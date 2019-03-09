@@ -1,0 +1,39 @@
+    Object rearrangeShared(int window) {
+        $type$[] as = fa.apply(size);
+        int[] order = fs.apply(size);
+        $type$[] rs = fr.apply(size);
+
+        for (int i = 0; i < as.length; i += window) {
+            for (int j = 0; j < window; j++) {
+                $type$ a = as[i+j];
+                int pos = order[j];
+                rs[i + pos] = a;
+            }
+        }
+
+        return rs;
+    }
+
+    @Benchmark
+    public Object rearrange064() {
+        int window = 64 / $Wideboxtype$.SIZE;
+        return rearrangeShared(window);
+    }
+
+    @Benchmark
+    public Object rearrange128() {
+        int window = 128 / $Wideboxtype$.SIZE;
+        return rearrangeShared(window);
+    }
+
+    @Benchmark
+    public Object rearrange256() {
+        int window = 256 / $Wideboxtype$.SIZE;
+        return rearrangeShared(window);
+    }
+
+    @Benchmark
+    public Object rearrange512() {
+        int window = 512 / $Wideboxtype$.SIZE;
+        return rearrangeShared(window);
+    }

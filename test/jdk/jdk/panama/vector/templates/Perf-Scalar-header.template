@@ -1,0 +1,72 @@
+/*
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have
+ * questions.
+ */
+
+package benchmark.jdk.panama.vector;
+
+import java.util.concurrent.TimeUnit;
+import java.util.function.IntFunction;
+
+import org.openjdk.jmh.annotations.*;
+
+@BenchmarkMode(Mode.Throughput)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@State(Scope.Benchmark)
+@Warmup(iterations = 3, time = 1)
+@Measurement(iterations = 5, time = 1)
+@Fork(value = 1, jvmArgsPrepend = {"--add-modules=jdk.panama.vector"})
+public class $Type$Scalar extends AbstractVectorBenchmark {
+    @Param("1024")
+    int size;
+
+    $type$[] fill(IntFunction<$Wideboxtype$> f) {
+        $type$[] array = new $type$[size];
+        for (int i = 0; i < array.length; i++) {
+            array[i] = f.apply(i);
+        }
+        return array;
+    }
+
+    $type$[] as, bs, cs, rs;
+    boolean[] ms, rms;
+    int[] ss;
+
+    @Setup
+    public void init() {
+        as = fill(i -> ($type$)(2*i));
+        bs = fill(i -> ($type$)(i+1));
+        cs = fill(i -> ($type$)(i+5));
+        rs = fill(i -> ($type$)0);
+        ms = fillMask(size, i -> (i % 2) == 0);
+        rms = fillMask(size, i -> false);
+
+        ss = fillInt(size, i -> RANDOM.nextInt(Math.max(i,1)));
+    }
+
+    final IntFunction<$type$[]> fa = vl -> as;
+    final IntFunction<$type$[]> fb = vl -> bs;
+    final IntFunction<$type$[]> fc = vl -> cs;
+    final IntFunction<$type$[]> fr = vl -> rs;
+    final IntFunction<boolean[]> fm = vl -> ms;
+    final IntFunction<boolean[]> fmr = vl -> rms;
+    final IntFunction<int[]> fs = vl -> ss;
+

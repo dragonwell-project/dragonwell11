@@ -1,0 +1,5 @@
+    @Test(dataProvider = "$type$TernaryOpProvider")
+    static void [[TEST]]$vectorteststype$(IntFunction<$type$[]> fa, IntFunction<$type$[]> fb, IntFunction<$type$[]> fc) {
+[[KERNEL]]
+        assertArraysEquals(a, b, c, r, $vectorteststype$::[[TEST]]);
+    }

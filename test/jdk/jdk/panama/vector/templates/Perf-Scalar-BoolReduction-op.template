@@ -1,0 +1,10 @@
+
+    @Benchmark
+    public boolean [[TEST]][[TEST_TYPE]][[OP_NAME]]() {
+        boolean[] ms = fm.apply(size);
+        boolean r = [[TEST_INIT]];
+        for (int i = 0; i < ms.length; i++) {
+          r [[TEST_OP]]= ms[i];
+        }
+        return r;
+    }

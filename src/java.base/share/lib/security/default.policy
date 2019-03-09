@@ -208,6 +208,12 @@ grant codeBase "jrt:/jdk.zipfs" {
     permission java.util.PropertyPermission "os.name", "read";
 };
 
+grant codeBase "jrt:/jdk.panama.vector" {
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.internal.vm.annotation";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.internal";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.internal.misc";
+};
+
 // permissions needed by applications using java.desktop module
 grant {
     permission java.lang.RuntimePermission "accessClassInPackage.com.sun.beans";
