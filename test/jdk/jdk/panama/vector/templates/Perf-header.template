@@ -1,0 +1,84 @@
+/*
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have
+ * questions.
+ */
+
+package benchmark.jdk.panama.vector;
+
+import jdk.panama.vector.Vector;
+import jdk.panama.vector.Vector.Shape;
+import jdk.panama.vector.$Type$Vector;
+
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
+import java.util.function.IntFunction;
+
+import org.openjdk.jmh.annotations.*;
+
+@BenchmarkMode(Mode.Throughput)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@State(Scope.Benchmark)
+@Warmup(iterations = 3, time = 1)
+@Measurement(iterations = 5, time = 1)
+@Fork(value = 1, jvmArgsPrepend = {"--add-modules=jdk.panama.vector"})
+public class $vectorbenchtype$ extends AbstractVectorBenchmark {
+    static final $abstractvectortype$.$Type$Species SPECIES = $Type$Vector.species(Shape.S_$bits$_BIT);
+
+    static final int INVOC_COUNT = 1; // get rid of outer loop
+
+    @Param("1024")
+    int size;
+
+    $type$[] fill(IntFunction<$Wideboxtype$> f) {
+        $type$[] array = new $type$[size];
+        for (int i = 0; i < array.length; i++) {
+            array[i] = f.apply(i);
+        }
+        return array;
+    }
+
+    $type$[] a, b, c, r;
+    boolean[] m, rm;
+    int[] s;
+
+    @Setup
+    public void init() {
+        size += size % SPECIES.length(); // FIXME: add post-loops
+
+        a = fill(i -> ($type$)(2*i));
+        b = fill(i -> ($type$)(i+1));
+        c = fill(i -> ($type$)(i+5));
+        r = fill(i -> ($type$)0);
+
+        m = fillMask(size, i -> (i % 2) == 0);
+        rm = fillMask(size, i -> false);
+
+        s = fillInt(size, i -> RANDOM.nextInt(SPECIES.length()));
+    }
+
+    final IntFunction<$type$[]> fa = vl -> a;
+    final IntFunction<$type$[]> fb = vl -> b;
+    final IntFunction<$type$[]> fc = vl -> c;
+    final IntFunction<$type$[]> fr = vl -> r;
+    final IntFunction<boolean[]> fm = vl -> m;
+    final IntFunction<boolean[]> fmr = vl -> rm;
+    final BiFunction<Integer,Integer,int[]> fs = (i,j) -> s;
+

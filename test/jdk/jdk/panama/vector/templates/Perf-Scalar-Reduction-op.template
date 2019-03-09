@@ -1,0 +1,10 @@
+
+    @Benchmark
+    public $type$ [[TEST]][[TEST_TYPE]][[OP_NAME]]() {
+        $type$[] as = fa.apply(size);
+        $type$ r = [[TEST_INIT]];
+        for (int i = 0; i < as.length; i++) {
+          r [[TEST_OP]]= as[i];
+        }
+        return r;
+    }

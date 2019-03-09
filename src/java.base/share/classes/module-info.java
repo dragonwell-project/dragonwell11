@@ -138,6 +138,8 @@ module java.base {
         jdk.jfr;
     exports jdk.internal.event to
         jdk.jfr;
+    exports jdk.internal to // for @HotSpotIntrinsicCandidate
+        jdk.panama.vector;
     exports jdk.internal.jimage to
         jdk.jlink;
     exports jdk.internal.jimage.decompressor to
@@ -185,6 +187,8 @@ module java.base {
         jdk.compiler,
         java.net.http,
         jdk.jfr,
+        jdk.panama.vector,
+        jdk.jdeps,
         jdk.jlink,
         jdk.jshell,
         jdk.net,
@@ -217,7 +221,8 @@ module java.base {
         jdk.management.agent;
     exports jdk.internal.vm.annotation to
         jdk.internal.vm.ci,
-        jdk.unsupported;
+        jdk.unsupported,
+        jdk.panama.vector;
     exports jdk.internal.util.jar to
         jdk.jartool;
     exports jdk.internal.util.xml to

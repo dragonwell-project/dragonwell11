@@ -1,0 +1,15 @@
+Vector API Benchmarks
+
+This suite contains a set of microbenchmarks automatically derived from unit tests.
+
+1. (Re-)Generate benchmarks
+  $ cd ..; bash gen-tests.sh
+
+2. Build
+  $ mvn install
+
+3. Run benchmarks
+  $ java -jar target/vector-benchmarks.jar '.*'
+
+Parameters:
+    -p size=1024  # data set size (in # of elements)

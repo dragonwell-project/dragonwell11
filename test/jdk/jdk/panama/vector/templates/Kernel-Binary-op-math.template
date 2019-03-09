@@ -1,0 +1,12 @@
+        $type$[] a = fa.apply(SPECIES.length());
+        $type$[] b = fb.apply(SPECIES.length());
+        $type$[] r = fr.apply(SPECIES.length());
+
+        for (int ic = 0; ic < INVOC_COUNT; ic++) {
+            for (int i = 0; i < a.length; i += SPECIES.length()) {
+                $abstractvectortype$ av = SPECIES.fromArray(a, i);
+                $abstractvectortype$ bv = SPECIES.fromArray(b, i);
+                av.[[TEST]](bv).intoArray(r, i);
+            }
+        }
+

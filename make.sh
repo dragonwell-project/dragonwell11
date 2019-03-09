@@ -4,7 +4,7 @@ if [ $# != 1 ]; then
   echo "USAGE: $0 release/debug/fastdebug"
   exit
 fi
-
+export JAVA_HOME=/vmfarm/AJDK/11/11.0.7.7GA/linux/x86_64/jdk-release/
 # incr by every Dragonwell release
 DRAGONWELL_VERSION=3
 LC_ALL=C
