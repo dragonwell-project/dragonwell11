@@ -353,6 +353,8 @@ class ciMethod : public ciMetadata {
   bool is_vector_method() const;
   bool is_object_initializer() const;
 
+  bool can_be_statically_bound(ciInstanceKlass* context) const;
+
   // Replay data methods
   void dump_name_as_ascii(outputStream* st);
   void dump_replay_data(outputStream* st);

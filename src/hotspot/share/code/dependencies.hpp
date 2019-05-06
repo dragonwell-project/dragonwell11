@@ -28,6 +28,7 @@
 #include "ci/ciCallSite.hpp"
 #include "ci/ciInstanceKlass.hpp"
 #include "ci/ciKlass.hpp"
+#include "ci/ciMethod.hpp"
 #include "ci/ciMethodHandle.hpp"
 #include "classfile/systemDictionary.hpp"
 #include "code/compressedStream.hpp"
@@ -348,6 +349,9 @@ class Dependencies: public ResourceObj {
   static void check_unique_implementor(ciInstanceKlass* ctxk, ciInstanceKlass* uniqk) {
     assert(ctxk->implementor() == uniqk, "not a unique implementor");
   }
+  static void check_unique_method(ciKlass* ctxk, ciMethod* m) {
+    assert(!m->can_be_statically_bound(ctxk->as_instance_klass()), "redundant");
+  }
 
   void assert_common_1(DepType dept, ciBaseObject* x);
   void assert_common_2(DepType dept, ciBaseObject* x0, ciBaseObject* x1);
@@ -376,6 +380,10 @@ class Dependencies: public ResourceObj {
     check_ctxk(ctxk);
     assert(ctxk->is_abstract(), "must be abstract");
   }
+  static void check_unique_method(Klass* ctxk, Method* m) {
+    assert(!m->can_be_statically_bound(InstanceKlass::cast(ctxk)), "redundant");
+  }
+
   void assert_common_1(DepType dept, DepValue x);
   void assert_common_2(DepType dept, DepValue x0, DepValue x1);
 
