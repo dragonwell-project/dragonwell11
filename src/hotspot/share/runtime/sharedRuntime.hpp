@@ -277,7 +277,6 @@ class SharedRuntime: AllStatic {
   static int dtrace_object_alloc_base(Thread* thread, oopDesc* o, int size);
   static int dtrace_method_entry(JavaThread* thread, Method* m);
   static int dtrace_method_exit(JavaThread* thread, Method* m);
-  static int wisp_yield(JavaThread* thread, Method* m);
 
   // Utility method for retrieving the Java thread id, returns 0 if the
   // thread is not a well formed Java thread.

@@ -1129,6 +1129,12 @@ void frame::nmethods_do(CodeBlobClosure* cf) {
   }
 }
 
+void frame::compiledMethods_do(CodeBlobClosure* cf) {
+  if (_cb != NULL && _cb->is_compiled()) {
+    cf->do_code_blob(_cb);
+  }
+}
+
 
 // call f() on the interpreted Method*s in the stack.
 // Have to walk the entire code cache for the compiled frames Yuck.

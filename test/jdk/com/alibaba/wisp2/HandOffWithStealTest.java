@@ -2,7 +2,7 @@
  * @test
  * @library /lib/testlibrary
  * @summary test long running or blocking syscall task could be retaken
- * @run main/othervm -Dcom.alibaba.wisp.carrierEngines=1 -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.version=2 -Dcom.alibaba.wisp.enableHandOff=true -Dcom.alibaba.wisp.handoffPolicy=ADAPTIVE -Dcom.alibaba.wisp.sysmonTickUs=100000 HandOffTest
+ * @run main/othervm -Dcom.alibaba.wisp.carrierEngines=2 -XX:+UseWisp2 -Dcom.alibaba.wisp.enableHandOff=true -Dcom.alibaba.wisp.sysmonTickUs=100000 -Dcom.alibaba.wisp.handoffPolicy=ADAPTIVE HandOffWithStealTest
  */
 
 import com.alibaba.wisp.engine.WispEngine;
@@ -17,13 +17,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static jdk.testlibrary.Asserts.assertTrue;
 
-public class HandOffTest {
+public class HandOffWithStealTest {
     public static void main(String[] args) throws Exception {
         CountDownLatch cl = new CountDownLatch(10);
         for (int i = 0; i < 10; i++) {
             WispEngine.dispatch(() -> {
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(2000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -35,16 +35,18 @@ public class HandOffTest {
 
         WispEngine.dispatch(() -> {
             try {
-                SocketChannel ch = SocketChannel.open(new InetSocketAddress("www.example.com", 80));
-                ch.read(ByteBuffer.allocate(4096));
+                String[] cmdA = { "/bin/sh", "-c", " sleep 200"};
+                Process process = Runtime.getRuntime().exec(cmdA);
+                process.waitFor();
                 blockingFinish.set(true);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         });
 
 
-        assertTrue(cl.await(100, TimeUnit.SECONDS));
+        cl.await();
+        System.out.println("await");
         assertTrue(!blockingFinish.get());
     }
 }

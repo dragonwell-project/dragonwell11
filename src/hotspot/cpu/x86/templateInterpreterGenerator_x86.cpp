@@ -1034,6 +1034,10 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
   }
 #endif
 
+  if (EnableCoroutine) {
+    __ movptr(t, Address(r15_thread, JavaThread::coroutine_list_offset()));
+    __ incrementl(Address(t, Coroutine::native_call_counter_offset()));
+  }
   // Change state to native
 
   __ movl(Address(thread, JavaThread::thread_state_offset()),

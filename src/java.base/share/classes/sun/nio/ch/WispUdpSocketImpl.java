@@ -17,6 +17,8 @@ import java.util.concurrent.TimeUnit;
 public class WispUdpSocketImpl {
 
     private static WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
+
+    private WispSocketLockSupport wispSocketLockSupport = new WispSocketLockSupport();
     // 1 verse 1 related socket
     private DatagramChannelImpl dc;
 
@@ -98,6 +100,25 @@ public class WispUdpSocketImpl {
     }
 
     public void send(DatagramPacket p) throws IOException {
+        try {
+            wispSocketLockSupport.beginWrite();
+            send0(p);
+        } finally {
+            wispSocketLockSupport.endWrite();
+        }
+    }
+
+    private SocketAddress receive(ByteBuffer bb) throws IOException {
+        try {
+            wispSocketLockSupport.beginRead();
+            return receive0(bb);
+        } finally {
+            wispSocketLockSupport.endRead();
+        }
+    }
+
+
+    private void send0(DatagramPacket p) throws IOException {
         final DatagramChannelImpl ch = getChannelImpl();
         try {
             ByteBuffer bb = ByteBuffer.wrap(p.getData(),
@@ -145,7 +166,7 @@ public class WispUdpSocketImpl {
     }
 
 
-    private SocketAddress receive(ByteBuffer bb) throws IOException {
+    private SocketAddress receive0(ByteBuffer bb) throws IOException {
         final DatagramChannelImpl ch = getChannelImpl();
         SocketAddress sa;
 
@@ -322,6 +343,7 @@ public class WispUdpSocketImpl {
             } catch (IOException x) {
                 throw new Error(x);
             }
+            wispSocketLockSupport.unparkBlockedWispTask();
         }
     }
 

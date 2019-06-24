@@ -252,28 +252,6 @@ JRT_LEAF(jfloat, SharedRuntime::frem(jfloat  x, jfloat  y))
 #endif
 JRT_END
 
-JRT_ENTRY_NO_ASYNC(int, SharedRuntime::wisp_yield(JavaThread* thread, Method* method))
-  assert(EnableCoroutine, "Coroutine is disabled");
-  JavaThread* jt = thread;
-  JavaValue result(T_VOID);
-  JavaCallArguments args;
-  // Class not found exception may appear here.
-  // We do not continue yield with exceptions.
-  if (jt->has_pending_exception()) {
-      return 0;
-  }
-  jt->set_wisp_preempt(0);
-  assert(jt->thread_state() == _thread_in_vm, "sanity check");
-  // Do java calls to perform yield work.
-  JavaCalls::call_static(&result,
-        SystemDictionary::Thread_klass(),
-        vmSymbols::yield_name(),
-        vmSymbols::void_method_signature(),
-        &args,
-        jt);
-  return 0;
-JRT_END
-
 JRT_LEAF(jdouble, SharedRuntime::drem(jdouble x, jdouble y))
 #ifdef _WIN64
   union { jdouble d; julong l; } xbits, ybits;

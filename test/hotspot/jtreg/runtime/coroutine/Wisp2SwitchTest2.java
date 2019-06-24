@@ -52,7 +52,7 @@ public class Wisp2SwitchTest2 {
         f = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredField("ENABLE_HANDOFF");
         f.setAccessible(true);
         isEnabled = f.getBoolean(null);
-        assertTrue(isEnabled == false, "The property com.alibaba.wisp.enableHandOff is enabled");
+        assertTrue(isEnabled == false, "The property com.alibaba.wisp.enableHandOff isn't disabled");
 
         Thread.sleep(1000);
     }

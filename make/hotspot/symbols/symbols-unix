@@ -144,7 +144,7 @@ JVM_Interrupt
 JVM_InvokeMethod
 JVM_IsArrayClass
 JVM_IsConstructorIx
-JVM_IsInNative
+JVM_IsInSameNative
 JVM_IsInterface
 JVM_IsInterrupted
 JVM_IsPrimitiveClass
@@ -154,7 +154,7 @@ JVM_IsThreadAlive
 JVM_IsVMGeneratedMethodIx
 JVM_LatestUserDefinedLoader
 JVM_LoadLibrary
-JVM_MarkPreempt
+JVM_MarkPreempted
 JVM_MaxMemory
 JVM_MaxObjectInspectionAge
 JVM_MonitorNotify

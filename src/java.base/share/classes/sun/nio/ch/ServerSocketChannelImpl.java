@@ -285,7 +285,8 @@ class ServerSocketChannelImpl
 
             boolean blocking = isBlocking();
 
-            final boolean wispAndBlocking = WispEngine.transparentWispSwitch() && blocking;
+            final boolean wispAndBlocking = WispEngine.transparentWispSwitch() && blocking &&
+                                            WEA.usingWispEpoll(null);
 
             try {
                 begin(blocking);

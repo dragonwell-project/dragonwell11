@@ -48,11 +48,6 @@ public class Wisp2SwitchTest {
         isEnabled = f.getBoolean(null);
         assertTrue(isEnabled == true, "The property com.alibaba.wisp.allThreadAsWisp isn't enabled");
 
-        f = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredField("ENABLE_HANDOFF");
-        f.setAccessible(true);
-        isEnabled = f.getBoolean(null);
-        assertFalse(isEnabled == true, "The property com.alibaba.wisp.enableHandOff isn't enabled");
-
         Thread.sleep(1000);
     }
 }

@@ -36,7 +36,7 @@ public class GlobalPollerTest {
         SocketChannel ch = so.getChannel();
         access.registerEvent(ch, SelectionKey.OP_READ);
 
-        Field f = Class.forName("com.alibaba.wisp.engine.WispPoller").getDeclaredField("fd2TaskLow");
+        Field f = Class.forName("com.alibaba.wisp.engine.WispPoller").getDeclaredField("fd2ReadTaskLow");
         f.setAccessible(true);
         WispTask[] fd2TaskLow = (WispTask[]) f.get(WispPoller.INSTANCE);
         int fd = ((SelChImpl) ch).getFDVal();

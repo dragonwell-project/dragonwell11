@@ -81,6 +81,7 @@ class WispPostStealHandleUpdateMark;
 class WispResourceArea;
 
 class Coroutine: public CHeapObj<mtThread>, public DoublyLinkedList<Coroutine> {
+  friend class JVMCIVMStructs;
 public:
   enum CoroutineState {
     _created    = 0x00000000,      // not inited
@@ -116,9 +117,12 @@ private:
   java_lang_Thread::ThreadStatus _thread_status;
   int             _enable_steal_count;
   int             _java_call_counter;
+  int             _last_native_call_counter;
+  volatile int    _native_call_counter;
 
   // work steal pool
   WispResourceArea*       _wisp_post_steal_resource_area;
+  bool            _is_yielding;
 
 #ifdef _LP64
   intptr_t        _storage[2];
@@ -137,6 +141,7 @@ public:
   static void initialize_coroutine_support(JavaThread* thread);
   static Coroutine* create_thread_coroutine(JavaThread* thread, CoroutineStack* stack);
   static Coroutine* create_coroutine(JavaThread* thread, CoroutineStack* stack, oop coroutineObj);
+  static void after_safepoint(JavaThread* thread);
 
   CoroutineState state() const      { return _state; }
   void set_state(CoroutineState x)  { _state = x; }
@@ -185,6 +190,11 @@ public:
   int java_call_counter() const           { return _java_call_counter; }
   void set_java_call_counter(int x)       { _java_call_counter = x; }
 
+  int last_native_call_counter() const    { return _last_native_call_counter; }
+  void set_last_native_call_counter(int x) { _last_native_call_counter = x; }
+
+  int native_call_counter() const         { return _native_call_counter; }
+
   bool is_disposable();
 
   void print_stack_on(outputStream* st);
@@ -192,6 +202,7 @@ public:
   // GC support
   void oops_do(OopClosure* f, CodeBlobClosure* cf);
   void nmethods_do(CodeBlobClosure* cf);
+  void compiledMethods_do(CodeBlobClosure* cf);
   void metadata_do(void f(Metadata*));
   void frames_do(void f(frame*, const RegisterMap* map));
 
@@ -214,7 +225,7 @@ public:
   }
   static ByteSize thread_status_offset()      { return byte_offset_of(Coroutine, _thread_status); }
   static ByteSize java_call_counter_offset()  { return byte_offset_of(Coroutine, _java_call_counter); }
-
+  static ByteSize native_call_counter_offset(){ return byte_offset_of(Coroutine, _native_call_counter); }
 #ifdef _LP64
   static ByteSize storage_offset()            { return byte_offset_of(Coroutine, _storage); }
 #endif
@@ -303,6 +314,7 @@ class ObjectWaiter;
 
 class WispThread: public JavaThread {
   friend class Coroutine;
+  friend class JVMCIVMStructs;
 private:
   static bool _wisp_booted;
   static Method* parkMethod;

@@ -791,9 +791,7 @@ class GraphKit : public Phase {
                           Node* parm0 = NULL, Node* parm1 = NULL,
                           Node* parm2 = NULL, Node* parm3 = NULL,
                           Node* parm4 = NULL, Node* parm5 = NULL,
-                          Node* parm6 = NULL, Node* parm7 = NULL,
-                          Node* ctrl = NULL);
-  void make_wisp_yield(ciMethod* method);
+                          Node* parm6 = NULL, Node* parm7 = NULL);
   enum {  // flag values for make_runtime_call
     RC_NO_FP = 1,               // CallLeafNoFPNode
     RC_NO_IO = 2,               // do not hook IO edges

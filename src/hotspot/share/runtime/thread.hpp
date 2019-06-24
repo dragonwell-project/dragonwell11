@@ -1140,7 +1140,7 @@ class JavaThread: public Thread {
   CoroutineStack*   _coroutine_stack_list;
   Coroutine*        _coroutine_list;
   Coroutine*        _current_coroutine;
-  bool              _wisp_preempt;
+  bool              _wisp_preempted;
 
   intptr_t          _coroutine_temp;
 
@@ -1151,11 +1151,11 @@ class JavaThread: public Thread {
   Coroutine*& coroutine_list()                   { return _coroutine_list; }
   Coroutine* current_coroutine()                 { return _current_coroutine; }
   void set_current_coroutine(Coroutine *coro)    { _current_coroutine = coro; }
-  void set_wisp_preempt(bool b)                  { _wisp_preempt = b; }
+  bool wisp_preempted() const                    { return _wisp_preempted; }
+  void set_wisp_preempted(bool b)                  { _wisp_preempted = b; }
 
   static ByteSize coroutine_temp_offset()        { return byte_offset_of(JavaThread, _coroutine_temp); }
   static ByteSize current_coroutine_offset()     { return byte_offset_of(JavaThread, _current_coroutine); }
-  static ByteSize wisp_preempt_offset()          { return byte_offset_of(JavaThread, _wisp_preempt); }
   void initialize_coroutine_support();
 
   bool is_expected_thread_entry(ThreadFunction entry_point) { return _entry_point == entry_point; }
@@ -1770,6 +1770,7 @@ class JavaThread: public Thread {
   static ByteSize reserved_stack_activation_offset() { return byte_offset_of(JavaThread, _reserved_stack_activation); }
   static ByteSize suspend_flags_offset()         { return byte_offset_of(JavaThread, _suspend_flags); }
   static ByteSize java_call_counter_offset()     { return byte_offset_of(JavaThread, _java_call_counter); }
+  static ByteSize coroutine_list_offset()        { return byte_offset_of(JavaThread, _coroutine_list); }
 
   static ByteSize do_not_unlock_if_synchronized_offset() { return byte_offset_of(JavaThread, _do_not_unlock_if_synchronized); }
   static ByteSize should_post_on_exceptions_flag_offset() {

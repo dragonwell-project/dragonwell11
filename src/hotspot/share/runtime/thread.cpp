@@ -1667,7 +1667,7 @@ void JavaThread::initialize() {
   _coroutine_stack_list = NULL;
   _coroutine_list = NULL;
   _current_coroutine = NULL;
-  _wisp_preempt = false;
+  _wisp_preempted = false;
 
   _thread_stat = NULL;
   _thread_stat = new ThreadStatistics();
@@ -3039,6 +3039,14 @@ void JavaThread::nmethods_do(CodeBlobClosure* cf) {
 
   if (jvmti_thread_state() != NULL) {
     jvmti_thread_state()->nmethods_do(cf);
+  }
+
+  if (EnableCoroutine) {
+    Coroutine* current = _coroutine_list;
+    do {
+      current->compiledMethods_do(cf);
+      current = current->next();
+    } while (current != _coroutine_list);
   }
 }
 

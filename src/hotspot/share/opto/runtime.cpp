@@ -1583,21 +1583,6 @@ JRT_ENTRY_NO_ASYNC(void, OptoRuntime::register_finalizer(oopDesc* obj, JavaThrea
   InstanceKlass::register_finalizer(instanceOop(obj), CHECK);
 JRT_END
 
-
-const TypeFunc *OptoRuntime::yield_method_exit_Type() {
-  // create input type (domain)
-  const Type **fields = TypeTuple::fields(2);
-  fields[TypeFunc::Parms+0] = TypeRawPtr::BOTTOM; // Thread-local storage
-  fields[TypeFunc::Parms+1] = TypeMetadataPtr::BOTTOM;  // Method*;    Method we are entering
-  const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+2,fields);
-
-  // create result type (range)
-  fields = TypeTuple::fields(0);
-
-  const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0,fields);
-
-  return TypeFunc::make(domain,range);
-}
 //-----------------------------------------------------------------------------
 
 NamedCounter * volatile OptoRuntime::_named_counters = NULL;

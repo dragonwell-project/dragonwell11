@@ -57,7 +57,7 @@ static JNINativeMethod methods[] = {
     {"getThreads",        "()[" THD,   (void *)&JVM_GetAllThreads},
     {"dumpThreads",      "([" THD ")[[" STE, (void *)&JVM_DumpThreads},
     {"setNativeName",    "(" STR ")V", (void *)&JVM_SetNativeThreadName},
-    {"isInNative",       "()Z",        (void *)&JVM_IsInNative},
+    {"isInSameNative",   "()Z",        (void *)&JVM_IsInSameNative},
 };
 
 #undef THD

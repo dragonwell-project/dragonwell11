@@ -118,6 +118,8 @@ Coroutine* Coroutine::create_thread_coroutine(JavaThread* thread, CoroutineStack
   coro->_metadata_handles = NULL;
   coro->_thread_status = java_lang_Thread::RUNNABLE;
   coro->_java_call_counter = 0;
+  coro->_last_native_call_counter = 0;
+  coro->_native_call_counter = 0;
 #if defined(_WINDOWS)
   coro->_last_SEH = NULL;
 #endif
@@ -128,6 +130,7 @@ Coroutine* Coroutine::create_thread_coroutine(JavaThread* thread, CoroutineStack
   coro->_wisp_task_id = WISP_ID_NOT_SET;
   coro->_enable_steal_count = 1;
   coro->_wisp_post_steal_resource_area = NULL;
+  coro->_is_yielding  = false;
   thread->set_current_coroutine(coro);
   return coro;
 }
@@ -167,6 +170,8 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
   coro->_metadata_handles = NULL;
   coro->_thread_status = java_lang_Thread::RUNNABLE;
   coro->_java_call_counter = 0;
+  coro->_last_native_call_counter = 0;
+  coro->_native_call_counter = 0;
 #if defined(_WINDOWS)
   coro->_last_SEH = NULL;
 #endif
@@ -181,6 +186,7 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
   // so we set `_enable_steal_count` to 1 which means this coroutine can be stolen when it starts.
   coro->_enable_steal_count = 1;
   coro->_wisp_post_steal_resource_area = new (mtWisp) WispResourceArea(coro, 32);
+  coro->_is_yielding  = false;
   return coro;
 }
 
@@ -256,6 +262,19 @@ public:
 
 void Coroutine::nmethods_do(CodeBlobClosure* cf) {
   nmethods_do_Closure fc(cf);
+  frames_do(&fc);
+}
+
+class compiledMethods_do_Closure: public FrameClosure {
+private:
+  CodeBlobClosure* _cf;
+public:
+  compiledMethods_do_Closure(CodeBlobClosure* cf): _cf(cf) { }
+  void frames_do(frame* fr, RegisterMap* map) { fr->compiledMethods_do(_cf); }
+};
+
+void Coroutine::compiledMethods_do(CodeBlobClosure* cf) {
+  compiledMethods_do_Closure fc(cf);
   frames_do(&fc);
 }
 
@@ -421,11 +440,12 @@ void Coroutine::print_stack_on(outputStream* st) {
           java_lang_String::as_utf8_string(name, buf, sizeof(buf));
         }
       }
-      st->print(" \"%s\" #%d active=%d steal=%d steal_fail=%d", buf,
+      st->print(" \"%s\" #%d active=%d steal=%d steal_fail=%d preempt=%d", buf,
           com_alibaba_wisp_engine_WispTask::get_id(_wisp_task),
           com_alibaba_wisp_engine_WispTask::get_activeCount(_wisp_task),
           com_alibaba_wisp_engine_WispTask::get_stealCount(_wisp_task),
-          com_alibaba_wisp_engine_WispTask::get_stealFailureCount(_wisp_task));
+          com_alibaba_wisp_engine_WispTask::get_stealFailureCount(_wisp_task),
+          com_alibaba_wisp_engine_WispTask::get_preemptCount(_wisp_task));
     } // else, we're only using the JKU part
     st->print("\n");
 
@@ -715,6 +735,53 @@ void WispThread::interrupt(int task_id, TRAPS) {
       &args,
       THREAD);
 
+}
+
+void Coroutine::after_safepoint(JavaThread* thread) {
+  assert(Thread::current() == thread, "sanity check");
+
+  if (!thread->safepoint_state()->is_running()) {
+      return;
+  }
+  Coroutine* coroutine = thread->current_coroutine();
+  if (thread->thread_state() != _thread_in_Java ||
+      // indicates we're inside compiled code or interpreter.
+      // rather than thread state transition.
+      coroutine->_is_yielding || !thread->wisp_preempted() ||
+      thread->has_pending_exception() || thread->has_async_condition()) {
+    return;
+  }
+
+  oop wisp_task = thread->current_coroutine()->_wisp_task;
+  if (wisp_task != NULL) { // expose to perfCount and jstack
+    int cnt = com_alibaba_wisp_engine_WispTask::get_preemptCount(wisp_task);
+    com_alibaba_wisp_engine_WispTask::set_preemptCount(wisp_task, cnt + 1);
+  } else {
+    assert(!WispThread::wisp_booted(), "wisp_task should be non-null when wisp is enabled");
+  }
+
+  coroutine->_is_yielding = true;
+  // "yield" will immediately switch context to execute other coroutines. 
+  // After all the runnable coroutines has been executed, we'll switch back.
+  //
+  // - The preempt mechanism should be disabled when current coroutine is calling "yield"
+  // - The preempt mechanism should be enabled during "other" coroutines are executing
+
+  thread->set_wisp_preempted(false);
+  ThreadInVMfromJava tiv(thread);
+  JavaValue result(T_VOID);
+  JavaCallArguments args;
+  JavaCalls::call_static(&result,
+        SystemDictionary::Thread_klass(),
+        vmSymbols::yield_name(),
+        vmSymbols::void_method_signature(),
+        &args,
+        thread);
+  coroutine->_is_yielding = false;
+
+  if (thread->has_pending_exception() || thread->has_async_condition()) {
+    thread->clear_pending_exception();
+  }
 }
 
 EnableStealMark::EnableStealMark(Thread* thread) {

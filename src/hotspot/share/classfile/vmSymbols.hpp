@@ -661,6 +661,7 @@
   template(activeCount_name,                           "activeCount")                                             \
   template(stealCount_name,                            "stealCount")                                              \
   template(stealFailureCount_name,                     "stealFailureCount")                                       \
+  template(preemptCount_name,                          "preemptCount")                                            \
   template(unparkById_name,                            "unparkById")                                              \
   template(interruptById_name,                         "interruptById")                                           \
   template(interrupted_name,                           "interrupted")                                             \

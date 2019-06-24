@@ -51,9 +51,6 @@
   product(uintx, MaxFreeCoroutinesCacheSize, 20,                            \
           "The max number of free coroutine stacks a thread can keep")      \
                                                                             \
-  product(bool, EnableCoroutineTimeSlice, false,                            \
-          "Wisp will perform yield periodically")                           \
-                                                                            \
   product(bool, UseWispMonitor, false,                                      \
           "yields to next coroutine when ObjectMonitor is contended")       \
                                                                             \

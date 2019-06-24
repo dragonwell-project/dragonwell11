@@ -2,7 +2,6 @@
  * @test
  * @summary Test ReentrantLock in coroutine environment
  * @modules java.base/jdk.internal.misc
- * @run main/othervm  -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true LockTest
  * @run main/othervm  -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 LockTest
 */
 

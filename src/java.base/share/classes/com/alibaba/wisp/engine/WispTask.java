@@ -116,11 +116,16 @@ public class WispTask implements Comparable<WispTask> {
     private volatile int jvmParkStatus;
     volatile int stealLock;
     private WispTask from;
+    /**
+     * WispTask execution wrapper for schduler should only be used in wakupTask
+     */
     final StealAwareRunnable resumeEntry;
     // counter printed by jstack
     private int activeCount;
     int stealCount;
     int stealFailureCount;
+    private int preemptCount;
+    // perf monitor
     long enqueueTime;
     long parkTime;
     long blockingTime;
@@ -167,6 +172,7 @@ public class WispTask implements Comparable<WispTask> {
         activeCount = 0;
         stealCount  = 0;
         stealFailureCount = 0;
+        preemptCount = 0;
 
         // thread status
         if (thread != null) { // calling from Thread.start()
@@ -210,7 +216,9 @@ public class WispTask implements Comparable<WispTask> {
                         synchronized (threadWrapper) {
                             threadWrapper.notifyAll();
                         }
-                        threadWrapper = null; // else WispThreadWrapper could be reused
+                        // move it to taskExit, since the threadWrapper will be used in Thread.currentThread()
+                        // when we remove the task from running task queue
+                        //threadWrapper = null; // else WispThreadWrapper could be reused
                     }
                     if (throwable instanceof CoroutineExitException) {
                         throw (CoroutineExitException) throwable;
@@ -477,6 +485,12 @@ public class WispTask implements Comparable<WispTask> {
     void setThreadWrapper(Thread thread) {
         threadWrapper = thread;
         WispEngine.JLA.setWispTask(thread, this);
+    }
+
+    void resetThreadWrapper() {
+        if (isThreadAsWisp) {
+            threadWrapper = null;
+        }
     }
 
     @Override
