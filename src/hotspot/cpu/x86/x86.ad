@@ -1599,7 +1599,8 @@ const bool Matcher::match_rule_supported_vector(int opcode, int vlen, BasicType 
           break;
         case Op_VectorTest:
           if (UseAVX <= 0) { ret_value = false; }
-          else if (size_in_bits != 128 && size_in_bits != 256) { ret_value = false; } // Implementation limitation
+          else if (size_in_bits == 512 && UseAVX <= 2) { ret_value = false; } // Implementation limitation
+          else if (size_in_bits != 128 && size_in_bits != 256 && size_in_bits != 512) { ret_value = false; } // Implementation limitation
           break;
         case Op_VectorLoadMask:
           if (UseSSE <= 3) { ret_value = false; }
@@ -25400,6 +25401,45 @@ instruct vptest8ieq(rRegI dst, legVecY src1, legVecY src2) %{
   %}
   ins_pipe( pipe_slow );
 %}
+
+instruct vptest16inae(rRegI dst, legVecZ src1, legVecZ src2, legVecZ tmp) %{
+  predicate(UseAVX > 2 && static_cast<const VectorTestNode*>(n)->get_predicate() == Assembler::carrySet);
+  match(Set dst (VectorTest src1 src2 ));
+  format %{ "vextracti64x4_high $tmp,$src2"
+            "vand $tmp,$src1\n\t"
+            "vptest  $src1,$src2\n\t"
+            "setb  $dst\t!" %}
+  effect(TEMP tmp);
+  ins_encode %{
+    int vector_len = 1;
+    __ vextracti64x4_high($tmp$$XMMRegister, $src1$$XMMRegister);
+    __ vpand($tmp$$XMMRegister, $src1$$XMMRegister, $tmp$$XMMRegister, vector_len);
+    __ vptest($tmp$$XMMRegister, $src2$$XMMRegister, vector_len);
+    __ setb(Assembler::carrySet, $dst$$Register);
+    __ movzbl($dst$$Register, $dst$$Register);
+  %}
+  ins_pipe( pipe_slow );
+%}
+
+instruct vptest16ieq(rRegI dst, legVecZ src1, legVecZ src2, legVecZ tmp) %{
+  predicate(UseAVX > 2 && static_cast<const VectorTestNode*>(n)->get_predicate() == Assembler::notZero);
+  match(Set dst (VectorTest src1 src2 ));
+  format %{ "vextracti64x4_high $tmp,$src1\n\t"
+            "vpor $tmp,$src1\n\t"
+            "vptest  $tmp,$tmp\n\t"
+            "setb  $dst\t!" %}
+  effect(TEMP tmp);
+  ins_encode %{
+    int vector_len = 1;
+    __ vextracti64x4_high($tmp$$XMMRegister, $src1$$XMMRegister);
+    __ vpor($tmp$$XMMRegister, $src1$$XMMRegister, $tmp$$XMMRegister, vector_len);
+    __ vptest($tmp$$XMMRegister, $tmp$$XMMRegister, vector_len);
+    __ setb(Assembler::notZero, $dst$$Register);
+    __ movzbl($dst$$Register, $dst$$Register);
+  %}
+  ins_pipe( pipe_slow );
+%}
+
 
 instruct loadmask8b(vecD dst, vecD src) %{
   predicate(UseSSE >= 2 && n->as_Vector()->length() == 8 && n->bottom_type()->is_vect()->element_basic_type() == T_BYTE);
