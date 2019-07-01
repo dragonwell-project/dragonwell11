@@ -309,9 +309,9 @@ public:
   static const bool match_rule_supported(int opcode);
 
   // identify extra cases that we might want to provide match rules for
-  // e.g. Op_ vector nodes and other intrinsics while guarding with vlen
+  // e.g. Op_ vector nodes and other intrinsics while guarding with vlen and basic type
+  static const bool match_rule_supported_vector(int opcode, int vlen, BasicType bt, int op_arity = 0);
   static const bool match_rule_supported_vector(int opcode, int vlen);
-
   // Some microarchitectures have mask registers used on vectors
   static const bool has_predicated_vectors(void);
 
@@ -431,6 +431,13 @@ public:
   // it is ESP.  On the PowerPC it is R1.  On Sparc it is SP.
   OptoReg::Name  c_frame_pointer() const;
   static RegMask c_frame_ptr_mask;
+
+  // Java-Native vector calling convention
+  static const bool supports_vector_calling_convention();
+  static void vector_calling_convention(VMRegPair *regs,
+                                        uint num_bits,
+                                        uint total_args_passed);
+  static OptoRegPair vector_return_value(uint ideal_reg);
 
   // !!!!! Special stuff for building ScopeDescs
   virtual int      regnum_to_fpu_offset(int regnum);

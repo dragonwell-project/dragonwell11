@@ -249,4 +249,64 @@ public:
   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
 };
 
+//------------------------------MaxLNode---------------------------------------
+// MAXimum of 2 longs.
+class MaxLNode : public Node {
+public:
+  MaxLNode(Node *in1, Node *in2) : Node(in1, in2) {}
+  virtual int Opcode() const;
+  virtual const Type *bottom_type() const { return TypeLong::LONG; }
+  virtual uint ideal_reg() const { return Op_RegL; }
+};
+
+//------------------------------MinLNode---------------------------------------
+// MINimum of 2 longs.  
+class MinLNode : public Node {
+public:
+  MinLNode(Node *in1, Node *in2) : Node(in1, in2) {}
+  virtual int Opcode() const;
+  virtual const Type *bottom_type() const { return TypeLong::LONG; }
+  virtual uint ideal_reg() const { return Op_RegL; }
+};
+
+//------------------------------MaxFNode---------------------------------------
+// MAXimum of 2 floats.
+class MaxFNode : public Node {
+public:
+  MaxFNode(Node *in1, Node *in2) : Node(in1, in2) {}
+  virtual int Opcode() const;
+  virtual const Type *bottom_type() const { return Type::FLOAT; }
+  virtual uint ideal_reg() const { return Op_RegF; }
+};
+
+//------------------------------MinFNode---------------------------------------
+// MINimum of 2 floats.
+class MinFNode : public Node {
+public:
+  MinFNode(Node *in1, Node *in2) : Node(in1, in2) {}
+  virtual int Opcode() const;
+  virtual const Type *bottom_type() const { return Type::FLOAT; }
+  virtual uint ideal_reg() const { return Op_RegF; }
+};
+
+//------------------------------MaxDNode---------------------------------------
+// MAXimum of 2 doubles.
+class MaxDNode : public Node {
+public:
+  MaxDNode(Node *in1, Node *in2) : Node(in1, in2) {}
+  virtual int Opcode() const;
+  virtual const Type *bottom_type() const { return Type::DOUBLE; }
+  virtual uint ideal_reg() const { return Op_RegD; }
+};
+
+//------------------------------MinDNode---------------------------------------
+// MINimum of 2 doubles.
+class MinDNode : public Node {
+public:
+  MinDNode(Node *in1, Node *in2) : Node(in1, in2) {}
+  virtual int Opcode() const;
+  virtual const Type *bottom_type() const { return Type::DOUBLE; }
+  virtual uint ideal_reg() const { return Op_RegD; }
+};
+
 #endif // SHARE_VM_OPTO_ADDNODE_HPP

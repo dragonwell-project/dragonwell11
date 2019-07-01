@@ -81,14 +81,19 @@ class JVMState;
 class Type;
 class TypeData;
 class TypeInt;
+class TypeInstPtr;
 class TypePtr;
 class TypeOopPtr;
 class TypeFunc;
+class TypeVect;
 class Unique_Node_List;
 class nmethod;
 class WarmCallInfo;
 class Node_Stack;
 struct Final_Reshape_Counts;
+class VectorBoxNode;
+class VectorBoxAllocateNode;
+class VectorUnboxNode;
 
 enum LoopOptsMode {
   LoopOptsDefault,
@@ -493,6 +498,8 @@ class Compile : public Phase {
 
   GrowableArray<CallGenerator*> _boxing_late_inlines; // same but for boxing operations
 
+  GrowableArray<CallGenerator*> _vector_reboxing_late_inlines; // same but for vector reboxing operations
+
   int                           _late_inlines_pos;    // Where in the queue should the next late inlining candidate go (emulate depth first inlining)
   uint                          _number_of_mh_late_inlines; // number of method handle late inlining still pending
 
@@ -745,6 +752,10 @@ class Compile : public Phase {
   }
 
   void print_method(CompilerPhaseType cpt, int level = 1) {
+    print_method(cpt, CompilerPhaseTypeHelper::to_string(cpt), level);
+  }
+
+  void print_method(CompilerPhaseType cpt, const char* name, int level) {
     EventCompilerPhase event;
     if (event.should_commit()) {
       event.set_starttime(C->_latest_stage_start_counter);
@@ -754,14 +765,15 @@ class Compile : public Phase {
       event.commit();
     }
 
-
 #ifndef PRODUCT
     if (_printer && _printer->should_print(level)) {
-      _printer->print_method(CompilerPhaseTypeHelper::to_string(cpt), level);
+      _printer->print_method(name, level);
     }
 #endif
     C->_latest_stage_start_counter.stamp();
   }
+
+  void print_method(CompilerPhaseType cpt, Node* n, int level = 3);
 
   void end_method(int level = 1) {
     EventCompilerPhase event;
@@ -999,10 +1011,13 @@ class Compile : public Phase {
                                    bool allow_intrinsics = true, bool delayed_forbidden = false);
   bool should_delay_inlining(ciMethod* call_method, JVMState* jvms) {
     return should_delay_string_inlining(call_method, jvms) ||
-           should_delay_boxing_inlining(call_method, jvms);
+           should_delay_boxing_inlining(call_method, jvms) ||
+           (UseVectorAPI && should_delay_vector_inlining(call_method, jvms));
   }
   bool should_delay_string_inlining(ciMethod* call_method, JVMState* jvms);
   bool should_delay_boxing_inlining(ciMethod* call_method, JVMState* jvms);
+  bool should_delay_vector_inlining(ciMethod* call_method, JVMState* jvms);
+  bool should_delay_vector_reboxing_inlining(ciMethod* call_method, JVMState* jvms);
 
   // Helper functions to identify inlining potential at call-site
   ciMethod* optimize_virtual_call(ciMethod* caller, int bci, ciInstanceKlass* klass,
@@ -1074,6 +1089,10 @@ class Compile : public Phase {
     _boxing_late_inlines.push(cg);
   }
 
+  void              add_vector_reboxing_late_inline(CallGenerator* cg) {
+    _vector_reboxing_late_inlines.push(cg);
+  }
+  
   void remove_useless_late_inlines(GrowableArray<CallGenerator*>* inlines, Unique_Node_List &useful);
 
   void process_print_inlining();
@@ -1097,6 +1116,26 @@ class Compile : public Phase {
   void inline_boxing_calls(PhaseIterGVN& igvn);
   bool optimize_loops(int& loop_opts_cnt, PhaseIterGVN& igvn, LoopOptsMode mode);
   void remove_root_to_sfpts_edges(PhaseIterGVN& igvn);
+
+  void expand_vbox_nodes();
+  void expand_vbox_node(VectorBoxNode* vec_box);
+  Node* expand_vbox_node_helper(Node* vbox,
+                                Node* vect,
+                                const TypeInstPtr* box_type,
+                                const TypeVect* vect_type);
+  Node* expand_vbox_alloc_node(VectorBoxAllocateNode* vbox_alloc,
+                               Node* value,
+                               const TypeInstPtr* box_type,
+                               const TypeVect* vect_type);
+  void scalarize_vbox_nodes();
+  void scalarize_vbox_node(VectorBoxNode* vec_box);
+  void expand_vunbox_nodes();
+  void expand_vunbox_node(VectorUnboxNode* vec_box);
+  void eliminate_vbox_alloc_nodes();
+  void eliminate_vbox_alloc_node(VectorBoxAllocateNode* vbox_alloc);
+  void inline_vector_reboxing_calls();
+
+  bool has_vbox_nodes();
 
   // Matching, CFG layout, allocation, code generation
   PhaseCFG*         cfg()                       { return _cfg; }

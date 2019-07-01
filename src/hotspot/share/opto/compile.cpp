@@ -426,6 +426,7 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
   remove_useless_late_inlines(&_string_late_inlines, useful);
   remove_useless_late_inlines(&_boxing_late_inlines, useful);
   remove_useless_late_inlines(&_late_inlines, useful);
+  remove_useless_late_inlines(&_vector_reboxing_late_inlines, useful);
   debug_only(verify_graph_edges(true/*check for no_dead_code*/);)
 }
 
@@ -544,7 +545,14 @@ void Compile::init_scratch_buffer_blob(int const_size) {
 
     ResourceMark rm;
     _scratch_const_size = const_size;
-    int size = C2Compiler::initial_code_buffer_size(const_size);
+    int size;
+    if (UseVectorAPI) {
+      int locs_size = sizeof(relocInfo) * MAX_locs_size;
+      int slop = 2 * CodeSection::end_slop(); // space between sections
+      size = (MAX_inst_size + MAX_stubs_size + _scratch_const_size + slop + locs_size);
+    } else {
+      size = (MAX_inst_size + MAX_stubs_size + _scratch_const_size);
+    }
     blob = BufferBlob::create("Compile::scratch_buffer", size);
     // Record the buffer blob for next time.
     set_scratch_buffer_blob(blob);
@@ -681,6 +689,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _late_inlines(comp_arena(), 2, 0, NULL),
                   _string_late_inlines(comp_arena(), 2, 0, NULL),
                   _boxing_late_inlines(comp_arena(), 2, 0, NULL),
+                  _vector_reboxing_late_inlines(comp_arena(), 2, 0, NULL),
                   _late_inlines_pos(0),
                   _number_of_mh_late_inlines(0),
                   _inlining_progress(false),
@@ -2119,6 +2128,8 @@ void Compile::inline_incrementally(PhaseIterGVN& igvn) {
 
     if (failing())  return;
 
+    print_method(PHASE_INCREMENTAL_INLINE_STEP, 3);
+
     {
       TracePhase tp("incrementalInline_igvn", &timers[_t_incrInline_igvn]);
       igvn.optimize();
@@ -2252,7 +2263,6 @@ void Compile::Optimize() {
     }
 
     print_method(PHASE_INCREMENTAL_BOXING_INLINE, 2);
-
     if (failing())  return;
   }
 
@@ -2270,6 +2280,53 @@ void Compile::Optimize() {
   // so keep only the actual candidates for optimizations.
   cleanup_expensive_nodes(igvn);
 
+  if (UseVectorAPI && has_vbox_nodes()) {
+    TracePhase tp("expandVectorBoxes", &timers[_t_expandVectorBoxes]);
+
+    set_inlining_incrementally(true); // FIXME another way to signal GraphKit it's post-parsing phase?
+
+    for_igvn()->clear();
+    initial_gvn()->replace_with(&igvn);
+
+    expand_vunbox_nodes();
+    scalarize_vbox_nodes();
+
+    inline_vector_reboxing_calls();
+
+    if (failing())  return;
+    {
+      ResourceMark rm;
+      PhaseRemoveUseless pru(initial_gvn(), for_igvn());
+    }
+    igvn = PhaseIterGVN(initial_gvn());
+    igvn.optimize();
+
+    print_method(PHASE_ITER_GVN_BEFORE_EA, 2);
+
+    if (failing())  return;
+
+    ////////////////////////////////////////////////////
+
+    for_igvn()->clear();
+    initial_gvn()->replace_with(&igvn);
+
+    expand_vbox_nodes();
+    eliminate_vbox_alloc_nodes();
+
+    if (failing())  return;
+    {
+      ResourceMark rm;
+      PhaseRemoveUseless pru(initial_gvn(), for_igvn());
+    }
+    igvn = PhaseIterGVN(initial_gvn());
+    igvn.optimize();
+    if (failing())  return;
+
+    print_method(PHASE_ITER_GVN_BEFORE_EA, 2);
+
+    set_inlining_incrementally(false); // FIXME another way to signal GraphKit it's post-parsing phase?
+  }
+
   if (!failing() && RenumberLiveNodes && live_nodes() + NodeLimitFudgeFactor < unique()) {
     Compile::TracePhase tp("", &timers[_t_renumberLive]);
     initial_gvn()->replace_with(&igvn);
@@ -2283,6 +2340,8 @@ void Compile::Optimize() {
     igvn = PhaseIterGVN(initial_gvn());
     igvn.optimize();
   }
+
+  // FIXME for_igvn() is corrupted from here: new_worklist which is set_for_ignv() was allocated on stack.
 
   // Perform escape analysis
   if (_do_escape_analysis && ConnectionGraph::has_candidates(this)) {
@@ -2440,6 +2499,441 @@ void Compile::Optimize() {
  print_method(PHASE_OPTIMIZE_FINISHED, 2);
 }
 
+void Compile::print_method(CompilerPhaseType cpt, Node* n, int level) {
+  ResourceMark rm;
+  stringStream ss;
+  ss.print_raw(CompilerPhaseTypeHelper::to_string(cpt));
+  if (n != NULL) {
+#ifndef PRODUCT
+    ss.print(": %s %d", n->Name(), n->_idx);
+#else
+    ss.print(": %d %d", n->Opcode(), n->_idx);
+#endif // PRODUCT
+  } else {
+    ss.print_raw(": NULL");
+  }
+  C->print_method(cpt, ss.as_string(), level);
+}
+
+void Compile::scalarize_vbox_nodes() {
+  int macro_idx = C->macro_count() - 1;
+  while(macro_idx >= 0) {
+    Node * n = C->macro_node(macro_idx);
+    assert(n->is_macro(), "only macro nodes expected here");
+    if (n->Opcode() == Op_VectorBox) {
+      VectorBoxNode* vbox = static_cast<VectorBoxNode*>(n);
+      scalarize_vbox_node(vbox);
+      if (failing())  return;
+      print_method(PHASE_SCALARIZE_VBOX, vbox);
+    }
+    if (C->failing())  return;
+    macro_idx = MIN2(macro_idx - 1, C->macro_count() - 1);
+  }
+}
+
+void Compile::expand_vbox_nodes() {
+  int macro_idx = C->macro_count() - 1;
+  while(macro_idx >= 0) {
+    Node * n = C->macro_node(macro_idx);
+    assert(n->is_macro(), "only macro nodes expected here");
+    if (n->Opcode() == Op_VectorBox) {
+      VectorBoxNode* vbox = static_cast<VectorBoxNode*>(n);
+      expand_vbox_node(vbox);
+      if (failing())  return;
+      print_method(PHASE_EXPAND_VBOX, vbox);
+    }
+    if (C->failing())  return;
+    macro_idx = MIN2(macro_idx - 1, C->macro_count() - 1);
+  }
+}
+
+void Compile::expand_vunbox_nodes() {
+  int macro_idx = C->macro_count() - 1;
+  while(macro_idx >= 0) {
+    Node * n = C->macro_node(macro_idx);
+    assert(n->is_macro(), "only macro nodes expected here");
+    if (n->Opcode() == Op_VectorUnbox) {
+      VectorUnboxNode* vec_unbox = static_cast<VectorUnboxNode*>(n);
+      expand_vunbox_node(vec_unbox);
+      if (failing())  return;
+      print_method(PHASE_EXPAND_VUNBOX, vec_unbox);
+    }
+    if (C->failing())  return;
+    macro_idx = MIN2(macro_idx - 1, C->macro_count() - 1);
+  }
+}
+
+void Compile::eliminate_vbox_alloc_nodes() {
+  int macro_idx = C->macro_count() - 1;
+  while(macro_idx >= 0) {
+    Node * n = C->macro_node(macro_idx);
+    assert(n->is_macro(), "only macro nodes expected here");
+    if (n->Opcode() == Op_VectorBoxAllocate) {
+      VectorBoxAllocateNode* vbox_alloc = static_cast<VectorBoxAllocateNode*>(n);
+      eliminate_vbox_alloc_node(vbox_alloc);
+      if (failing())  return;
+      print_method(PHASE_ELIMINATE_VBOX_ALLOC, vbox_alloc);
+    }
+    if (C->failing())  return;
+    macro_idx = MIN2(macro_idx - 1, C->macro_count() - 1);
+  }
+}
+
+void Compile::inline_vector_reboxing_calls() {
+  if (_vector_reboxing_late_inlines.length() > 0) {
+    PhaseGVN* gvn = initial_gvn();
+
+    _late_inlines_pos = _late_inlines.length();
+    while (_vector_reboxing_late_inlines.length() > 0) {
+      CallGenerator* cg = _vector_reboxing_late_inlines.pop();
+      cg->do_late_inline();
+      if (failing())  return;
+      print_method(PHASE_INLINE_VECTOR_REBOX, cg->call_node());
+    }
+    _vector_reboxing_late_inlines.trunc_to(0);
+  }
+}
+
+bool Compile::has_vbox_nodes() {
+  if (_vector_reboxing_late_inlines.length() > 0) {
+    return true;
+  }
+  for (int macro_idx = C->macro_count() - 1; macro_idx >= 0; macro_idx--) {
+    Node * n = C->macro_node(macro_idx);
+    assert(n->is_macro(), "only macro nodes expected here");
+    if (n->Opcode() == Op_VectorUnbox || n->Opcode() == Op_VectorBox || n->Opcode() == Op_VectorBoxAllocate) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static JVMState* clone_jvms(Compile* C, SafePointNode* sfpt) {
+  JVMState* new_jvms = sfpt->jvms()->clone_shallow(C);
+  uint size = sfpt->req();
+  SafePointNode* map = new SafePointNode(size, new_jvms);
+  for (uint i = 0; i < size; i++) {
+    map->init_req(i, sfpt->in(i));
+  }
+  // Make sure the state is a MergeMem for parsing.
+  // FIXME not needed?
+//  if (!map->in(TypeFunc::Memory)->is_MergeMem()) {
+//    Node* mem = MergeMemNode::make(map->in(TypeFunc::Memory));
+//    gvn.set_type_bottom(mem);
+//    map->set_req(TypeFunc::Memory, mem);
+//  }
+  new_jvms->set_map(map);
+  return new_jvms;
+}
+
+void Compile::scalarize_vbox_node(VectorBoxNode* vec_box) {
+  Node* vec_value = vec_box->in(VectorBoxNode::Value);
+  PhaseGVN& gvn = *initial_gvn();
+
+  // Process merged VBAs
+
+  Unique_Node_List calls(C->comp_arena());
+  for (DUIterator_Fast imax, i = vec_box->fast_outs(imax); i < imax; i++) {
+    Node* use = vec_box->fast_out(i);
+    if (use->is_CallJava()) {
+      CallJavaNode* call = use->as_CallJava();
+      if (call->has_non_debug_use(vec_box) && vec_box->in(VectorBoxNode::Box)->is_Phi()) {
+        calls.push(call);
+      }
+    }
+  }
+
+  while (VectorAPIAggressiveReboxing && calls.size() > 0) {
+    CallJavaNode* call = calls.pop()->as_CallJava();
+    // Attach new VBA to the call and use it instead of Phi (VBA ... VBA).
+
+    JVMState* jvms = clone_jvms(C, call);
+    GraphKit kit(jvms);
+    PhaseGVN& gvn = kit.gvn();
+
+    // Adjust JVMS from post-call to pre-call state: put args on stack
+    uint nargs = call->method()->arg_size();
+    kit.ensure_stack(kit.sp() + nargs);
+    for (uint i = TypeFunc::Parms; i < call->tf()->domain()->cnt(); i++) {
+      kit.push(call->in(i));
+    }
+    jvms = kit.sync_jvms();
+
+    Node* new_vbox = NULL;
+    {
+      PreserveReexecuteState prs(&kit);
+
+      kit.jvms()->set_should_reexecute(true);
+
+      const TypeInstPtr* vbox_type = vec_box->box_type();
+      const TypeVect* vect_type = vec_box->vec_type();
+      Node* vect = vec_box->in(VectorBoxNode::Value);
+
+      VectorBoxAllocateNode* alloc = new VectorBoxAllocateNode(C, vbox_type);
+      kit.set_edges_for_java_call(alloc, /*must_throw=*/false, /*separate_io_proj=*/true);
+      kit.make_slow_call_ex(alloc, env()->Throwable_klass(), /*separate_io_proj=*/true, /*deoptimize=*/true);
+      kit.set_i_o(gvn.transform( new ProjNode(alloc, TypeFunc::I_O) ));
+      kit.set_all_memory(gvn.transform( new ProjNode(alloc, TypeFunc::Memory) ));
+      Node* ret = gvn.transform(new ProjNode(alloc, TypeFunc::Parms));
+
+      new_vbox = gvn.transform(new VectorBoxNode(C, ret, vect, vbox_type, vect_type));
+
+      kit.replace_in_map(vec_box, new_vbox);
+    }
+
+    kit.dec_sp(nargs);
+    jvms = kit.sync_jvms();
+
+    bool found = false;
+    int cnt = _vector_reboxing_late_inlines.length();
+    for (int i = 0; i < cnt; i++) {
+      CallGenerator* cg = _vector_reboxing_late_inlines.at(i);
+      if (cg->call_node() == call) {
+        ciMethod* m = cg->method();
+        _vector_reboxing_late_inlines.remove(cg); // remove_at(i);
+        CallGenerator* new_cg = CallGenerator::for_vector_reboxing_late_inline(
+            m,
+            CallGenerator::for_inline(m, m->interpreter_invocation_count()));
+
+        JVMState* new_jvms = new_cg->generate(jvms);
+
+        Node* new_res = kit.top();
+        if (m->return_type()->basic_type() != T_VOID) {
+          new_res = new_cg->call_node()->proj_out(TypeFunc::Parms);
+        }
+        kit.replace_call(call, new_res, /*do_replaced_nodes=*/true);
+
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      // FIXME does it cover all cases?
+      CallJavaNode* new_call = call->clone()->as_CallJava();
+      new_call->set_req(TypeFunc::Control  , kit.control());
+      new_call->set_req(TypeFunc::I_O      , kit.i_o());
+      new_call->set_req(TypeFunc::Memory   , kit.reset_memory());
+      new_call->set_req(TypeFunc::FramePtr , kit.frameptr());
+
+      new_call->replace_edge(vec_box, new_vbox);
+      new_call = gvn.transform(new_call)->as_CallJava();
+
+      C->gvn_replace_by(call, new_call);
+    }
+    call->disconnect_inputs(NULL, C);
+  }
+
+  // Process debug uses at safepoints
+  Unique_Node_List safepoints(C->comp_arena());
+
+  for (DUIterator_Fast imax, i = vec_box->fast_outs(imax); i < imax; i++) {
+    Node* use = vec_box->fast_out(i);
+    if (use->is_SafePoint()) {
+      SafePointNode* sfpt = use->as_SafePoint();
+      if (!sfpt->is_Call() || !sfpt->as_Call()->has_non_debug_use(vec_box)) {
+        safepoints.push(sfpt);
+      }
+    }
+  }
+
+  while (safepoints.size() > 0) {
+    SafePointNode* sfpt = safepoints.pop()->as_SafePoint();
+
+    uint first_ind = (sfpt->req() - sfpt->jvms()->scloff());
+    Node* sobj = new SafePointScalarObjectNode(vec_box->box_type(),
+#ifdef ASSERT
+                                               NULL,
+#endif // ASSERT
+                                               first_ind, /*n_fields=*/1);
+    sobj->init_req(0, C->root());
+    sfpt->add_req(vec_value);
+
+    sobj = gvn.transform(sobj);
+
+    JVMState *jvms = sfpt->jvms();
+
+    jvms->set_endoff(sfpt->req());
+    // Now make a pass over the debug information replacing any references
+    // to the allocated object with "sobj"
+    int start = jvms->debug_start();
+    int end   = jvms->debug_end();
+    sfpt->replace_edges_in_range(vec_box, sobj, start, end);
+  }
+}
+
+void Compile::expand_vbox_node(VectorBoxNode* vec_box) {
+  if (vec_box->outcnt() > 0) {
+    Node* vbox = vec_box->in(VectorBoxNode::Box);
+    Node* vect = vec_box->in(VectorBoxNode::Value);
+    Node* result = expand_vbox_node_helper(vbox, vect, vec_box->box_type(), vec_box->vec_type());
+    C->gvn_replace_by(vec_box, result);
+  }
+  C->remove_macro_node(vec_box);
+}
+
+Node* Compile::expand_vbox_node_helper(Node* vbox,
+                                       Node* vect,
+                                       const TypeInstPtr* box_type,
+                                       const TypeVect* vect_type) {
+  if (vbox->is_Phi() && vect->is_Phi()) {
+    assert(vbox->as_Phi()->region() == vect->as_Phi()->region(), "");
+    Node* new_phi = new PhiNode(vbox->as_Phi()->region(), box_type);
+    for (uint i = 1; i < vbox->req(); i++) {
+      Node* new_box = expand_vbox_node_helper(vbox->in(i), vect->in(i), box_type, vect_type);
+      new_phi->set_req(i, new_box);
+    }
+    new_phi = initial_gvn()->transform(new_phi);
+    return new_phi;
+  } else if (vbox->is_Proj() && vbox->in(0)->Opcode() == Op_VectorBoxAllocate) {
+    VectorBoxAllocateNode* vbox_alloc = static_cast<VectorBoxAllocateNode*>(vbox->in(0));
+    return expand_vbox_alloc_node(vbox_alloc, vect, box_type, vect_type);
+  } else {
+    // TODO: ensure that expanded vbox is initialized with the same value (vect).
+    return vbox; // already expanded
+  }
+}
+
+Node* Compile::expand_vbox_alloc_node(VectorBoxAllocateNode* vbox_alloc,
+                                      Node* value,
+                                      const TypeInstPtr* box_type,
+                                      const TypeVect* vect_type) {
+  JVMState* jvms = clone_jvms(C, vbox_alloc);
+  GraphKit kit(jvms);
+  PhaseGVN& gvn = kit.gvn();
+
+  ciInstanceKlass* box_klass = box_type->klass()->as_instance_klass();
+  BasicType bt = vect_type->element_basic_type();
+  int num_elem = vect_type->length();
+
+  bool is_mask = box_klass->is_vectormask();
+  //assert(!is_mask || vect_type->element_basic_type() == getMaskBasicType(bt), "consistent vector element type expected");
+  if (is_mask && bt != T_BOOLEAN) {
+    value = gvn.transform(new VectorStoreMaskNode(value, bt, num_elem));
+    // Although type of mask depends on its definition, in terms of storage everything is stored in boolean array.
+    bt = T_BOOLEAN;
+    assert(value->as_Vector()->bottom_type()->is_vect()->element_basic_type() == bt,
+           "must be consistent with mask representation");
+  }
+
+  // Generate the allocate for the Vector object.
+  const TypeKlassPtr* klass_type = box_type->as_klass_type();
+  Node* klass_node = kit.makecon(klass_type);
+  Node* vec_obj = kit.new_instance(klass_node);
+
+  // Generate array allocation for the field which holds the values.
+  const TypeKlassPtr* array_klass = TypeKlassPtr::make(ciTypeArrayKlass::make(bt));
+  Node* arr = kit.new_array(kit.makecon(array_klass), kit.intcon(num_elem), 1);
+
+  // FIXME convert both stores into initializing stores
+
+  // Store the vector value into the array.
+  Node* arr_adr = kit.array_element_address(arr, kit.intcon(0), bt);
+  const TypePtr* arr_adr_type = arr_adr->bottom_type()->is_ptr();
+  Node* arr_mem = kit.memory(arr_adr);
+  Node* vstore = gvn.transform(StoreVectorNode::make(0,
+                                                     kit.control(),
+                                                     arr_mem,
+                                                     arr_adr,
+                                                     arr_adr_type,
+                                                     value,
+                                                     num_elem));
+  kit.set_memory(vstore, arr_adr_type);
+
+
+  // Store the allocated array into object.
+  ciField* field = box_klass->get_field_by_name(ciSymbol::make(is_mask ? "bits" : "vec"),
+                                                ciSymbol::make(TypeArrayKlass::external_name(bt)),
+                                                false);
+  Node* vec_field = kit.basic_plus_adr(vec_obj, field->offset_in_bytes());
+  const TypePtr* vec_adr_type = vec_field->bottom_type()->is_ptr();
+  Node* field_store = gvn.transform(kit.access_store_at(kit.control(), vec_obj,
+                                                            vec_field,
+                                                            vec_adr_type,
+                                                            arr,
+                                                            TypeOopPtr::make_from_klass(field->type()->as_klass()),
+                                                            T_OBJECT,
+                                                            IN_HEAP));
+
+  kit.set_memory(field_store, vec_adr_type);
+
+  kit.replace_call(vbox_alloc, vec_obj, true);
+  C->remove_macro_node(vbox_alloc);
+  return vec_obj;
+}
+
+void Compile::expand_vunbox_node(VectorUnboxNode* vec_unbox) {
+  if (vec_unbox->outcnt() > 0) {
+    GraphKit kit;
+    PhaseGVN& gvn = kit.gvn();
+
+    Node* obj = vec_unbox->obj();
+    const TypeInstPtr* tinst = gvn.type(obj)->isa_instptr();
+    ciInstanceKlass* from_kls = tinst->klass()->as_instance_klass();
+    BasicType bt = vec_unbox->vect_type()->element_basic_type();
+    BasicType masktype = bt;
+
+    const char* field_name = "vec";
+    if (from_kls->is_vectormask()) {
+      field_name = "bits";
+      bt = T_BOOLEAN;
+    } else if (from_kls->is_vectorshuffle()) {
+      field_name = "reorder";
+      bt = T_BYTE;
+    }
+
+    ciField* field = from_kls->get_field_by_name(ciSymbol::make(field_name),
+      ciSymbol::make(TypeArrayKlass::external_name(bt)), false);
+
+    int offset = field->offset_in_bytes();
+    Node* vec_adr = kit.basic_plus_adr(obj, offset);
+
+    Node* mem = vec_unbox->mem();
+    Node* ctrl = vec_unbox->in(0);
+    Node* vec_field_ld = LoadNode::make(gvn,
+                                        ctrl,
+                                        mem,
+                                        vec_adr,
+                                        vec_adr->bottom_type()->is_ptr(),
+                                        TypeOopPtr::make_from_klass(field->type()->as_klass()),
+                                        T_OBJECT,
+                                        MemNode::unordered);
+    vec_field_ld = gvn.transform(vec_field_ld);
+
+    Node* adr = kit.array_element_address(vec_field_ld, gvn.intcon(0), bt);
+    const TypePtr* adr_type = adr->bottom_type()->is_ptr();
+    int num_elem = vec_unbox->bottom_type()->is_vect()->length();
+    Node* vec_val_load = LoadVectorNode::make(0,
+                                              ctrl,
+                                              mem,
+                                              adr,
+                                              adr_type,
+                                              num_elem,
+                                              bt);
+    vec_val_load = gvn.transform(vec_val_load);
+
+    if (from_kls->is_vectormask() && masktype != T_BOOLEAN) {
+      assert(vec_unbox->bottom_type()->is_vect()->element_basic_type() == masktype, "expect mask type consistency");
+      vec_val_load = gvn.transform(new VectorLoadMaskNode(vec_val_load, TypeVect::make(masktype, num_elem)));
+    } else if (from_kls->is_vectorshuffle()) {
+      assert(vec_unbox->bottom_type()->is_vect()->element_basic_type() == masktype, "expect shuffle type consistency");
+      vec_val_load = gvn.transform(new VectorLoadShuffleNode(vec_val_load, TypeVect::make(masktype, num_elem)));
+    }
+
+    gvn.hash_delete(vec_unbox);
+    vec_unbox->disconnect_inputs(NULL, C);
+    C->gvn_replace_by(vec_unbox, vec_val_load);
+  }
+  C->remove_macro_node(vec_unbox);
+}
+
+void Compile::eliminate_vbox_alloc_node(VectorBoxAllocateNode* vbox_alloc) {
+  JVMState* jvms = clone_jvms(C, vbox_alloc);
+  GraphKit kit(jvms);
+  // FIXME replace VBA with a safepoint. Otherwise, no safepoints left in tight loops.
+  kit.replace_call(vbox_alloc, kit.top(), true);
+  C->remove_macro_node(vbox_alloc);
+}
 
 //------------------------------Code_Gen---------------------------------------
 // Given a graph, generate code for it
@@ -2463,6 +2957,7 @@ void Compile::Code_Gen() {
   {
     TracePhase tp("matcher", &timers[_t_matcher]);
     matcher.match();
+    print_method(PHASE_AFTER_MATCHING, 3);
   }
   // In debug mode can dump m._nodes.dump() for mapping of ideal to machine
   // nodes.  Mapping is only valid at the root of each matched subtree.
@@ -2772,7 +3267,8 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
     // Check for commutative opcode
     switch( nop ) {
     case Op_AddI:  case Op_AddF:  case Op_AddD:  case Op_AddL:
-    case Op_MaxI:  case Op_MinI:
+    case Op_MaxI:  case Op_MaxL:  case Op_MaxF:  case Op_MaxD:
+    case Op_MinI:  case Op_MinL:  case Op_MinF:  case Op_MinD:
     case Op_MulI:  case Op_MulF:  case Op_MulD:  case Op_MulL:
     case Op_AndL:  case Op_XorL:  case Op_OrL:
     case Op_AndI:  case Op_XorI:  case Op_OrI: {
@@ -2856,6 +3352,7 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
     frc.inc_java_call_count(); // Count java call site;
   case Op_CallRuntime:
   case Op_CallLeaf:
+  case Op_CallLeafVector:
   case Op_CallLeafNoFP: {
     assert (n->is_Call(), "");
     CallNode *call = n->as_Call();
@@ -3330,6 +3827,8 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
 
   case Op_LoadVector:
   case Op_StoreVector:
+  case Op_LoadVectorGather:
+  case Op_StoreVectorScatter:
     break;
 
   case Op_AddReductionVI:
@@ -3340,6 +3839,13 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   case Op_MulReductionVL:
   case Op_MulReductionVF:
   case Op_MulReductionVD:
+  case Op_MinReductionV:
+  case Op_MaxReductionV:
+  case Op_AndReductionV:
+  case Op_OrReductionV:
+  case Op_XorReductionV:
+  case Op_SubReductionV:
+  case Op_SubReductionVFP:
     break;
 
   case Op_PackB:

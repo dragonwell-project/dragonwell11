@@ -52,6 +52,7 @@
 #include "opto/runtime.hpp"
 #include "opto/rootnode.hpp"
 #include "opto/subnode.hpp"
+#include "opto/vectornode.hpp"
 #include "prims/nativeLookup.hpp"
 #include "prims/unsafe.hpp"
 #include "runtime/objectMonitor.hpp"
@@ -328,6 +329,27 @@ class LibraryCallKit : public GraphKit {
 
   bool inline_profileBoolean();
   bool inline_isCompileConstant();
+
+  // Vector API support
+  bool inline_vector_nary_operation(int n);
+  bool inline_vector_broadcast_coerced();
+  bool inline_vector_mem_operation(bool is_store);
+  bool inline_vector_gather_scatter(bool is_scatter);
+  bool inline_vector_reduction();
+  bool inline_vector_test();
+  bool inline_vector_blend();
+  bool inline_vector_rearrange();
+  bool inline_vector_compare();
+  bool inline_vector_broadcast_int();
+  bool inline_vector_cast_reinterpret(bool is_cast);
+  bool inline_vector_extract();
+  bool inline_vector_insert();
+  Node* box_vector(Node* in, const TypeInstPtr* vbox_type, BasicType bt, int num_elem);
+  Node* unbox_vector(Node* in, const TypeInstPtr* vbox_type, BasicType bt, int num_elem);
+  Node* shift_count(Node* cnt, int shift_op, BasicType bt, int num_elem);
+  Node* gen_call_to_svml(int vector_api_op_id, BasicType bt, int num_elem, Node* opd1, Node* opd2);
+  void set_vector_result(Node* result, bool set_res = true);
+
   void clear_upper_avx() {
 #ifdef X86
     if (UseAVX >= 2) {
@@ -521,7 +543,6 @@ bool LibraryCallKit::try_to_inline(int predicate) {
     set_all_memory(reset_memory());
   }
   assert(merged_memory(), "");
-
 
   switch (intrinsic_id()) {
   case vmIntrinsics::_hashCode:                 return inline_native_hashcode(intrinsic()->is_virtual(), !is_static);
@@ -876,6 +897,44 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_isUpperCase:
   case vmIntrinsics::_isWhitespace:
     return inline_character_compare(intrinsic_id());
+
+  case vmIntrinsics::_VectorUnaryOp:
+    return inline_vector_nary_operation(1);
+  case vmIntrinsics::_VectorBinaryOp:
+    return inline_vector_nary_operation(2);
+  case vmIntrinsics::_VectorTernaryOp:
+    return inline_vector_nary_operation(3);
+
+  case vmIntrinsics::_VectorBroadcastCoerced:
+    return inline_vector_broadcast_coerced();
+  case vmIntrinsics::_VectorLoadOp:
+    return inline_vector_mem_operation(/*is_store=*/false);
+  case vmIntrinsics::_VectorStoreOp:
+    return inline_vector_mem_operation(/*is_store=*/true);
+  case vmIntrinsics::_VectorGatherOp:
+    return inline_vector_gather_scatter(/*is_scatter*/ false);
+  case vmIntrinsics::_VectorScatterOp:
+    return inline_vector_gather_scatter(/*is_scatter*/ true);
+  case vmIntrinsics::_VectorReductionCoerced:
+    return inline_vector_reduction();
+  case vmIntrinsics::_VectorTest:
+    return inline_vector_test();
+  case vmIntrinsics::_VectorBlend:
+    return inline_vector_blend();
+  case vmIntrinsics::_VectorRearrange:
+    return inline_vector_rearrange();
+  case vmIntrinsics::_VectorCompare:
+    return inline_vector_compare();
+  case vmIntrinsics::_VectorBroadcastInt:
+    return inline_vector_broadcast_int();
+  case vmIntrinsics::_VectorReinterpret:
+    return inline_vector_cast_reinterpret(/*is_cast*/ false);
+  case vmIntrinsics::_VectorCast:
+    return inline_vector_cast_reinterpret(/*is_cast*/ true);
+  case vmIntrinsics::_VectorInsert:
+    return inline_vector_insert();
+  case vmIntrinsics::_VectorExtract:
+    return inline_vector_extract();
 
   default:
     // If you get here, it may be that someone has added a new intrinsic
@@ -6366,6 +6425,1715 @@ bool LibraryCallKit::inline_sha_implCompressMB(Node* digestBase_obj, ciInstanceK
   Node* result = _gvn.transform(new ProjNode(call, TypeFunc::Parms));
   set_result(result);
 
+  return true;
+}
+
+enum VectorApiObjectType {
+  VECAPI_VECTOR,
+  VECAPI_MASK,
+  VECAPI_SPECIES,
+  VECAPI_SHUFFLE,
+};
+
+enum VectorMaskUseType {
+  VecMaskUseLoad,
+  VecMaskUseStore,
+  VecMaskUseAll,
+  VecMaskNotUsed
+};
+
+static bool arch_supports_vector(int op, int num_elem, BasicType type, VectorMaskUseType mask_use_type, int op_arity = 0) {
+  // Check that the operation is valid.
+  if (op <= 0) {
+#ifndef PRODUCT
+    if (DebugVectorApi) {
+      tty->print_cr("Rejected intrinsification because no valid vector op could be extracted");
+    }
+#endif
+    return false;
+  }
+
+  // Check that architecture supports this op-size-type combination.
+  if (!Matcher::match_rule_supported_vector(op, num_elem, type, op_arity)) {
+#ifndef PRODUCT
+    if (DebugVectorApi) {
+      tty->print_cr("Rejected vector op (%s,%s,%d) because architecture does not support it",
+                    NodeClassNames[op], type2name(type), num_elem);
+    }
+#endif
+    return false;
+  } else {
+    assert(Matcher::match_rule_supported(op), "must be supported");
+  }
+
+  // Check whether mask unboxing is supported.
+  if (mask_use_type == VecMaskUseAll || mask_use_type == VecMaskUseLoad) {
+    if (!Matcher::match_rule_supported_vector(Op_VectorLoadMask, num_elem, type)) {
+    #ifndef PRODUCT
+        if (DebugVectorApi) {
+          tty->print_cr("Rejected vector mask loading (%s,%s,%d) because architecture does not support it",
+                        NodeClassNames[Op_VectorLoadMask], type2name(type), num_elem);
+        }
+    #endif
+        return false;
+      }
+  }
+
+  // Check whether mask boxing is supported.
+  if (mask_use_type == VecMaskUseAll || mask_use_type == VecMaskUseStore) {
+    if (!Matcher::match_rule_supported_vector(Op_VectorStoreMask, num_elem, type)) {
+    #ifndef PRODUCT
+        if (DebugVectorApi) {
+          tty->print_cr("Rejected vector mask storing (%s,%s,%d) because architecture does not support it",
+                        NodeClassNames[Op_VectorStoreMask], type2name(type), num_elem);
+        }
+    #endif
+        return false;
+      }
+  }
+
+  return true;
+}
+
+// Should be aligned with constants in jdk.panama.vector.VectorIntrinsics.
+enum {
+  // Unary
+  OP_ABS     = 0,
+  OP_NEG     = 1,
+  OP_SQRT    = 2,
+  OP_NOT     = 3,
+  // Binary
+  OP_ADD     = 4,
+  OP_SUB     = 5,
+  OP_MUL     = 6,
+  OP_DIV     = 7,
+  OP_MIN     = 8,
+  OP_MAX     = 9,
+  OP_AND     = 10,
+  OP_OR      = 11,
+  OP_XOR     = 12,
+  // Ternary
+  OP_FMA     = 13,
+  // Broadcast int
+  OP_LSHIFT  = 14,
+  OP_RSHIFT  = 15,
+  OP_URSHIFT = 16,
+  // Vector Math Library
+  OP_TAN = 101,
+  OP_SVML_START = OP_TAN,
+  OP_TANH = 102,
+  OP_SIN = 103,
+  OP_SINH = 104,
+  OP_COS = 105,
+  OP_COSH = 106,
+  OP_ASIN = 107,
+  OP_ACOS = 108,
+  OP_ATAN = 109,
+  OP_ATAN2 = 110,
+  OP_CBRT = 111,
+  OP_LOG = 112,
+  OP_LOG10 = 113,
+  OP_LOG1P = 114,
+  OP_POW = 115,
+  OP_EXP = 116,
+  OP_EXPM1 = 117,
+  OP_HYPOT = 118,
+  OP_SVML_END = OP_HYPOT,
+};
+
+static int get_opc(jint op, BasicType bt) {
+  switch (op) {
+    case OP_ADD: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    return Op_AddI;
+        case T_LONG:   return Op_AddL;
+        case T_FLOAT:  return Op_AddF;
+        case T_DOUBLE: return Op_AddD;
+        default: fatal("ADD: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_SUB: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    return Op_SubI;
+        case T_LONG:   return Op_SubL;
+        case T_FLOAT:  return Op_SubF;
+        case T_DOUBLE: return Op_SubD;
+        default: fatal("SUB: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_MUL: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    return Op_MulI;
+        case T_LONG:   return Op_MulL;
+        case T_FLOAT:  return Op_MulF;
+        case T_DOUBLE: return Op_MulD;
+        default: fatal("MUL: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_DIV: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    return Op_DivI;
+        case T_LONG:   return Op_DivL;
+        case T_FLOAT:  return Op_DivF;
+        case T_DOUBLE: return Op_DivD;
+        default: fatal("DIV: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_MIN: {
+      switch (bt) {
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:    return Op_MinI;
+        case T_LONG:   return Op_MinL;
+        case T_FLOAT:  return Op_MinF;
+        case T_DOUBLE: return Op_MinD;
+        default: fatal("MIN: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_MAX: {
+      switch (bt) {
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:    return Op_MaxI;
+        case T_LONG:   return Op_MaxL;
+        case T_FLOAT:  return Op_MaxF;
+        case T_DOUBLE: return Op_MaxD;
+        default: fatal("MAX: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_ABS: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_LONG:   // fall-through
+        case T_INT:    return Op_AbsI;
+        case T_FLOAT:  return Op_AbsF;
+        case T_DOUBLE: return Op_AbsD;
+        default: fatal("ABS: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_NEG: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    return Op_NegI;
+        case T_FLOAT:  return Op_NegF;
+        case T_DOUBLE: return Op_NegD;
+        default: fatal("NEG: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_AND: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    return Op_AndI;
+        case T_LONG:   return Op_AndL;
+        default: fatal("AND: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_OR: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    return Op_OrI;
+        case T_LONG:   return Op_OrL;
+        default: fatal("OR: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_XOR: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    return Op_XorI;
+        case T_LONG:   return Op_XorL;
+        default: fatal("XOR: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_SQRT: {
+      switch (bt) {
+        case T_FLOAT:  return Op_SqrtF;
+        case T_DOUBLE: return Op_SqrtD;
+        default: fatal("SQRT: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_NOT: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:    // fall-through
+        case T_LONG:   return Op_Not;
+        default: fatal("NOT: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_FMA: {
+      switch (bt) {
+        case T_FLOAT:  return Op_FmaF;
+        case T_DOUBLE: return Op_FmaD;
+        default: fatal("FMA: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_LSHIFT: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:  return Op_LShiftI;
+        case T_LONG: return Op_LShiftL;
+        default: fatal("LSHIFT: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_RSHIFT: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:  return Op_RShiftI;
+        case T_LONG: return Op_RShiftL;
+        default: fatal("RSHIFT: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_URSHIFT: {
+      switch (bt) {
+        case T_BYTE:   // fall-through
+        case T_SHORT:  // fall-through
+        case T_INT:  return Op_URShiftI;
+        case T_LONG: return Op_URShiftL;
+        default: fatal("URSHIFT: %s", type2name(bt));
+      }
+      break;
+    }
+    case OP_TAN:
+    case OP_TANH:
+    case OP_SIN:
+    case OP_SINH:
+    case OP_COS:
+    case OP_COSH:
+    case OP_ASIN:
+    case OP_ACOS:
+    case OP_ATAN:
+    case OP_ATAN2:
+    case OP_CBRT:
+    case OP_LOG:
+    case OP_LOG10:
+    case OP_LOG1P:
+    case OP_POW:
+    case OP_EXP:
+    case OP_EXPM1:
+    case OP_HYPOT:
+      return Op_CallLeafVector;
+    default: fatal("unknown op: %d", op);
+  }
+  return 0; // Unimplemented
+}
+
+Node* LibraryCallKit::box_vector(Node* vector, const TypeInstPtr* vbox_type,
+                                 BasicType elem_bt, int num_elem) {
+
+  const TypeVect* vec_type = TypeVect::make(elem_bt, num_elem);
+
+  VectorBoxAllocateNode* alloc = new VectorBoxAllocateNode(C, vbox_type);
+  set_edges_for_java_call(alloc, /*must_throw=*/false, /*separate_io_proj=*/true);
+  make_slow_call_ex(alloc, env()->Throwable_klass(), /*separate_io_proj=*/true);
+  set_i_o(_gvn.transform( new ProjNode(alloc, TypeFunc::I_O) ));
+  set_all_memory(_gvn.transform( new ProjNode(alloc, TypeFunc::Memory) ));
+  Node* ret = _gvn.transform(new ProjNode(alloc, TypeFunc::Parms));
+
+  VectorBoxNode* vbox = new VectorBoxNode(C, ret, vector, vbox_type, vec_type);
+  return _gvn.transform(vbox);
+}
+
+Node* LibraryCallKit::unbox_vector(Node* v, const TypeInstPtr* vbox_type, BasicType elem_bt, int num_elem) {
+  const TypeInstPtr* vbox_type_v = gvn().type(v)->is_instptr();
+  if (vbox_type->klass() != vbox_type_v->klass()) {
+    return NULL; // arguments don't agree on vector shapes
+  }
+  if (vbox_type_v->maybe_null()) {
+    return NULL; // no nulls are allowed
+  }
+  const TypeVect* vec_type = TypeVect::make(elem_bt, num_elem);
+  Node* unbox = gvn().transform(new VectorUnboxNode(C, vec_type, v, merged_memory()));
+  return unbox;
+}
+
+void LibraryCallKit::set_vector_result(Node* result, bool set_res) {
+  if (DebugVectorApi) {
+#ifndef PRODUCT
+    tty->print("============ ");
+    callee()->print();
+    tty->print_cr(" ============");
+    result->dump(5);
+    tty->print_cr("----------------------------------------------------");
+#endif
+  }
+  if (set_res) {
+    set_result(result);
+  }
+}
+
+bool LibraryCallKit::inline_vector_nary_operation(int n) {
+  if (!UseVectorAPI) return false;
+  const TypeInt* opr              = gvn().type(argument(0))->is_int();
+  const TypeInstPtr* vector_klass = gvn().type(argument(1))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(2))->is_instptr();
+  const TypeInt* vlen             = gvn().type(argument(3))->is_int();
+
+  if (!opr->is_con() || vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+  int opc = get_opc(opr->get_con(), elem_bt);
+  int sopc = opc != Op_CallLeafVector ? VectorNode::opcode(opc, elem_bt) : Op_CallLeafVector;
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  if (opc == Op_CallLeafVector && !Matcher::supports_vector_calling_convention()) {
+    return false;
+  }
+
+  // TODO When mask usage is supported, VecMaskNotUsed needs to be VecMaskUseLoad.
+  if (!arch_supports_vector(sopc, num_elem, elem_bt, vbox_klass->is_vectormask() ? VecMaskUseAll : VecMaskNotUsed, n)) {
+    return false; // not supported
+  }
+
+  Node* opd1 = NULL; Node* opd2 = NULL; Node* opd3 = NULL;
+  switch (n) {
+    case 3: {
+      opd3 = unbox_vector(argument(6), vbox_type, elem_bt, num_elem);
+      if (opd3 == NULL) {
+        return false;
+      }
+      // fall-through
+    }
+    case 2: {
+      opd2 = unbox_vector(argument(5), vbox_type, elem_bt, num_elem);
+      if (opd2 == NULL) {
+        return false;
+      }
+      // fall-through
+    }
+    case 1: {
+      opd1 = unbox_vector(argument(4), vbox_type, elem_bt, num_elem);
+      if (opd1 == NULL) {
+        return false;
+      }
+      break;
+    }
+    default: fatal("unsupported arity: %d", n);
+  }
+
+  Node* operation = NULL;
+  if (sopc == Op_CallLeafVector) {
+    operation = gen_call_to_svml(opr->get_con(), elem_bt, num_elem, opd1, opd2);
+    if (operation == NULL) {
+      return false;
+    }
+  } else {
+    switch (n) {
+      case 1:
+      case 2: {
+        operation = _gvn.transform(VectorNode::make(opc, opd1, opd2, num_elem, elem_bt));
+        break;
+      }
+      case 3: {
+        operation = _gvn.transform(VectorNode::make(opc, opd1, opd2, opd3, num_elem, elem_bt));
+        break;
+      }
+      default: fatal("unsupported arity: %d", n);
+    }
+  }
+  // Wrap it up in VectorBox to keep object type information.
+  operation = box_vector(operation, vbox_type, elem_bt, num_elem);
+  set_vector_result(operation);
+
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+// <V extends Vector<?,?>>
+// V broadcastCoerced(Class<?> vectorClass, Class<?> elementType, int vlen,
+//                    long bits,
+//                    LongFunction<V> defaultImpl)
+bool LibraryCallKit::inline_vector_broadcast_coerced() {
+  if (!UseVectorAPI) return false;
+  const TypeInstPtr* vector_klass = gvn().type(argument(0))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(1))->is_instptr();
+  const TypeInt* vlen             = gvn().type(argument(2))->is_int();
+
+  if (vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  // TODO When mask usage is supported, VecMaskNotUsed needs to be VecMaskUseLoad.
+  if (!arch_supports_vector(VectorNode::replicate_opcode(elem_bt), num_elem, elem_bt,
+                            vbox_klass->is_vectormask() ? VecMaskUseStore : VecMaskNotUsed)) {
+    return false; // not supported
+  }
+
+  Node* bits = argument(3); // long
+
+  Node* elem = NULL;
+  switch (elem_bt) {
+    case T_BOOLEAN: // fall-through
+    case T_BYTE:    // fall-through
+    case T_SHORT:   // fall-through
+    case T_CHAR:    // fall-through
+    case T_INT: {
+      elem = gvn().transform(new ConvL2INode(bits));
+      break;
+    }
+    case T_DOUBLE: {
+      elem = gvn().transform(new MoveL2DNode(bits));
+      break;
+    }
+    case T_FLOAT: {
+      bits = gvn().transform(new ConvL2INode(bits));
+      elem = gvn().transform(new MoveI2FNode(bits));
+      break;
+    }
+    case T_LONG: {
+      elem = bits; // no conversion needed
+      break;
+    }
+    default: fatal("%s", type2name(elem_bt));
+  }
+
+  Node* broadcast = VectorNode::scalar2vector(elem, num_elem, Type::get_const_basic_type(elem_bt));
+  broadcast = gvn().transform(broadcast);
+  Node* box = box_vector(broadcast, vbox_type, elem_bt, num_elem);
+  set_vector_result(box);
+
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+//    <C, V extends Vector<?,?>>
+//    V load(Class<?> vectorClass, Class<?> elementType, int vlen,
+//           Object base, long offset,
+//           /* Vector.Mask<E,S> m*/
+//           Object container, int index,
+//           LoadOperation<C, VM> defaultImpl) {
+//
+//    <C, V extends Vector<?,?>>
+//    void store(Class<?> vectorClass, Class<?> elementType, int vlen,
+//               Object base, long offset,
+//               V v, /*Vector.Mask<E,S> m*/
+//               Object container, int index,
+//               StoreVectorOperation<C, V> defaultImpl) {
+
+bool LibraryCallKit::inline_vector_mem_operation(bool is_store) {
+  if (!UseVectorAPI) return false;
+  const TypeInstPtr* vector_klass = gvn().type(argument(0))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(1))->is_instptr();
+  const TypeInt* vlen             = gvn().type(argument(2))->is_int();
+
+  if (vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+
+  // TODO When mask usage is supported, VecMaskNotUsed needs to be VecMaskUseLoad.
+  if (!arch_supports_vector(is_store ? Op_StoreVector : Op_LoadVector, num_elem, elem_bt, VecMaskNotUsed)) {
+    return false; // not supported
+  }
+
+  Node* base = argument(3);
+  Node* offset = ConvL2X(argument(4));
+  Node* addr = make_unsafe_address(base, offset, elem_bt, true);
+
+  const TypePtr *addr_type = gvn().type(addr)->isa_ptr();
+  const TypeAryPtr* arr_type = addr_type->isa_aryptr();
+
+  // Now handle special case where load/store happens from/to byte array but element type is not byte.
+  bool using_byte_array = arr_type != NULL && arr_type->elem()->array_element_basic_type() == T_BYTE && elem_bt != T_BYTE;
+
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  bool is_mask = vbox_klass->is_vectormask();
+  // It must be the case that if it is not special byte array case, there is consistency between
+  // array and vector element types.
+  if (!using_byte_array && arr_type != NULL && elem_bt != arr_type->elem()->array_element_basic_type() && !is_mask) {
+    return false;
+  }
+  // Since we are using byte array, we need to double check that the byte operations are supported by backend.
+  if (using_byte_array) {
+    int byte_num_elem = num_elem * type2aelembytes(elem_bt);
+    if (!arch_supports_vector(is_store ? Op_StoreVector : Op_LoadVector, byte_num_elem, T_BYTE, VecMaskNotUsed)) {
+      return false; // not supported
+    }
+  }
+
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  if (is_store) {
+    Node* val = unbox_vector(argument(6), vbox_type, elem_bt, num_elem);
+    if (val == NULL) {
+      return false; // operand unboxing failed
+    }
+    set_all_memory(reset_memory());
+
+    // In case the store needs to happen to byte array, reinterpret the incoming vector to byte vector.
+    int store_num_elem = num_elem;
+    if (using_byte_array) {
+      store_num_elem = num_elem * type2aelembytes(elem_bt);
+      const TypeVect* to_vect_type = TypeVect::make(T_BYTE, store_num_elem);
+      val = gvn().transform(new VectorReinterpretNode(val, val->bottom_type()->is_vect(), to_vect_type));
+    }
+
+    Node* vstore = gvn().transform(StoreVectorNode::make(0, control(), memory(addr), addr, addr_type, val, store_num_elem));
+    set_memory(vstore, addr_type);
+    set_vector_result(vstore, false);
+  } else {
+    // When using byte array, we need to load as byte then reinterpret the value. Otherwise, do a simple vector load.
+    Node* vload = NULL;
+    if (using_byte_array) {
+      int load_num_elem = num_elem * type2aelembytes(elem_bt);
+      vload = gvn().transform(LoadVectorNode::make(0, control(), memory(addr), addr, addr_type, load_num_elem, T_BYTE));
+      const TypeVect* to_vect_type = TypeVect::make(elem_bt, num_elem);
+      vload = gvn().transform(new VectorReinterpretNode(vload, vload->bottom_type()->is_vect(), to_vect_type));
+    } else {
+      // Special handle for masks
+      if (is_mask) {
+          vload = gvn().transform(LoadVectorNode::make(0, control(), memory(addr), addr, addr_type, num_elem, T_BOOLEAN));
+          const TypeVect* to_vect_type = TypeVect::make(elem_bt, num_elem);
+          vload = gvn().transform(new VectorLoadMaskNode(vload, to_vect_type));
+      } else {
+          vload = gvn().transform(LoadVectorNode::make(0, control(), memory(addr), addr, addr_type, num_elem, elem_bt));
+      }
+    }
+    Node* box = box_vector(vload, vbox_type, elem_bt, num_elem);
+    set_vector_result(box);
+  }
+
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+//    <C, V extends Vector<?>, W extends IntVector>
+//    void storeWithMap(Class<?> vectorClass, Class<?> elementType, int length, Class<?> vectorIndexClass,
+//                      Object base, long offset,    // Unsafe addressing
+//                      W index_vector, V v,
+//                      C container, int index, int[] indexMap, int indexM, // Arguments for default implementation
+//                      StoreVectorOperationWithMap<C, V> defaultImpl) {
+//
+bool LibraryCallKit::inline_vector_gather_scatter(bool is_scatter) {
+  if (!UseVectorAPI) return false;
+  const TypeInstPtr* vector_klass     = gvn().type(argument(0))->is_instptr();
+  const TypeInstPtr* elem_klass       = gvn().type(argument(1))->is_instptr();
+  const TypeInt* vlen                 = gvn().type(argument(2))->is_int();
+  const TypeInstPtr* vector_idx_klass = gvn().type(argument(3))->is_instptr();
+
+  if (vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || vector_idx_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+
+  if (!arch_supports_vector(is_scatter ? Op_StoreVectorScatter : Op_LoadVectorGather, num_elem, elem_bt, VecMaskNotUsed)) {
+    return false; // not supported
+  }
+
+  // Check that the vector holding indices is supported by architecture
+  if (!arch_supports_vector(Op_LoadVector, num_elem, T_INT, VecMaskNotUsed)) {
+      return false; // not supported
+    }
+
+  Node* base = argument(4);
+  Node* offset = ConvL2X(argument(5));
+  Node* addr = make_unsafe_address(base, offset, elem_bt, true);
+
+  const TypePtr *addr_type = gvn().type(addr)->isa_ptr();
+  const TypeAryPtr* arr_type = addr_type->isa_aryptr();
+
+  // The array must be consistent with vector type
+  if (arr_type == NULL || (arr_type != NULL && elem_bt != arr_type->elem()->array_element_basic_type())) {
+    return false;
+  }
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  ciKlass* vbox_idx_klass = vector_idx_klass->const_oop()->as_instance()->java_lang_Class_klass();
+
+  if (vbox_idx_klass == NULL) {
+    return false;
+  }
+
+  const TypeInstPtr* vbox_idx_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_idx_klass);
+
+  Node* index_vect = unbox_vector(argument(7), vbox_idx_type, T_INT, num_elem);
+  if (index_vect == NULL) {
+    return false;
+  }
+  const TypeVect* vector_type = TypeVect::make(elem_bt, num_elem);
+  if (is_scatter) {
+    Node* val = unbox_vector(argument(8), vbox_type, elem_bt, num_elem);
+    if (val == NULL) {
+      return false; // operand unboxing failed
+    }
+    set_all_memory(reset_memory());
+
+    Node* vstore = gvn().transform(new StoreVectorScatterNode(control(), memory(addr), addr, addr_type, val, index_vect));
+    set_memory(vstore, addr_type);
+    set_vector_result(vstore, false);
+ } else {
+    Node* vload = gvn().transform(new LoadVectorGatherNode(control(), memory(addr), addr, addr_type, vector_type, index_vect));
+
+    Node* box = box_vector(vload, vbox_type, elem_bt, num_elem);
+    set_vector_result(box);
+  }
+
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+// <V extends Vector<?,?>>
+// long reductionCoerced(int oprId, Class<?> vectorClass, Class<?> elementType, int vlen,
+//                       V v,
+//                       Function<V,Long> defaultImpl)
+
+bool LibraryCallKit::inline_vector_reduction() {
+  if (!UseVectorAPI) return false;
+  const TypeInt* opr              = gvn().type(argument(0))->is_int();
+  const TypeInstPtr* vector_klass = gvn().type(argument(1))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(2))->is_instptr();
+  const TypeInt* vlen             = gvn().type(argument(3))->is_int();
+
+  if (vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+
+  int opc  = get_opc(opr->get_con(), elem_bt);
+  int sopc = ReductionNode::opcode(opc, elem_bt);
+
+  // FIXME: When encountering a SubReduction, we want to check for support of
+  // the corresponding AddReduction node.
+  if (sopc == Op_SubReductionV) {
+    if (gvn().type(argument(2))->isa_int()) {
+      sopc = Op_AddReductionVI;
+    } else if (gvn().type(argument(2))->isa_long()) {
+      sopc = Op_AddReductionVL;
+    }
+  }
+
+  // TODO When mask usage is supported, VecMaskNotUsed needs to be VecMaskUseLoad.
+  if (!arch_supports_vector(sopc, num_elem, elem_bt, VecMaskNotUsed)) {
+    return false;
+  }
+
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  Node* opd = unbox_vector(argument(4), vbox_type, elem_bt, num_elem);
+  if (opd == NULL) {
+    return false; // operand unboxing failed
+  }
+
+  Node* init = ReductionNode::make_reduction_input(_gvn, opc, elem_bt);
+  Node* rn = gvn().transform(ReductionNode::make(opc, NULL, init, opd, elem_bt));
+
+  Node* bits = NULL;
+  switch (elem_bt) {
+    case T_BYTE:
+    case T_SHORT:
+    case T_INT: {
+      bits = gvn().transform(new ConvI2LNode(rn));
+      break;
+    }
+    case T_FLOAT: {
+      rn   = gvn().transform(new MoveF2INode(rn));
+      bits = gvn().transform(new ConvI2LNode(rn));
+      break;
+    }
+    case T_DOUBLE: {
+      bits = gvn().transform(new MoveD2LNode(rn));
+      break;
+    }
+    case T_LONG: {
+      bits = rn; // no conversion needed
+      break;
+    }
+    default: fatal("%s", type2name(elem_bt));
+  }
+  set_vector_result(bits);
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+// static <V> boolean test(int cond, Class<?> vectorClass, Class<?> elementType, int vlen,
+//                         V v1, V v2,
+//                         BiFunction<V, V, Boolean> defaultImpl) {
+
+bool LibraryCallKit::inline_vector_test() {
+  if (!UseVectorAPI) return false;
+  const TypeInt* cond             = gvn().type(argument(0))->is_int();
+  const TypeInstPtr* vector_klass = gvn().type(argument(1))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(2))->is_instptr();
+  const TypeInt* vlen             = gvn().type(argument(3))->is_int();
+
+  if (!cond->is_con() || vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+  Assembler::Condition booltest = (Assembler::Condition)cond->get_con();
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  if (!arch_supports_vector(Op_VectorTest, num_elem, elem_bt, vbox_klass->is_vectormask() ? VecMaskUseLoad : VecMaskNotUsed)) {
+    return false;
+  }
+
+  Node* opd1 = unbox_vector(argument(4), vbox_type, elem_bt, num_elem);
+  Node* opd2 = unbox_vector(argument(5), vbox_type, elem_bt, num_elem);
+  if (opd1 == NULL || opd2 == NULL) {
+    return false; // operand unboxing failed
+  }
+  Node* test = new VectorTestNode(opd1, opd2, booltest);
+  test = _gvn.transform(test);
+  set_vector_result(test);
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+// static
+// <V extends Vector, M extends Mask>
+// V blend(Class<V> vectorClass, Class<M> maskClass, Class<?> elementType, int vlen,
+//         V v1, V v2, M m,
+//         VectorBlendOp<V,M> defaultImpl) { ...
+//
+bool LibraryCallKit::inline_vector_blend() {
+  if (!UseVectorAPI) return false;
+  const TypeInstPtr* vector_klass = gvn().type(argument(0))->is_instptr();
+  const TypeInstPtr* mask_klass   = gvn().type(argument(1))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(2))->is_instptr();
+  const TypeInt*     vlen         = gvn().type(argument(3))->is_int();
+
+  if (mask_klass->const_oop() == NULL || vector_klass->const_oop() == NULL ||
+      elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  BasicType mask_bt = elem_bt;
+  int num_elem = vlen->get_con();
+
+  if (!arch_supports_vector(Op_VectorBlend, num_elem, elem_bt, VecMaskUseLoad)) {
+    return false; // not supported
+  }
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  ciKlass* mbox_klass = mask_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* mbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, mbox_klass);
+
+  Node* v1   = unbox_vector(argument(4), vbox_type, elem_bt, num_elem);
+  Node* v2   = unbox_vector(argument(5), vbox_type, elem_bt, num_elem);
+  Node* mask = unbox_vector(argument(6), mbox_type, mask_bt, num_elem);
+
+  if (v1 == NULL || v2 == NULL || mask == NULL) {
+    return false; // operand unboxing failed
+  }
+
+  Node* blend = _gvn.transform(new VectorBlendNode(v1, v2, mask));
+  Node* box = box_vector(blend, vbox_type, elem_bt, num_elem);
+  set_vector_result(box);
+
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+//  static <V extends Vector<E,S>,
+//          M extends Vector.Mask<E,S>,
+//          S extends Vector.Shape, E>
+//  M compare(int cond, Class<V> vectorClass, Class<M> maskClass, Class<?> elementType, int vlen,
+//            V v1, V v2,
+//            VectorCompareOp<V,M> defaultImpl) { ...
+//
+bool LibraryCallKit::inline_vector_compare() {
+  if (!UseVectorAPI) return false;
+  const TypeInt*     cond         = gvn().type(argument(0))->is_int();
+  const TypeInstPtr* vector_klass = gvn().type(argument(1))->is_instptr();
+  const TypeInstPtr* mask_klass   = gvn().type(argument(2))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(3))->is_instptr();
+  const TypeInt*     vlen         = gvn().type(argument(4))->is_int();
+
+  if (!cond->is_con() || vector_klass->const_oop() == NULL || mask_klass->const_oop() == NULL ||
+      elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+
+  int num_elem = vlen->get_con();
+  BasicType elem_bt = elem_type->basic_type();
+  BasicType mask_bt = elem_bt;
+
+  if (!arch_supports_vector(Op_VectorMaskCmp, num_elem, elem_bt, VecMaskUseStore)) {
+    return false;
+  }
+
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  ciKlass* mbox_klass = mask_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* mbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, mbox_klass);
+
+  Node* v1 = unbox_vector(argument(5), vbox_type, elem_bt, num_elem);
+  Node* v2 = unbox_vector(argument(6), vbox_type, elem_bt, num_elem);
+
+  if (v1 == NULL || v2 == NULL) {
+    return false; // operand unboxing failed
+  }
+  BoolTest::mask pred = (BoolTest::mask)cond->get_con();
+  const TypeVect* vt = TypeVect::make(mask_bt, num_elem);
+  Node* operation = _gvn.transform(new VectorMaskCmpNode(pred, v1, v2, vt));
+
+  Node* box = box_vector(operation, mbox_type, mask_bt, num_elem);
+  set_vector_result(box);
+
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+// static
+// <V extends Vector, Sh extends Shuffle>
+//  V rearrangeOp(Class<V> vectorClass, Class<Sh> shuffleClass, Class< ? > elementType, int vlen,
+//    V v1, Sh sh,
+//    VectorSwizzleOp<V, Sh, S, E> defaultImpl) { ...
+
+bool LibraryCallKit::inline_vector_rearrange() {
+  if (!UseVectorAPI) return false;
+  const TypeInstPtr* vector_klass = gvn().type(argument(0))->is_instptr();
+  const TypeInstPtr* shuffle_klass = gvn().type(argument(1))->is_instptr();
+  const TypeInstPtr* elem_klass = gvn().type(argument(2))->is_instptr();
+  const TypeInt*     vlen = gvn().type(argument(3))->is_int();
+
+  if (shuffle_klass->const_oop() == NULL || vector_klass->const_oop() == NULL ||
+    elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  BasicType shuffle_bt = elem_bt;
+  int num_elem = vlen->get_con();
+
+  if (!arch_supports_vector(Op_VectorLoadShuffle, num_elem, elem_bt, VecMaskNotUsed)) {
+    return false; // not supported
+  }
+  if (!arch_supports_vector(Op_VectorRearrange, num_elem, elem_bt, VecMaskNotUsed)) {
+    return false; // not supported
+  }
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  ciKlass* shbox_klass = shuffle_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* shbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, shbox_klass);
+
+  Node* v1 = unbox_vector(argument(4), vbox_type, elem_bt, num_elem);
+  Node* shuffle = unbox_vector(argument(5), shbox_type, shuffle_bt, num_elem);
+
+  if (v1 == NULL || shuffle == NULL) {
+    return false; // operand unboxing failed
+  }
+
+  Node* rearrange = _gvn.transform(new VectorRearrangeNode(v1, shuffle));
+  Node* box = box_vector(rearrange, vbox_type, elem_bt, num_elem);
+  set_result(box);
+
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+Node* LibraryCallKit::shift_count(Node* cnt, int shift_op, BasicType bt, int num_elem) {
+  assert(bt == T_INT || bt == T_LONG, "Only long and int are supported");
+  juint mask = (bt == T_INT) ? (BitsPerInt - 1) : (BitsPerLong - 1);
+  const TypeInt* t = cnt->find_int_type();
+  if (t != NULL && t->is_con()) {
+    juint shift = t->get_con();
+    if (shift > mask) {
+      return _gvn.transform(ConNode::make(TypeInt::make(shift & mask)));
+    } else {
+      return cnt;
+    }
+  } else {
+    Node* maskedcnt = cnt;
+    if (t == NULL || t->_lo < 0 || t->_hi > (int)mask) {
+      Node* nmask = _gvn.transform(ConNode::make(TypeInt::make(mask)));
+      maskedcnt = _gvn.transform(new AndINode(cnt, nmask));
+    }
+    return _gvn.transform(VectorNode::shift_count(shift_op, maskedcnt, num_elem, bt));
+  }
+}
+
+static void get_svml_address(int op, int bits, BasicType bt, const char** name_ptr, address* addr_ptr) {
+  assert(name_ptr != NULL, "unexpected");
+  assert(addr_ptr != NULL, "unexpected");
+
+  // Since the addresses are resolved at runtime, using switch instead of table - otherwise might get NULL addresses.
+  if (bt == T_FLOAT) {
+    switch(op) {
+      case OP_EXP: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_exp"; *addr_ptr = StubRoutines::vector_float64_exp(); break;
+            case 128: *name_ptr = "vector_float128_exp"; *addr_ptr = StubRoutines::vector_float128_exp(); break;
+            case 256: *name_ptr = "vector_float256_exp"; *addr_ptr = StubRoutines::vector_float256_exp(); break;
+            case 512: *name_ptr = "vector_float512_exp"; *addr_ptr = StubRoutines::vector_float512_exp(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_LOG1P: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_log1p"; *addr_ptr = StubRoutines::vector_float64_log1p(); break;
+            case 128: *name_ptr = "vector_float128_log1p"; *addr_ptr = StubRoutines::vector_float128_log1p(); break;
+            case 256: *name_ptr = "vector_float256_log1p"; *addr_ptr = StubRoutines::vector_float256_log1p(); break;
+            case 512: *name_ptr = "vector_float512_log1p"; *addr_ptr = StubRoutines::vector_float512_log1p(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_LOG: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_log"; *addr_ptr = StubRoutines::vector_float64_log(); break;
+            case 128: *name_ptr = "vector_float128_log"; *addr_ptr = StubRoutines::vector_float128_log(); break;
+            case 256: *name_ptr = "vector_float256_log"; *addr_ptr = StubRoutines::vector_float256_log(); break;
+            case 512: *name_ptr = "vector_float512_log"; *addr_ptr = StubRoutines::vector_float512_log(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_LOG10: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_log10"; *addr_ptr = StubRoutines::vector_float64_log10(); break;
+            case 128: *name_ptr = "vector_float128_log10"; *addr_ptr = StubRoutines::vector_float128_log10(); break;
+            case 256: *name_ptr = "vector_float256_log10"; *addr_ptr = StubRoutines::vector_float256_log10(); break;
+            case 512: *name_ptr = "vector_float512_log10"; *addr_ptr = StubRoutines::vector_float512_log10(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_EXPM1: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_expm1"; *addr_ptr = StubRoutines::vector_float64_expm1(); break;
+            case 128: *name_ptr = "vector_float128_expm1"; *addr_ptr = StubRoutines::vector_float128_expm1(); break;
+            case 256: *name_ptr = "vector_float256_expm1"; *addr_ptr = StubRoutines::vector_float256_expm1(); break;
+            case 512: *name_ptr = "vector_float512_expm1"; *addr_ptr = StubRoutines::vector_float512_expm1(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_SIN: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_sin"; *addr_ptr = StubRoutines::vector_float64_sin(); break;
+            case 128: *name_ptr = "vector_float128_sin"; *addr_ptr = StubRoutines::vector_float128_sin(); break;
+            case 256: *name_ptr = "vector_float256_sin"; *addr_ptr = StubRoutines::vector_float256_sin(); break;
+            case 512: *name_ptr = "vector_float512_sin"; *addr_ptr = StubRoutines::vector_float512_sin(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_COS: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_cos"; *addr_ptr = StubRoutines::vector_float64_cos(); break;
+            case 128: *name_ptr = "vector_float128_cos"; *addr_ptr = StubRoutines::vector_float128_cos(); break;
+            case 256: *name_ptr = "vector_float256_cos"; *addr_ptr = StubRoutines::vector_float256_cos(); break;
+            case 512: *name_ptr = "vector_float512_cos"; *addr_ptr = StubRoutines::vector_float512_cos(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_TAN: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_tan"; *addr_ptr = StubRoutines::vector_float64_tan(); break;
+            case 128: *name_ptr = "vector_float128_tan"; *addr_ptr = StubRoutines::vector_float128_tan(); break;
+            case 256: *name_ptr = "vector_float256_tan"; *addr_ptr = StubRoutines::vector_float256_tan(); break;
+            case 512: *name_ptr = "vector_float512_tan"; *addr_ptr = StubRoutines::vector_float512_tan(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_SINH: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_sinh"; *addr_ptr = StubRoutines::vector_float64_sinh(); break;
+            case 128: *name_ptr = "vector_float128_sinh"; *addr_ptr = StubRoutines::vector_float128_sinh(); break;
+            case 256: *name_ptr = "vector_float256_sinh"; *addr_ptr = StubRoutines::vector_float256_sinh(); break;
+            case 512: *name_ptr = "vector_float512_sinh"; *addr_ptr = StubRoutines::vector_float512_sinh(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_COSH: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_cosh"; *addr_ptr = StubRoutines::vector_float64_cosh(); break;
+            case 128: *name_ptr = "vector_float128_cosh"; *addr_ptr = StubRoutines::vector_float128_cosh(); break;
+            case 256: *name_ptr = "vector_float256_cosh"; *addr_ptr = StubRoutines::vector_float256_cosh(); break;
+            case 512: *name_ptr = "vector_float512_cosh"; *addr_ptr = StubRoutines::vector_float512_cosh(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_TANH: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_tanh"; *addr_ptr = StubRoutines::vector_float64_tanh(); break;
+            case 128: *name_ptr = "vector_float128_tanh"; *addr_ptr = StubRoutines::vector_float128_tanh(); break;
+            case 256: *name_ptr = "vector_float256_tanh"; *addr_ptr = StubRoutines::vector_float256_tanh(); break;
+            case 512: *name_ptr = "vector_float512_tanh"; *addr_ptr = StubRoutines::vector_float512_tanh(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_ASIN: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_asin"; *addr_ptr = StubRoutines::vector_float64_asin(); break;
+            case 128: *name_ptr = "vector_float128_asin"; *addr_ptr = StubRoutines::vector_float128_asin(); break;
+            case 256: *name_ptr = "vector_float256_asin"; *addr_ptr = StubRoutines::vector_float256_asin(); break;
+            case 512: *name_ptr = "vector_float512_asin"; *addr_ptr = StubRoutines::vector_float512_asin(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_ACOS: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_acos"; *addr_ptr = StubRoutines::vector_float64_acos(); break;
+            case 128: *name_ptr = "vector_float128_acos"; *addr_ptr = StubRoutines::vector_float128_acos(); break;
+            case 256: *name_ptr = "vector_float256_acos"; *addr_ptr = StubRoutines::vector_float256_acos(); break;
+            case 512: *name_ptr = "vector_float512_acos"; *addr_ptr = StubRoutines::vector_float512_acos(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_ATAN: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_atan"; *addr_ptr = StubRoutines::vector_float64_atan(); break;
+            case 128: *name_ptr = "vector_float128_atan"; *addr_ptr = StubRoutines::vector_float128_atan(); break;
+            case 256: *name_ptr = "vector_float256_atan"; *addr_ptr = StubRoutines::vector_float256_atan(); break;
+            case 512: *name_ptr = "vector_float512_atan"; *addr_ptr = StubRoutines::vector_float512_atan(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_CBRT: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_cbrt"; *addr_ptr = StubRoutines::vector_float64_cbrt(); break;
+            case 128: *name_ptr = "vector_float128_cbrt"; *addr_ptr = StubRoutines::vector_float128_cbrt(); break;
+            case 256: *name_ptr = "vector_float256_cbrt"; *addr_ptr = StubRoutines::vector_float256_cbrt(); break;
+            case 512: *name_ptr = "vector_float512_cbrt"; *addr_ptr = StubRoutines::vector_float512_cbrt(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+       case OP_HYPOT: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_hypot"; *addr_ptr = StubRoutines::vector_float64_hypot(); break;
+            case 128: *name_ptr = "vector_float128_hypot"; *addr_ptr = StubRoutines::vector_float128_hypot(); break;
+            case 256: *name_ptr = "vector_float256_hypot"; *addr_ptr = StubRoutines::vector_float256_hypot(); break;
+            case 512: *name_ptr = "vector_float512_hypot"; *addr_ptr = StubRoutines::vector_float512_hypot(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_POW: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_pow"; *addr_ptr = StubRoutines::vector_float64_pow(); break;
+            case 128: *name_ptr = "vector_float128_pow"; *addr_ptr = StubRoutines::vector_float128_pow(); break;
+            case 256: *name_ptr = "vector_float256_pow"; *addr_ptr = StubRoutines::vector_float256_pow(); break;
+            case 512: *name_ptr = "vector_float512_pow"; *addr_ptr = StubRoutines::vector_float512_pow(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_ATAN2: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_float64_atan2"; *addr_ptr = StubRoutines::vector_float64_atan2(); break;
+            case 128: *name_ptr = "vector_float128_atan2"; *addr_ptr = StubRoutines::vector_float128_atan2(); break;
+            case 256: *name_ptr = "vector_float256_atan2"; *addr_ptr = StubRoutines::vector_float256_atan2(); break;
+            case 512: *name_ptr = "vector_float512_atan2"; *addr_ptr = StubRoutines::vector_float512_atan2(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      default:
+        *name_ptr = "invalid";
+        *addr_ptr = NULL;
+        break;
+    }
+  } else {
+    assert(bt == T_DOUBLE, "must be FP type only");
+    switch(op) {
+      case OP_EXP: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_exp"; *addr_ptr = StubRoutines::vector_double64_exp(); break;
+            case 128: *name_ptr = "vector_double128_exp"; *addr_ptr = StubRoutines::vector_double128_exp(); break;
+            case 256: *name_ptr = "vector_double256_exp"; *addr_ptr = StubRoutines::vector_double256_exp(); break;
+            case 512: *name_ptr = "vector_double512_exp"; *addr_ptr = StubRoutines::vector_double512_exp(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_LOG1P: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_log1p"; *addr_ptr = StubRoutines::vector_double64_log1p(); break;
+            case 128: *name_ptr = "vector_double128_log1p"; *addr_ptr = StubRoutines::vector_double128_log1p(); break;
+            case 256: *name_ptr = "vector_double256_log1p"; *addr_ptr = StubRoutines::vector_double256_log1p(); break;
+            case 512: *name_ptr = "vector_double512_log1p"; *addr_ptr = StubRoutines::vector_double512_log1p(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_LOG: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_log"; *addr_ptr = StubRoutines::vector_double64_log(); break;
+            case 128: *name_ptr = "vector_double128_log"; *addr_ptr = StubRoutines::vector_double128_log(); break;
+            case 256: *name_ptr = "vector_double256_log"; *addr_ptr = StubRoutines::vector_double256_log(); break;
+            case 512: *name_ptr = "vector_double512_log"; *addr_ptr = StubRoutines::vector_double512_log(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_LOG10: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_log10"; *addr_ptr = StubRoutines::vector_double64_log10(); break;
+            case 128: *name_ptr = "vector_double128_log10"; *addr_ptr = StubRoutines::vector_double128_log10(); break;
+            case 256: *name_ptr = "vector_double256_log10"; *addr_ptr = StubRoutines::vector_double256_log10(); break;
+            case 512: *name_ptr = "vector_double512_log10"; *addr_ptr = StubRoutines::vector_double512_log10(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_EXPM1: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_expm1"; *addr_ptr = StubRoutines::vector_double64_expm1(); break;
+            case 128: *name_ptr = "vector_double128_expm1"; *addr_ptr = StubRoutines::vector_double128_expm1(); break;
+            case 256: *name_ptr = "vector_double256_expm1"; *addr_ptr = StubRoutines::vector_double256_expm1(); break;
+            case 512: *name_ptr = "vector_double512_expm1"; *addr_ptr = StubRoutines::vector_double512_expm1(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_SIN: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_sin"; *addr_ptr = StubRoutines::vector_double64_sin(); break;
+            case 128: *name_ptr = "vector_double128_sin"; *addr_ptr = StubRoutines::vector_double128_sin(); break;
+            case 256: *name_ptr = "vector_double256_sin"; *addr_ptr = StubRoutines::vector_double256_sin(); break;
+            case 512: *name_ptr = "vector_double512_sin"; *addr_ptr = StubRoutines::vector_double512_sin(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_COS: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_cos"; *addr_ptr = StubRoutines::vector_double64_cos(); break;
+            case 128: *name_ptr = "vector_double128_cos"; *addr_ptr = StubRoutines::vector_double128_cos(); break;
+            case 256: *name_ptr = "vector_double256_cos"; *addr_ptr = StubRoutines::vector_double256_cos(); break;
+            case 512: *name_ptr = "vector_double512_cos"; *addr_ptr = StubRoutines::vector_double512_cos(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_TAN: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_tan"; *addr_ptr = StubRoutines::vector_double64_tan(); break;
+            case 128: *name_ptr = "vector_double128_tan"; *addr_ptr = StubRoutines::vector_double128_tan(); break;
+            case 256: *name_ptr = "vector_double256_tan"; *addr_ptr = StubRoutines::vector_double256_tan(); break;
+            case 512: *name_ptr = "vector_double512_tan"; *addr_ptr = StubRoutines::vector_double512_tan(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_SINH: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_sinh"; *addr_ptr = StubRoutines::vector_double64_sinh(); break;
+            case 128: *name_ptr = "vector_double128_sinh"; *addr_ptr = StubRoutines::vector_double128_sinh(); break;
+            case 256: *name_ptr = "vector_double256_sinh"; *addr_ptr = StubRoutines::vector_double256_sinh(); break;
+            case 512: *name_ptr = "vector_double512_sinh"; *addr_ptr = StubRoutines::vector_double512_sinh(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_COSH: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_cosh"; *addr_ptr = StubRoutines::vector_double64_cosh(); break;
+            case 128: *name_ptr = "vector_double128_cosh"; *addr_ptr = StubRoutines::vector_double128_cosh(); break;
+            case 256: *name_ptr = "vector_double256_cosh"; *addr_ptr = StubRoutines::vector_double256_cosh(); break;
+            case 512: *name_ptr = "vector_double512_cosh"; *addr_ptr = StubRoutines::vector_double512_cosh(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_TANH: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_tanh"; *addr_ptr = StubRoutines::vector_double64_tanh(); break;
+            case 128: *name_ptr = "vector_double128_tanh"; *addr_ptr = StubRoutines::vector_double128_tanh(); break;
+            case 256: *name_ptr = "vector_double256_tanh"; *addr_ptr = StubRoutines::vector_double256_tanh(); break;
+            case 512: *name_ptr = "vector_double512_tanh"; *addr_ptr = StubRoutines::vector_double512_tanh(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_ASIN: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_asin"; *addr_ptr = StubRoutines::vector_double64_asin(); break;
+            case 128: *name_ptr = "vector_double128_asin"; *addr_ptr = StubRoutines::vector_double128_asin(); break;
+            case 256: *name_ptr = "vector_double256_asin"; *addr_ptr = StubRoutines::vector_double256_asin(); break;
+            case 512: *name_ptr = "vector_double512_asin"; *addr_ptr = StubRoutines::vector_double512_asin(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_ACOS: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_acos"; *addr_ptr = StubRoutines::vector_double64_acos(); break;
+            case 128: *name_ptr = "vector_double128_acos"; *addr_ptr = StubRoutines::vector_double128_acos(); break;
+            case 256: *name_ptr = "vector_double256_acos"; *addr_ptr = StubRoutines::vector_double256_acos(); break;
+            case 512: *name_ptr = "vector_double512_acos"; *addr_ptr = StubRoutines::vector_double512_acos(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_ATAN: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_atan"; *addr_ptr = StubRoutines::vector_double64_atan(); break;
+            case 128: *name_ptr = "vector_double128_atan"; *addr_ptr = StubRoutines::vector_double128_atan(); break;
+            case 256: *name_ptr = "vector_double256_atan"; *addr_ptr = StubRoutines::vector_double256_atan(); break;
+            case 512: *name_ptr = "vector_double512_atan"; *addr_ptr = StubRoutines::vector_double512_atan(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_CBRT: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_cbrt"; *addr_ptr = StubRoutines::vector_double64_cbrt(); break;
+            case 128: *name_ptr = "vector_double128_cbrt"; *addr_ptr = StubRoutines::vector_double128_cbrt(); break;
+            case 256: *name_ptr = "vector_double256_cbrt"; *addr_ptr = StubRoutines::vector_double256_cbrt(); break;
+            case 512: *name_ptr = "vector_double512_cbrt"; *addr_ptr = StubRoutines::vector_double512_cbrt(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_HYPOT: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_hypot"; *addr_ptr = StubRoutines::vector_double64_hypot(); break;
+            case 128: *name_ptr = "vector_double128_hypot"; *addr_ptr = StubRoutines::vector_double128_hypot(); break;
+            case 256: *name_ptr = "vector_double256_hypot"; *addr_ptr = StubRoutines::vector_double256_hypot(); break;
+            case 512: *name_ptr = "vector_double512_hypot"; *addr_ptr = StubRoutines::vector_double512_hypot(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_POW: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_pow"; *addr_ptr = StubRoutines::vector_double64_pow(); break;
+            case 128: *name_ptr = "vector_double128_pow"; *addr_ptr = StubRoutines::vector_double128_pow(); break;
+            case 256: *name_ptr = "vector_double256_pow"; *addr_ptr = StubRoutines::vector_double256_pow(); break;
+            case 512: *name_ptr = "vector_double512_pow"; *addr_ptr = StubRoutines::vector_double512_pow(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+      case OP_ATAN2: {
+          switch(bits) {
+            case 64: *name_ptr = "vector_double64_atan2"; *addr_ptr = StubRoutines::vector_double64_atan2(); break;
+            case 128: *name_ptr = "vector_double128_atan2"; *addr_ptr = StubRoutines::vector_double128_atan2(); break;
+            case 256: *name_ptr = "vector_double256_atan2"; *addr_ptr = StubRoutines::vector_double256_atan2(); break;
+            case 512: *name_ptr = "vector_double512_atan2"; *addr_ptr = StubRoutines::vector_double512_atan2(); break;
+            default: Unimplemented(); break;
+          }
+        }
+        break;
+
+      default:
+        *name_ptr = "invalid";
+        *addr_ptr = NULL;
+        break;
+    }
+  }
+}
+
+Node* LibraryCallKit::gen_call_to_svml(int vector_api_op_id, BasicType bt, int num_elem, Node* opd1, Node* opd2) {
+  assert(vector_api_op_id >= OP_SVML_START && vector_api_op_id <= OP_SVML_END, "need valid op id");
+  assert(opd1 != NULL, "must not be null");
+  const TypeVect* vt = TypeVect::make(bt, num_elem);
+  const TypeFunc* call_type = OptoRuntime::Math_Vector_Vector_Type(opd2 != NULL ? 2 : 1, vt, vt);
+  const char* name = NULL;
+  address addr = NULL;
+
+  // Get address for svml method.
+  get_svml_address(vector_api_op_id, vt->length_in_bytes() * BitsPerByte, bt, &name, &addr);
+
+  if (addr == NULL) {
+    return NULL;
+  }
+
+  assert(name != NULL, "name must not be null");
+  Node* operation = make_runtime_call(RC_VECTOR,
+                                      call_type,
+                                      addr,
+                                      name,
+                                      TypePtr::BOTTOM,
+                                      opd1,
+                                      opd2);
+  return _gvn.transform(new ProjNode(_gvn.transform(operation), TypeFunc::Parms));
+}
+
+//  static
+//  <V extends Vector<?,?>>
+//  V broadcastInt(int opr, Class<V> vectorClass, Class<?> elementType, int vlen,
+//                 V v, int i,
+//                 VectorBroadcastIntOp<V> defaultImpl) {
+//
+bool LibraryCallKit::inline_vector_broadcast_int() {
+  if (!UseVectorAPI) return false;
+  const TypeInt* opr              = gvn().type(argument(0))->is_int();
+  const TypeInstPtr* vector_klass = gvn().type(argument(1))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(2))->is_instptr();
+  const TypeInt* vlen             = gvn().type(argument(3))->is_int();
+
+  if (!opr->is_con() || vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || !vlen->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+  int opc = get_opc(opr->get_con(), elem_bt);
+  int sopc = VectorNode::opcode(opc, elem_bt); // get_node_id(opr->get_con(), elem_bt);
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  if (!arch_supports_vector(sopc, num_elem, elem_bt, VecMaskNotUsed)) {
+    return false; // not supported
+  }
+  Node* opd1 = unbox_vector(argument(4), vbox_type, elem_bt, num_elem);
+  Node* opd2 = shift_count(argument(5), opc, elem_bt, num_elem);
+  if (opd1 == NULL || opd2 == NULL) {
+    return false;
+  }
+  Node* operation = _gvn.transform(VectorNode::make(opc, opd1, opd2, num_elem, elem_bt));
+
+  Node* vbox = box_vector(operation, vbox_type, elem_bt, num_elem);
+  set_vector_result(vbox);
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+bool LibraryCallKit::inline_vector_cast_reinterpret(bool is_cast) {
+  if (!UseVectorAPI) return false;
+  const TypeInstPtr* vector_klass_from = gvn().type(argument(0))->is_instptr();
+  const TypeInstPtr* elem_klass_from   = gvn().type(argument(1))->is_instptr();
+  const TypeInt*     vlen_from         = gvn().type(argument(2))->is_int();
+
+  const TypeInstPtr* vector_klass_to   = gvn().type(argument(3))->is_instptr();
+  const TypeInstPtr* elem_klass_to     = gvn().type(argument(4))->is_instptr();
+  const TypeInt*     vlen_to           = gvn().type(argument(5))->is_int();
+
+  if (vector_klass_from->const_oop() == NULL || elem_klass_from->const_oop() == NULL || !vlen_from->is_con() ||
+      vector_klass_to->const_oop() == NULL || elem_klass_to->const_oop() == NULL || !vlen_to->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+
+  ciKlass* vbox_klass_from = vector_klass_from->const_oop()->as_instance()->java_lang_Class_klass();
+  ciKlass* vbox_klass_to = vector_klass_to->const_oop()->as_instance()->java_lang_Class_klass();
+  if (!vbox_klass_from->is_vectorapi_vector() || !vbox_klass_to->is_vectorapi_vector()) {
+    return false; // only vector & mask are supported
+  }
+  bool is_mask = vbox_klass_from->is_vectormask();
+
+  ciType* elem_type_from = elem_klass_from->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type_from->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt_from = elem_type_from->basic_type();
+  ciType* elem_type_to = elem_klass_to->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type_to->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt_to = elem_type_to->basic_type();
+  if (is_mask && elem_bt_from != elem_bt_to) {
+    return false; // type mismatch
+  }
+  int num_elem_from = vlen_from->get_con();
+  int num_elem_to = vlen_to->get_con();
+
+  // Check whether we can unbox to appropriate size. Even with casting, checking for reinterpret is needed
+  // since we may need to change size.
+  if (!arch_supports_vector(Op_VectorReinterpret,
+                            num_elem_from,
+                            elem_bt_from,
+                            is_mask ? VecMaskUseAll : VecMaskNotUsed)) {
+    return false;
+  }
+
+  // Check whether we can support resizing/reinterpreting to the new size.
+  if (!arch_supports_vector(Op_VectorReinterpret,
+                            num_elem_to,
+                            elem_bt_to,
+                            is_mask ? VecMaskUseAll : VecMaskNotUsed)) {
+    return false;
+  }
+
+  // At this point, we know that both input and output vector registers are supported
+  // by the architecture. Next check if the casted type is simply to same type - which means
+  // that it is actually a resize and not a cast.
+  if (is_cast && elem_bt_from == elem_bt_to) {
+    is_cast = false;
+  }
+
+  const TypeInstPtr* vbox_type_from = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass_from);
+
+  Node* opd1 = unbox_vector(argument(6), vbox_type_from, elem_bt_from, num_elem_from);
+  if (opd1 == NULL) {
+    return false;
+  }
+
+  const TypeVect* src_type = TypeVect::make(elem_bt_from, num_elem_from);
+  const TypeVect* dst_type = TypeVect::make(elem_bt_to,   num_elem_to);
+
+  Node* op = opd1;
+  if (is_cast) {
+    assert(!is_mask, "masks cannot be casted");
+    int cast_vopc = VectorCastNode::opcode(elem_bt_from);
+    // Make sure that cast is implemented to particular type/size combination.
+    if (!arch_supports_vector(cast_vopc, num_elem_to, elem_bt_to, VecMaskNotUsed)) {
+      return false;
+    }
+
+    if (num_elem_from < num_elem_to) {
+      // Since input and output number of elements are not consistent, we need to make sure we
+      // properly size. Thus, first make a cast that retains the number of elements from source.
+      // In case the size exceeds the arch size, we do the minimum.
+      int num_elem_for_cast = MIN2(num_elem_from, Matcher::max_vector_size(elem_bt_to));
+
+      // It is possible that arch does not support this intermediate vector size
+      // TODO More complex logic required here to handle this corner case for the sizes.
+      if (!arch_supports_vector(cast_vopc, num_elem_for_cast, elem_bt_to, VecMaskNotUsed)) {
+        return false;
+      }
+
+      op = _gvn.transform(VectorCastNode::make(cast_vopc, op, elem_bt_to, num_elem_for_cast));
+      // Now ensure that the destination gets properly resized to needed size.
+      op = _gvn.transform(new VectorReinterpretNode(op, op->bottom_type()->is_vect(), dst_type));
+    } else if (num_elem_from > num_elem_to) {
+      // Since number elements from input is larger than output, simply reduce size of input (we are supposed to
+      // drop top elements anyway).
+      int num_elem_for_resize = MAX2(num_elem_to, Matcher::min_vector_size(elem_bt_to));
+
+      // It is possible that arch does not support this intermediate vector size
+      // TODO More complex logic required here to handle this corner case for the sizes.
+      if (!arch_supports_vector(Op_VectorReinterpret,
+                                num_elem_for_resize,
+                                elem_bt_from,
+                                VecMaskNotUsed)) {
+        return false;
+      }
+
+      op = _gvn.transform(new VectorReinterpretNode(op,
+                                                    src_type,
+                                                    TypeVect::make(elem_bt_from,
+                                                                   num_elem_for_resize)));
+      op = _gvn.transform(VectorCastNode::make(cast_vopc, op, elem_bt_to, num_elem_to));
+    } else {
+      // Since input and output number of elements match, and since we know this vector size is
+      // supported, simply do a cast with no resize needed.
+      op = _gvn.transform(VectorCastNode::make(cast_vopc, op, elem_bt_to, num_elem_to));
+    }
+  } else if (Type::cmp(src_type, dst_type) != 0) {
+    assert(!is_cast, "must be reinterpret");
+    op = _gvn.transform(new VectorReinterpretNode(op, src_type, dst_type));
+  }
+
+  const TypeInstPtr* vbox_type_to = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass_to);
+  Node* vbox = box_vector(op, vbox_type_to, elem_bt_to, num_elem_to);
+  set_vector_result(vbox);
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem_to * type2aelembytes(elem_bt_to))));
+  return true;
+}
+
+bool LibraryCallKit::inline_vector_insert() {
+  if (!UseVectorAPI) return false;
+  const TypeInstPtr* vector_klass = gvn().type(argument(0))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(1))->is_instptr();
+  const TypeInt* vlen             = gvn().type(argument(2))->is_int();
+  const TypeInt* idx              = gvn().type(argument(4))->is_int();
+
+  if (vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || !vlen->is_con() || !idx->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+  if (!arch_supports_vector(Op_VectorInsert, num_elem, elem_bt, VecMaskNotUsed)) {
+    return false; // not supported
+  }
+
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  Node* opd = unbox_vector(argument(3), vbox_type, elem_bt, num_elem);
+  if (opd == NULL) {
+    return false;
+  }
+
+  Node* insert_val = argument(5);
+  assert(gvn().type(insert_val)->isa_long() != NULL, "expected to be long");
+
+  // Convert insert value back to its appropriate type.
+  switch (elem_bt) {
+    case T_BYTE:
+      insert_val = gvn().transform(new ConvL2INode(insert_val));
+      insert_val = gvn().transform(new CastIINode(insert_val, TypeInt::BYTE));
+      break;
+    case T_SHORT:
+      insert_val = gvn().transform(new ConvL2INode(insert_val));
+      insert_val = gvn().transform(new CastIINode(insert_val, TypeInt::SHORT));
+      break;
+    case T_INT:
+      insert_val = gvn().transform(new ConvL2INode(insert_val));
+      break;
+    case T_FLOAT:
+      insert_val = gvn().transform(new ConvL2INode(insert_val));
+      insert_val = gvn().transform(new MoveI2FNode(insert_val));
+      break;
+    case T_DOUBLE:
+      insert_val = gvn().transform(new MoveL2DNode(insert_val));
+      break;
+    case T_LONG:
+      // no conversion needed
+      break;
+    default: fatal("%s", type2name(elem_bt)); break;
+  }
+
+  Node* operation = _gvn.transform(VectorInsertNode::make(opd, insert_val, idx->get_con()));
+  operation = box_vector(operation, vbox_type, elem_bt, num_elem);
+  set_vector_result(operation);
+
+  C->set_max_vector_size(MAX2(C->max_vector_size(), (uint)(num_elem * type2aelembytes(elem_bt))));
+  return true;
+}
+
+bool LibraryCallKit::inline_vector_extract() {
+  if (!UseVectorAPI) return false;
+  const TypeInstPtr* vector_klass = gvn().type(argument(0))->is_instptr();
+  const TypeInstPtr* elem_klass   = gvn().type(argument(1))->is_instptr();
+  const TypeInt* vlen             = gvn().type(argument(2))->is_int();
+  const TypeInt* idx              = gvn().type(argument(4))->is_int();
+
+  if (vector_klass->const_oop() == NULL || elem_klass->const_oop() == NULL || !vlen->is_con() || !idx->is_con()) {
+    return false; // not enough info for intrinsification
+  }
+  ciType* elem_type = elem_klass->const_oop()->as_instance()->java_mirror_type();
+  if (!elem_type->is_primitive_type()) {
+    return false; // should be primitive type
+  }
+  BasicType elem_bt = elem_type->basic_type();
+  int num_elem = vlen->get_con();
+  int vopc = ExtractNode::opcode(elem_bt);
+  if (!arch_supports_vector(vopc, num_elem, elem_bt, VecMaskNotUsed)) {
+    return false; // not supported
+  }
+
+  ciKlass* vbox_klass = vector_klass->const_oop()->as_instance()->java_lang_Class_klass();
+  const TypeInstPtr* vbox_type = TypeInstPtr::make_exact(TypePtr::NotNull, vbox_klass);
+
+  Node* opd = unbox_vector(argument(3), vbox_type, elem_bt, num_elem);
+  if (opd == NULL) {
+    return false;
+  }
+
+  Node* operation = gvn().transform(ExtractNode::make(opd, idx->get_con(), elem_bt));
+
+  Node* bits = NULL;
+  switch (elem_bt) {
+    case T_BYTE:
+    case T_SHORT:
+    case T_INT: {
+      bits = gvn().transform(new ConvI2LNode(operation));
+      break;
+    }
+    case T_FLOAT: {
+      bits = gvn().transform(new MoveF2INode(operation));
+      bits = gvn().transform(new ConvI2LNode(bits));
+      break;
+    }
+    case T_DOUBLE: {
+      bits = gvn().transform(new MoveD2LNode(operation));
+      break;
+    }
+    case T_LONG: {
+      bits = operation; // no conversion needed
+      break;
+    }
+    default: fatal("%s", type2name(elem_bt));
+  }
+
+  set_vector_result(bits);
   return true;
 }
 

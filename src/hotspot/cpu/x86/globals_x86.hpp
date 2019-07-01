@@ -122,6 +122,9 @@ define_pd_global(bool, ThreadLocalHandshakes, false);
           "Highest supported AVX instructions set on x86/x64")              \
           range(0, 99)                                                      \
                                                                             \
+  product(bool, UseVectorAPI, false,                                        \
+          "Enable Vector API")                                              \
+                                                                            \
   product(bool, UseCLMUL, false,                                            \
           "Control whether CLMUL instructions can be used on x86/x64")      \
                                                                             \

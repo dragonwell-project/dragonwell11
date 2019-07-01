@@ -75,6 +75,7 @@ public:
         _t_incrInline_pru,
         _t_incrInline_inline,
       _t_renumberLive,
+      _t_expandVectorBoxes,
       _t_idealLoop,
       _t_idealLoopVerify,
       _t_ccp,

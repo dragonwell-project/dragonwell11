@@ -107,6 +107,8 @@ PLATFORM_MODULES += \
     jdk.crypto.ec \
     jdk.dynalink \
     jdk.httpserver \
+    jdk.panama.vector \
+    jdk.internal.vm.compiler.management \
     jdk.jsobject \
     jdk.localedata \
     jdk.naming.dns \
@@ -148,6 +150,7 @@ DOCS_MODULES += \
     jdk.editpad \
     jdk.hotspot.agent \
     jdk.httpserver \
+    jdk.panama.vector \
     jdk.jartool \
     jdk.javadoc \
     jdk.jcmd \

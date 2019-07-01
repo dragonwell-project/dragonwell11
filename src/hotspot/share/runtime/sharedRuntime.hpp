@@ -387,6 +387,10 @@ class SharedRuntime: AllStatic {
   static int c_calling_convention(const BasicType *sig_bt, VMRegPair *regs, VMRegPair *regs2,
                                   int total_args_passed);
 
+  static int vector_calling_convention(VMRegPair *regs,
+                                       uint num_bits,
+                                       uint total_args_passed);
+
   static size_t trampoline_size();
 
   static void generate_trampoline(MacroAssembler *masm, address destination);

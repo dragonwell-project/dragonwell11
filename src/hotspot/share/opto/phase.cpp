@@ -78,6 +78,7 @@ void Phase::print_timers() {
        }
     }
     tty->print_cr ("         Renumber Live:       %7.3f s", timers[_t_renumberLive].seconds());
+    tty->print_cr ("         Expand VectorBoxes:  %7.3f s", timers[_t_expandVectorBoxes].seconds());
     tty->print_cr ("         IdealLoop:           %7.3f s", timers[_t_idealLoop].seconds());
     tty->print_cr ("         IdealLoop Verify:    %7.3f s", timers[_t_idealLoopVerify].seconds());
     tty->print_cr ("         Cond Const Prop:     %7.3f s", timers[_t_ccp].seconds());

@@ -30,6 +30,8 @@
 class  AllocateNode;
 class  AllocateArrayNode;
 class  CallNode;
+class  VectorBoxNode;
+class  VectorUnboxNode;
 class  Node;
 class  PhaseIterGVN;
 
@@ -225,6 +227,7 @@ public:
   Node* longcon(jlong con)      const { return _igvn.longcon(con); }
   Node* makecon(const Type *t)  const { return _igvn.makecon(t); }
   Node* top()                   const { return C->top(); }
+  void expand_vbox_nodes();
 };
 
 #endif // SHARE_VM_OPTO_MACRO_HPP

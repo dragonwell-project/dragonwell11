@@ -1549,6 +1549,12 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(MaxNode, AddNode)                                       \
   declare_c2_type(MaxINode, MaxNode)                                      \
   declare_c2_type(MinINode, MaxNode)                                      \
+  declare_c2_type(MaxLNode, Node)                                         \
+  declare_c2_type(MinLNode, Node)                                         \
+  declare_c2_type(MaxFNode, Node)                                         \
+  declare_c2_type(MinFNode, Node)                                         \
+  declare_c2_type(MaxDNode, Node)                                         \
+  declare_c2_type(MinDNode, Node)                                         \
   declare_c2_type(StartNode, MultiNode)                                   \
   declare_c2_type(StartOSRNode, StartNode)                                \
   declare_c2_type(ParmNode, ProjNode)                                     \
@@ -1564,6 +1570,7 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(CallRuntimeNode, CallNode)                              \
   declare_c2_type(CallLeafNode, CallRuntimeNode)                          \
   declare_c2_type(CallLeafNoFPNode, CallLeafNode)                         \
+  declare_c2_type(CallLeafVectorNode, CallLeafNode)                       \
   declare_c2_type(AllocateNode, CallNode)                                 \
   declare_c2_type(AllocateArrayNode, AllocateNode)                        \
   declare_c2_type(LockNode, AbstractLockNode)                             \
@@ -1760,6 +1767,7 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(SubFPNode, SubNode)                                     \
   declare_c2_type(SubFNode, SubFPNode)                                    \
   declare_c2_type(SubDNode, SubFPNode)                                    \
+  declare_c2_type(SubReductionVNode, ReductionNode)                       \
   declare_c2_type(CmpNode, SubNode)                                       \
   declare_c2_type(CmpINode, CmpNode)                                      \
   declare_c2_type(CmpUNode, CmpNode)                                      \
@@ -1779,15 +1787,21 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(AbsDNode, AbsNode)                                      \
   declare_c2_type(CmpLTMaskNode, Node)                                    \
   declare_c2_type(NegNode, Node)                                          \
+  declare_c2_type(NegINode, NegNode)                                      \
+  declare_c2_type(NegLNode, NegNode)                                      \
   declare_c2_type(NegFNode, NegNode)                                      \
   declare_c2_type(NegDNode, NegNode)                                      \
   declare_c2_type(AtanDNode, Node)                                        \
   declare_c2_type(SqrtFNode, Node)                                        \
   declare_c2_type(SqrtDNode, Node)                                        \
+  declare_c2_type(NotNode, Node)                                          \
   declare_c2_type(ReverseBytesINode, Node)                                \
   declare_c2_type(ReverseBytesLNode, Node)                                \
   declare_c2_type(ReductionNode, Node)                                    \
   declare_c2_type(VectorNode, Node)                                       \
+  declare_c2_type(AbsVNode, VectorNode)                                   \
+  declare_c2_type(AbsVFNode, VectorNode)                                  \
+  declare_c2_type(AbsVDNode, VectorNode)                                  \
   declare_c2_type(AddVBNode, VectorNode)                                  \
   declare_c2_type(AddVSNode, VectorNode)                                  \
   declare_c2_type(AddVINode, VectorNode)                                  \
@@ -1804,6 +1818,7 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(SubVLNode, VectorNode)                                  \
   declare_c2_type(SubVFNode, VectorNode)                                  \
   declare_c2_type(SubVDNode, VectorNode)                                  \
+  declare_c2_type(MulVBNode, VectorNode)                                  \
   declare_c2_type(MulVSNode, VectorNode)                                  \
   declare_c2_type(MulVLNode, VectorNode)                                  \
   declare_c2_type(MulReductionVLNode, ReductionNode)                      \
@@ -1812,6 +1827,10 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(MulVFNode, VectorNode)                                  \
   declare_c2_type(MulReductionVFNode, ReductionNode)                      \
   declare_c2_type(MulVDNode, VectorNode)                                  \
+  declare_c2_type(NegVINode, VectorNode)                                  \
+  declare_c2_type(NegVFNode, VectorNode)                                  \
+  declare_c2_type(NegVDNode, VectorNode)                                  \
+  declare_c2_type(NotVNode, VectorNode)                                   \
   declare_c2_type(FmaVDNode, VectorNode)                                  \
   declare_c2_type(FmaVFNode, VectorNode)                                  \
   declare_c2_type(CMoveVFNode, VectorNode)                                \
@@ -1832,9 +1851,14 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(URShiftVSNode, VectorNode)                              \
   declare_c2_type(URShiftVINode, VectorNode)                              \
   declare_c2_type(URShiftVLNode, VectorNode)                              \
+  declare_c2_type(MinReductionVNode, ReductionNode)                       \
+  declare_c2_type(MaxReductionVNode, ReductionNode)                       \
   declare_c2_type(AndVNode, VectorNode)                                   \
+  declare_c2_type(AndReductionVNode, ReductionNode)                       \
   declare_c2_type(OrVNode, VectorNode)                                    \
+  declare_c2_type(OrReductionVNode, ReductionNode)                        \
   declare_c2_type(XorVNode, VectorNode)                                   \
+  declare_c2_type(XorReductionVNode, ReductionNode)                       \
   declare_c2_type(LoadVectorNode, LoadNode)                               \
   declare_c2_type(StoreVectorNode, StoreNode)                             \
   declare_c2_type(ReplicateBNode, VectorNode)                             \
@@ -1872,6 +1896,27 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(OverflowMulLNode, OverflowLNode)                        \
   declare_c2_type(FmaDNode, Node)                                         \
   declare_c2_type(FmaFNode, Node)                                         \
+  declare_c2_type(LoadVectorGatherNode, LoadVectorNode)                   \
+  declare_c2_type(StoreVectorScatterNode, StoreVectorNode)                \
+  declare_c2_type(VectorLoadMaskNode, VectorNode)                         \
+  declare_c2_type(VectorLoadShuffleNode, VectorNode)                      \
+  declare_c2_type(VectorStoreMaskNode, VectorNode)                        \
+  declare_c2_type(VectorBlendNode, VectorNode)                            \
+  declare_c2_type(VectorRearrangeNode, VectorNode)                        \
+  declare_c2_type(VectorMaskWrapperNode, VectorNode)                      \
+  declare_c2_type(VectorMaskCmpNode, VectorNode)                          \
+  declare_c2_type(VectorCastB2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastS2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastI2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastL2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastF2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastD2XNode, VectorNode)                          \
+  declare_c2_type(VectorInsertNode, VectorNode)                           \
+  declare_c2_type(VectorUnboxNode, VectorNode)                            \
+  declare_c2_type(VectorReinterpretNode, VectorNode)                      \
+  declare_c2_type(VectorBoxNode, Node)                                    \
+  declare_c2_type(VectorBoxAllocateNode, CallStaticJavaNode)              \
+  declare_c2_type(VectorTestNode, Node)                                   \
                                                                           \
   /*********************/                                                 \
   /* Adapter Blob Entries */                                              \

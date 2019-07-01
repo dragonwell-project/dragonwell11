@@ -480,6 +480,8 @@ public:
   virtual const Type *xmeet( const Type *t ) const;
   virtual const Type *xdual() const;    // Compute dual right now.
   // Convenience common pre-built types.
+  static const TypeF *MAX;
+  static const TypeF *MIN;
   static const TypeF *ZERO; // positive zero only
   static const TypeF *ONE;
 #ifndef PRODUCT
@@ -507,6 +509,8 @@ public:
   virtual const Type *xmeet( const Type *t ) const;
   virtual const Type *xdual() const;    // Compute dual right now.
   // Convenience common pre-built types.
+  static const TypeD *MAX;
+  static const TypeD *MIN;
   static const TypeD *ZERO; // positive zero only
   static const TypeD *ONE;
 #ifndef PRODUCT
@@ -548,6 +552,8 @@ public:
   virtual const Type *narrow( const Type *t ) const;
   // Do not kill _widen bits.
   // Convenience common pre-built types.
+  static const TypeInt *MAX;
+  static const TypeInt *MIN;
   static const TypeInt *MINUS_1;
   static const TypeInt *ZERO;
   static const TypeInt *ONE;
@@ -613,6 +619,8 @@ public:
   virtual const Type *widen( const Type *t, const Type* limit_type ) const;
   virtual const Type *narrow( const Type *t ) const;
   // Convenience common pre-built types.
+  static const TypeLong *MAX;
+  static const TypeLong *MIN;
   static const TypeLong *MINUS_1;
   static const TypeLong *ZERO;
   static const TypeLong *ONE;

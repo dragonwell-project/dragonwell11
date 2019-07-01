@@ -180,7 +180,6 @@ public final class Unsafe {
      */
     @HotSpotIntrinsicCandidate
     public native Object getObject(Object o, long offset);
-
     public Object getReference(Object o, long offset) {
         return getObject(o, offset);
     }
@@ -197,7 +196,6 @@ public final class Unsafe {
      */
     @HotSpotIntrinsicCandidate
     public native void putObject(Object o, long offset, Object x);
-
     public void putReference(Object o, long offset, Object x) {
         putObject(o, offset, x);
     }

@@ -424,7 +424,7 @@ static RegMask *init_input_masks( uint size, RegMask &ret_adr, RegMask &fp ) {
 void Matcher::init_first_stack_mask() {
 
   // Allocate storage for spill masks as masks for the appropriate load type.
-  RegMask *rms = (RegMask*)C->comp_arena()->Amalloc_D(sizeof(RegMask) * (3*6+5));
+  RegMask *rms = (RegMask*)C->comp_arena()->Amalloc_D(sizeof(RegMask) * (3*11));
 
   idealreg2spillmask  [Op_RegN] = &rms[0];
   idealreg2spillmask  [Op_RegI] = &rms[1];
@@ -452,6 +452,18 @@ void Matcher::init_first_stack_mask() {
   idealreg2spillmask  [Op_VecX] = &rms[20];
   idealreg2spillmask  [Op_VecY] = &rms[21];
   idealreg2spillmask  [Op_VecZ] = &rms[22];
+
+  idealreg2debugmask  [Op_VecS] = &rms[23];
+  idealreg2debugmask  [Op_VecD] = &rms[24];
+  idealreg2debugmask  [Op_VecX] = &rms[25];
+  idealreg2debugmask  [Op_VecY] = &rms[26];
+  idealreg2debugmask  [Op_VecZ] = &rms[27];
+
+  idealreg2mhdebugmask[Op_VecS] = &rms[28];
+  idealreg2mhdebugmask[Op_VecD] = &rms[29];
+  idealreg2mhdebugmask[Op_VecX] = &rms[30];
+  idealreg2mhdebugmask[Op_VecY] = &rms[31];
+  idealreg2mhdebugmask[Op_VecZ] = &rms[32];
 
   OptoReg::Name i;
 
@@ -581,12 +593,24 @@ void Matcher::init_first_stack_mask() {
   *idealreg2debugmask  [Op_RegD]= *idealreg2spillmask[Op_RegD];
   *idealreg2debugmask  [Op_RegP]= *idealreg2spillmask[Op_RegP];
 
+  *idealreg2debugmask  [Op_VecS]= *idealreg2spillmask[Op_VecS];
+  *idealreg2debugmask  [Op_VecD]= *idealreg2spillmask[Op_VecD];
+  *idealreg2debugmask  [Op_VecX]= *idealreg2spillmask[Op_VecX];
+  *idealreg2debugmask  [Op_VecY]= *idealreg2spillmask[Op_VecY];
+  *idealreg2debugmask  [Op_VecZ]= *idealreg2spillmask[Op_VecZ];
+
   *idealreg2mhdebugmask[Op_RegN]= *idealreg2spillmask[Op_RegN];
   *idealreg2mhdebugmask[Op_RegI]= *idealreg2spillmask[Op_RegI];
   *idealreg2mhdebugmask[Op_RegL]= *idealreg2spillmask[Op_RegL];
   *idealreg2mhdebugmask[Op_RegF]= *idealreg2spillmask[Op_RegF];
   *idealreg2mhdebugmask[Op_RegD]= *idealreg2spillmask[Op_RegD];
   *idealreg2mhdebugmask[Op_RegP]= *idealreg2spillmask[Op_RegP];
+
+  *idealreg2mhdebugmask[Op_VecS]= *idealreg2spillmask[Op_VecS];
+  *idealreg2mhdebugmask[Op_VecD]= *idealreg2spillmask[Op_VecD];
+  *idealreg2mhdebugmask[Op_VecX]= *idealreg2spillmask[Op_VecX];
+  *idealreg2mhdebugmask[Op_VecY]= *idealreg2spillmask[Op_VecY];
+  *idealreg2mhdebugmask[Op_VecZ]= *idealreg2spillmask[Op_VecZ];
 
   // Prevent stub compilations from attempting to reference
   // callee-saved registers from debug info
@@ -603,6 +627,11 @@ void Matcher::init_first_stack_mask() {
       idealreg2debugmask  [Op_RegF]->Remove(i); // masks
       idealreg2debugmask  [Op_RegD]->Remove(i);
       idealreg2debugmask  [Op_RegP]->Remove(i);
+      idealreg2debugmask  [Op_VecS]->Remove(i);
+      idealreg2debugmask  [Op_VecD]->Remove(i);
+      idealreg2debugmask  [Op_VecX]->Remove(i);
+      idealreg2debugmask  [Op_VecY]->Remove(i);
+      idealreg2debugmask  [Op_VecZ]->Remove(i);
 
       idealreg2mhdebugmask[Op_RegN]->Remove(i);
       idealreg2mhdebugmask[Op_RegI]->Remove(i);
@@ -610,6 +639,11 @@ void Matcher::init_first_stack_mask() {
       idealreg2mhdebugmask[Op_RegF]->Remove(i);
       idealreg2mhdebugmask[Op_RegD]->Remove(i);
       idealreg2mhdebugmask[Op_RegP]->Remove(i);
+      idealreg2mhdebugmask[Op_VecS]->Remove(i);
+      idealreg2mhdebugmask[Op_VecD]->Remove(i);
+      idealreg2mhdebugmask[Op_VecX]->Remove(i);
+      idealreg2mhdebugmask[Op_VecY]->Remove(i);
+      idealreg2mhdebugmask[Op_VecZ]->Remove(i);
     }
   }
 
@@ -622,6 +656,11 @@ void Matcher::init_first_stack_mask() {
   idealreg2mhdebugmask[Op_RegF]->SUBTRACT(save_mask);
   idealreg2mhdebugmask[Op_RegD]->SUBTRACT(save_mask);
   idealreg2mhdebugmask[Op_RegP]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecS]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecD]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecX]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecY]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecZ]->SUBTRACT(save_mask);
 }
 
 //---------------------------is_save_on_entry----------------------------------
@@ -1276,16 +1315,27 @@ MachNode *Matcher::match_sfpt( SafePointNode *sfpt ) {
     for( i = 0; i < argcnt; i++ ) {
       // Address of incoming argument mask to fill in
       RegMask *rm = &mcall->_in_rms[i+TypeFunc::Parms];
-      if( !parm_regs[i].first()->is_valid() &&
-          !parm_regs[i].second()->is_valid() ) {
+      VMReg first = parm_regs[i].first();
+      VMReg second = parm_regs[i].second();
+      if( !first->is_valid() &&
+          !second->is_valid() ) {
         continue;               // Avoid Halves
       }
+      // Handle case where arguments are in vector registers.
+      if(UseVectorAPI && call->in(TypeFunc::Parms + i)->bottom_type()->isa_vect()) {
+        OptoReg::Name reg_fst = OptoReg::as_OptoReg(first);
+        OptoReg::Name reg_snd = OptoReg::as_OptoReg(second);
+        assert (reg_fst <= reg_snd, "fst=%d snd=%d", reg_fst, reg_snd);
+        for (OptoReg::Name r = reg_fst; r <= reg_snd; r++) {
+          rm->Insert(r);
+        }
+      }
       // Grab first register, adjust stack slots and insert in mask.
-      OptoReg::Name reg1 = warp_outgoing_stk_arg(parm_regs[i].first(), begin_out_arg_area, out_arg_limit_per_call );
+      OptoReg::Name reg1 = warp_outgoing_stk_arg(first, begin_out_arg_area, out_arg_limit_per_call );
       if (OptoReg::is_valid(reg1))
         rm->Insert( reg1 );
       // Grab second register (if any), adjust stack slots and insert in mask.
-      OptoReg::Name reg2 = warp_outgoing_stk_arg(parm_regs[i].second(), begin_out_arg_area, out_arg_limit_per_call );
+      OptoReg::Name reg2 = warp_outgoing_stk_arg(second, begin_out_arg_area, out_arg_limit_per_call );
       if (OptoReg::is_valid(reg2))
         rm->Insert( reg2 );
     } // End of for all arguments
@@ -2348,6 +2398,20 @@ void Matcher::find_shared( Node *n ) {
         n->set_req(2, pair);
         n->set_req(1, n->in(3));
         n->del_req(3);
+        break;
+      }
+      case Op_VectorBlend:
+      case Op_VectorInsert: {
+        Node* pair = new BinaryNode(n->in(1), n->in(2));
+        n->set_req(1, pair);
+        n->set_req(2, n->in(3));
+        n->del_req(3);
+        break;
+      }
+      case Op_StoreVectorScatter: {
+        Node* pair = new BinaryNode(n->in(MemNode::ValueIn), n->in(MemNode::ValueIn+1));
+        n->set_req(MemNode::ValueIn, pair);
+        n->del_req(MemNode::ValueIn+1);
         break;
       }
       default:
