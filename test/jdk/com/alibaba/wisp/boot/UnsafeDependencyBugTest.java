@@ -32,6 +32,6 @@ public class UnsafeDependencyBugTest {
                 .redirectOutput(new File("/dev/null"))
                 .start();
 
-        assertTrue(p.waitFor(2, TimeUnit.SECONDS));
+        assertTrue(p.waitFor(5, TimeUnit.SECONDS));
     }
 }
