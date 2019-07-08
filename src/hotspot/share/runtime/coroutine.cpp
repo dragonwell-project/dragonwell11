@@ -341,7 +341,7 @@ CoroutineStack* CoroutineStack::create_stack(JavaThread* thread, intptr_t size/*
     default_size = true;
   }
 
-  uint reserved_pages = StackShadowPages + StackRedPages + StackYellowPages + + StackReservedPages;
+  uint reserved_pages = StackShadowPages + StackRedPages + StackYellowPages + StackReservedPages;
   uintx real_stack_size = size + (reserved_pages * os::vm_page_size());
   uintx reserved_size = align_up(real_stack_size, os::vm_allocation_granularity());
 

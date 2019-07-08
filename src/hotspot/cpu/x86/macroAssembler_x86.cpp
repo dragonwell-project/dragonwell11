@@ -1092,11 +1092,6 @@ void MacroAssembler::bang_stack_size(Register size, Register tmp) {
 }
 
 void MacroAssembler::reserved_stack_check() {
-    //TODO: JDK11 introduces the usage of @ReservedStackAccess, we will support it with Coroutine
-    // If we check it in wisp flow, the exception is thrown when coroutine switches.
-    if (EnableCoroutine) {
-        return;
-    }
     // testing if reserved zone needs to be enabled
     Label no_reserved_zone_enabling;
     Register thread = NOT_LP64(rsi) LP64_ONLY(r15_thread);
