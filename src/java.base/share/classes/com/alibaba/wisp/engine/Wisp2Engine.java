@@ -252,6 +252,7 @@ final class Wisp2Engine extends WispEngine {
             return;
         }
         hasBeenShutdown = true;
+        deRegisterPerfCounter();
         group.scheduler.executeWithCarrierThread(new StealAwareRunnable() {
             @Override
             public void run() {

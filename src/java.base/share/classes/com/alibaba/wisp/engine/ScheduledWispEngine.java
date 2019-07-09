@@ -587,6 +587,7 @@ final class ScheduledWispEngine extends WispEngine {
     @Override
     public void shutdown() {
         hasBeenShutdown = true;
+        deRegisterPerfCounter();
         if (WispEngine.current().current == threadTask) {
             doShutdown();
         } else {

@@ -39,6 +39,7 @@ public enum WispWorkerContainer {
                 @Override
                 public void run() {
                     WispEngine engine = WispEngine.current(); // create engine
+                    engine.registerPerfCounter();
                     countDownLatch.countDown();
                     engine.schedule();
                     // wait task submit

@@ -111,6 +111,7 @@ class Wisp2Scheduler {
                 engine.group = group;
                 engine.carrier = this;
                 group.carrierEngines.add(engine);
+                engine.registerPerfCounter();
                 runCarrier(engine);
             } finally {
                 WispEngine.carrierThreads.remove(thread);
@@ -461,6 +462,8 @@ class Wisp2Scheduler {
                 last = cs[i];
             }
             carriers = cs;
+            Wisp2Engine engine = (Wisp2Engine) JLA.getWispEngine(thread);
+            engine.deRegisterPerfCounter();
         }
     }
 

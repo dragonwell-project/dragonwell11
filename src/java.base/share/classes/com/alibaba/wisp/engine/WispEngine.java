@@ -15,6 +15,7 @@ import java.util.*;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReference;
@@ -72,6 +73,7 @@ public abstract class WispEngine extends AbstractExecutorService {
 
     static Set<Thread> carrierThreads;
     private static Thread pollerThread;
+    static Map<Long, WispCounter> managedEngineCounters;
 
     static {
         registerNatives();
@@ -130,6 +132,9 @@ public abstract class WispEngine extends AbstractExecutorService {
                 }, "Wisp-Poller");
                 pollerThread.setDaemon(true);
                 pollerThread.start();
+            }
+            if (WispConfiguration.WISP_PROFILE_LOG_ENABLED) {
+                WispPerfCounterMonitor.INSTANCE.startDaemon();
             }
         }
     }
@@ -334,6 +339,10 @@ public abstract class WispEngine extends AbstractExecutorService {
             if (WispConfiguration.GLOBAL_POLLER) {
                 Class.forName(WispEventPump.class.getName());
             }
+            managedEngineCounters = new ConcurrentHashMap<>(100);
+            if (WispConfiguration.WISP_PROFILE) {
+                Class.forName(WispPerfCounterMonitor.class.getName());
+            }
             WispEngine.current().preloadClasses();
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
@@ -478,6 +487,10 @@ public abstract class WispEngine extends AbstractExecutorService {
         return thread.getId();
     }
 
+    public static Map<Long, WispCounter> getManagedEngineCounters() {
+        return managedEngineCounters;
+    }
+
     /**
      * Create WispTask to run task code
      * <p>
@@ -488,6 +501,35 @@ public abstract class WispEngine extends AbstractExecutorService {
     public static void dispatch(Runnable target) {
         WispEngine engine = current();
         engine.dispatchTask(target, "dispatch task", null);
+    }
+
+    public static WispCounter getWispCounter(long id) {
+        if (WispConfiguration.WISP_PROFILE) {
+            return WispPerfCounterMonitor.INSTANCE.getWispCounter(id);
+        } else {
+            return null;
+        }
+    }
+
+    public void registerPerfCounter() {
+        SharedSecrets.getWispEngineAccess().runInCritical(() -> {
+            if (WispConfiguration.WISP_PROFILE) {
+                WispPerfCounterMonitor.INSTANCE.register(counter);
+            }
+            managedEngineCounters.put(getId(), counter);
+            return null;
+        });
+    }
+
+    void deRegisterPerfCounter() {
+        SharedSecrets.getWispEngineAccess().runInCritical(() -> {
+            if (WispConfiguration.WISP_PROFILE) {
+                WispPerfCounterMonitor.INSTANCE.deRegister(counter);
+            }
+            managedEngineCounters.remove(getId());
+            counter.cleanup();
+            return null;
+        });
     }
 
     final WispTask runTaskInternal(Runnable target, String name, Thread thread, ClassLoader ctxLoader) {
