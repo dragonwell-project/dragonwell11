@@ -154,12 +154,12 @@ static volatile int gMonitorPopulation = 0;  // # Extant -- in circulation
 // into a single notifyAndExit() runtime primitive.
 
 bool ObjectSynchronizer::quick_notify(oopDesc * obj, Thread * self, bool all) {
-  if (UseWispMonitor) {
-    self = WispThread::current(self);
-  }
   assert(!SafepointSynchronize::is_at_safepoint(), "invariant");
   assert(self->is_Java_thread(), "invariant");
   assert(((JavaThread *) self)->thread_state() == _thread_in_Java, "invariant");
+  if (UseWispMonitor) {
+    self = WispThread::current(self);
+  }
   NoSafepointVerifier nsv;
   if (obj == NULL) return false;  // slow-path for invalid obj
   const markOop mark = obj->mark();
@@ -207,12 +207,13 @@ bool ObjectSynchronizer::quick_notify(oopDesc * obj, Thread * self, bool all) {
 
 bool ObjectSynchronizer::quick_enter(oop obj, Thread * Self,
                                      BasicLock * lock) {
-  if (UseWispMonitor) {
-    Self = WispThread::current(Self);
-  }
   assert(!SafepointSynchronize::is_at_safepoint(), "invariant");
   assert(Self->is_Java_thread(), "invariant");
   assert(UseWispMonitor || ((JavaThread *) Self)->thread_state() == _thread_in_Java, "invariant");
+  if (UseWispMonitor) {
+    Self = WispThread::current(Self);
+  }
+
   NoSafepointVerifier nsv;
   if (obj == NULL) return false;       // Need to throw NPE
   const markOop mark = obj->mark();
