@@ -687,10 +687,10 @@
   template(doPrivileged_signature_2,                   "(Ljava/security/PrivilegedAction;Ljava/security/AccessControlContext;)Ljava/lang/Object;")    \
   template(doPrivileged_signature_3,                   "(Ljava/security/PrivilegedExceptionAction;)Ljava/lang/Object;")    \
   template(doPrivileged_signature_4,                   "(Ljava/security/PrivilegedExceptionAction;Ljava/security/AccessControlContext;)Ljava/lang/Object;")    \
-  template(sun_reflect_NativeMethodAccessorImpl,       "sun/reflect/NativeMethodAccessorImpl")                    \
+  template(jdk_internal_reflect_NativeMethodAccessorImpl,       "jdk/internal/reflect/NativeMethodAccessorImpl")                    \
   template(invoke0_name,                               "invoke0")                                                 \
   template(invoke0_signature,                          "(Ljava/lang/reflect/Method;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;")  \
-  template(sun_reflect_NativeConstructorAccessorImpl,  "sun/reflect/NativeConstructorAccessorImpl")               \
+  template(jdk_internal_reflect_NativeConstructorAccessorImpl,  "jdk/internal/reflect/NativeConstructorAccessorImpl")               \
   template(newInstance0_signature,                     "(Ljava/lang/reflect/Constructor;[Ljava/lang/Object;)Ljava/lang/Object;")  \
                                                                                                                  \
   /* forEachRemaining support */                                                                                  \

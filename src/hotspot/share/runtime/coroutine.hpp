@@ -425,12 +425,12 @@ public:
   WispStealCandidate (Symbol *holder, Symbol *name, Symbol *signature) : _holder(holder), _name(name), _signature(signature) {}
 private:
   bool is_method_invoke() {
-    return _holder == vmSymbols::sun_reflect_NativeMethodAccessorImpl() && // sun.reflect.NativeMethodAccessorImpl.invoke0()
+    return _holder == vmSymbols::jdk_internal_reflect_NativeMethodAccessorImpl() && // jdk.internal.reflect.NativeMethodAccessorImpl.invoke0()
            _name == vmSymbols::invoke0_name() &&
            _signature == vmSymbols::invoke0_signature();
   }
   bool is_constructor_newinstance() {
-    return _holder == vmSymbols::sun_reflect_NativeConstructorAccessorImpl() &&  // sun.reflect.NativeConstructorAccessorImpl.newInstance0()
+    return _holder == vmSymbols::jdk_internal_reflect_NativeConstructorAccessorImpl() &&  // jdk.internal.reflect.NativeConstructorAccessorImpl.newInstance0()
            _name == vmSymbols::newInstance0_name() &&
            _signature == vmSymbols::newInstance0_signature();
   }
