@@ -31,7 +31,7 @@ import jdk.internal.misc.SharedSecrets;
  * * Abstract of coroutines.
  */
 public abstract class CoroutineBase {
-    transient long data;
+    transient long nativeCoroutine;
 
     boolean finished = false;
 
@@ -54,9 +54,9 @@ public abstract class CoroutineBase {
      * @param threadSupport CoroutineSupport
      * @param data          value
      */
-    CoroutineBase(CoroutineSupport threadSupport, long data) {
+    CoroutineBase(CoroutineSupport threadSupport, long nativeCoroutine) {
         this.threadSupport = threadSupport;
-        this.data = data;
+        this.nativeCoroutine = nativeCoroutine;
     }
 
     /**
@@ -68,9 +68,6 @@ public abstract class CoroutineBase {
     private final void startInternal() {
         assert threadSupport.getThread() == SharedSecrets.getJavaLangAccess().currentThread0();
         try {
-            if (false && CoroutineSupport.DEBUG) {
-                System.out.println("starting coroutine " + this);
-            }
             // When we symmetricYieldTo a newly created coroutine,
             // we'll expect the new coroutine release lock as soon as possible
             threadSupport.beforeResume(this);
@@ -98,7 +95,7 @@ public abstract class CoroutineBase {
 
     /**
      * @return the thread that this coroutine is associated with
-     * @throws NullPointerException if the coroutine has terminated
+     * @throws NullPointerException if the coroutine has been terminated
      */
     public Thread getThread() {
         return threadSupport.getThread();

@@ -103,7 +103,7 @@ public class MultiCoroutineStackTest {
                 break;
         }
         assertTrue(i != result.size(), "coroutine stack not found");
-        assertTrue(result.get(i + 1).contains("java.dyn.CoroutineSupport.symmetricYieldTo"),
+        assertTrue(result.get(i + 1).contains("java.dyn.CoroutineSupport.symmetricYieldTo") || result.get(i + 1).contains("java.dyn.CoroutineSupport.unsafeSymmetricYieldTo"),
                 "unexpected stack top :" + result.get(i + 1));
 
         boolean lockFound = false, jucFound = false;

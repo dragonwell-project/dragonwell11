@@ -13,6 +13,7 @@ import java.nio.channels.Selector;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 /**
  * Coroutine Runtime Engine. It's a "wisp" thing, as we want our asynchronization transformation to be transparent
@@ -68,6 +69,7 @@ public abstract class WispEngine extends AbstractExecutorService {
      * check whether the thread's group is daemonThreadGroup
      */
     static ThreadGroup daemonThreadGroup;
+
     static Set<Thread> carrierThreads;
 
     static {
@@ -80,7 +82,6 @@ public abstract class WispEngine extends AbstractExecutorService {
         assert JLA.currentThread0().getName().equals("main") : "Wisp need to be loaded by main thread";
         shiftThreadModel = WispConfiguration.ENABLE_THREAD_AS_WISP;
         daemonThreadGroup = new ThreadGroup(JLA.currentThread0().getThreadGroup(), "Daemon Thread Group");
-
         carrierThreads = new ConcurrentSkipListSet<>(new Comparator<Thread>() {
             @Override
             public int compare(Thread o1, Thread o2) {
@@ -367,6 +368,7 @@ public abstract class WispEngine extends AbstractExecutorService {
         return !task.isThreadTask();
     }
 
+
     WispEngine() {
         thread = JLA.currentThread0();
         CoroutineSupport cs = thread.getCoroutineSupport();
@@ -408,7 +410,6 @@ public abstract class WispEngine extends AbstractExecutorService {
             if (engine.threadTask.ctx != null) {
                 JLA.setWispEngine(thread, engine);
                 engine.init();
-                engine.postInit();
             } // else: fake engine used in jni attach
         }
         return engine;
@@ -418,10 +419,10 @@ public abstract class WispEngine extends AbstractExecutorService {
     // current running task
     protected WispTask current;
     protected final WispTask threadTask;
-    protected Set<WispTask> runningTasks = new HashSet<>();
     protected List<WispTask> taskCache = new ArrayList<>();
 
     private int createdTasks;
+    protected volatile int runningTaskCount = 0;
 
     protected boolean isInCritical;
     private boolean hasBeenShutdown;
@@ -455,7 +456,7 @@ public abstract class WispEngine extends AbstractExecutorService {
      */
     private static void eventLoop() {
         WispEngine engine = current();
-        while (!engine.runningTasks.isEmpty()) {
+        while (engine.runningTaskCount > 0) {
             engine.yieldToNext();
         }
     }
@@ -501,7 +502,7 @@ public abstract class WispEngine extends AbstractExecutorService {
                 WispTask.trackTask(wispTask);
             }
             wispTask.reset(target, current, name, thread, ctxLoader);
-            runningTasks.add(wispTask);
+            TASK_COUNT_UPDATER.incrementAndGet(this);
         } finally {
             isInCritical = isInCritical0;
         }
@@ -587,6 +588,30 @@ public abstract class WispEngine extends AbstractExecutorService {
 
 
     /**
+     * 1. In Wisp2, each WispEngine's runningTask is modified when WispTask is stolen, we can't guarantee
+     * the accuracy of the task set.
+     * 2. this function is only called in shutdown, so it's not performance sensitive
+     * 3. this function should only be called by current WispTask
+     */
+    protected List<WispTask> getRunningTasks() {
+        assert WispEngine.current() == this;
+        ArrayList<WispTask> runningTasks = new ArrayList<>();
+        boolean isInCritical0 = isInCritical;
+        isInCritical = true;
+        try {
+            for (WispTask task : WispTask.id2Task.values()) {
+                if (task.engine == this && !task.isThreadTask()) {
+                    runningTasks.add(task);
+                }
+            }
+            return runningTasks;
+        } finally {
+            isInCritical = isInCritical0;
+        }
+    }
+
+
+    /**
      * Modify current {@link WispTask}'s interest channel and event.
      * {@see registerEvent(...)}
      * <p>
@@ -629,7 +654,7 @@ public abstract class WispEngine extends AbstractExecutorService {
      */
     void taskExit() { // and exit
         current.status = WispTask.Status.ZOMBIE;
-        runningTasks.remove(current);
+        TASK_COUNT_UPDATER.decrementAndGet(this);
 
         current.countExecutionTime(switchTimestamp);
         current.resetThreadWrapper();
@@ -640,7 +665,7 @@ public abstract class WispEngine extends AbstractExecutorService {
 
         counter.incrementCompleteTaskCount();
 
-        if (runningTasks.isEmpty() && threadTask.isRunnable()) {
+        if (runningTaskCount == 0 && threadTask.isRunnable()) {
             // finish the event loop
             yieldTo(threadTask);
         } else {
@@ -667,12 +692,6 @@ public abstract class WispEngine extends AbstractExecutorService {
      * Only called when WispEngine is loading.
      */
     protected abstract void preloadClasses() throws Exception;
-
-    /**
-     * Implementation WispEngine specified initialize.
-     */
-    protected void postInit() {
-    }
 
 
     // ----------------------------------------------- lifecycle hooks
@@ -799,8 +818,8 @@ public abstract class WispEngine extends AbstractExecutorService {
     /**
      * @return running task number, used for mxBean report
      */
-    int getNumberOfRunningTasks() {
-        return runningTasks.size();
+    int getNumberOfrunningTaskCount() {
+        return runningTaskCount;
     }
 
     // -----------------------------------------------  shutdown support
@@ -814,6 +833,7 @@ public abstract class WispEngine extends AbstractExecutorService {
 
     /**
      * Send exception to coroutines one by one.
+     * This function should noly be called in WispEngine.doShutdown.
      */
     protected abstract void iterateTasksForShutdown();
 
@@ -870,7 +890,7 @@ public abstract class WispEngine extends AbstractExecutorService {
     public String toString() {
         return new SimpleDateFormat("MM-dd HH:mm:ss.SSS").format(new Date()) + "\n" +
                 "Engine (" + thread.getName() + ") Runtime Info:" +
-                "\nrunningTasks\t" + runningTasks.size() +
+                "\nrunningTaskCount\t" + runningTaskCount +
                 "\ncreatedTasks\t" + createdTasks +
                 "\neventLoops\t" + statistics.eventLoops +
                 "\nswitchCount\t" + schedTick;
@@ -910,13 +930,16 @@ public abstract class WispEngine extends AbstractExecutorService {
 
     @Override
     public boolean isTerminated() {
-        return runningTasks.isEmpty();
+        return runningTaskCount == 0;
     }
 
     @Override
     public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
         return shutdownFuture.await(timeout, unit);
     }
+
+    protected static final AtomicIntegerFieldUpdater<WispEngine> TASK_COUNT_UPDATER =
+            AtomicIntegerFieldUpdater.newUpdater(WispEngine.class, "runningTaskCount");
 
     private static native void registerNatives();
 

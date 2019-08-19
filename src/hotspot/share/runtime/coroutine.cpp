@@ -128,6 +128,7 @@ Coroutine* Coroutine::create_thread_coroutine(JavaThread* thread, CoroutineStack
   coro->_wisp_engine  = NULL;
   coro->_wisp_task    = NULL;
   coro->_wisp_task_id = WISP_ID_NOT_SET;
+  coro->_coroutine    = NULL;
   coro->_enable_steal_count = 1;
   coro->_wisp_post_steal_resource_area = NULL;
   coro->_is_yielding  = false;
@@ -180,6 +181,7 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
   coro->_wisp_engine  = NULL;
   coro->_wisp_task    = NULL;
   coro->_wisp_task_id = WISP_ID_NOT_SET;
+  coro->_coroutine = coroutineObj;
   // if coro->_enable_steal_count == coro->_java_call_counter is true, we can do work steal.
   // when a coroutine starts, the `_java_call_counter` is 0,
   // then it will call java method `Coroutine.startInternal()` and then `_java_call_counter` is 1.
@@ -249,6 +251,9 @@ void Coroutine::oops_do(OopClosure* f, CodeBlobClosure* cf) {
   if (_wisp_task != NULL) {
     f->do_oop((oop*) &_wisp_engine);
     f->do_oop((oop*) &_wisp_task);
+  }
+  if (_coroutine != NULL) {
+    f->do_oop((oop*) &_coroutine);
   }
 }
 
@@ -786,7 +791,7 @@ void Coroutine::after_safepoint(JavaThread* thread) {
 
 EnableStealMark::EnableStealMark(Thread* thread) {
   assert(JavaThread::current() == thread, "current thread check");
-  if (EnableSteal) {
+  if (EnableCoroutine) {
     if (thread->is_Java_thread()) {
       _thread = (JavaThread*) thread;
       _coroutine = _thread->current_coroutine();
@@ -798,7 +803,7 @@ EnableStealMark::EnableStealMark(Thread* thread) {
 }
 
 EnableStealMark::~EnableStealMark() {
-  if (EnableSteal && _coroutine != NULL) {
+  if (EnableCoroutine && _coroutine != NULL) {
     assert(_coroutine->thread() == JavaThread::current(), "must be");
     bool eq = _enable_steal_count == _coroutine->dec_enable_steal_count();
     assert(eq, "enable_steal_count not balanced");
@@ -962,7 +967,7 @@ WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *&th)   
 bool WispPostStealHandleUpdateMark::check(JavaThread *current, bool sp) {
   assert(current == JavaThread::current(), "must be");
   Coroutine *coroutine = current->current_coroutine();
-  if (!EnableSteal ||
+  if (!EnableCoroutine ||
       coroutine == current->coroutine_list() ||
       // if we won't steal it, then no need to allocate handles.
       coroutine->enable_steal_count() != (sp ? current->java_call_counter()+1 : current->java_call_counter())) {

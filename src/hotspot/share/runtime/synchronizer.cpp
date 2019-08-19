@@ -528,7 +528,7 @@ ObjectLocker::ObjectLocker(Handle obj, Thread* thread, bool doLock) {
 
     ObjectSynchronizer::fast_enter(_obj, &_lock, false, _thread);
 
-    assert(!EnableSteal || thread == Thread::current(), "must not be stealed");
+    assert(!EnableCoroutine || thread == Thread::current(), "must not be stealed");
   }
 }
 

@@ -50,18 +50,19 @@ public class MemLeakTest {
      * After fix :  25436kB -> 25572kB
      */
     private static void testUserCreatedCoroutineLeak() throws Exception {
+        Coroutine threadCoro = Thread.currentThread().getCoroutineSupport().threadCoroutine();
         // occupy rss
         for (int i = 0; i < 200000; i++) {
-            new Coroutine(r);
-            Coroutine.yield(); // switch to new created coroutine and let it die
+            Coroutine target =  new Coroutine(r);
+            Coroutine.yieldTo(target); // switch to new created coroutine and let it die
         }
 
         int rss0 = getRssInKb();
         System.out.println(rss0);
 
         for (int i = 0; i < 200000; i++) {
-            new Coroutine(r);
-            Coroutine.yield();
+            Coroutine target =  new Coroutine(r);
+            Coroutine.yieldTo(target);
         }
 
         int rss1 = getRssInKb();

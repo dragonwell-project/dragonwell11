@@ -4,7 +4,7 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @summary test bug of update stealEnable fail
- * @run main/othervm -XX:+UseWisp2 -XX:-EnableSteal DisableStealBugTest
+ * @run main/othervm -XX:+UseWisp2 DisableStealBugTest
  */
 
 import com.alibaba.wisp.engine.WispEngine;

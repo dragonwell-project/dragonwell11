@@ -6,6 +6,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.spi.AbstractSelector;
 import java.util.Queue;
+import java.util.List;
 import java.util.concurrent.*;
 
 /**
@@ -51,11 +52,6 @@ final class Wisp2Engine extends WispEngine {
 
     Wisp2Engine(Wisp2Group group) {
         this.group = group;
-    }
-
-    @Override
-    protected void postInit() {
-        runningTasks = new ConcurrentSkipListSet<>(); // support concurrent modify
     }
 
     private TimeOut pendingTimer;
@@ -126,6 +122,7 @@ final class Wisp2Engine extends WispEngine {
      */
     private static boolean steal(WispTask task, WispEngine current, boolean failOnContention) {
         assert current == WispEngine.current();
+        assert !task.isThreadTask();
         if (task.engine != current) {
             while (task.stealLock != 0) {/* wait until steal enabled */}
             assert task.status != WispTask.Status.RUNNABLE;
@@ -140,7 +137,7 @@ final class Wisp2Engine extends WispEngine {
         return true;
     }
 
-    private static boolean resumeTask(WispTask task, boolean failOnContention) {
+    private static boolean tryStealAndResumeTask(WispTask task, boolean failOnContention) {
         WispEngine current = WispEngine.current();
         /*
          * Please be extremely cautious:
@@ -150,12 +147,16 @@ final class Wisp2Engine extends WispEngine {
          * this closure.
          */
         if (task.engine != current) {
-            WispEngine source = task.engine;
+            Wisp2Engine source = (Wisp2Engine) task.engine;
             if (!steal(task, current, failOnContention)) {
                 return false;
             }
-            source.runningTasks.remove(task);
-            current.runningTasks.add(task);
+            WispEngine.TASK_COUNT_UPDATER.decrementAndGet(source);
+            WispEngine.TASK_COUNT_UPDATER.incrementAndGet(current);
+            // notify detached empty carrier to exit
+            if (source.carrier.detached && WispEngine.TASK_COUNT_UPDATER.get(source) == 0) {
+                source.carrier.signal();
+            }
         }
         current.countEnqueueTime(task.getEnqueueTime());
         task.resetEnqueueTime();
@@ -169,9 +170,10 @@ final class Wisp2Engine extends WispEngine {
         assert !task.isThreadTask();
         return new StealAwareRunnable() {
             boolean stealEnable = true;
+
             @Override
             public void run() {
-                if (!resumeTask(task, true)) {
+                if (!tryStealAndResumeTask(task, true)) {
                     stealEnable = false;
                     wakeupTask(task);
                 }
@@ -315,8 +317,13 @@ final class Wisp2Engine extends WispEngine {
 
     @Override
     protected void iterateTasksForShutdown() {
-        while (!runningTasks.isEmpty()) {
-            yieldTo(runningTasks.iterator().next());
+        while (runningTaskCount != 0) {
+            List<WispTask> runningTasks = getRunningTasks();
+            for (WispTask task : runningTasks) {
+                while (task.engine == this && task.isAlive()) {
+                    yieldTo(task);
+                }
+            }
         }
     }
 
@@ -329,26 +336,5 @@ final class Wisp2Engine extends WispEngine {
     @Override
     protected void handOff() {
         group.scheduler.handOffCarrierThread(thread);
-        // this carrier can not steal task from now on,
-        // runningTasks will never grow
-        for (WispTask task : runningTasks) {
-            if (current != task) {
-                group.scheduler.execute(new StealAwareRunnable() {
-                    @Override
-                    public void run() {
-                        // avoiding steal failure by lock contention
-                        if (!resumeTask(task, false)) {
-                            // The task will be remained in the handoffed thread.
-                            // We already make our best efforts.
-                            // Forcedly stealing a steal-disabled task which contains
-                            // an unexpected native frame will result in jvm crash
-
-                            // retry is meaningless, because the carrier thread is occupied
-                            // by the running task, and other tasks has no chance to move on
-                        }
-                    }
-                });
-            }
-        }
     }
 }

@@ -30,7 +30,7 @@ import java.util.function.Supplier;
 public class WispTask implements Comparable<WispTask> {
     private final static AtomicInteger idGenerator = new AtomicInteger();
 
-    private static final Map<Integer, WispTask> id2Task = new ConcurrentHashMap<>(360);
+    static final Map<Integer, WispTask> id2Task = new ConcurrentHashMap<>(360);
     // global table used for all WispEngines
 
     static WispTask fromId(int id) {
@@ -126,13 +126,11 @@ public class WispTask implements Comparable<WispTask> {
     int stealFailureCount;
     private int preemptCount;
     // perf monitor
-    long enqueueTime;
-    long parkTime;
-    long blockingTime;
-    long registerEventTime;
-    /**
-     * reduce the cost of deciding weather task is in queue.
-     */
+    private long enqueueTime;
+    private long parkTime;
+    private long blockingTime;
+    private long registerEventTime;
+    // reduce the cost of deciding whether task is in queue.
     final AtomicBoolean enqueued = new AtomicBoolean(false);
 
     WispTask(WispEngine engine, Coroutine ctx, boolean isRealTask, boolean isThreadTask) {
@@ -246,7 +244,7 @@ public class WispTask implements Comparable<WispTask> {
             STEAL_LOCK_UPDATER.lazySet(next, 1);
             // store load barrier is not necessary
         }
-        Coroutine.yieldTo(next.ctx);
+        current.engine.thread.getCoroutineSupport().unsafeSymmetricYieldTo(next.ctx);
         if (WispConfiguration.WISP_USE_STEAL_LOCK) {
             assert current.stealLock != 0;
             STEAL_LOCK_UPDATER.lazySet(current.from, 0);

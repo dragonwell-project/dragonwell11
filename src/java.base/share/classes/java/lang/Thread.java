@@ -323,9 +323,6 @@ class Thread implements Runnable {
         return currentThread0();
     }
 
-    // use local copy to reduce test branch
-    private static boolean vmBooted = false;
-
     /**
      * Always return the underlying Java thread.
      */

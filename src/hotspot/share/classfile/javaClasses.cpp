@@ -4437,7 +4437,7 @@ int java_dyn_CoroutineBase::_data_offset = 0;
 void java_dyn_CoroutineBase::compute_offsets() {
   Klass* k = SystemDictionary::java_dyn_CoroutineBase_klass();
   if (k != NULL) {
-    compute_offset(_data_offset, InstanceKlass::cast(k), vmSymbols::data_name(), vmSymbols::long_signature());
+    compute_offset(_data_offset, InstanceKlass::cast(k), vmSymbols::nativeCoroutine_name(), vmSymbols::long_signature());
   }
 }
 

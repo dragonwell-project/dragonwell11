@@ -27,6 +27,7 @@ package java.dyn;
 
 import jdk.internal.HotSpotIntrinsicCandidate;
 import jdk.internal.misc.SharedSecrets;
+import jdk.internal.vm.annotation.Contended;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,14 +36,8 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 /**
  * Jvm entry of coroutine APIs.
  */
+@Contended
 public class CoroutineSupport {
-    /*
-     Controls debugging and tracing, for maximum performance the actual if(DEBUG/TRACE) code needs to be commented out
-     the inner of synchronized System.out.println() may result in coroutine switch
-     DO NOT enable DEBUG, TRACE flag before we have a solution.
-      */
-    static final boolean DEBUG = false;
-    static final boolean TRACE = false;
 
     private static final boolean CHECK_LOCK = true;
     private static final int SPIN_BACKOFF_LIMIT = 2 << 8;
@@ -78,9 +73,8 @@ public class CoroutineSupport {
         }
         id = idGen.incrementAndGet();
         this.thread = thread;
-        threadCoroutine = new Coroutine(this, getThreadCoroutine());
-        threadCoroutine.next = threadCoroutine;
-        threadCoroutine.last = threadCoroutine;
+        threadCoroutine = new Coroutine(this, getNativeThreadCoroutine());
+        markThreadCoroutine(threadCoroutine.nativeCoroutine, threadCoroutine);
         currentCoroutine = threadCoroutine;
     }
 
@@ -97,16 +91,7 @@ public class CoroutineSupport {
         assert currentCoroutine != null;
         lock();
         try {
-            coroutine.data = createCoroutine(coroutine, stacksize);
-            if (false && DEBUG) {
-                System.out.println("add Coroutine " + coroutine + ", data" + coroutine.data);
-            }
-
-            // add the coroutine into the doubly linked ring
-            coroutine.next = currentCoroutine.next;
-            coroutine.last = currentCoroutine;
-            currentCoroutine.next = coroutine;
-            coroutine.next.last = coroutine;
+            coroutine.nativeCoroutine = createCoroutine(coroutine, stacksize);
         } finally {
             unlock();
         }
@@ -124,14 +109,12 @@ public class CoroutineSupport {
             throw new IllegalArgumentException("Cannot drain another threads CoroutineThreadSupport");
         }
 
-        if (false && DEBUG) {
-            System.out.println("draining");
-        }
         lock();
         try {
             // drain all coroutines
-            while (currentCoroutine.next != currentCoroutine) {
-                symmetricExitInternal(currentCoroutine.next);
+            Coroutine next = null;
+            while ((next = getNextCoroutine(currentCoroutine.nativeCoroutine)) != currentCoroutine) {
+                symmetricExitInternal(next);
             }
 
             CoroutineBase coro;
@@ -148,58 +131,47 @@ public class CoroutineSupport {
         }
     }
 
-    void symmetricYield() {
-        if (false && TRACE) {
-            System.out.println("locking for symmetric yield...");
-        }
-
-        lock();
-        Coroutine next = currentCoroutine.next;
-        if (next == currentCoroutine) {
-            unlock();
+    /**
+     * optimized version of symmetricYieldTo based on assumptions:
+     * 1. we won't simultaneously steal a {@link Coroutine} from other threads
+     * 2. we won't switch to a {@link Coroutine} that's being stolen
+     * 3. we won't steal a running {@link Coroutine}
+     * this function should only be called in
+     * {@link com.alibaba.wisp.engine.WispTask#switchTo(WispTask, WispTask)},
+     * we skipped unnecessary lock to improve performance.
+     * @param target coroutine
+     */
+    public void unsafeSymmetricYieldTo(Coroutine target) {
+        if (target.threadSupport != this) {
             return;
         }
-
-        if (false && TRACE) {
-            System.out.println("symmetric yield to " + next);
-        }
-
         final Coroutine current = currentCoroutine;
-        currentCoroutine = next;
-
-        unlockLater(next);
-        switchTo(current, next);
+        currentCoroutine = target;
+        switchTo(current, target);
+        //check if locked by exiting coroutine
         beforeResume(current);
     }
 
-    void symmetricYieldTo(Coroutine target) {
+    /**
+     * yield to coroutine with lock
+     * @param target coroutine
+     */
+    public void symmetricYieldTo(Coroutine target) {
         lock();
         if (target.threadSupport != this) {
             unlock();
             return;
         }
-        moveCoroutine(currentCoroutine, target);
-
-        final Coroutine current = currentCoroutine;
-        currentCoroutine = target;
+        moveCoroutine(currentCoroutine.nativeCoroutine, target.nativeCoroutine);
         unlockLater(target);
-        switchTo(current, target);
-        beforeResume(current);
+        unsafeSymmetricYieldTo(target);
     }
 
-    private void moveCoroutine(Coroutine a, Coroutine position) {
-        // remove a from the ring
-        a.last.next = a.next;
-        a.next.last = a.last;
-
-        // ... and insert at the new position
-        a.next = position.next;
-        a.last = position;
-        a.next.last = a;
-        position.next = a;
-    }
-
-    void symmetricStopCoroutine(Coroutine target) {
+    /**
+     * yield to coroutine with lock and stop the current coroutine
+     * @param target coroutine
+     */
+    public void symmetricStopCoroutine(Coroutine target) {
         Coroutine current;
         lock();
         try {
@@ -207,10 +179,9 @@ public class CoroutineSupport {
                 unlock();
                 return;
             }
-            moveCoroutine(currentCoroutine, target);
-
             current = currentCoroutine;
             currentCoroutine = target;
+            moveCoroutine(current.nativeCoroutine, target.nativeCoroutine);
         } finally {
             unlock();
         }
@@ -220,21 +191,14 @@ public class CoroutineSupport {
 
     /**
      * switch to coroutine and throw Exception in coroutine
+     * @param coroutine coroutine
      */
-    private void symmetricExitInternal(Coroutine coroutine) {
+    void symmetricExitInternal(Coroutine coroutine) {
         assert currentCoroutine != coroutine;
         assert coroutine.threadSupport == this;
 
-        // remove the coroutine from the ring
-        coroutine.last.next = coroutine.next;
-        coroutine.next.last = coroutine.last;
-
-        if (!testDisposableAndTryReleaseStack(coroutine.data)) {
-            // and insert it before the current coroutine
-            coroutine.last = currentCoroutine.last;
-            coroutine.next = currentCoroutine;
-            coroutine.last.next = coroutine;
-            currentCoroutine.last = coroutine;
+        if (!testDisposableAndTryReleaseStack(coroutine.nativeCoroutine)) {
+            moveCoroutine(currentCoroutine.nativeCoroutine, coroutine.nativeCoroutine);
 
             final Coroutine current = currentCoroutine;
             currentCoroutine = coroutine;
@@ -249,18 +213,13 @@ public class CoroutineSupport {
      */
     void terminateCoroutine() {
         assert currentCoroutine != threadCoroutine : "cannot exit thread coroutine";
-        assert currentCoroutine != currentCoroutine.next : "last coroutine shouldn't call coroutineexit";
+        assert currentCoroutine != getNextCoroutine(currentCoroutine.nativeCoroutine) : "last coroutine shouldn't call coroutineexit";
 
         lock();
         Coroutine old = currentCoroutine;
-        Coroutine forward = old.next;
+        Coroutine forward = getNextCoroutine(old.nativeCoroutine);
         currentCoroutine = forward;
-        old.last.next = old.next;
-        old.next.last = old.last;
 
-        if (false && DEBUG) {
-            System.out.println("to be terminated: " + old);
-        }
         unlockLater(forward);
         switchToAndTerminate(old, forward);
     }
@@ -294,25 +253,15 @@ public class CoroutineSupport {
         }
 
         try {
-            try {
-                if (source.terminated || coroutine.finished ||
-                        coroutine.threadSupport != source || // already been stolen
-                        source.currentCoroutine == coroutine || // running
-                        !stealCoroutine(coroutine.data)) { // native frame
-                    return false;
-                }
-
-                coroutine.last.next = coroutine.next;
-                coroutine.next.last = coroutine.last;
-                coroutine.threadSupport = target;
-            } finally {
-                source.unlock();
+            if (source.terminated || coroutine.finished ||
+                    coroutine.threadSupport != source || // already been stolen
+                    source.currentCoroutine == coroutine || // running
+                    !stealCoroutine(coroutine.nativeCoroutine)) { // native frame
+                return false;
             }
-            coroutine.next = target.currentCoroutine.next;
-            coroutine.last = target.currentCoroutine;
-            target.currentCoroutine.next = coroutine;
-            coroutine.next.last = coroutine;
+            coroutine.threadSupport = target;
         } finally {
+            source.unlock();
             target.unlock();
         }
 
@@ -383,15 +332,24 @@ public class CoroutineSupport {
     }
 
     /**
+     * @param coroutine the coroutine
+     * @return whether the coroutine is current coroutine
+     */
+    public boolean isCurrent(CoroutineBase coroutine) {
+        return coroutine == currentCoroutine;
+    }
+
+    /**
      * @return current running coroutine
      */
     public CoroutineBase getCurrent() {
         return currentCoroutine;
     }
 
+
     private static native void registerNatives();
 
-    private static native long getThreadCoroutine();
+    private static native long getNativeThreadCoroutine();
 
     /**
      * need lock because below methods will operate on thread->coroutine_list()
@@ -405,6 +363,27 @@ public class CoroutineSupport {
 
     private static native boolean stealCoroutine(long coroPtr);
     // end of locking
+
+    /**
+     * get next {@link Coroutine} from current thread's doubly linked {@link Coroutine} list
+     * @param coroPtr hotspot coroutine
+     * @return java Coroutine
+     */
+    private static native Coroutine getNextCoroutine(long coroPtr);
+
+    /**
+     * move coroPtr to targetPtr's next field in underlying hotspot coroutine list
+     * @param coroPtr current threadCoroutine
+     * @param targetPtr coroutine that is about to exit
+     */
+    private static native void moveCoroutine(long coroPtr, long targetPtr);
+
+    /**
+     * track hotspot couroutine with java coroutine.
+     * @param coroPtr threadCoroutine in hotspot
+     * @param threadCoroutine threadCoroutine in java
+     */
+    private static native void markThreadCoroutine(long coroPtr, CoroutineBase threadCoroutine);
 
     @HotSpotIntrinsicCandidate
     private static native void switchTo(CoroutineBase current, CoroutineBase target);

@@ -1834,7 +1834,7 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
 
 void generate_thread_fix(MacroAssembler *masm, Method *method) {
   // we can have a check here at the codegen time, so no cost in runtime.
-  if (EnableSteal) {
+  if (EnableCoroutine) {
     if (WispStealCandidate(method->method_holder()->name(), method->name(), method->signature()).is_steal_candidate()) {
       // as X86 calling conventions, the thread register r15 is one of the callee saved registers.
       // see: https://www.cs.cmu.edu/~aplatzer/course/Compilers11/calling_conventions.pdf, callee saved registers
@@ -2763,7 +2763,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_locking_C), 3);
     restore_args(masm, total_c_args, c_arg, out_regs);
 
-    if (EnableSteal) {
+    if (EnableCoroutine) {
       // the r15 has been restored in restore_args so we need fix it.
       WISP_COMPILER_RESTORE_FORCE_UPDATE;
     }

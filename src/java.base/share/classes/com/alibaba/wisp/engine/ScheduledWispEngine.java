@@ -102,7 +102,7 @@ final class ScheduledWispEngine extends WispEngine {
             WispTask pseudo = new WispTask(this, null, false, false);
             long enqueueTime = getNanoTimeForProfile();
             pseudo.command = () -> {
-                if (runningTasks.size() >= WispConfiguration.EXTERNAL_SUBMIT_THRESHOLD) {
+                if (runningTaskCount >= WispConfiguration.EXTERNAL_SUBMIT_THRESHOLD) {
                     pendingTaskQueue.offer(pseudo);
                     return false;
                 } else {
@@ -160,9 +160,9 @@ final class ScheduledWispEngine extends WispEngine {
 
     @Override
     protected void yield() {
-        if (!runningTasks.isEmpty() || !wakeupQueue.isEmpty()) {
+        if (runningTaskCount > 0 || !wakeupQueue.isEmpty()) {
             // for history reason, thread-coroutine is not
-            // treated as one runningTask, engine.runningTasks == 0
+            // treated as one runningTask, engine.runningTaskCount == 0
             // means only thread-coroutine, keep the raw thread behavior
             if (selector == null || selector.keys().isEmpty()) {
                 wakeupTask(current, false); // append to wakeup queue's tail
@@ -193,7 +193,7 @@ final class ScheduledWispEngine extends WispEngine {
                     statistics.doIO++;
                     break;
                 }
-            } else if ((runningTasks.size() < WispConfiguration.EXTERNAL_SUBMIT_THRESHOLD
+            } else if ((runningTaskCount < WispConfiguration.EXTERNAL_SUBMIT_THRESHOLD
                     && (task = pendingTaskQueue.poll()) != null)
                     || (task = wakeupQueue.poll()) != null) {
                 // 2. check wakened task
@@ -608,9 +608,10 @@ final class ScheduledWispEngine extends WispEngine {
 
     @Override
     protected void iterateTasksForShutdown() {
-        while (!runningTasks.isEmpty()) {
-            for (WispTask t : runningTasks) {
-                wakeupTask(t);
+        while (runningTaskCount != 0) {
+            List<WispTask> runningTasks = getRunningTasks();
+            for (WispTask task : runningTasks) {
+                wakeupTask(task);
             }
             // ensure we could come back again and
             // check if all tasks has been exited

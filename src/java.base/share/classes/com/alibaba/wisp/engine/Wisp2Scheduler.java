@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
+
 /**
  * Wisp2 work-stealing implementation.
  * <p>
@@ -39,7 +40,8 @@ class Wisp2Scheduler {
     private final Wisp2Group group;
 
     Wisp2Scheduler(int parallelism, ThreadFactory threadFactory, Wisp2Group group) {
-        this(parallelism, parallelism, parallelism, Math.max(1, parallelism / 2), threadFactory, group, true);
+        this(parallelism, Math.max(1, parallelism / 2), parallelism,
+                Math.max(1, parallelism / 4), threadFactory, group, true);
     }
 
     Wisp2Scheduler(int parallelism, int stealRetry, int pushRetry, int helpStealRetry,
@@ -83,6 +85,16 @@ class Wisp2Scheduler {
             queueLength = 0;
         }
 
+        void copyContextFromDetachedCarrier(Carrier detachedCarrier) {
+            // copy timers
+            timerManager.copyTimer(detachedCarrier.timerManager.queue);
+            // drain wispTasks
+            StealAwareRunnable task;
+            while ((task = detachedCarrier.taskQueue.poll()) != null) {
+                pushAndSignal(task);
+            }
+        }
+
         void runCarrier(WispEngine engine) {
             int r = (int) System.nanoTime();
             Runnable task;
@@ -92,7 +104,7 @@ class Wisp2Scheduler {
                 }
 
                 if (detached) {
-                    if (engine.runningTasks.isEmpty()) {
+                    if (engine.runningTaskCount == 0) {
                         return;
                     }
                 } else if ((task = trySteal(STEAL_RETRY, r = nextRandom(r))) != null) {
@@ -237,17 +249,27 @@ class Wisp2Scheduler {
         return carriers[(r & IDX_MASK) % PARALLEL];
     }
 
-    private Carrier castToCarrier(Thread thread) {
+    /**
+     * cast thread to carrier
+     *
+     * @param detachedAsNull treat detached carrier as not carrier thread if detachedAsNull is true.
+     * @return null means thread is not considered as a carrier
+     */
+    private Carrier castToCarrier(Thread thread, boolean detachedAsNull) {
         if (thread == null) {
             return null;
         }
         Wisp2Engine engine = (Wisp2Engine) JLA.getWispEngine(thread);
-        return engine.carrier != null && engine.carrier.theScheduler() == this ?
-                engine.carrier : null;
+        Carrier carrier = engine.carrier;
+        if (carrier == null || carrier.theScheduler() != this) {
+            return null;
+        } else {
+            return (detachedAsNull && carrier.detached) ? null : carrier;
+        }
     }
 
     void addTimer(TimeOut timeOut, Thread current) {
-        Carrier carrier = castToCarrier(current);
+        Carrier carrier = castToCarrier(current, true);
         if (carrier != null) {
             carrier.timerManager.addTimer(timeOut);
         } else {
@@ -255,7 +277,7 @@ class Wisp2Scheduler {
                     new StealAwareRunnable() {
                         @Override
                         public void run() {
-                            Carrier carrier = castToCarrier(JLA.currentThread0());
+                            Carrier carrier = castToCarrier(JLA.currentThread0(), true);
                             assert carrier != null;
                             carrier.timerManager.addTimer(timeOut);
                         }
@@ -264,7 +286,7 @@ class Wisp2Scheduler {
     }
 
     void cancelTimer(TimeOut timeOut, Thread current) {
-        Carrier carrier = castToCarrier(current);
+        Carrier carrier = castToCarrier(current, true);
         if (carrier != null) {
             carrier.timerManager.cancelTimer(timeOut);
         }
@@ -273,21 +295,21 @@ class Wisp2Scheduler {
     /**
      * Run the command on the specified thread.
      * Used to implement Thread affinity for scheduler.
+     * When execute with detached carrier thread, we try to execute this task by
+     * other carriers, if this step failed command would be marked as can't be stolen,
+     * then we push this command to detached carrier.
      *
      * @param command the code
      * @param thread  target thread
      */
     void executeWithCarrierThread(StealAwareRunnable command, Thread thread) {
-        final Carrier carrier = castToCarrier(thread);
-        if (carrier != null && !carrier.detached) {
-            if (!carrier.pushAndSignal(command)) {
-                // carrier is busy, wakeup a idle carrier to steal task
-                if (HELP_STEAL_RETRY > 0) {
-                    findIdleAndWakeup(HELP_STEAL_RETRY, true, false, command);
-                }
-            }
-        } else {
+        final Carrier carrier = castToCarrier(thread, false);
+        if (carrier == null || (carrier.detached && command.isStealEnable())) {
+            // detached carrier try to execute from global scheduler at first
             execute(command);
+        } else if (!carrier.pushAndSignal(command) &&
+                HELP_STEAL_RETRY > 0 && command.isStealEnable()) {
+            findIdleAndWakeup(HELP_STEAL_RETRY, true, false, null);
         }
     }
 
@@ -305,7 +327,7 @@ class Wisp2Scheduler {
      * Detach carrier and create a new carrier to replace it.
      */
     void handOffCarrierThread(Thread thread) {
-        Carrier carrier = castToCarrier(thread);
+        Carrier carrier = castToCarrier(thread, true);
         if (carrier != null && !carrier.detached) {
             carrier.detached = true;
             carrier.pushAndSignal(new StealAwareRunnable() {
@@ -318,6 +340,10 @@ class Wisp2Scheduler {
             for (int i = 0; i < PARALLEL; i++) {
                 if (cs[i] == carrier) {
                     cs[i] = new Carrier();
+                    // tasks blocked on detached carrier may not be scheduled in time
+                    // because it's in long-time syscall, so we try our best to delegate
+                    // all context to the new carrier
+                    cs[i].copyContextFromDetachedCarrier(carrier);
                     cs[i].thread.start();
                     break;
                 }

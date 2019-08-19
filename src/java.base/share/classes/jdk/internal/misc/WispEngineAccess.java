@@ -1,5 +1,6 @@
 package jdk.internal.misc;
 
+import com.alibaba.wisp.engine.WispEngine;
 import com.alibaba.wisp.engine.WispTask;
 
 import java.io.IOException;

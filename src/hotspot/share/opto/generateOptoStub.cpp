@@ -111,7 +111,7 @@ void GraphKit::gen_stub(address C_function,
   store_to_memory(NULL, adr_sp, last_sp, T_ADDRESS, NoAlias, MemNode::unordered);
 
   Node *coro_task = NULL;
-  if (EnableSteal && C_function == (address)SharedRuntime::complete_monitor_locking_C) {
+  if (EnableCoroutine && C_function == (address)SharedRuntime::complete_monitor_locking_C) {
     Node *coro_adr = basic_plus_adr(top(), thread, in_bytes(JavaThread::current_coroutine_offset()));
     coro_task = make_load(NULL, coro_adr, TypeRawPtr::NOTNULL, T_ADDRESS, MemNode::unordered);
   }
@@ -235,7 +235,7 @@ void GraphKit::gen_stub(address C_function,
   //-----------------------------
 
   Node *refetch = NULL;
-  if (EnableSteal && C_function == (address)SharedRuntime::complete_monitor_locking_C) {
+  if (EnableCoroutine && C_function == (address)SharedRuntime::complete_monitor_locking_C) {
     // we add ThreadRefetchNode so we can refetch r15 when monitorenter() ends, and
     // after refetching thread, every node based on ThreadLocalNode should be changed to use ThreadRefetchNode as thread.
     refetch = _gvn.transform(new ThreadRefetchNode(control(), coro_task));

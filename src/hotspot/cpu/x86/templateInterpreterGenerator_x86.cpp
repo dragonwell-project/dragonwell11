@@ -1049,7 +1049,7 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
   // 64: result potentially in rax or xmm0
 
   // when we get back from native c++ code, our coroutine may be stolen by another thread.
-  if (EnableSteal) {
+  if (EnableCoroutine) {
     // it is a little hard to present method signature check here: because interpreter
     // will directly jump into this entry, which is in runtime.
     WISP_X86_CONVENTION_V2j_UPDATE;

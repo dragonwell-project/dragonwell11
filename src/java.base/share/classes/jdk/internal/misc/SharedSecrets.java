@@ -379,14 +379,14 @@ public class SharedSecrets {
         return Unsafe.access;
     }
 
-    public static void setEpollAccess(EpollAccess ea) {
-        epollAccess = ea;
-    }
-
     public static EpollAccess getEpollAccess() {
         if (epollAccess == null) {
             EpollAccess.initializeEpoll();
         }
         return epollAccess;
+    }
+
+    public static void setEpollAccess(EpollAccess epollAccess) {
+        SharedSecrets.epollAccess = epollAccess;
     }
 }

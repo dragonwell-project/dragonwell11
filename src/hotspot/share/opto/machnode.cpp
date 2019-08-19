@@ -357,7 +357,7 @@ const class TypePtr *MachNode::adr_type() const {
   // tlsLoad is special handled in adlc to return bottom type,
   // we do not want to hack for tlsRefetch because it is only
   // used for complete_monitor_locking_C stub, just check here
-  if (EnableSteal && base->is_Mach() && base->as_Mach()->ideal_Opcode() == Op_ThreadRefetch) {
+  if (EnableCoroutine && base->is_Mach() && base->as_Mach()->ideal_Opcode() == Op_ThreadRefetch) {
     return TypeRawPtr::BOTTOM;
   }
 

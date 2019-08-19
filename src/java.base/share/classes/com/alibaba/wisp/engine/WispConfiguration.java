@@ -61,7 +61,6 @@ class WispConfiguration {
                 }
         );
 
-        final int CORES = Runtime.getRuntime().availableProcessors();
         TRANSPARENT_WISP_SWITCH = p.containsKey("com.alibaba.wisp.transparentWispSwitch") ?
                 parseBooleanParameter(p, "com.alibaba.wisp.transparentWispSwitch", false) :
                 parseBooleanParameter(p, "com.alibaba.transparentAsync", false);
@@ -75,8 +74,9 @@ class WispConfiguration {
         USE_THREAD_POOL_LIMIT = parseBooleanParameter(p, "com.alibaba.threadPoolLimit", true);
         GLOBAL_POLLER = parseBooleanParameter(p, "com.alibaba.globalPoller", true);
         WISP_VERSION = parsePositiveIntegerParameter(p, "com.alibaba.wisp.version", 1);
-        WORKER_COUNT = parsePositiveIntegerParameter(p, "com.alibaba.wisp.carrierEngines", CORES);
-        ENABLE_HANDOFF = parseBooleanParameter(p, "com.alibaba.wisp.enableHandOff", false);
+        WORKER_COUNT = parsePositiveIntegerParameter(p, "com.alibaba.wisp.carrierEngines",
+                Runtime.getRuntime().availableProcessors());
+        ENABLE_HANDOFF = parseBooleanParameter(p, "com.alibaba.wisp.enableHandOff", TRANSPARENT_WISP_SWITCH && WISP_VERSION == 2);
         // handoff carrier thread implementation is not stable enough,
         // use preempt by default, and we'll move to ADAPTIVE in the future
         HANDOFF_POLICY = WispSysmon.Policy.valueOf(
@@ -95,12 +95,11 @@ class WispConfiguration {
 
         WISP_HIGH_PRECISION_TIMER = parseBooleanParameter(p, "com.alibaba.wisp.highPrecisionTimer", false);
         WISP_DAEMON_WORKER = parseBooleanParameter(p, "com.alibaba.wisp.daemonWorker", true);
-        WISP_USE_STEAL_LOCK = parseBooleanParameter(p, "com.alibaba.wisp.useStealLock", WISP_VERSION == 2 ? true : false);
+        WISP_USE_STEAL_LOCK = parseBooleanParameter(p, "com.alibaba.wisp.useStealLock", WISP_VERSION == 2);
         WISP_ENGINE_TASK_CACHE_SIZE = parsePositiveIntegerParameter(p, "com.alibaba.wisp.engineTaskCache", 20);
-        WISP_SCHEDULE_STEAL_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.stealRetry", CORES);
-        WISP_SCHEDULE_PUSH_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.pushRetry", CORES);
-        WISP_SCHEDULE_HELP_STEAL_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.helpStealRetry",
-                Math.max(1, CORES / 2));
+        WISP_SCHEDULE_STEAL_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.stealRetry", Math.max(1, WORKER_COUNT / 2));
+        WISP_SCHEDULE_PUSH_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.pushRetry", WORKER_COUNT);
+        WISP_SCHEDULE_HELP_STEAL_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.helpStealRetry", Math.max(1, WORKER_COUNT / 4));
         WISP_ENABLE_SOCKET_LOCK = parseBooleanParameter(p, "com.alibaba.wisp.useSocketLock", true);
         checkCompatibility();
     }
@@ -112,7 +111,7 @@ class WispConfiguration {
         checkDependency(ENABLE_THREAD_AS_WISP, "-Dcom.alibaba.wisp.enableThreadAsWisp=true",
                 TRANSPARENT_WISP_SWITCH, "-Dcom.alibaba.wisp.transparentWispSwitch=true");
         checkDependency(ENABLE_HANDOFF, "-Dcom.alibaba.wisp.enableHandOff=true",
-                TRANSPARENT_WISP_SWITCH, "-Dcom.alibaba.wisp.enableThreadAsWisp=true");
+                TRANSPARENT_WISP_SWITCH, "-Dcom.alibaba.wisp.transparentWispSwitch=true");
         checkDependency(WISP_VERSION == 2, "-Dcom.alibaba.wisp.version=2",
                 GLOBAL_POLLER, "-Dcom.alibaba.globalPoller=true");
         checkDependency(ALL_THREAD_AS_WISP, "-Dcom.alibaba.wisp.allThreadAsWisp=true",

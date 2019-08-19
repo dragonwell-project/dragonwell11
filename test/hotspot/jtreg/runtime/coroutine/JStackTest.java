@@ -53,7 +53,7 @@ public class JStackTest {
             e.printStackTrace();
         }
         try {
-            data = CoroutineBase.class.getDeclaredField("data");
+            data = CoroutineBase.class.getDeclaredField("nativeCoroutine");
             data.setAccessible(true);
         } catch (NoSuchFieldException e) {
             e.printStackTrace();

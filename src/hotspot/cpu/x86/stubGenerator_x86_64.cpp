@@ -358,7 +358,7 @@ class StubGenerator: public StubCodeGenerator {
     // pop parameters
     __ lea(rsp, rsp_after_call);
 
-    if (EnableSteal) {
+    if (EnableCoroutine) {
       Label L;    // the steal thread patch
       __ cmpptr(r15_thread, thread);
       __ jcc(Assembler::equal, L);
@@ -456,7 +456,7 @@ class StubGenerator: public StubCodeGenerator {
     const Address rsp_after_call(rbp, rsp_after_call_off * wordSize);
     const Address thread        (rbp, thread_off         * wordSize);
 
-    if (EnableSteal) {
+    if (EnableCoroutine) {
       // to pass the assertion fail
       WISP_j2v_UPDATE;
     }

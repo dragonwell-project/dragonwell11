@@ -1,6 +1,7 @@
 package com.alibaba.wisp.engine;
 
 import java.util.Arrays;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Represents {@link WispTask} related time out
@@ -51,6 +52,16 @@ public class TimeOut {
      */
     static class TimerManager {
         Queue queue = new Queue();
+        ConcurrentLinkedQueue<TimeOut> rmQ = new ConcurrentLinkedQueue<>();
+
+        void copyTimer(Queue copiedQueue) {
+            copiedQueue.size = 0;
+            for (TimeOut timeOut : copiedQueue.queue) {
+                if (timeOut != null) {
+                    addTimer(timeOut);
+                }
+            }
+        }
 
         void addTimer(TimeOut timeOut) {
             timeOut.deadlineNano = overflowFree(timeOut.deadlineNano, queue.peek());
@@ -59,8 +70,12 @@ public class TimeOut {
         }
 
         void cancelTimer(TimeOut timeOut) {
-            if (timeOut.manager == this && timeOut.queueIdx != -1) {
-                queue.remove(timeOut);
+            if (timeOut.queueIdx != -1) {
+                if (timeOut.manager == this) {
+                    queue.remove(timeOut);
+                } else {
+                    timeOut.manager.rmQ.add(timeOut);
+                }
             }
         }
 
@@ -71,8 +86,13 @@ public class TimeOut {
          * @return -1: infinitely waiting, > 0 wait nanos
          */
         long processTimeoutEventsAndGetWaitNanos() {
-            long nanos = -1;
             TimeOut timeOut;
+            while ((timeOut = rmQ.poll()) != null) {
+                assert timeOut.manager == this;
+                queue.remove(timeOut);
+            }
+
+            long nanos = -1;
             if (queue.size != 0) {
                 long now = System.nanoTime();
                 while ((timeOut = queue.peek()) != null) {

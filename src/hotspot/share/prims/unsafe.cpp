@@ -1009,8 +1009,9 @@ UNSAFE_ENTRY(jint, Unsafe_GetLoadAverage0(JNIEnv *env, jobject unsafe, jdoubleAr
   return ret;
 } UNSAFE_END
 
-JVM_ENTRY(jlong, CoroutineSupport_getThreadCoroutine(JNIEnv* env, jclass klass))
-  DEBUG_CORO_PRINT("CoroutineSupport_getThreadCoroutine\n");
+JVM_ENTRY(jlong, CoroutineSupport_getNativeThreadCoroutine(JNIEnv* env, jclass klass))
+  DEBUG_CORO_PRINT("CoroutineSupport_getNativeThreadCoroutine\n");
+  assert(EnableCoroutine, "pre-condition");
 
   Coroutine* list = thread->coroutine_list();
   assert(list != NULL, "thread isn't initialized for coroutines");
@@ -1109,6 +1110,29 @@ JVM_ENTRY(void, CoroutineSupport_setWispBooted(JNIEnv* env, jclass klass))
   WispThread::set_wisp_booted(thread);
 JVM_END
 
+JVM_ENTRY (jobject, CoroutineSupport_getNextCoroutine(JNIEnv* env, jclass klass, jlong coroPtr))
+  assert(EnableCoroutine, "pre-condition");
+  Coroutine* coro = (Coroutine*)coroPtr;
+  assert (coro->next()->coroutine() != NULL, "coroutine oop can't be null");
+  return JNIHandles::make_local(env, coro->next()->coroutine());
+JVM_END
+
+JVM_ENTRY (void, CoroutineSupport_moveCoroutine(JNIEnv* env, jclass klass, jlong coroPtr, jlong targetPtr))
+  assert(EnableCoroutine, "pre-condition");
+  Coroutine* coro = (Coroutine*)coroPtr;
+  Coroutine* target = (Coroutine*)targetPtr;
+  Coroutine::move(coro, target);
+JVM_END
+
+JVM_ENTRY (void, CoroutineSupport_markThreadCoroutine(JNIEnv* env, jclass klass, jlong coroPtr, jobject coroObj))
+  assert(EnableCoroutine, "pre-condition");
+  Coroutine* coro = (Coroutine*)coroPtr;
+  oop x = JNIHandles::resolve_non_null(coroObj);
+  coro->set_coroutine(x);
+  assert (coro->is_thread_coroutine() == true, "should be called by thread coro");
+  assert (coro->coroutine() != NULL, "coroutine oop can't be null");
+JVM_END
+
 JVM_ENTRY(jboolean, CoroutineSupport_stealCoroutine(JNIEnv* env, jclass klass, jlong coroPtr))
   // We've already locked the target's thread
   // and source's thread. target_thread->coroutine_list()s have
@@ -1117,7 +1141,7 @@ JVM_ENTRY(jboolean, CoroutineSupport_stealCoroutine(JNIEnv* env, jclass klass, j
   // The lock will also block coroutine switch operation,
   // so we must finish the steal operation as soon as possible.
   Coroutine* coro = (Coroutine*) coroPtr;
-  if (!EnableSteal || coro == NULL || coro->enable_steal_count() != coro->java_call_counter()) {
+  if (coro == NULL || coro->enable_steal_count() != coro->java_call_counter()) {
       return false;       // an Exception throws and the coroutine being stealed is exited
   }
   assert(coro->thread() != thread, "steal from self");
@@ -1226,18 +1250,22 @@ static JNINativeMethod jdk_internal_misc_Unsafe_methods[] = {
 };
 
 #define COBA "Ljava/dyn/CoroutineBase;"
+#define COR "Ljava/dyn/Coroutine;"
 
 JNINativeMethod coroutine_support_methods[] = {
     {CC"switchTo",                CC"("COBA COBA")V", FN_PTR(CoroutineSupport_switchTo)},
     {CC"switchToAndTerminate",    CC"("COBA COBA")V", FN_PTR(CoroutineSupport_switchToAndTerminate)},
     {CC"switchToAndExit",         CC"("COBA COBA")V", FN_PTR(CoroutineSupport_switchToAndExit)},
-    {CC"getThreadCoroutine",      CC"()J",            FN_PTR(CoroutineSupport_getThreadCoroutine)},
+    {CC"getNativeThreadCoroutine",CC"()J",            FN_PTR(CoroutineSupport_getNativeThreadCoroutine)},
     {CC"createCoroutine",         CC"("COBA"J)J",     FN_PTR(CoroutineSupport_createCoroutine)},
     {CC"testDisposableAndTryReleaseStack", 
                                   CC"(J)Z",           FN_PTR(CoroutineSupport_testDisposableAndTryReleaseStack)},
     {CC"cleanupCoroutine",        CC"()"COBA,         FN_PTR(CoroutineSupport_cleanupCoroutine)},
     {CC"setWispBooted",           CC"()V",            FN_PTR(CoroutineSupport_setWispBooted)},
     {CC"stealCoroutine",          CC"(J)Z",           FN_PTR(CoroutineSupport_stealCoroutine)},
+    {CC"getNextCoroutine",        CC"(J)"COR,         FN_PTR(CoroutineSupport_getNextCoroutine)},
+    {CC"moveCoroutine",           CC"(JJ)V",          FN_PTR(CoroutineSupport_moveCoroutine)},
+    {CC"markThreadCoroutine",     CC"(J"COBA")V",     FN_PTR(CoroutineSupport_markThreadCoroutine)},
 };
 
 #define COMPILE_CORO_METHODS_BEFORE (3)

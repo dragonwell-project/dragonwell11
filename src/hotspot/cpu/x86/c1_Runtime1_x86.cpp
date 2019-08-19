@@ -86,7 +86,7 @@ int StubAssembler::call_RT(Register oop_result1, Register metadata_result, addre
     call_offset = offset();
   }
 
-  if (EnableSteal) {
+  if (EnableCoroutine) {
     // only if the entry_point is equal to `Runtime1::monitorenter()`, we will do this amendment.
     if (entry == monitorenter_address_C1) {
       WISP_V2v_UPDATE;
@@ -1401,7 +1401,7 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         oop_maps->add_gc_map(call_offset, map);
         restore_live_registers(sasm, save_fpu_registers);
 
-        if (EnableSteal) {
+        if (EnableCoroutine) {
           // r15 has been forcely restored in restore_live_registers so we need fix it.
           WISP_COMPILER_RESTORE_FORCE_UPDATE;
         }

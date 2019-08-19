@@ -666,7 +666,7 @@
   template(interruptById_name,                         "interruptById")                                           \
   template(interrupted_name,                           "interrupted")                                             \
   template(yield_name,                                 "yield")                                                   \
-  template(data_name,                                  "data")                                                    \
+  template(nativeCoroutine_name,                       "nativeCoroutine")                                         \
   template(stack_name,                                 "stack")                                                   \
   template(current_name,                               "current")                                                 \
   template(java_dyn_CoroutineBase_signature,           "Ljava/dyn/CoroutineBase;")                                \

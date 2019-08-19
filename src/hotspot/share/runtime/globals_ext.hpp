@@ -54,9 +54,6 @@
   product(bool, UseWispMonitor, false,                                      \
           "yields to next coroutine when ObjectMonitor is contended")       \
                                                                             \
-  product(bool, EnableSteal, true,                                          \
-          "Enable coroutine steal")                                         \
-                                                                            \
   product(bool, UseWisp2, false,                                            \
           "Enable Wisp2")                                                   \
                                                                             \

@@ -6,12 +6,12 @@
 import org.junit.Test;
 
 import java.dyn.Coroutine;
+import java.dyn.CoroutineSupport;
 import java.util.Arrays;
-import java.util.Random;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
+import java.util.Comparator;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import static org.junit.Assert.*;
 
@@ -46,61 +46,136 @@ public class ConcurrentStealTest {
 
     final static int THREADS = Math.min(Runtime.getRuntime().availableProcessors(), 8);
     final static int CORO_PER_TH = 20;
-    final static int TIMEOUT = 10;
+    final static int TIMEOUT = 10000;
 
     @Test
     public void randomSteal() throws Exception {
-        Coroutine[] coro = new Coroutine[THREADS * CORO_PER_TH];
-        int[] cnt = new int[THREADS];
+        CoroutineAdaptor[] coro = new CoroutineAdaptor[THREADS * CORO_PER_TH];
+        Stat[] cnt = new Stat[THREADS];
+        StealWorker[] stealWorkers = new StealWorker[THREADS];
 
         AtomicInteger sync = new AtomicInteger();
 
-        for (int th = 1; th < THREADS; th++) {
-            int cth = th;
-            Thread t = new Thread(() -> {
-                for (int i = 0; i < CORO_PER_TH; i++) {
-                    coro[CORO_PER_TH * cth + i] = new Coroutine(() -> {
-                        while (true) {
-                            cnt[cth]++;
-                            Coroutine.yield();
-                        }
-                    });
-                }
-                sync.incrementAndGet();
-                while (sync.get() != THREADS) {
-                }
-
-                runRandomCoroutines(System.nanoTime(), coro);
-            }, "randomSteal-" + th);
+        for (int th = 0; th < THREADS; th++) {
+            cnt[th] = new Stat();
+            stealWorkers[th] = new StealWorker(coro, cnt , sync, th, stealWorkers);
+            Thread t = new Thread(stealWorkers[th], "randomSteal-" + th);
             t.setDaemon(true);
             t.start();
         }
 
-        for (int i = 0; i < CORO_PER_TH; i++) {
-            coro[i] = new Coroutine(() -> {
-                while (true) {
-                    cnt[0]++;
-                    Coroutine.yield();
-                }
-            });
-        }
-
-        sync.incrementAndGet();
         while (sync.get() != THREADS) {
         }
-        runRandomCoroutines(System.nanoTime(), coro);
+
+        long start = System.nanoTime();
+        while (System.nanoTime() - start < TimeUnit.SECONDS.toNanos(TIMEOUT)) {
+        }
+
         for (int i = 0; i < cnt.length; i++) {
-            cnt[i] /= TIMEOUT;
+            cnt[i].stealCnt /= TIMEOUT;
+            cnt[i].yieldCnt /= TIMEOUT;
+            cnt[i].stealFailedCnt /= TIMEOUT;
         }
         System.out.println(Arrays.toString(cnt));
     }
 
-    private static void runRandomCoroutines(long start, Coroutine[] coro) {
-        while (System.nanoTime() - start < TimeUnit.SECONDS.toNanos(TIMEOUT)) {
-            Coroutine co = coro[ThreadLocalRandom.current().nextInt(coro.length)];
-            if (co.getThread() == Thread.currentThread() || co.steal(true)) {
-                Coroutine.yieldTo(co);
+    class StealWorker implements Runnable {
+        CoroutineAdaptor[] coro;
+        Coroutine threadCoro;
+        public ConcurrentSkipListSet<CoroutineAdaptor> stealables = new ConcurrentSkipListSet<>(new Comparator<CoroutineAdaptor>() {
+            @Override
+            public int compare(CoroutineAdaptor o1, CoroutineAdaptor o2) {
+                return  Long.compare(o1.id, o2.id);
             }
+        });
+        Stat[] cnt;
+        StealWorker[] workers;
+        AtomicInteger sync;
+        int cth;
+
+        StealWorker(CoroutineAdaptor[] coro, Stat[] cnt, AtomicInteger sync, int cth, StealWorker[] workers) {
+            this.coro = coro;
+            this.cnt = cnt;
+            this.sync = sync;
+            this.cth = cth;
+            this.workers = workers;
+        }
+
+        @Override
+        public void run() {
+            threadCoro =  Thread.currentThread().getCoroutineSupport().threadCoroutine();
+
+            for (int i = 0; i < CORO_PER_TH; i++) {
+                coro[CORO_PER_TH * cth + i] = new CoroutineAdaptor(() -> {
+                    while (true) {
+                        Coroutine.yieldTo(threadCoro);
+                        cnt[cth].yieldCnt++;
+                    }
+                });
+            }
+            for (int i = 0; i < CORO_PER_TH; i++) {
+                CoroutineAdaptor coroutineAdaptor =  new CoroutineAdaptor(() ->{
+                    while (true) {
+                        yield();
+                    }
+                });
+                Coroutine.yieldTo(coroutineAdaptor);
+                stealables.add(coroutineAdaptor);
+            }
+
+
+            sync.incrementAndGet();
+            while (sync.get() != THREADS) {
+            }
+
+            runRandom(System.nanoTime(), (cth + 1) % THREADS);
+        }
+
+
+        void yield() {
+            Coroutine.yieldTo(coro[CORO_PER_TH * cth +  ThreadLocalRandom.current().nextInt(CORO_PER_TH)]);
+        }
+
+        void runRandom(long start, int nxt) {
+            while (System.nanoTime() - start < TimeUnit.SECONDS.toNanos(TIMEOUT)) {
+                for (int i = 0; i < 2; i ++) {
+                    if(i != 1) {
+                        yield();
+                        cnt[cth].yieldCnt++;
+                    } else {
+                        CoroutineAdaptor target = workers[nxt].stealables.pollFirst();
+                        if (target != null && target.steal(true)) {
+                            stealables.add(target);
+                            cnt[cth].stealCnt++;
+                        } else {
+                            if (target != null)
+                                workers[nxt].stealables.add(target);
+                            cnt[cth].stealFailedCnt++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    static AtomicInteger seq = new AtomicInteger(0);
+
+    class CoroutineAdaptor extends Coroutine {
+        long id;
+        CoroutineAdaptor(Runnable runnable) {
+            super(runnable);
+            id = seq.addAndGet(1);
+        }
+    }
+
+    class Stat {
+        int stealCnt;
+        int yieldCnt;
+        int stealFailedCnt;
+
+        @Override
+        public String toString() {
+            return "\n < steal Cnt " + stealCnt + ">, < yieldCnt" + yieldCnt + "> , < stealFailedCnt " + stealFailedCnt + " > ";
         }
     }
 }

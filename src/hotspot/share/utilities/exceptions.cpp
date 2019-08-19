@@ -311,7 +311,7 @@ Handle Exceptions::new_exception(Thread *thread, Symbol* name,
                                       thread);
 
     {
-      guarantee(!EnableSteal || thread == Thread::current(), "fatal: stealed");
+      guarantee(!EnableCoroutine || thread == Thread::current(), "fatal: stealed");
     }
 
   }

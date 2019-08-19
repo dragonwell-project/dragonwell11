@@ -2553,7 +2553,7 @@ void MacroAssembler::call_VM_base(Register oop_result,
   // do the call, remove parameters
   MacroAssembler::call_VM_leaf_base(entry_point, number_of_arguments);
 
-  if (EnableSteal) {
+  if (EnableCoroutine) {
     // only if the entry_point is equal to `Interpreter::monitorenter()`, we will do this amendment.
     if (entry_point == monitorenter_address_interp) {
       WISP_V2v_UPDATE;

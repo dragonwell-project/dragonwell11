@@ -67,6 +67,7 @@ public:
 
   void remove_from_list(pointer& list);
   void insert_into_list(pointer& list);
+  static void move(pointer& coro, pointer& target);
 
   T* last() const   { return _last; }
   T* next() const   { return _next; }
@@ -105,6 +106,7 @@ private:
   int             _wisp_task_id;
   oop             _wisp_engine;
   oop             _wisp_task;
+  oop             _coroutine;
   WispThread*     _wisp_thread;
 
   ResourceArea*   _resource_area;
@@ -161,6 +163,9 @@ public:
 
   oop wisp_task() const             { return _wisp_task; }
   void set_wisp_task(oop x)         { _wisp_task = x;    }
+
+  oop coroutine() const             { return _coroutine; }
+  void set_coroutine(oop x)         { _coroutine = x;    }
 
   WispThread* wisp_thread() const   { return _wisp_thread; }
 
@@ -308,6 +313,22 @@ template<class T> void DoublyLinkedList<T>::insert_into_list(pointer& list) {
     _last = list;
     _next->_last = (T*)this;
   }
+}
+
+template<class T> void DoublyLinkedList<T>::move(DoublyLinkedList<T>::pointer &coro,
+                                                 DoublyLinkedList<T>::pointer &target) {
+  assert(coro != NULL, "coroutine can't be null");
+  assert(target != NULL, "target can't be null");
+
+  // remove current coro from the ring
+  coro->_last->_next = coro->_next;
+  coro->_next->_last = coro->_last;
+
+  // insert at new position
+  coro->_next = target->_next;
+  coro->_last = target;
+  coro->_next->_last = coro;
+  target->_next = coro;
 }
 
 class ObjectWaiter;

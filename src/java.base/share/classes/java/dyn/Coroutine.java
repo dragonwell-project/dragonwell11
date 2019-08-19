@@ -69,9 +69,6 @@ import jdk.internal.misc.SharedSecrets;
 public class Coroutine extends CoroutineBase {
     private final Runnable target;
 
-    Coroutine next;
-    Coroutine last;
-
     /**
      * Allocates a new {@code Coroutine} object.
      */
@@ -117,25 +114,27 @@ public class Coroutine extends CoroutineBase {
      * @param threadSupport the CoroutineSupport
      * @param data          the value
      */
-    Coroutine(CoroutineSupport threadSupport, long data) {
-        super(threadSupport, data);
+    Coroutine(CoroutineSupport threadSupport, long nativeCoroutine) {
+        super(threadSupport, nativeCoroutine);
         this.target = null;
     }
 
     /**
-     * Yields execution to the next coroutine in the current threads coroutine queue.
-     */
-    public static void yield() {
-        SharedSecrets.getJavaLangAccess().currentThread0().getCoroutineSupport().symmetricYield();
-    }
-
-    /**
      * Yields execution to the target coroutine.
-     *
      * @param target Coroutine
      */
     public static void yieldTo(Coroutine target) {
         SharedSecrets.getJavaLangAccess().currentThread0().getCoroutineSupport().symmetricYieldTo(target);
+    }
+    /**
+     * optimized version of yieldTo function for wisp based on the following assumptions:
+     * 1. we won't simultaneously steal a {@link Coroutine} from other threads
+     * 2. we won't switch to a {@link Coroutine} that's being stolen
+     * 3. we won't steal a running {@link Coroutine}
+     * @param target target coroutine
+     */
+    public static void unsafeYieldTo(Coroutine target) {
+        SharedSecrets.getJavaLangAccess().currentThread0().getCoroutineSupport().unsafeSymmetricYieldTo(target);
     }
 
     /**
@@ -163,7 +162,7 @@ public class Coroutine extends CoroutineBase {
      * @param engine wispEngine oop
      */
     public void setWispTask(int id, Object task, Object engine) {
-        setWispTask(data, id, task, engine);
+        setWispTask(nativeCoroutine, id, task, engine);
     }
 
     protected void run() {
