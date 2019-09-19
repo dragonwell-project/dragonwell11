@@ -48,9 +48,6 @@
   product(uintx, DefaultCoroutineStackSize, 128*K,                          \
           "Default size of stack that is associated with new coroutine")    \
                                                                             \
-  product(uintx, MaxFreeCoroutinesCacheSize, 20,                            \
-          "The max number of free coroutine stacks a thread can keep")      \
-                                                                            \
   product(bool, UseWispMonitor, false,                                      \
           "yields to next coroutine when ObjectMonitor is contended")       \
                                                                             \

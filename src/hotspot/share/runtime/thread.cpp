@@ -1662,9 +1662,6 @@ void JavaThread::initialize() {
   _special_runtime_exit_condition = _no_async_condition;
   _pending_async_exception = NULL;
 
-  _coroutine_stack_cache = NULL;
-  _coroutine_stack_cache_size = 0;
-  _coroutine_stack_list = NULL;
   _coroutine_list = NULL;
   _current_coroutine = NULL;
   _wisp_preempted = false;
@@ -1789,12 +1786,6 @@ JavaThread::JavaThread(ThreadFunction entry_point, size_t stack_sz) :
 }
 
 JavaThread::~JavaThread() {
-  while (EnableCoroutine && coroutine_stack_cache() != NULL) {
-    CoroutineStack* stack = coroutine_stack_cache();
-    stack->remove_from_list(coroutine_stack_cache());
-    CoroutineStack::free_stack(stack, this);
-  }
-
   while (EnableCoroutine && coroutine_list() != NULL) {
      CoroutineStack::free_stack(coroutine_list()->stack(), this);
      delete coroutine_list();
@@ -5219,6 +5210,5 @@ void Threads::verify() {
 
 void JavaThread::initialize_coroutine_support() {
   assert(EnableCoroutine, "EnableCoroutine isn't enable");
-  CoroutineStack::create_thread_stack(this)->insert_into_list(_coroutine_stack_list);
-  Coroutine::create_thread_coroutine(this, _coroutine_stack_list)->insert_into_list(_coroutine_list);
+  Coroutine::create_thread_coroutine(this, CoroutineStack::create_thread_stack(this))->insert_into_list(_coroutine_list);
 }

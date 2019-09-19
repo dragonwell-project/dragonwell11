@@ -1135,9 +1135,6 @@ class JavaThread: public Thread {
   int _frames_to_pop_failed_realloc;
 
   // coroutine support
-  CoroutineStack*   _coroutine_stack_cache;
-  uintx             _coroutine_stack_cache_size;
-  CoroutineStack*   _coroutine_stack_list;
   Coroutine*        _coroutine_list;
   Coroutine*        _current_coroutine;
   bool              _wisp_preempted;
@@ -1145,9 +1142,6 @@ class JavaThread: public Thread {
   intptr_t          _coroutine_temp;
 
  public:
-  CoroutineStack*& coroutine_stack_cache()       { return _coroutine_stack_cache; }
-  uintx& coroutine_stack_cache_size()            { return _coroutine_stack_cache_size; }
-  CoroutineStack*& coroutine_stack_list()        { return _coroutine_stack_list; }
   Coroutine*& coroutine_list()                   { return _coroutine_list; }
   Coroutine* current_coroutine()                 { return _current_coroutine; }
   void set_current_coroutine(Coroutine *coro)    { _current_coroutine = coro; }

@@ -1034,14 +1034,7 @@ JVM_ENTRY(void, CoroutineSupport_switchToAndTerminate(JNIEnv* env, jclass klass,
 
   java_dyn_CoroutineBase::set_data(old_oop, 0);
 
-  CoroutineStack* stack = coro->stack();
-  stack->remove_from_list(thread->coroutine_stack_list());
-  if (thread->coroutine_stack_cache_size() < MaxFreeCoroutinesCacheSize) {
-    stack->insert_into_list(thread->coroutine_stack_cache());
-    thread->coroutine_stack_cache_size() ++;
-  } else {
-    CoroutineStack::free_stack(stack, thread);
-  }
+  CoroutineStack::free_stack(coro->stack(), thread);
   delete coro;
 JVM_END
 
@@ -1059,19 +1052,11 @@ JVM_ENTRY(jlong, CoroutineSupport_createCoroutine(JNIEnv* env, jclass klass, job
   if (stack_size == 0 || stack_size < -1) {
     THROW_MSG_0(vmSymbols::java_lang_IllegalArgumentException(), "invalid stack size");
   }
-  CoroutineStack* stack = NULL;
-  if (stack_size <= 0 && thread->coroutine_stack_cache_size() > 0) {
-    stack = thread->coroutine_stack_cache();
-    stack->remove_from_list(thread->coroutine_stack_cache());
-    thread->coroutine_stack_cache_size() --;
-    DEBUG_CORO_ONLY(tty->print("reused coroutine stack at %08x\n", stack->_stack_base));
-  } else {
-    stack = CoroutineStack::create_stack(thread, stack_size);
-    if (stack == NULL) {
-      THROW_0(vmSymbols::java_lang_OutOfMemoryError());
-    }
+
+  CoroutineStack* stack = CoroutineStack::create_stack(thread, stack_size);
+  if (stack == NULL) {
+    THROW_0(vmSymbols::java_lang_OutOfMemoryError());
   }
-  stack->insert_into_list(thread->coroutine_stack_list());
 
   Coroutine* coro = Coroutine::create_coroutine(thread, stack, JNIHandles::resolve(coroutine));
   if (coro == NULL) {
@@ -1089,9 +1074,7 @@ JVM_ENTRY(jboolean, CoroutineSupport_testDisposableAndTryReleaseStack(JNIEnv* en
 
   jboolean is_disposable = coro->is_disposable();
   if (is_disposable) {
-    CoroutineStack* stack = coro->stack();
-    stack->remove_from_list(thread->coroutine_stack_list());
-    CoroutineStack::free_stack(stack, thread);
+    CoroutineStack::free_stack(coro->stack(), thread);
     delete coro;
   }
   return is_disposable;
