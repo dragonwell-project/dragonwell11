@@ -219,7 +219,10 @@ class OopStorage;
   do_klass(java_dyn_CoroutineSupport_klass,             java_dyn_CoroutineSupport,                 Opt                 ) \
   do_klass(java_dyn_CoroutineBase_klass,                java_dyn_CoroutineBase,                    Opt                 ) \
   do_klass(com_alibaba_wisp_engine_WispTask_klass,      com_alibaba_wisp_engine_WispTask,          Opt                 ) \
+  do_klass(com_alibaba_wisp_engine_WispTask_CacheableCoroutine_klass,                                                    \
+                                                        com_alibaba_wisp_engine_WispTask_CacheableCoroutine, Opt       ) \
   do_klass(com_alibaba_wisp_engine_WispEngine_klass,    com_alibaba_wisp_engine_WispEngine,        Opt                 ) \
+  do_klass(com_alibaba_wisp_engine_WispEventPump_klass, com_alibaba_wisp_engine_WispEventPump,     Opt                 ) \
   /* JVMCI classes. These are loaded on-demand. */                                                                       \
   JVMCI_WK_KLASSES_DO(do_klass)                                                                                          \
                                                                                                                          \

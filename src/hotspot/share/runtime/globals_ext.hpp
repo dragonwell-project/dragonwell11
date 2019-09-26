@@ -57,6 +57,8 @@
   manageable(bool, PrintThreadCoroutineInfo, false,                         \
           "print the park/unpark information for thread coroutine")         \
                                                                             \
+  diagnostic(bool, VerboseWisp, false,                                      \
+          "Print verbose Wisp information")                                 \
 
   //add new AJDK specific flags here
 

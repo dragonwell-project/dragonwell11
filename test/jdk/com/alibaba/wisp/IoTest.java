@@ -2,8 +2,8 @@
  * @test
  * @summary Test Wisp engine's NIO support
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+EnableCoroutine IoTest
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.version=2 IoTest
+ * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true IoTest
+ * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 IoTest
 */
 
 

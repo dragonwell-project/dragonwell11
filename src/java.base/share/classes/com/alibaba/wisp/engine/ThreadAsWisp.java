@@ -1,0 +1,135 @@
+package com.alibaba.wisp.engine;
+
+import java.util.stream.Stream;
+
+/**
+ * Convert Thread.start() to Wisp without changing application's code.
+ * <p/>
+ * Note that ThreadAsWisp is not wisp core logic, just a wrapper of wisp
+ * coroutine create API which is used by jdk threading library, so we can
+ * use objectMonitor here.
+ */
+class ThreadAsWisp {
+    private final static String JAVA_LANG_PKG = "package:java.lang";
+
+    private static int nonDaemonCount;
+    private static Thread preventShutdownThread;
+
+
+    /**
+     * Try to "start thread" as wisp if all listed condition is satisfied:
+     * <p>
+     * 1. not in java.lang or blacklisted package/class
+     * 2. not a WispEngine Thread (may overlapping 2; except user created wisp2 carrier)
+     * 3. allThreadAsWisp is true or call stack satisfies wisp.conf's description.
+     *
+     * @param thread the thread
+     * @param target thread's target field
+     * @return if condition is satisfied and thread is started as wisp
+     */
+    static boolean tryStart(Thread thread, Runnable target) {
+        if (matchBlackList(thread, target)) {
+            return false;
+        }
+
+        if (WispEngine.isEngineThread(thread) ||
+                !(WispConfiguration.ALL_THREAD_AS_WISP || WispConfiguration.ifPutToManagedThread())) {
+            return false;
+        }
+
+        if (!thread.isDaemon()) {
+            synchronized (ThreadAsWisp.class) {
+                if (nonDaemonCount++ == 0) { // start a non-daemon thread to prevent jvm exit
+                    assert preventShutdownThread == null;
+                    preventShutdownThread = new PreventShutdownThread();
+                    preventShutdownThread.start();
+                }
+            }
+        }
+
+        // pthread_create always return before new thread started, so we should not wait here
+        WispEngine.JLA.setWispAlive(thread, true); // thread.isAlive() should be true
+        WispWorkerContainer.INSTANCE.dispatch(WispWorkerContainer.getThreadUsage(thread.getName()),
+                thread.getName(), thread, thread);
+        return true;
+    }
+
+    /**
+     * Refer to hotspot JavaThread::exit():
+     * <p>
+     * 1. Call Thread.exit() to clean up threadGroup
+     * 2. Notify threads wait on Thread.join()
+     * 3. exit jvm if all non-daemon thread is exited
+     *
+     * @param thread exited thread
+     */
+    static void exit(Thread thread) {
+        WispEngine.JLA.threadExit(thread);
+        synchronized (thread) {
+            thread.notifyAll();
+        }
+        if (!thread.isDaemon()) {
+            synchronized (ThreadAsWisp.class) {
+                if (--nonDaemonCount == 0) {
+                    assert preventShutdownThread != null && !preventShutdownThread.isInterrupted();
+                    preventShutdownThread.interrupt();
+                    preventShutdownThread = null;
+                }
+            }
+        }
+    }
+
+    private static boolean matchBlackList(Thread thread, Runnable target) {
+        return Stream.concat(Stream.of(JAVA_LANG_PKG), WispConfiguration.getThreadAsWispBlacklist().stream())
+                .anyMatch(s -> {
+                    Class<?> clazz = (target == null ? thread : target).getClass();
+                    // Java code could start a thread by passing a `target` Runnable argument
+                    // or override Thread.run() method;
+                    // if `target` is null, we're processing the override situation, so we need
+                    // to check the thread object's class.
+                    String[] sp = s.split(":");
+                    if (sp.length != 2) {
+                        return false;
+                    }
+                    switch (sp[0]) {
+                        case "class":
+                            return sp[1].equals(clazz.getName());
+                        case "package":
+                            Package pkg = clazz.getPackage();
+                            String pkgName = pkg == null ? "" : pkg.getName();
+                            return sp[1].equals(pkgName);
+                        case "name":
+                            return wildCardMatch(thread.getName(), sp[1]);
+                        default:
+                            return false;
+                    }
+                });
+    }
+
+    private static boolean wildCardMatch(String s, String p) {
+        return s.matches(p.replace("?", ".?").replace("*", ".*"));
+    }
+
+
+    private static class PreventShutdownThread extends Thread {
+        // help us monitor if PreventShutdownThread start/exit too much times.
+        // startCount should very close to 1 for most applications
+        private static int startCount;
+
+        private PreventShutdownThread() {
+            super(WispEngine.daemonThreadGroup, "Wisp-Prevent-Shutdown-" + startCount++);
+            setDaemon(false); // the daemon attribute is inherited from parent, set to false explicitly
+        }
+
+        @Override
+        public synchronized void run() {
+            while (true) {
+                try {
+                    wait();
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+        }
+    } // class PreventShutdownThread
+}

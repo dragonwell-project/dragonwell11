@@ -162,8 +162,34 @@ class EPoll {
             }
 
             @Override
-            public int epollWait(int epfd, long pollAddress, int numfds) throws IOException {
-                return EPoll.wait(epfd, pollAddress, numfds, -1);
+            public int epollWait(int epfd, long pollAddress, int numfds, int timeout) throws IOException {
+                return EPoll.wait(epfd, pollAddress, numfds, timeout);
+            }
+
+            @Override
+            public void socketpair(int[] sv) throws IOException {
+                long fds = IOUtil.makePipe(false);
+                sv[0] = (int) (fds >>> 32);
+                sv[1] = (int) fds;
+            }
+
+            @Override
+            public void interrupt(int fd) throws IOException {
+                IOUtil.write1(fd, (byte)0);
+            }
+
+            @Override
+            public void drain(int fd) throws IOException {
+                IOUtil.drain1(fd);
+            }
+
+            @Override
+            public void close(int fd) {
+                try {
+                    FileDispatcherImpl.closeIntFD(fd);
+                } catch (IOException e) {
+                    // pass
+                }
             }
         });
     }

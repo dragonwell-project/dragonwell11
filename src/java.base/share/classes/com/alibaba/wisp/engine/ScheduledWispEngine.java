@@ -1,5 +1,6 @@
 package com.alibaba.wisp.engine;
 
+import jdk.internal.misc.SharedSecrets;
 import sun.nio.ch.EPollSelectorProvider;
 
 import java.io.IOException;
@@ -10,30 +11,28 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import jdk.internal.misc.SharedSecrets;
-
 /**
  * Per-thread self-scheduled implementation of WispEngine.
  * These tasks are bound to Engine after they are created.
  * We could create tasks in different WispEngine to make maximum use of multiprocessing.
  * <p>
- * Here's how {@link java.net.Socket} cooperation with Java's NIO.
+ * Here's how {@link java.net.Socket} and {@link WispSelector} cooperation with Java's NIO.
  * +----------------------------------------------------------------------------------------------------+
  * |                                                                                                    |
- * | WispEngine.current()               +---------------+                                               |
- * |                                 +->|  nioSelector  | ------------------------+                     |
- * |                                 |  +---------------+ <---------------------+ |                     |
- * |                                 |                                          | |                     |
- * |                                 |                                          | |                     |
- * |                                 |                                          | |                     |
- * |                                 |                                          | |                     |
+ * | WispEngine.current()               +---------------+  After nioSelector.select(), dispatch events  |
+ * |                                 +->|  nioSelector  | ------------------------+  to wispSelectors,  |
+ * |                                 |  +---------------+ <---------------------+ |  and wake up task   |
+ * |                                 |                                          | |  who block on       |
+ * |                                 |      ch.register(wispSelector, event)    | |  wispSelectors.     |
+ * |                                 |      will proxy the request to engine's  | |                     |
+ * |                                 |      nioSelector.                        | |                     |
  * |    +----------+  block on       |                  +----------+  block on  | v                     |
- * |    | wispTask | --------- socket                   | wispTask | ---------- socket                  |
+ * |    | wispTask | --------- socket                   | wispTask | ---------- wispSelector            |
  * |    +----------+                                    +----------+                                    |
- * |     this task use bio process one connection                                                       |
- * |                                                                                                    |
+ * |     this task use bio process one connection      this task use NIO api handle                     |
+ * |                                                   lots of connections..                            |
  * |    +----------+  block on                         +----------+                                     |
- * |    | wispTask | --------- socket                  | wispTask |                                     |
+ * |    | wispTask | --------- socket                  | wispTask |             wispSelector            |
  * |    +----------+                                   +----------+                                     |
  * |                                                                                                    |
  * |    +----------+                                   +----------+                                     |
@@ -100,7 +99,7 @@ final class ScheduledWispEngine extends WispEngine {
          */
             ClassLoader ctxClassLoader = current.ctxClassLoader;
             WispTask pseudo = new WispTask(this, null, false, false);
-            long enqueueTime = getNanoTimeForProfile();
+            long enqueueTime = getNanoTime();
             pseudo.command = () -> {
                 if (runningTaskCount >= WispConfiguration.EXTERNAL_SUBMIT_THRESHOLD) {
                     pendingTaskQueue.offer(pseudo);
@@ -171,14 +170,14 @@ final class ScheduledWispEngine extends WispEngine {
                 // tasks in separate queue which will be handled at end of doSelect
                 yieldTasks.add(current);
             }
-            yieldOnBlocking(); // and do schedule
+            schedule(); // and do schedule
         } else {
             SharedSecrets.getJavaLangAccess().yield0();
         }
     }
 
     @Override
-    protected void yieldToNext() {
+    protected void doSchedule() {
         int rescheduleCnt = 0;
 
         while (true) {
@@ -236,14 +235,7 @@ final class ScheduledWispEngine extends WispEngine {
                     try {
                         long ms = -1;
                         if (0 != timerManager.queue.size()) {
-                            long nanoDiff = timerManager.queue.peek().deadlineNano - System.nanoTime();
-                            ms = TimeUnit.NANOSECONDS.toMillis(nanoDiff + TimeUnit.MILLISECONDS.toNanos(1) / 2);
-                            if (ms < 0) {
-                                ms = 0;
-                            }
-                            if (WispConfiguration.PARK_ONE_MS_AT_LEAST && ms == 0) {
-                                ms = 1;
-                            }
+                            ms = TimeOut.nanos2Millis(timerManager.queue.peek().deadlineNano - System.nanoTime());
                         }
                         if (!yieldTasks.isEmpty()) {
                             ms = 0;
@@ -297,7 +289,7 @@ final class ScheduledWispEngine extends WispEngine {
             Selector sel = selector(false);
             if (sel == null) {
                 if (events != 0) { // wispPoller is one shot, do not need clear
-                    WispPoller.INSTANCE.registerEvent(target, ch, events);
+                    WispEventPump.INSTANCE.registerEvent(target, ch, events);
                 }
                 return;
             }
@@ -456,8 +448,8 @@ final class ScheduledWispEngine extends WispEngine {
 
 
                 if (selectCnt == 0 && idleTime <= 100000 /* 0.1ms */ && !wakened.get()) {
-                    // In ajdk 8.4.8, While unparking a thread(which actually waking up the underlying selector 
-                    // used by WispEngine), an IOException might occur if the unparking is issued on a 'closed' 
+                    // In ajdk 8.4.8, While unparking a thread(which actually waking up the underlying selector
+                    // used by WispEngine), an IOException might occur if the unparking is issued on a 'closed'
                     // selector(which has been made as 'closed' after rebuilding)
                     // To solve it, before calling rebuildSelector, set wakened as true. Then selector.wakeup
                     // won't be called (see wakeup)
@@ -499,6 +491,7 @@ final class ScheduledWispEngine extends WispEngine {
         }
     }
 
+
     Selector selector(boolean ensureCreate) {
         if (selector == null && (!WispConfiguration.GLOBAL_POLLER || ensureCreate)) {
             selector = newSelector();
@@ -521,11 +514,8 @@ final class ScheduledWispEngine extends WispEngine {
 
     @Override
     protected int getTaskQueueLength() {
-        if (selector != null) {
-            return wakeupQueue.size() + pendingTaskQueue.size() + selector.selectedKeys().size();
-        } else {
-            return wakeupQueue.size() + pendingTaskQueue.size();
-        }
+        return wakeupQueue.size() + pendingTaskQueue.size() +
+                (selector == null ? 0 : selector.selectedKeys().size());
     }
 
 
@@ -595,7 +585,27 @@ final class ScheduledWispEngine extends WispEngine {
     }
 
     @Override
-    protected void startShutdown() {
+    public void shutdown() {
+        hasBeenShutdown = true;
+        if (WispEngine.current().current == threadTask) {
+            doShutdown();
+        } else {
+            startShutdown();
+        }
+    }
+
+    void doShutdown() {
+        if (current == threadTask) {
+            iterateTasksForShutdown();
+            thread.getCoroutineSupport().drain();
+            shutdownFuture.countDown();
+        } else {
+            UNSAFE.throwException(new ThreadDeath());
+        }
+    }
+
+
+    private void startShutdown() {
         threadTask.enqueued.lazySet(false);
         // if threadTask has been enqueued, "switch to threadTask"
         // may happen before `hasBeenShutdown` has been seen.
@@ -606,8 +616,7 @@ final class ScheduledWispEngine extends WispEngine {
         wakeupTask(threadTask, true);
     }
 
-    @Override
-    protected void iterateTasksForShutdown() {
+    private void iterateTasksForShutdown() {
         while (runningTaskCount != 0) {
             List<WispTask> runningTasks = getRunningTasks();
             for (WispTask task : runningTasks) {
@@ -616,7 +625,14 @@ final class ScheduledWispEngine extends WispEngine {
             // ensure we could come back again and
             // check if all tasks has been exited
             wakeupTask(current);
-            yieldToNext();
+            doSchedule();
+        }
+    }
+
+    @Override
+    protected void runTaskYieldEpilog() {
+        if (hasBeenShutdown) {
+            doShutdown();
         }
     }
 }

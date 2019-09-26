@@ -120,6 +120,7 @@ private:
   int             _enable_steal_count;
   int             _java_call_counter;
   int             _last_native_call_counter;
+  int             _clinit_call_counter;
   volatile int    _native_call_counter;
 
   // work steal pool
@@ -194,6 +195,10 @@ public:
 
   int java_call_counter() const           { return _java_call_counter; }
   void set_java_call_counter(int x)       { _java_call_counter = x; }
+
+  int clinit_call_count()                  { return _clinit_call_counter; }
+  int inc_clinit_call_count()              { return _clinit_call_counter++; }
+  int dec_clinit_call_count()              { return _clinit_call_counter--; }
 
   int last_native_call_counter() const    { return _last_native_call_counter; }
   void set_last_native_call_counter(int x) { _last_native_call_counter = x; }
@@ -601,5 +606,12 @@ private:
   size_t size_in_bytes() { return _size_in_bytes; }
 };
 
+class WispClinitCounterMark : public StackObj {
+public:
+  WispClinitCounterMark(Thread* th);
+  ~WispClinitCounterMark();
+private:
+  JavaThread*   _thread;
+};
 
 #endif // SHARE_VM_RUNTIME_COROUTINE_HPP

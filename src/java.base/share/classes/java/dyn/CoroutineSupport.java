@@ -101,6 +101,17 @@ public class CoroutineSupport {
         return thread;
     }
 
+
+    /**
+     * Telling if current coroutine is executing clinit
+     *
+     * @param coroutine the coroutine
+     * @return if current coroutine is executing clinit
+     */
+    public static boolean isInClinit(Coroutine coroutine) {
+        return isInClinit0(coroutine.nativeCoroutine);
+    }
+
     /**
      * drain all alive coroutines.
      */
@@ -404,4 +415,6 @@ public class CoroutineSupport {
      * @return target coroutine's stack
      */
     public static native StackTraceElement[] getCoroutineStack(long coroPtr);
+
+    private static native boolean isInClinit0(long coroPtr);
 }

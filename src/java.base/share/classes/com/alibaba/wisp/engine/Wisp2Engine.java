@@ -1,13 +1,16 @@
 package com.alibaba.wisp.engine;
 
+
+import java.dyn.CoroutineSupport;
 import java.io.IOException;
 import java.nio.channels.SelectableChannel;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.spi.AbstractSelector;
-import java.util.Queue;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 /**
  * In wisp1 WispTask could run in ANY user created thread.
@@ -32,8 +35,6 @@ final class Wisp2Engine extends WispEngine {
                 }
             });
 
-    private static Queue<WispTask> globalTaskCache = new ConcurrentLinkedQueue<>();
-
     @Override
     protected void preloadClasses() throws Exception {
         if (WispConfiguration.WISP_HIGH_PRECISION_TIMER) {
@@ -49,12 +50,13 @@ final class Wisp2Engine extends WispEngine {
 
     Wisp2Group group;
     Wisp2Scheduler.Carrier carrier;
+    private WispTask yieldingTask;
+    private TimeOut pendingTimer;
+
 
     Wisp2Engine(Wisp2Group group) {
         this.group = group;
     }
-
-    private TimeOut pendingTimer;
 
     @Override
     protected void addTimer(long deadlineNano, boolean fromJvm) {
@@ -79,7 +81,7 @@ final class Wisp2Engine extends WispEngine {
     }
 
     private void processPendingTimer() {
-        if (pendingTimer != null) {
+        if (WispConfiguration.WISP_HIGH_PRECISION_TIMER && pendingTimer != null) {
             scheduleInTimer(pendingTimer);
             pendingTimer = null;
         }
@@ -121,6 +123,9 @@ final class Wisp2Engine extends WispEngine {
      * @return if success
      */
     private static boolean steal(WispTask task, WispEngine current, boolean failOnContention) {
+        if (current.hasBeenShutdown) {
+            return false;
+        }
         assert current == WispEngine.current();
         assert !task.isThreadTask();
         if (task.engine != current) {
@@ -143,7 +148,7 @@ final class Wisp2Engine extends WispEngine {
          * Please be extremely cautious:
          * task.engine can not be changed here by other thread
          * is base on our implementation of using park instead of
-         * direct yieldOnBlocking, so only one thread could receive
+         * direct schedule, so only one thread could receive
          * this closure.
          */
         if (task.engine != current) {
@@ -205,23 +210,34 @@ final class Wisp2Engine extends WispEngine {
     }
 
     @Override
-    protected void yieldToNext() {
+    protected void doSchedule() {
         assert current.resumeEntry != null;
         current.resumeEntry.setStealEnable(true);
         yieldTo(threadTask); // letting the scheduler choose runnable task
     }
 
+
     @Override
     protected void yield() {
+        if (!WispConfiguration.WISP_HIGH_PRECISION_TIMER && carrier != null) {
+            carrier.processTimer();
+        }
         if (WispEngine.runningAsCoroutine(current.getThreadWrapper())) {
-            wakeupTask(current);
-            // can be steal, and the stealing thread may
-            // blocking on `stealingLock`
-            // Not a big problem, because we'll release it
-            // immediately
-            yieldOnBlocking();
+            if (getTaskQueueLength() > 0) {
+                assert yieldingTask == null;
+                yieldingTask = current;
+                // delay it, make sure wakeupTask is called after yield out
+                schedule();
+            }
         } else {
             JLA.yield0();
+        }
+    }
+
+    private void processYield() {
+        if (yieldingTask != null) {
+            wakeupTask(yieldingTask);
+            yieldingTask = null;
         }
     }
 
@@ -231,10 +247,35 @@ final class Wisp2Engine extends WispEngine {
     }
 
     @Override
+    public void shutdown() {
+        if (hasBeenShutdown) {
+            return;
+        }
+        hasBeenShutdown = true;
+        group.scheduler.executeWithCarrierThread(new StealAwareRunnable() {
+            @Override
+            public void run() {
+                WispEngine current = current();
+                current.runTaskInternal(new Runnable() {
+                    @Override
+                    public void run() {
+                        notifyAndWaitTasksForShutdown(Wisp2Engine.this);
+                    }
+                }, WispTask.SHUTDOWN_TASK_NAME, null, null);
+            }
+
+            @Override
+            public boolean isStealEnable() {
+                return false;
+            }
+        }, thread);
+    }
+
+    @Override
     protected void dispatchTask(Runnable target, String name, Thread thread) {
         // wisp2 DO NOT ALLOW running task in non-scheduler thread
         ClassLoader ctxClassLoader = current.ctxClassLoader;
-        long enqueueTime = getNanoTimeForProfile();
+        long enqueueTime = getNanoTime();
 
         group.scheduler.execute(new StealAwareRunnable() {
             @Override
@@ -251,13 +292,16 @@ final class Wisp2Engine extends WispEngine {
         if (!taskCache.isEmpty()) {
             return taskCache.remove(taskCache.size() - 1);
         }
-        WispTask task = globalTaskCache.poll();
+        if (hasBeenShutdown) {
+            return null;
+        }
+        WispTask task = group.groupTaskCache.poll();
         if (task == null) {
             return null;
         }
         if (task.engine != this) {
             if (!steal(task, this, true)) {
-                globalTaskCache.add(task);
+                group.groupTaskCache.add(task);
                 return null;
             }
         }
@@ -266,8 +310,10 @@ final class Wisp2Engine extends WispEngine {
 
     @Override
     void returnTaskToCache(WispTask task) {
-        if (taskCache.size() > WispConfiguration.WISP_ENGINE_TASK_CACHE_SIZE) {
-            globalTaskCache.add(task);
+        // reuse exited wispTasks from shutdown wispEngine is very tricky, so we'd better not return
+        // these tasks to global cache
+        if (taskCache.size() > WispConfiguration.WISP_ENGINE_TASK_CACHE_SIZE && !hasBeenShutdown) {
+            group.groupTaskCache.add(task);
         } else {
             taskCache.add(task);
         }
@@ -276,13 +322,8 @@ final class Wisp2Engine extends WispEngine {
     @Override
     protected void registerEvent(WispTask target, SelectableChannel ch, int events) throws IOException {
         if (ch != null && ch.isOpen() && events != 0) {
-            WispPoller.INSTANCE.registerEvent(target, ch, events);
+            WispEventPump.INSTANCE.registerEvent(target, ch, events);
         }
-    }
-
-    @Override
-    protected void registerEpollEvent(int epFd) throws IOException {
-        WispPoller.INSTANCE.registerEvent(current, epFd, SelectionKey.OP_READ);
     }
 
     @Override
@@ -292,38 +333,66 @@ final class Wisp2Engine extends WispEngine {
 
     @Override
     protected int getTaskQueueLength() {
-        return carrier == null ? 0 : (carrier.queueLength > 0 ? carrier.queueLength : 0);
+        if (carrier == null) {
+            return 0;
+        }
+        int ql = carrier.queueLength;
+        // use a local copy to avoid queueLength change to negative.
+        return ql > 0 ? ql : 0;
     }
 
     @Override
     protected void runWispTaskEpilog() {
         processPendingTimer();
+        processYield();
     }
 
-    @Override
-    protected void startShutdown() {
-        group.scheduler.executeWithCarrierThread(new StealAwareRunnable() {
+    private void notifyAndWaitTasksForShutdown(Wisp2Engine engine) {
+        // wait until current 'shutdown wispTask' is the only
+        // running wispTask on this engine
+        while (runningTaskCount != 1) {
+            List<WispTask> runningTasks = getRunningTasks();
+            for (WispTask task : runningTasks) {
+                if (task.engine == this && task.isAlive()) {
+                    task.interrupt();
+                }
+            }
+            yield();
+        }
+
+        assert WispTask.SHUTDOWN_TASK_NAME.equals(current.getName());
+
+        carrier.pushAndSignal(new StealAwareRunnable() {
             @Override
             public void run() {
-                doShutdown();
-            }
+                // set shutdownFinished true when SHUTDOWN-TASK finished
+                // SHUTDOWN-TASK would keep interrupting running tasks until
+                // it is the only running one
+                assert runningTaskCount == 0;
 
+                thread.getCoroutineSupport().drain();
+                engine.shutdownFuture.countDown();
+
+                //exit carrier
+                carrier.detached = true;
+            }
             @Override
             public boolean isStealEnable() {
                 return false;
             }
-        }, thread);
+        });
     }
 
     @Override
-    protected void iterateTasksForShutdown() {
-        while (runningTaskCount != 0) {
-            List<WispTask> runningTasks = getRunningTasks();
-            for (WispTask task : runningTasks) {
-                while (task.engine == this && task.isAlive()) {
-                    yieldTo(task);
-                }
+    protected void runTaskYieldEpilog() {
+        if (hasBeenShutdown) {
+            assert WispEngine.current().current.engine == this;
+            if (WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
+                || current == threadTask
+                || CoroutineSupport.isInClinit(current.ctx)) {
+                return;
             }
+            UNSAFE.throwException(new ThreadDeath());
         }
     }
 

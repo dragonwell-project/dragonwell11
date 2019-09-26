@@ -17,15 +17,15 @@ class WispSocketLockSupport {
 
     /** Lock held when reading and accepting
      */
-    private final ReentrantLock readLock = WispEngine.enableSocketLock()? new ReentrantLock() : null;
+    private final ReentrantLock readLock = WEA.enableSocketLock()? new ReentrantLock() : null;
 
     /** Lock held when writing and connecting
      */
-    private final ReentrantLock writeLock = WispEngine.enableSocketLock()? new ReentrantLock() : null;
+    private final ReentrantLock writeLock = WEA.enableSocketLock()? new ReentrantLock() : null;
 
     /** Lock held when tracking current blocked WispTask and closing
      */
-    private final ReentrantLock stateLock = WispEngine.enableSocketLock()? new ReentrantLock() : null;
+    private final ReentrantLock stateLock = WEA.enableSocketLock()? new ReentrantLock() : null;
 
     WispTask blockedReadWispTask  = null;
     WispTask blockedWriteWispTask = null;
@@ -51,7 +51,7 @@ class WispSocketLockSupport {
     }
 
     void beginRead() {
-        if (!WispEngine.enableSocketLock()) {
+        if (!WEA.enableSocketLock()) {
             return;
         }
         lockRead();
@@ -64,7 +64,7 @@ class WispSocketLockSupport {
     }
 
     void endRead() {
-        if (!WispEngine.enableSocketLock()) {
+        if (!WEA.enableSocketLock()) {
             return;
         }
 
@@ -78,7 +78,7 @@ class WispSocketLockSupport {
     }
 
     void beginWrite() {
-        if (!WispEngine.enableSocketLock()) {
+        if (!WEA.enableSocketLock()) {
             return;
         }
         lockWrite();
@@ -91,7 +91,7 @@ class WispSocketLockSupport {
     }
 
     void endWrite() {
-        if (!WispEngine.enableSocketLock()) {
+        if (!WEA.enableSocketLock()) {
             return;
         }
         stateLock.lock();

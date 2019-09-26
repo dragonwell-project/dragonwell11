@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -41,11 +40,11 @@ public enum WispWorkerContainer {
                 public void run() {
                     WispEngine engine = WispEngine.current(); // create engine
                     countDownLatch.countDown();
-                    engine.yieldOnBlocking();
+                    engine.schedule();
                     // wait task submit
                 }
             }, WISP_THREAD_NAME_PREFIX + i);
-            t.setDaemon(WispConfiguration.WISP_DAEMON_WORKER);
+            t.setDaemon(true);
             t.start();
             return t;
         }).collect(Collectors.toList());

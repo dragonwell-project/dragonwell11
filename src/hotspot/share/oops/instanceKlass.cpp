@@ -1330,6 +1330,7 @@ void InstanceKlass::call_class_initializer(TRAPS) {
     ls.print_cr("%s (" INTPTR_FORMAT ")", h_method() == NULL ? "(no method)" : "", p2i(this));
   }
   if (h_method() != NULL) {
+    WispClinitCounterMark wcm(THREAD);
     JavaCallArguments args; // No arguments
     JavaValue result(T_VOID);
     JavaCalls::call(&result, h_method, &args, CHECK); // Static call (no args)

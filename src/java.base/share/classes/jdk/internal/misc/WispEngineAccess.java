@@ -1,10 +1,11 @@
 package jdk.internal.misc;
 
-import com.alibaba.wisp.engine.WispEngine;
+
 import com.alibaba.wisp.engine.WispTask;
 
 import java.io.IOException;
 import java.nio.channels.SelectableChannel;
+import java.util.concurrent.atomic.AtomicReference;
 
 public interface WispEngineAccess {
 
@@ -16,11 +17,12 @@ public interface WispEngineAccess {
 
     void registerEvent(SelectableChannel ch, int events) throws IOException;
 
-    void registerEpollEvent(int epFd) throws IOException;
-
     void unregisterEvent();
 
-    void yieldOnBlocking();
+    int epollWait(int epfd, long pollArray, int arraySize, long timeout,
+                  AtomicReference<Object> status, final Object INTERRUPTED) throws IOException;
+
+    void interruptEpoll(AtomicReference<Object> status, Object INTERRUPTED, int interruptFD);
 
     void addTimer(long deadlineNano);
 
@@ -59,7 +61,7 @@ public interface WispEngineAccess {
 
     boolean runningAsCoroutine(Thread t);
 
-    boolean usingWispEpoll(Thread t);
+    boolean usingWispEpoll();
 
     boolean ifPutToCurrentEngine();
 
@@ -69,9 +71,15 @@ public interface WispEngineAccess {
 
     boolean ifPutToManagedThread();
 
+    boolean isAllThreadAsWisp();
+
     boolean useThreadPoolLimit();
 
     String getThreadUsage(String threadName);
 
     boolean tryStartThreadAsWisp(Thread thread, Runnable target);
+
+    boolean useDirectSelectorWakeup();
+
+    boolean enableSocketLock();
 }

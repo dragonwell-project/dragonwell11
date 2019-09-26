@@ -1,12 +1,7 @@
 package com.alibaba.wisp.engine;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.AbstractExecutorService;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -32,6 +27,7 @@ public class Wisp2Group extends AbstractExecutorService {
 
     final Wisp2Scheduler scheduler;
     final Set<Wisp2Engine> carrierEngines;
+    final Queue<WispTask> groupTaskCache = new ConcurrentLinkedDeque<>();
 
     /**
      * Create a new WispV2Group for executing tasks.
@@ -68,11 +64,10 @@ public class Wisp2Group extends AbstractExecutorService {
                     @Override
                     public Thread newThread(Runnable r) {
                         Thread t = new Thread(r, "Wisp2-" + name + "-Carrier-" + seq.getAndIncrement());
-                        t.setDaemon(WispConfiguration.WISP_DAEMON_WORKER);
+                        t.setDaemon(true);
                         return t;
                     }
-                },
-                this, false);
+                }, this, true);
     }
 
     private Wisp2Group(int size, ThreadFactory tf) {
@@ -80,10 +75,22 @@ public class Wisp2Group extends AbstractExecutorService {
         scheduler = new Wisp2Scheduler(size, tf, this);
     }
 
+    public List<Long> getWispEngineIDs() {
+        List<Long> workers = new ArrayList<>();
+        for (Wisp2Engine worker : carrierEngines) {
+            workers.add(worker.getId());
+        }
+        return workers;
+    }
+
     @Override
     public void shutdown() {
         for (Wisp2Engine worker : carrierEngines) {
             worker.shutdown();
+        }
+
+        for (WispTask task : groupTaskCache) {
+            WispTask.cleanExitedTask(task);
         }
     }
 
@@ -116,10 +123,12 @@ public class Wisp2Group extends AbstractExecutorService {
 
     @Override
     public void execute(Runnable command) {
+        long enqueueTime = WispEngine.getNanoTime();
         scheduler.execute(new StealAwareRunnable() {
             @Override
             public void run() {
                 WispEngine engine = WispEngine.current();
+                engine.countEnqueueTime(enqueueTime);
                 engine.runTaskInternal(command, "group dispatch task",
                         null, engine.current.ctxClassLoader);
             }

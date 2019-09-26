@@ -2,6 +2,7 @@ package com.alibaba.wisp.engine;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Represents {@link WispTask} related time out
@@ -80,21 +81,20 @@ public class TimeOut {
         }
 
         /**
-         * Dispatch timeout events and return the timeout interval for next
+         * Dispatch timeout events and return the timeout deadline for next
          * first timeout task
          *
-         * @return -1: infinitely waiting, > 0 wait nanos
+         * @return -1: there's no timeout task, > 0 deadline nanos
          */
-        long processTimeoutEventsAndGetWaitNanos() {
+        long processTimeoutEventsAndGetWaitDeadline(final long now) {
             TimeOut timeOut;
             while ((timeOut = rmQ.poll()) != null) {
                 assert timeOut.manager == this;
                 queue.remove(timeOut);
             }
 
-            long nanos = -1;
+            long deadline = -1;
             if (queue.size != 0) {
-                long now = System.nanoTime();
                 while ((timeOut = queue.peek()) != null) {
                     if (timeOut.canceled) {
                         queue.poll();
@@ -102,12 +102,12 @@ public class TimeOut {
                         queue.poll();
                         timeOut.doUnpark();
                     } else {
-                        nanos = timeOut.deadlineNano - now;
+                        deadline = timeOut.deadlineNano;
                         break;
                     }
                 }
             }
-            return nanos;
+            return deadline;
         }
 
         class Queue {
@@ -236,6 +236,17 @@ public class TimeOut {
             // i.e. deadlineNano > head.deadlineNano
         }
         return deadlineNano;
+    }
+
+    static long nanos2Millis(long nanos) {
+        long ms = TimeUnit.NANOSECONDS.toMillis(nanos + TimeUnit.MILLISECONDS.toNanos(1) / 2);
+        if (ms < 0) {
+            ms = 0;
+        }
+        if (WispConfiguration.PARK_ONE_MS_AT_LEAST && ms == 0) {
+            ms = 1;
+        }
+        return ms;
     }
 }
 

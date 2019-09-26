@@ -653,7 +653,10 @@
   template(java_dyn_CoroutineBase,                     "java/dyn/CoroutineBase")                                  \
   template(java_dyn_CoroutineExitException,            "java/dyn/CoroutineExitException")                         \
   template(com_alibaba_wisp_engine_WispTask,           "com/alibaba/wisp/engine/WispTask")                        \
+  template(com_alibaba_wisp_engine_WispTask_CacheableCoroutine,                                                   \
+                                                       "com/alibaba/wisp/engine/WispTask$CacheableCoroutine")     \
   template(com_alibaba_wisp_engine_WispEngine,         "com/alibaba/wisp/engine/WispEngine")                      \
+  template(com_alibaba_wisp_engine_WispEventPump,      "com/alibaba/wisp/engine/WispEventPump")                   \
   template(isInCritical_name,                          "isInCritical")                                            \
   template(jdkParkStatus_name,                         "jdkParkStatus")                                           \
   template(jvmParkStatus_name,                         "jvmParkStatus")                                           \

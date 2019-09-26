@@ -5,8 +5,7 @@ import jdk.internal.misc.JavaLangAccess;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.UnsafeAccess;
 
-import java.util.Comparator;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.TimeUnit;
 
@@ -17,18 +16,19 @@ enum WispSysmon {
         registerNatives();
     }
 
-    private static Set<WispEngine> engines = new ConcurrentSkipListSet<>(new Comparator<WispEngine>() {
+    private Set<WispEngine> engines = new ConcurrentSkipListSet<>(new Comparator<WispEngine>() {
         @Override
         public int compare(WispEngine o1, WispEngine o2) {
             return o1.threadTask.compareTo(o2.threadTask);
         }
     });
+    final static String WISP_SYSMON_NAME = "Wisp-Sysmon";
 
     void startDaemon() {
         if (WispConfiguration.ENABLE_HANDOFF) {
             assert WispConfiguration.HANDOFF_POLICY != null;
             Thread thread = new Thread(WispEngine.daemonThreadGroup,
-                    WispSysmon::sysmonLoop, "Wisp-Sysmon");
+                    WispSysmon.INSTANCE::sysmonLoop, WISP_SYSMON_NAME);
             thread.setDaemon(true);
             thread.start();
         }
@@ -40,23 +40,38 @@ enum WispSysmon {
         }
     }
 
-    private static void sysmonLoop() {
+    private void sysmonLoop() {
         final long interval = TimeUnit.MICROSECONDS.toNanos(WispConfiguration.SYSMON_TICK_US);
+        final long carrierCheckRate = TimeUnit.MICROSECONDS.toNanos(WispConfiguration.SYSMON_CARRIER_GROW_TICK_US);
+        final long checkCarrierOnNthTick = carrierCheckRate / interval;
+        final boolean checkCarrier = WispConfiguration.CARRIER_GROW && checkCarrierOnNthTick > 0
+                                    // Detach group's worker cnt is not specified by configuration
+                                    && WispConfiguration.WORKER_COUNT == Runtime.getRuntime().availableProcessors();
         long nextTick = System.nanoTime() + interval;
+        int tick = 0;
+
         while (true) {
-            final long timeout = nextTick - System.nanoTime();
+            long timeout = nextTick - System.nanoTime();
             if (timeout > 0) {
-                UA.park0(false, timeout);
+                do {
+                    UA.park0(false, timeout);
+                } while ((timeout = nextTick - System.nanoTime()) > 0);
                 handleLongOccupation();
-            }
+                if (checkCarrier && tick++ == checkCarrierOnNthTick) {
+                    Wisp2Group.WISP2_ROOT_GROUP.scheduler.checkAndGrowCarriers(Runtime.getRuntime().availableProcessors());
+                    tick = 0;
+                }
+            } // else: we're too slow, skip a tick
             nextTick += interval;
         }
     }
 
+    private List<WispEngine> longOccupationEngines = new ArrayList<>();
+
     /**
      * Handle a WispTask occupied a carrier thread for long time.
      */
-    private static void handleLongOccupation() {
+    private void handleLongOccupation() {
         for (WispEngine engine : engines) {
             if (engine.terminated) {
                 // remove in iteration is OK for ConcurrentSkipListSet
@@ -64,41 +79,51 @@ enum WispSysmon {
                 continue;
             }
             if (engine.isRunning() && engine.schedTick == engine.lastSchedTick) {
-                WispConfiguration.HANDOFF_POLICY.handle(engine);
+                longOccupationEngines.add(engine);
             }
             engine.lastSchedTick = engine.schedTick;
         }
+
+        if (!longOccupationEngines.isEmpty()) {
+            Iterator<WispEngine> itr = longOccupationEngines.iterator();
+            while (itr.hasNext()) {
+                WispEngine engine = itr.next();
+                WispConfiguration.HANDOFF_POLICY.handle(engine, !itr.hasNext());
+                itr.remove();
+            }
+        }
+        assert longOccupationEngines.isEmpty();
     }
 
     enum Policy {
         HAND_OFF { // handOff the carrier (Only supported in wisp2)
             @Override
-            void handle(WispEngine engine) {
+            void handle(WispEngine engine, boolean isLast) {
                 if (JLA.isInSameNative(engine.thread)) {
                     engine.handOff();
-                    engines.remove(engine);
+                    INSTANCE.engines.remove(engine);
                 }
             }
         },
         PREEMPT { // insert a yield() after next safepoint
             @Override
-            void handle(WispEngine engine) {
-                markPreempted(engine.thread, true);
+            void handle(WispEngine engine, boolean isLast) {
+                markPreempted(engine.thread, isLast);
             }
         },
         ADAPTIVE { // depends on thread status
             @Override
-            void handle(WispEngine engine) {
+            void handle(WispEngine engine, boolean isLast) {
                 if (JLA.isInSameNative(engine.thread)) {
                     engine.handOff();
-                    engines.remove(engine);
+                    INSTANCE.engines.remove(engine);
                 } else {
-                    markPreempted(engine.thread, true);
+                    markPreempted(engine.thread, isLast);
                 }
             }
         };
 
-        abstract void handle(WispEngine engine);
+        abstract void handle(WispEngine engine, boolean isLast);
 
     }
 

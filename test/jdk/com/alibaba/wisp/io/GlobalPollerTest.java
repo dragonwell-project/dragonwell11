@@ -9,7 +9,6 @@
 */
 
 import com.alibaba.wisp.engine.WispEngine;
-import com.alibaba.wisp.engine.WispPoller;
 import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.WispEngineAccess;
@@ -36,9 +35,10 @@ public class GlobalPollerTest {
         SocketChannel ch = so.getChannel();
         access.registerEvent(ch, SelectionKey.OP_READ);
 
-        Field f = Class.forName("com.alibaba.wisp.engine.WispPoller").getDeclaredField("fd2ReadTaskLow");
+        Class<?> clazz = Class.forName("com.alibaba.wisp.engine.WispEventPump");
+        Field f = clazz.getDeclaredField("fd2ReadTaskLow");
         f.setAccessible(true);
-        WispTask[] fd2TaskLow = (WispTask[]) f.get(WispPoller.INSTANCE);
+        WispTask[] fd2TaskLow = (WispTask[]) f.get(clazz.getEnumConstants()[0]);
         int fd = ((SelChImpl) ch).getFDVal();
         assertTrue(fd2TaskLow[fd] != null);
 

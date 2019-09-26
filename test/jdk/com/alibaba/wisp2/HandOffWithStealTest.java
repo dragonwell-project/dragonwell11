@@ -2,7 +2,7 @@
  * @test
  * @library /lib/testlibrary
  * @summary test long running or blocking syscall task could be retaken
- * @run main/othervm -Dcom.alibaba.wisp.carrierEngines=2 -XX:+UseWisp2 -Dcom.alibaba.wisp.enableHandOff=true -Dcom.alibaba.wisp.sysmonTickUs=100000 -Dcom.alibaba.wisp.handoffPolicy=ADAPTIVE HandOffWithStealTest
+ * @run main/othervm -Dcom.alibaba.wisp.carrierEngines=1 -XX:+UseWisp2 -Dcom.alibaba.wisp.handoffPolicy=ADAPTIVE HandOffWithStealTest
  */
 
 import com.alibaba.wisp.engine.WispEngine;
@@ -19,8 +19,9 @@ import static jdk.testlibrary.Asserts.assertTrue;
 
 public class HandOffWithStealTest {
     public static void main(String[] args) throws Exception {
-        CountDownLatch cl = new CountDownLatch(10);
-        for (int i = 0; i < 10; i++) {
+        final int N = 100;
+        CountDownLatch cl = new CountDownLatch(N);
+        for (int i = 0; i < N; i++) {
             WispEngine.dispatch(() -> {
                 try {
                     Thread.sleep(2000);
@@ -44,9 +45,7 @@ public class HandOffWithStealTest {
             }
         });
 
-
-        cl.await();
-        System.out.println("await");
-        assertTrue(!blockingFinish.get());
+        assertTrue(cl.await(3, TimeUnit.SECONDS) && !blockingFinish.get());
     }
 }
+

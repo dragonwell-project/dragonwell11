@@ -130,6 +130,7 @@ Coroutine* Coroutine::create_thread_coroutine(JavaThread* thread, CoroutineStack
   coro->_wisp_task_id = WISP_ID_NOT_SET;
   coro->_coroutine    = NULL;
   coro->_enable_steal_count = 1;
+  coro->_clinit_call_counter = 0;
   coro->_wisp_post_steal_resource_area = NULL;
   coro->_is_yielding  = false;
   thread->set_current_coroutine(coro);
@@ -187,6 +188,7 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
   // then it will call java method `Coroutine.startInternal()` and then `_java_call_counter` is 1.
   // so we set `_enable_steal_count` to 1 which means this coroutine can be stolen when it starts.
   coro->_enable_steal_count = 1;
+  coro->_clinit_call_counter = 0;
   coro->_wisp_post_steal_resource_area = new (mtWisp) WispResourceArea(coro, 32);
   coro->_is_yielding  = false;
   return coro;
@@ -849,6 +851,84 @@ const char* WispThread::print_blocking_status(int status) {
   }
 }
 
+class WispCriticalVerifier : public StackObj {
+  friend Coroutine;
+  /* a typical wisp stack looks like:
+    at java.dyn.CoroutineSupport.unsafeSymmetricYieldTo(CoroutineSupport.java:134)
+    - parking to wait for  <0x00000007303e1c28> (a java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject)
+    at com.alibaba.wisp.engine.WispTask.switchTo(WispTask.java:254)
+    at com.alibaba.wisp.engine.WispEngine.yieldTo(WispEngine.java:613)
+    at com.alibaba.wisp.engine.Wisp2Engine.yieldToNext(Wisp2Engine.java:211)
+    at com.alibaba.wisp.engine.WispEngine.yieldOnBlocking(WispEngine.java:574)
+    at com.alibaba.wisp.engine.WispTask.parkInternal(WispTask.java:350)
+    at com.alibaba.wisp.engine.WispTask.jdkPark(WispTask.java:403)
+    at com.alibaba.wisp.engine.WispEngine$4.park(WispEngine.java:224)
+    at sun.misc.Unsafe.park(Unsafe.java:1029)
+    at java.util.concurrent.locks.LockSupport.park(LockSupport.java:176)
+    at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:2047)
+    at java.util.concurrent.ArrayBlockingQueue.take(ArrayBlockingQueue.java:403)
+    at java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1077)
+    at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1137)
+    at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:627)
+    at java.lang.Thread.run(Thread.java:861)
+    at com.alibaba.wisp.engine.WispTask.coroutineCacheLoop(WispTask.java:213)
+    at com.alibaba.wisp.engine.WispTask.access$000(WispTask.java:33)
+    at com.alibaba.wisp.engine.WispTask$CacheableCoroutine.run(WispTask.java:153)
+    at java.dyn.CoroutineBase.startInternal(CoroutineBase.java:60)
+
+    Preempt should only happened when we're executing the non-wisp part.
+  */
+
+  bool _is_wisp_entry;
+  // see above, all the wisp task stacks are started with 'fixed' wisp frames,
+  // e.g. java.dyn.CoroutineBase, com.alibaba.wisp.engine.WispTask etc.
+  bool _found_non_bottom_wisp_frame;
+
+  WispCriticalVerifier(JavaThread* thread)
+    : _is_wisp_entry(true), _found_non_bottom_wisp_frame(false) {
+    if (!thread->has_last_Java_frame()) {
+      _is_wisp_entry = false;
+      return;
+    }
+
+    ResourceMark rm;
+    HandleMark   hm;
+    RegisterMap reg_map(thread);
+    transverse_frame(thread->last_java_vframe(&reg_map));
+  }
+
+  bool in_critical() {  return _is_wisp_entry || _found_non_bottom_wisp_frame; }
+
+  void transverse_frame(vframe* f);
+};
+
+void WispCriticalVerifier::transverse_frame(vframe* f) {
+  if (!f) return;
+  transverse_frame(f->sender()); // from bottom to top
+
+  // 1. skip wisp task entry frames
+  // 2. if a wisp frame is found, we're in critical
+  if (f->is_java_frame()) {
+    javaVFrame* jvf = javaVFrame::cast(f);
+    InstanceKlass* k = jvf->method()->method_holder();
+    if (_is_wisp_entry) {
+      if (k != SystemDictionary::com_alibaba_wisp_engine_WispTask_klass()
+          && k != SystemDictionary::com_alibaba_wisp_engine_WispTask_CacheableCoroutine_klass()
+          && k != SystemDictionary::java_dyn_CoroutineBase_klass()) {
+        _is_wisp_entry = false;
+      }
+    } else if (k == SystemDictionary::com_alibaba_wisp_engine_WispTask_klass()
+        || k == SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass()
+        || k->is_subtype_of(SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass())
+        || k == SystemDictionary::com_alibaba_wisp_engine_WispEventPump_klass()) {
+      _found_non_bottom_wisp_frame = true;
+      if (VerboseWisp) {
+        tty->print_cr("[WISP] preempt was blocked, because wisp internal method on the stack");
+      }
+    }
+  }
+}
+
 void Coroutine::after_safepoint(JavaThread* thread) {
   assert(Thread::current() == thread, "sanity check");
 
@@ -860,7 +940,8 @@ void Coroutine::after_safepoint(JavaThread* thread) {
       // indicates we're inside compiled code or interpreter.
       // rather than thread state transition.
       coroutine->_is_yielding || !thread->wisp_preempted() ||
-      thread->has_pending_exception() || thread->has_async_condition()) {
+      thread->has_pending_exception() || thread->has_async_condition() ||
+      WispCriticalVerifier(thread).in_critical()) {
     return;
   }
 
@@ -890,6 +971,13 @@ void Coroutine::after_safepoint(JavaThread* thread) {
         &args,
         thread);
   coroutine->_is_yielding = false;
+
+  if (thread->has_pending_exception() 
+    && (thread->pending_exception()->klass() == SystemDictionary::OutOfMemoryError_klass()
+      || thread->pending_exception()->klass() == SystemDictionary::StackOverflowError_klass())) {
+      // throw expected vm error
+      return;
+  }
 
   if (thread->has_pending_exception() || thread->has_async_condition()) {
     thread->clear_pending_exception();
@@ -1136,5 +1224,18 @@ void Coroutine::initialize_coroutine_support(JavaThread* thread) {
       vmSymbols::initializeCoroutineSupport_method_name(),
       vmSymbols::void_method_signature(),
       thread);
+}
+
+WispClinitCounterMark::WispClinitCounterMark(Thread* th) {
+  _thread = (JavaThread*)th;
+  if (EnableCoroutine) {
+    _thread->current_coroutine()->inc_clinit_call_count();
+  }
+}
+
+WispClinitCounterMark::~WispClinitCounterMark() {
+  if (EnableCoroutine) {
+    _thread->current_coroutine()->dec_clinit_call_count();
+  }
 }
 

@@ -188,7 +188,7 @@ final class WispCounter {
     }
 
     long getNumberOfRunningTasks() {
-        return engine.getNumberOfrunningTaskCount();
+        return engine.getRunningTaskCount();
     }
 
     void incrementUnparkFromJvmCount() {

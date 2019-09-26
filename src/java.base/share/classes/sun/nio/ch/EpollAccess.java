@@ -27,9 +27,17 @@ public interface EpollAccess {
 
     int epollCtl(int epfd, int opcode, int fd, int events);
 
-    int epollWait(int epfd, long pollAddress, int numfds) throws IOException;
+    int epollWait(int epfd, long pollAddress, int numfds, int timeout) throws IOException;
+
+    void socketpair(int[] sv) throws IOException;
+
+    void interrupt(int fd) throws IOException;
+
+    void drain(int fd) throws IOException;
+
+    void close(int fd);
 
     static void initializeEpoll() {
-        Unsafe.getUnsafe().ensureClassInitialized(EPoll.class);
+        Unsafe.getUnsafe().ensureClassInitialized(EPollPort.class);
     }
 }

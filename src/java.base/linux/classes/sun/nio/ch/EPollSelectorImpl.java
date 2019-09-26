@@ -39,6 +39,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static sun.nio.ch.EPoll.EPOLLIN;
@@ -145,18 +146,14 @@ class EPollSelectorImpl extends SelectorImpl {
         return processEvents(numEntries, action);
     }
 
+    private final static Object INTERRUPTED = new Object();
+    private AtomicReference<Object> status = new AtomicReference<>();
+    // null: initial status
+    // INTERRUPTED: interrupted by wakeup()
+    // other: task blocking on this selector
+
     private int handleEPollWithWisp(long timeout) throws IOException {
-        if (timeout != 0 && WEA.usingWispEpoll(Thread.currentThread())) {
-            final int updated = EPoll.wait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, 0);
-            if (updated > 0) {
-                return updated;
-            }
-            WEA.registerEpollEvent(epfd);
-            WEA.park(TimeUnit.MILLISECONDS.toNanos(timeout));
-            return EPoll.wait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, 0);
-        } else {
-            return EPoll.wait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, (int) timeout);
-        }
+        return WEA.epollWait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, timeout, status, INTERRUPTED);
     }
 
     /**
@@ -221,7 +218,7 @@ class EPollSelectorImpl extends SelectorImpl {
             }
         }
 
-        if (interrupted) {
+        if (interrupted || WEA.useDirectSelectorWakeup() && status.get() == INTERRUPTED) {
             clearInterrupt();
         }
 
@@ -272,10 +269,14 @@ class EPollSelectorImpl extends SelectorImpl {
     public Selector wakeup() {
         synchronized (interruptLock) {
             if (!interruptTriggered) {
-                try {
-                    IOUtil.write1(fd1, (byte)0);
-                } catch (IOException ioe) {
-                    throw new InternalError(ioe);
+                if (WEA.useDirectSelectorWakeup()) {
+                    WEA.interruptEpoll(status, INTERRUPTED, fd1);
+                } else {
+                    try {
+                        IOUtil.write1(fd1, (byte) 0);
+                    } catch (IOException ioe) {
+                        throw new InternalError(ioe);
+                    }
                 }
                 interruptTriggered = true;
             }
@@ -285,7 +286,15 @@ class EPollSelectorImpl extends SelectorImpl {
 
     private void clearInterrupt() throws IOException {
         synchronized (interruptLock) {
-            IOUtil.drain(fd0);
+            if (WEA.useDirectSelectorWakeup()) {
+                assert status.get() == INTERRUPTED;
+                status.lazySet(null);
+                if (!WEA.isAllThreadAsWisp()) {
+                    IOUtil.drain(fd0);
+                }
+            } else {
+                IOUtil.drain(fd0);
+            }
             interruptTriggered = false;
         }
     }

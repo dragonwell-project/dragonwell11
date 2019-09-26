@@ -1,5 +1,6 @@
 package com.alibaba.wisp.engine;
 
+
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.UnsafeAccess;
 
@@ -14,7 +15,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.function.Supplier;
+
 
 /**
  * {@link WispTask} provides high-level semantics of {link @Coroutine}
@@ -50,7 +53,10 @@ public class WispTask implements Comparable<WispTask> {
             boolean isInCritical0 = engine.isInCritical;
             engine.isInCritical = true;
             try {
-                tasks.forEach(t -> id2Task.remove(t.id));
+                tasks.forEach(t -> {
+                    id2Task.remove(t.id);
+                    t.cleanup();
+                });
             } finally {
                 engine.isInCritical = isInCritical0;
             }
@@ -62,6 +68,7 @@ public class WispTask implements Comparable<WispTask> {
         boolean isInCritical0 = engine.isInCritical;
         engine.isInCritical = true;
         try {
+            // cleanup shouldn't be executed for thread task
             id2Task.remove(task.id);
         } finally {
             engine.isInCritical = isInCritical0;
@@ -133,18 +140,17 @@ public class WispTask implements Comparable<WispTask> {
     // reduce the cost of deciding whether task is in queue.
     final AtomicBoolean enqueued = new AtomicBoolean(false);
 
+    // monolithic epoll support
+    private volatile long epollArray;
+    private volatile int epollEventNum;
+    int epollArraySize;
+
     WispTask(WispEngine engine, Coroutine ctx, boolean isRealTask, boolean isThreadTask) {
         this.isThreadTask = isThreadTask;
         this.id     = isRealTask ? idGenerator.addAndGet(1) : -1;
         this.engine = engine;
         if (isRealTask) {
-            this.ctx = ctx != null ? ctx :
-                    new Coroutine(WispConfiguration.STACK_SIZE) {
-                        @Override
-                        protected void run() {
-                            coroutineCacheLoop();
-                        }
-                    };
+            this.ctx = ctx != null ? ctx : new CacheableCoroutine(WispConfiguration.STACK_SIZE);
             this.ctx.setWispTask(id, this, engine);
         } else {
             this.ctx = null;
@@ -194,37 +200,45 @@ public class WispTask implements Comparable<WispTask> {
         }
     }
 
-    private void coroutineCacheLoop() {
-        while (true) {
-            assert !WispConfiguration.WISP_USE_STEAL_LOCK || stealLock != 0;
-            assert WispEngine.current() == engine;
-            assert engine.current == this;
-            if (runnable != null) {
-                Throwable throwable = null;
-                try {
-                    runnable.run();
-                } catch (Throwable t) {
-                    throwable = t;
-                } finally {
-                    assert timeOut == null;
-                    runnable = null;
-                    WispEngine.JLA.setWispAlive(threadWrapper, false);
-                    if (isThreadAsWisp) {
-                        WispEngine.JLA.threadExit(threadWrapper);
-                        synchronized (threadWrapper) {
-                            threadWrapper.notifyAll();
+    void cleanup() {
+        engine = null;
+        threadWrapper = null;
+        ctxClassLoader = null;
+    }
+
+    class CacheableCoroutine extends Coroutine {
+        public CacheableCoroutine(long stacksize) {
+            super(stacksize);
+        }
+
+        @Override
+        protected void run() {
+            while (true) {
+                assert !WispConfiguration.WISP_USE_STEAL_LOCK || stealLock != 0;
+                assert WispEngine.current() == engine;
+                assert engine.current == WispTask.this;
+                if (runnable != null) {
+                    Throwable throwable = null;
+                    try {
+                        runnable.run();
+                    } catch (Throwable t) {
+                        throwable = t;
+                    } finally {
+                        assert timeOut == null;
+                        runnable = null;
+                        WispEngine.JLA.setWispAlive(threadWrapper, false);
+                        if (isThreadAsWisp) {
+                            ThreadAsWisp.exit(threadWrapper);
+                            threadWrapper = null; // else WispThreadWrapper could be reused
                         }
-                        // move it to taskExit, since the threadWrapper will be used in Thread.currentThread()
-                        // when we remove the task from running task queue
-                        //threadWrapper = null; // else WispThreadWrapper could be reused
+                        if (throwable instanceof CoroutineExitException) {
+                            throw (CoroutineExitException) throwable;
+                        }
+                        engine.taskExit();
                     }
-                    if (throwable instanceof CoroutineExitException) {
-                        throw (CoroutineExitException) throwable;
-                    }
-                    engine.taskExit();
+                } else {
+                    engine.schedule();
                 }
-            } else {
-                engine.yieldOnBlocking();
             }
         }
     }
@@ -240,6 +254,7 @@ public class WispTask implements Comparable<WispTask> {
         assert current.engine == next.engine;
         next.activeCount++;
         if (WispConfiguration.WISP_USE_STEAL_LOCK) {
+            assert current.isThreadTask() || next.isThreadTask();
             next.from = current;
             STEAL_LOCK_UPDATER.lazySet(next, 1);
             // store load barrier is not necessary
@@ -300,6 +315,8 @@ public class WispTask implements Comparable<WispTask> {
             FREE = 0,       // the Initial Park status
             PERMITTED = 1;  // another task give a permit to make the task not block at next park()
 
+    static final String SHUTDOWN_TASK_NAME = "SHUTDOWN_TASK";
+
 
     boolean isRunnable() {
         return status == Status.RUNNABLE;
@@ -318,6 +335,10 @@ public class WispTask implements Comparable<WispTask> {
      *                    else park with given timeout
      */
     private void parkInternal(long timeoutNano, boolean fromJvm) {
+        if (timeoutNano > 0 && timeoutNano < WispConfiguration.MIN_PARK_NANOS) {
+            engine.yield();
+            return;
+        }
         final AtomicIntegerFieldUpdater<WispTask> statusUpdater = fromJvm ? JVM_PARK_UPDATER : JDK_PARK_UPDATER;
 
         final boolean isInCritical0 = engine.isInCritical;
@@ -340,7 +361,7 @@ public class WispTask implements Comparable<WispTask> {
                     try {
                         if (WispEngine.runningAsCoroutine(threadWrapper)) {
                             setParkTime();
-                            engine.yieldOnBlocking();
+                            engine.schedule();
                         } else {
                             UA.park0(false, timeoutNano < 0 ? 0 : timeoutNano);
                         }
@@ -485,19 +506,29 @@ public class WispTask implements Comparable<WispTask> {
         WispEngine.JLA.setWispTask(thread, this);
     }
 
-    void resetThreadWrapper() {
-        if (isThreadAsWisp) {
-            threadWrapper = null;
-        }
-    }
-
     @Override
     public int compareTo(WispTask o) {
         return Integer.compare(this.id, o.id);
     }
 
+    long getEpollArray() {
+        return epollArray;
+    }
+
+    void setEpollArray(long epollArray) {
+        EPOLL_ARRAY_UPDATER.lazySet(this, epollArray);
+    }
+
+    int getEpollEventNum() {
+        return epollEventNum;
+    }
+
+    void setEpollEventNum(int epollEventNum) {
+        EPOLL_EVENT_NUM_UPDATER.lazySet(this, epollEventNum);
+    }
+
     void updateEnqueueTime() {
-        if (!WispConfiguration.WISP_PROFILE_DETAIL) {
+        if (!WispConfiguration.WISP_PROFILE) {
             return;
         }
         // For pseudo task, use another flow to record the enque time
@@ -522,7 +553,7 @@ public class WispTask implements Comparable<WispTask> {
 
     void setRegisterEventTime() {
         // only count the time which is spent on WispTask by service
-        registerEventTime = (!WispConfiguration.WISP_PROFILE_DETAIL || isThreadTask) ? 0 : System.nanoTime();
+        registerEventTime = (!WispConfiguration.WISP_PROFILE || isThreadTask) ? 0 : System.nanoTime();
     }
 
     void resetRegisterEventTime() {
@@ -537,14 +568,14 @@ public class WispTask implements Comparable<WispTask> {
     }
 
     void setParkTime() {
-        parkTime = (!WispConfiguration.WISP_PROFILE_DETAIL || isThreadTask) ? 0 : System.nanoTime();
+        parkTime = (!WispConfiguration.WISP_PROFILE || isThreadTask) ? 0 : System.nanoTime();
     }
 
     /* When unpark is called, the time is set.
      * Since the unpark may be called by non-carrier thread, the count is delayed.
      */
     private void recordOnUnpark(boolean fromJVM) {
-        if (!WispConfiguration.WISP_PROFILE_DETAIL) {
+        if (!WispConfiguration.WISP_PROFILE) {
             return;
         }
         if (parkTime != 0) {
@@ -560,9 +591,9 @@ public class WispTask implements Comparable<WispTask> {
     }
 
     void countExecutionTime(long beginTime) {
-        // TaskExit set beginTime to 0, and calls yieldOnBlocking,
+        // TaskExit set beginTime to 0, and calls schedule,
         // then beginTime is 0. It need to skip it.
-        if (!WispConfiguration.WISP_PROFILE_DETAIL || beginTime == 0) {
+        if (!WispConfiguration.WISP_PROFILE || beginTime == 0) {
             return;
         }
         engine.counter.incrementTotalExecutionTime(System.nanoTime() - beginTime);
@@ -581,6 +612,8 @@ public class WispTask implements Comparable<WispTask> {
     private static final AtomicIntegerFieldUpdater<WispTask> INTERRUPTED_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> NATIVE_INTERRUPTED_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> STEAL_LOCK_UPDATER;
+    private static final AtomicLongFieldUpdater<WispTask> EPOLL_ARRAY_UPDATER;
+    private static final AtomicIntegerFieldUpdater<WispTask> EPOLL_EVENT_NUM_UPDATER;
     private static final UnsafeAccess UA = SharedSecrets.getUnsafeAccess();
 
     private static native void registerNatives();
@@ -594,6 +627,8 @@ public class WispTask implements Comparable<WispTask> {
         INTERRUPTED_UPDATER = AtomicIntegerFieldUpdater.newUpdater(WispTask.class, "interrupted");
         NATIVE_INTERRUPTED_UPDATER = AtomicIntegerFieldUpdater.newUpdater(WispTask.class, "alreadyCheckNativeInterrupt");
         STEAL_LOCK_UPDATER = AtomicIntegerFieldUpdater.newUpdater(WispTask.class, "stealLock");
+        EPOLL_ARRAY_UPDATER = AtomicLongFieldUpdater.newUpdater(WispTask.class, "epollArray");
+        EPOLL_EVENT_NUM_UPDATER = AtomicIntegerFieldUpdater.newUpdater(WispTask.class, "epollEventNum");
         registerNatives();
     }
 }
