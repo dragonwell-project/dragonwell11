@@ -1720,10 +1720,10 @@ class Thread implements Runnable {
                 slowPath = this != Thread.currentThread();
             } else {
                 boolean isCurrentTask = WEA.getCurrentTask() == task;
-                if (!WEA.isThreadTask(task) && !isCurrentTask) {
-                    throw new UnsupportedOperationException("NYI, can NOT get other runnable Coroutine stacktrace!");
-                }
                 slowPath = !isCurrentTask;
+                if (!WEA.isThreadTask(task) && !isCurrentTask) {
+                    return task.getStackTrace();
+                }
             }
         } else {
             slowPath = this != Thread.currentThread();

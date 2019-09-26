@@ -397,4 +397,11 @@ public class CoroutineSupport {
      * Telling jvm that wisp is ready to be used.
      */
     public static native void setWispBooted();
+
+    /**
+     * this will turn on a safepoint to stop all threads.
+     * @param coroPtr coroutine
+     * @return target coroutine's stack
+     */
+    public static native StackTraceElement[] getCoroutineStack(long coroPtr);
 }

@@ -1610,6 +1610,7 @@ public:
 class com_alibaba_wisp_engine_WispTask: AllStatic {
 private:
   static int _jvmParkStatus_offset;
+  static int _jdkParkStatus_offset;
   static int _id_offset;
   static int _threadWrapper_offset;
   static int _interrupted_offset;
@@ -1619,6 +1620,8 @@ private:
   static int _preemptCount_offset;
 public:
   static void set_jvmParkStatus(oop obj, jint status);
+  static int  get_jvmParkStatus(oop obj);
+  static int  get_jdkParkStatus(oop obj);
   static int  get_id(oop obj);
   static oop  get_threadWrapper(oop obj);
   static int  get_interrupted(oop obj);

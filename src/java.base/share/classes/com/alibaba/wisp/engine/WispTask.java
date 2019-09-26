@@ -572,6 +572,9 @@ public class WispTask implements Comparable<WispTask> {
         }
     }
 
+    public StackTraceElement[] getStackTrace() {
+        return this.ctx.getCoroutineStack();
+    }
 
     private static final AtomicIntegerFieldUpdater<WispTask> JVM_PARK_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> JDK_PARK_UPDATER;

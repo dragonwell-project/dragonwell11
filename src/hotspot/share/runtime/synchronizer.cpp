@@ -2093,9 +2093,10 @@ void SystemDictObjMonitor::notify_all(TRAPS) {
 }
 
 void SystemDictObjMonitor::set_obj_lock(oop obj, TRAPS) {
+  Handle h_obj(THREAD, obj);
   MutexLocker mu(_monitor, THREAD);
   assert(UseWispMonitor, "UseWispMonitor if off");
   assert(_obj == NULL, "_obj already been set");
-  _obj = obj;
+  _obj = h_obj();
   _monitor->notify_all();
 }

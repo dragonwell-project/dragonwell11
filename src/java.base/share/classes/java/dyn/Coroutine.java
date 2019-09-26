@@ -165,6 +165,14 @@ public class Coroutine extends CoroutineBase {
         setWispTask(nativeCoroutine, id, task, engine);
     }
 
+    /**
+     * get StackTrace element for coroutine
+     * @return StackTraceElement
+     */
+    public StackTraceElement[] getCoroutineStack() {
+        return CoroutineSupport.getCoroutineStack(nativeCoroutine);
+    }
+
     protected void run() {
         assert Thread.currentThread() == threadSupport.getThread();
         if (target != null) {

@@ -4809,6 +4809,10 @@ void Threads::print_on(outputStream* st, bool print_stacks,
         p->print_stack_on(st);
         if (EnableCoroutine) {
           assert(p->coroutine_list() != NULL, "coroutine list");
+          if (!p->is_Compiler_thread() && (PrintThreadCoroutineInfo || !p->current_coroutine()->is_thread_coroutine())) {
+            p->current_coroutine()->print_stack_header_on(st);
+            st->print("\n");
+          }
           Coroutine* c = p->coroutine_list();
           do {
             c->print_stack_on(st);

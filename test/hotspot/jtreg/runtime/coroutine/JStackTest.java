@@ -32,6 +32,7 @@ public class JStackTest {
     private static Field stealCount = null;
     private static Field ctx = null;
     private static Field data = null;
+    private static Field jvmParkStatus = null;
 
     static {
         try {
@@ -53,6 +54,12 @@ public class JStackTest {
             e.printStackTrace();
         }
         try {
+            jvmParkStatus = WispTask.class.getDeclaredField("jvmParkStatus");
+            jvmParkStatus.setAccessible(true);
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+        try {
             data = CoroutineBase.class.getDeclaredField("nativeCoroutine");
             data.setAccessible(true);
         } catch (NoSuchFieldException e) {
@@ -61,6 +68,7 @@ public class JStackTest {
     }
 
     private static Map<String, Integer> map = new HashMap<>();
+    private static Map<String, Integer> jvmMap = new HashMap<>();
 
     private static void test() throws Exception {
         ReentrantLock lock = new ReentrantLock();
@@ -75,6 +83,8 @@ public class JStackTest {
                         long coroutine = (Long) data.get(ctx.get(current));
                         int count = (Integer) stealCount.get(current);
                         map.put("0x"+Long.toHexString(coroutine), count);
+                        int parkStatus = (Integer) jvmParkStatus.get(current);
+                        jvmMap.put("0x"+Long.toHexString(coroutine), parkStatus);
                     } catch (IllegalAccessException e) {
                         e.printStackTrace();
                     }
@@ -95,6 +105,8 @@ public class JStackTest {
                 String coroutine = matchCoroutine(str);
                 int stealCount = Integer.parseInt(matchStealCount(str));
                 assertTrue(map.get(coroutine) == stealCount);
+                int jvmParkStatus = Integer.parseInt(matchParkStatus(str));
+                assertTrue(jvmMap.get(coroutine) == jvmParkStatus);
             }
         }
     }
@@ -110,6 +122,15 @@ public class JStackTest {
 
     private static String matchStealCount(String str) {
         Pattern pattern = Pattern.compile(".*steal=(\\d+).*");
+        Matcher matcher = pattern.matcher(str);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        throw new RuntimeException("ShouldNotReachHere");
+    }
+
+    private static String matchParkStatus(String str) {
+        Pattern pattern = Pattern.compile(".*park=(\\d+).*");
         Matcher matcher = pattern.matcher(str);
         if (matcher.find()) {
             return matcher.group(1);

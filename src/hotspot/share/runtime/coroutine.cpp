@@ -432,26 +432,45 @@ frame CoroutineStack::last_frame(Coroutine* coro, RegisterMap& map) const {
   return frame(sp, fp, pc);
 }
 
+oop Coroutine::print_stack_header_on(outputStream* st) {
+  oop thread_obj = NULL;
+  st->print("\n - Coroutine [%p]", this);
+  if (_wisp_task != NULL) {
+    thread_obj = com_alibaba_wisp_engine_WispTask::get_threadWrapper(_wisp_task);
+    char buf[128] = "<cached>";
+    if (thread_obj != NULL) {
+      oop name = java_lang_Thread::name(thread_obj);
+      if (name != NULL) {
+        java_lang_String::as_utf8_string(name, buf, sizeof(buf));
+      }
+    }
+    st->print(" \"%s\" #%d active=%d steal=%d steal_fail=%d preempt=%d park=%d/%d", buf,
+        com_alibaba_wisp_engine_WispTask::get_id(_wisp_task),
+        com_alibaba_wisp_engine_WispTask::get_activeCount(_wisp_task),
+        com_alibaba_wisp_engine_WispTask::get_stealCount(_wisp_task),
+        com_alibaba_wisp_engine_WispTask::get_stealFailureCount(_wisp_task),
+        com_alibaba_wisp_engine_WispTask::get_preemptCount(_wisp_task),
+        com_alibaba_wisp_engine_WispTask::get_jvmParkStatus(_wisp_task),
+        com_alibaba_wisp_engine_WispTask::get_jdkParkStatus(_wisp_task));
+  }
+  if (_wisp_thread && PrintThreadCoroutineInfo) {
+    st->print(" monitor_park_stage=%s", WispThread::print_blocking_status(_wisp_thread->_unpark_status));
+    if (_wisp_thread->_os_park_reason != WispThread::_not_os_park) {
+      st->print(" os_park_reason=%s", WispThread::print_os_park_reason(_wisp_thread->_os_park_reason));
+    }
+    if (_wisp_thread->_unpark_coroutine) {
+      st->print(" unpark_thread=%p", _wisp_thread->_unpark_coroutine);
+      if (_wisp_thread->_has_exception) {
+        st->print(" (unpark has exception)");
+      }
+    }
+  } // else, we're only using the JKU part
+  return thread_obj;
+}
+
 void Coroutine::print_stack_on(outputStream* st) {
   if (_state == Coroutine::_onstack) {
-    oop thread_obj = NULL;
-    st->print("\n - Coroutine [%p]", this);
-    if (_wisp_task != NULL) {
-      thread_obj = com_alibaba_wisp_engine_WispTask::get_threadWrapper(_wisp_task);
-      char buf[128] = "<cached>";
-      if (thread_obj != NULL) {
-        oop name = java_lang_Thread::name(thread_obj);
-        if (name != NULL) {
-          java_lang_String::as_utf8_string(name, buf, sizeof(buf));
-        }
-      }
-      st->print(" \"%s\" #%d active=%d steal=%d steal_fail=%d preempt=%d", buf,
-          com_alibaba_wisp_engine_WispTask::get_id(_wisp_task),
-          com_alibaba_wisp_engine_WispTask::get_activeCount(_wisp_task),
-          com_alibaba_wisp_engine_WispTask::get_stealCount(_wisp_task),
-          com_alibaba_wisp_engine_WispTask::get_stealFailureCount(_wisp_task),
-          com_alibaba_wisp_engine_WispTask::get_preemptCount(_wisp_task));
-    } // else, we're only using the JKU part
+    oop thread_obj = print_stack_header_on(st);
     st->print("\n");
 
     ResourceMark rm;
@@ -540,6 +559,47 @@ void WispThread::set_wisp_booted(Thread* thread) {
  *   So , totally disable the switch in PLL is better solution(monitor->object() != java_lang_ref_Reference::pending_list_lock()).
  *
 */
+
+bool WispThread::need_wisp_park(ObjectMonitor* monitor, ObjectWaiter* ow, bool is_sd_lock) {
+  _os_park_reason = _not_os_park;
+  _unpark_status = _no_park;
+
+  if (!_wisp_booted) {
+    _os_park_reason = _wisp_not_booted;
+    return false;
+  }
+  if (_coroutine->wisp_task_id() == Coroutine::WISP_ID_NOT_SET) {
+    // For java threads, including JvmtiAgentThread, ServiceThread,
+    // SurrogateLockerThread, CompilerThread which are only used in JVM,
+    // because we don't initialize co-routine stuff for them, the initial
+    // value of _coroutine->wisp_task_id() for them should be Coroutine::WISP_ID_NOT_SET.
+    _os_park_reason = _wisp_id_not_set;
+    return false;
+  }
+  if (com_alibaba_wisp_engine_WispEngine::in_critical(_coroutine->wisp_engine())) {
+    _os_park_reason = _wispengine_in_critical;
+    return false;
+  }
+  if (_thread->in_critical()) {
+    _os_park_reason = _thread_in_critical;
+    return false;
+  }
+  if (Compile_lock->owner() == _thread) {
+    // case holding Compile_lock,  we will park for lock contention
+    // not for monitor->wait()
+    // so we'll be unparked immediately. It's safe to block the JavaThread
+    _os_park_reason = _thread_owned_compile_lock;
+    return false;
+  }
+  if (is_sd_lock && ow->TState != ObjectWaiter::TS_WAIT) {
+    // case parking for fetching SystemDictionary_lock fails, DO NOT schedule
+    // otherwise we'll encounter DEADLOCK because of fetching CompilerQeueu_lock in java
+    _os_park_reason = _is_sd_lock;
+    return false;
+  }
+  return true;
+}
+
 void WispThread::before_enqueue(ObjectMonitor* monitor, ObjectWaiter* ow) {
   JavaThreadState st = _thread->_thread_state;
   if (st != _thread_in_vm) {
@@ -547,22 +607,7 @@ void WispThread::before_enqueue(ObjectMonitor* monitor, ObjectWaiter* ow) {
     ThreadStateTransition::transition(_thread, st, _thread_in_vm);
   }
   bool is_sd_lock = monitor->object() == SystemDictionary_lock->obj();
-  if (_wisp_booted && _coroutine->wisp_task_id() != Coroutine::WISP_ID_NOT_SET
-      // For java threads, including JvmtiAgentThread, ServiceThread,
-      // SurrogateLockerThread, CompilerThread which are only used in JVM,
-      // because we don't initialize co-routine stuff for them, the initial
-      // value of _coroutine->wisp_task_id() for them should be Coroutine::WISP_ID_NOT_SET.
-      && !com_alibaba_wisp_engine_WispEngine::in_critical(_coroutine->wisp_engine())
-      //&& monitor->object() != java_lang_ref_Reference::pending_list_lock()
-      && !_thread->in_critical()
-      && Compile_lock->owner() != _thread
-      // case holding Compile_lock,  we will park for lock contention
-      // not for monitor->wait()
-      // so we'll be unparked immediately. It's safe to block the JavaThread 
-      && !(is_sd_lock && ow->TState != ObjectWaiter::TS_WAIT)
-      // case parking for fetching SystemDictionary_lock fails, DO NOT schedule
-      // otherwise we'll encounter DEADLOCK because of fetching CompilerQeueu_lock in java
-      ) {
+  if (need_wisp_park(monitor, ow, is_sd_lock)) {
     ow->_using_wisp_park = true;
     ow->_park_wisp_id = _coroutine->wisp_task_id();
     com_alibaba_wisp_engine_WispTask::set_jvmParkStatus(_coroutine->wisp_task(), 0); //reset
@@ -590,7 +635,7 @@ void WispThread::park(long millis, const ObjectWaiter* ow) {
     millis = ow->_timeout;
     assert(!ow->_using_wisp_park, "invariant");
   }
-
+  WispThread* wisp_thread = (WispThread*) ow->_thread;
   if (ow->_using_wisp_park) {
     assert(parkMethod != NULL, "parkMethod should be resolved in set_wisp_booted");
 
@@ -602,7 +647,7 @@ void WispThread::park(long millis, const ObjectWaiter* ow) {
 
     // thread steal support
     WispPostStealHandleUpdateMark w(jt);   // special one, because park() is inside an EnableStealMark, so the _enable_steal_count counter has been added one.
-
+    wisp_thread->_unpark_status = _wisp_parking;
     // when TenantThreadStop is on, we may receive TenantDeathException
     // and return before unpark().
     // Do not use a TenantShutdownMark to change the behavior.
@@ -616,6 +661,7 @@ void WispThread::park(long millis, const ObjectWaiter* ow) {
 
     ThreadStateTransition::transition(jt, _thread_in_vm, _thread_blocked);
   } else {
+    wisp_thread->_unpark_status = _os_parking;
     if (millis <= 0) {
       ow->_event->park();
     } else {
@@ -624,8 +670,11 @@ void WispThread::park(long millis, const ObjectWaiter* ow) {
   }
 }
 
-void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, ParkEvent* event, TRAPS) {
+void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, ParkEvent* event, WispThread* wisp_thread, TRAPS) {
+  wisp_thread->_has_exception = false;
+  wisp_thread->_unpark_coroutine = NULL;
   if (!using_wisp_park) {
+    wisp_thread->_unpark_status = _os_unpark;
     event->unpark();
     return;
   }
@@ -637,6 +686,7 @@ void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, Pa
   WispThread* wt = WispThread::current(THREAD);
   proxy_unpark_special_case = wt->is_proxy_unpark();
   wt->clear_proxy_unpark_flag();
+  wisp_thread->_unpark_coroutine = jt->current_coroutine();
 
   if (proxy_unpark || proxy_unpark_special_case ||
       jt->is_Compiler_thread() ||
@@ -653,11 +703,14 @@ void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, Pa
     // due to the fact that we modify the priority of Wisp_lock from `non-leaf` to `special`,
     // so we'd use `MutexLockerEx` and `_no_safepoint_check_flag` to make our program run
     MutexLockerEx mu(Wisp_lock, Mutex::_no_safepoint_check_flag);
+    wisp_thread->_unpark_status = WispThread::_proxy_unpark_begin;
     _proxy_unpark->append(task_id);
     Wisp_lock->notify(); // only one consumer
+    wisp_thread->_unpark_status = WispThread::_proxy_unpark_done;
     return;
   }
 
+  wisp_thread->_unpark_status = WispThread::_wisp_unpark_begin;
   JavaValue result(T_VOID);
   JavaCallArguments args;
   args.push_int(task_id);
@@ -682,11 +735,14 @@ void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, Pa
   {
     // unpark is very important, should not interruted by tenant shutdown
     assert(unparkMethod != NULL, "unparkMethod should be resolved in set_wisp_booted");
+    wisp_thread->_unpark_status = WispThread::_wisp_unpark_before_call_java;
     JavaCalls::call(&result, methodHandle(unparkMethod), &args, jt);
+    wisp_thread->_unpark_status = WispThread::_wisp_unpark_after_call_java;
   }
   // ~tsm may produce an exception and c1 monitor_exit has an exception_mark
   // clear the exception to prevent jvm crash
   if (jt->has_pending_exception()) {
+    wisp_thread->_has_exception = true;
     jt->clear_pending_exception();
   }
   if (in_java) {
@@ -695,6 +751,7 @@ void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, Pa
   if (pending_excep != NULL) {
     jt->set_pending_exception(pending_excep, pending_file, pending_line);
   }
+  wisp_thread->_unpark_status = WispThread::_wisp_unpark_done;
 }
 
 int WispThread::get_proxy_unpark(jintArray res) {
@@ -740,6 +797,56 @@ void WispThread::interrupt(int task_id, TRAPS) {
       &args,
       THREAD);
 
+}
+
+const char* WispThread::print_os_park_reason(int reason) {
+  switch(reason) {
+  case _not_os_park:
+    return "NOT_OS_PARK";
+  case _wisp_not_booted:
+    return "WISP_NOT_BOOOTED";
+  case _wisp_id_not_set:
+    return "WISP_ID_NOT_SET";
+  case _wispengine_in_critical:
+    return "WISPENGINE_IN_CRITICAL";
+  case _monitor_is_pending_lock:
+    return "MONITOR_IS_PENDING_LOCK";
+  case _thread_in_critical:
+    return "THREAD_IN_CRITICAL";
+  case _thread_owned_compile_lock:
+    return "THREAD_OWNED_COMPILE_LOCK";
+  case _is_sd_lock:
+    return "IS_SD_LOCK";
+  default:
+    return "";
+  }
+}
+
+const char* WispThread::print_blocking_status(int status) {
+  switch(status) {
+  case _no_park:
+    return "NO_PARK";
+  case _wisp_parking:
+    return "WISP_PARKING";
+  case _os_parking:
+    return "OS_PARKING";
+  case _wisp_unpark_begin:
+    return "WISP_UNPARK_BEGIN";
+  case _wisp_unpark_before_call_java:
+    return "WISP_UNPARK_BEFORE_CALL_JAVA";
+  case _wisp_unpark_after_call_java:
+    return "WISP_UNPARK_AFTER_CALL_JAVA";
+  case _wisp_unpark_done:
+    return "WISP_UNPARK_DONE";
+  case _proxy_unpark_begin:
+    return "PROXY_UNPARK_BEGIN";
+  case _proxy_unpark_done:
+    return "PROXY_UNPARK_DONE";
+  case _os_unpark:
+    return "OS_UNPARK";
+  default:
+    return "";
+  }
 }
 
 void Coroutine::after_safepoint(JavaThread* thread) {

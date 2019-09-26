@@ -655,6 +655,7 @@
   template(com_alibaba_wisp_engine_WispTask,           "com/alibaba/wisp/engine/WispTask")                        \
   template(com_alibaba_wisp_engine_WispEngine,         "com/alibaba/wisp/engine/WispEngine")                      \
   template(isInCritical_name,                          "isInCritical")                                            \
+  template(jdkParkStatus_name,                         "jdkParkStatus")                                           \
   template(jvmParkStatus_name,                         "jvmParkStatus")                                           \
   template(id_name,                                    "id")                                                      \
   template(threadWrapper_name,                         "threadWrapper")                                           \

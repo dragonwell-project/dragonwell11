@@ -839,156 +839,14 @@ static bool should_reexecute_implied_by_bytecode(JVMState *jvms, bool is_anewarr
     return false;
 }
 
-void GraphKit::add_safepoint_edges_wisp(SafePointNode* call) {
-  assert(UseWispMonitor, "UseWispMonitor is off");
-  // Add the safepoint edges to the call (or other safepoint).
-
-  // Walk the inline list to fill in the correct set of JVMState's
-  // Also fill in the associated edges for each JVMState.
-
-  // If the bytecode needs to be reexecuted we need to put
-  // the arguments back on the stack.
-  const bool should_reexecute = jvms()->should_reexecute();
-  JVMState* youngest_jvms = should_reexecute ? sync_jvms_for_reexecute() : sync_jvms();
-
-  // NOTE: set_bci (called from sync_jvms) might reset the reexecute bit to
-  // undefined if the bci is different.  This is normal for Parse but it
-  // should not happen for LibraryCallKit because only one bci is processed.
-  assert(!is_LibraryCallKit() || (jvms()->should_reexecute() == should_reexecute),
-         "in LibraryCallKit the reexecute bit should not change");
-
-  // If we are guaranteed to throw, we can prune everything but the
-  // input to the current bytecode.
-  bool can_prune_locals = false;
-  uint stack_slots_not_pruned = 0;
-  int inputs = 0, depth = 0;
-
-  if (env()->should_retain_local_variables()) {
-    // At any safepoint, this method can get breakpointed, which would
-    // then require an immediate deoptimization.
-    can_prune_locals = false;  // do not prune locals
-    stack_slots_not_pruned = 0;
-  }
-
-  // do not scribble on the input jvms
-  JVMState* out_jvms = youngest_jvms->clone_deep(C);
-  call->set_jvms(out_jvms); // Start jvms list for call node
-
-  // Presize the call:
-  DEBUG_ONLY(uint non_debug_edges = call->req());
-  call->add_req_batch(top(), youngest_jvms->debug_depth());
-  assert(call->req() == non_debug_edges + youngest_jvms->debug_depth(), "");
-
-  // Set up edges so that the call looks like this:
-  //  Call [state:] ctl io mem fptr retadr
-  //       [parms:] parm0 ... parmN
-  //       [root:]  loc0 ... locN stk0 ... stkSP mon0 obj0 ... monN objN
-  //    [...mid:]   loc0 ... locN stk0 ... stkSP mon0 obj0 ... monN objN [...]
-  //       [young:] loc0 ... locN stk0 ... stkSP mon0 obj0 ... monN objN
-  // Note that caller debug info precedes callee debug info.
-
-  // Fill pointer walks backwards from "young:" to "root:" in the diagram above:
-  uint debug_ptr = call->req();
-
-  // Loop over the map input edges associated with jvms, add them
-  // to the call node, & reset all offsets to match call node array.
-  for (JVMState* in_jvms = youngest_jvms; in_jvms != NULL; ) {
-    uint debug_end   = debug_ptr;
-    uint debug_start = debug_ptr - in_jvms->debug_size();
-    debug_ptr = debug_start;  // back up the ptr
-
-    uint p = debug_start;  // walks forward in [debug_start, debug_end)
-    uint j, k, l;
-    SafePointNode* in_map = in_jvms->map();
-    out_jvms->set_map(call);
-
-    if (can_prune_locals) {
-      assert(in_jvms->method() == out_jvms->method(), "sanity");
-      // If the current throw can reach an exception handler in this JVMS,
-      // then we must keep everything live that can reach that handler.
-      // As a quick and dirty approximation, we look for any handlers at all.
-      if (in_jvms->method()->has_exception_handlers()) {
-        can_prune_locals = false;
-      }
-    }
-
-    // Add the Locals
-    k = in_jvms->locoff();
-    l = in_jvms->loc_size();
-    out_jvms->set_locoff(p);
-    if (!can_prune_locals) {
-      for (j = 0; j < l; j++)
-        call->set_req(p++, in_map->in(k+j));
-    } else {
-      p += l;  // already set to top above by add_req_batch
-    }
-
-    // Add the Expression Stack
-    k = in_jvms->stkoff();
-    l = in_jvms->sp();
-    out_jvms->set_stkoff(p);
-    if (!can_prune_locals) {
-      for (j = 0; j < l; j++)
-        call->set_req(p++, in_map->in(k+j));
-    } else if (can_prune_locals && stack_slots_not_pruned != 0) {
-      // Divide stack into {S0,...,S1}, where S0 is set to top.
-      uint s1 = stack_slots_not_pruned;
-      stack_slots_not_pruned = 0;  // for next iteration
-      if (s1 > l)  s1 = l;
-      uint s0 = l - s1;
-      p += s0;  // skip the tops preinstalled by add_req_batch
-      for (j = s0; j < l; j++)
-        call->set_req(p++, in_map->in(k+j));
-    } else {
-      p += l;  // already set to top above by add_req_batch
-    }
-
-    // Add the Monitors
-    k = in_jvms->monoff();
-    l = in_jvms->mon_size();
-    out_jvms->set_monoff(p);
-    for (j = 0; j < l; j++)
-      call->set_req(p++, in_map->in(k+j));
-
-    // Copy any scalar object fields.
-    k = in_jvms->scloff();
-    l = in_jvms->scl_size();
-    out_jvms->set_scloff(p);
-    for (j = 0; j < l; j++)
-      call->set_req(p++, in_map->in(k+j));
-
-    // Finish the new jvms.
-    out_jvms->set_endoff(p);
-
-    assert(out_jvms->endoff()     == debug_end,             "fill ptr must match");
-    assert(out_jvms->depth()      == in_jvms->depth(),      "depth must match");
-    assert(out_jvms->loc_size()   == in_jvms->loc_size(),   "size must match");
-    assert(out_jvms->mon_size()   == in_jvms->mon_size(),   "size must match");
-    assert(out_jvms->scl_size()   == in_jvms->scl_size(),   "size must match");
-    assert(out_jvms->debug_size() == in_jvms->debug_size(), "size must match");
-
-    // Update the two tail pointers in parallel.
-    out_jvms = out_jvms->caller();
-    in_jvms  = in_jvms->caller();
-  }
-
-  assert(debug_ptr == non_debug_edges, "debug info must fit exactly");
-
-  // Test the correctness of JVMState::debug_xxx accessors:
-  assert(call->jvms()->debug_start() == non_debug_edges, "");
-  assert(call->jvms()->debug_end()   == call->req(), "");
-  assert(call->jvms()->debug_depth() == call->req() - non_debug_edges, "");
-}
-
-
 // Helper function for adding JVMState and debug information to node
-void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
+void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw, bool is_wisp) {
   // Add the safepoint edges to the call (or other safepoint).
 
   // Make sure dead locals are set to top.  This
   // should help register allocation time and cut down on the size
   // of the deoptimization information.
-  assert(dead_locals_are_killed(), "garbage in debug info before safepoint");
+  assert(is_wisp || dead_locals_are_killed(), "garbage in debug info before safepoint");
 
   // Walk the inline list to fill in the correct set of JVMState's
   // Also fill in the associated edges for each JVMState.
@@ -1030,7 +888,7 @@ void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
 
   // For a known set of bytecodes, the interpreter should reexecute them if
   // deoptimization happens. We set the reexecute state for them here
-  if (out_jvms->is_reexecute_undefined() && //don't change if already specified
+  if (!is_wisp && out_jvms->is_reexecute_undefined() && //don't change if already specified
       should_reexecute_implied_by_bytecode(out_jvms, call->is_AllocateArray())) {
     out_jvms->set_should_reexecute(true); //NOTE: youngest_jvms not changed
   }
@@ -3482,7 +3340,7 @@ void GraphKit::shared_unlock(Node* box, Node* obj) {
   unlock = _gvn.transform(unlock)->as_Unlock();
 
   if (UseWispMonitor && jvms()->has_method()) {
-    add_safepoint_edges_wisp(unlock);
+    add_safepoint_edges(unlock, false, true);
   }
   Node* mem = reset_memory();
 

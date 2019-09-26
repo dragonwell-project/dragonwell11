@@ -202,6 +202,7 @@ public:
 
   bool is_disposable();
 
+  oop print_stack_header_on(outputStream* st);
   void print_stack_on(outputStream* st);
 
   // GC support
@@ -346,10 +347,19 @@ private:
   JavaThread* _thread;
 
   bool _is_proxy_unpark;
+  int _unpark_status;
+  int _os_park_reason;
+  bool _has_exception;
+
+  Coroutine* _unpark_coroutine;
 
   WispThread(Coroutine *c): _coroutine(c), _thread(c->thread()), _is_proxy_unpark(false) {
     set_osthread(new OSThread(NULL, NULL));
     set_thread_state(_thread_in_vm);
+    _unpark_status = 0;
+    _os_park_reason = 0;
+    _has_exception = false;
+    _unpark_coroutine = NULL;
   }
 
   virtual ~WispThread() {
@@ -358,8 +368,34 @@ private:
   }
 
 public:
+  enum OsParkReason {
+    _not_os_park = 0,
+    _wisp_not_booted = 1,
+    _wisp_id_not_set = 2,
+    _wispengine_in_critical = 3,
+    _monitor_is_pending_lock = 4,
+    _thread_in_critical = 5,
+    _thread_owned_compile_lock = 6,
+    _is_sd_lock = 7
+  };
+
+  enum BlockingStatus {
+    _no_park = 0,
+    _wisp_parking = 1,
+    _os_parking = 2,
+    _wisp_unpark_begin = 3,
+    _wisp_unpark_before_call_java = 4,
+    _wisp_unpark_after_call_java = 5,
+    _wisp_unpark_done = 6,
+    _proxy_unpark_begin = 7,
+    _proxy_unpark_done = 8,
+    _os_unpark = 9
+  };
+
   static bool wisp_booted()           { return _wisp_booted; }
   static void set_wisp_booted(Thread* thread);
+  static const char *print_os_park_reason(int reason);
+  static const char *print_blocking_status(int status);
 
   virtual bool is_Wisp_thread() const { return true; }
 
@@ -386,11 +422,12 @@ public:
 
   // we must set ObjectWaiter members before node enqueued(observed by other threads)
   void before_enqueue(ObjectMonitor* monitor, ObjectWaiter* ow);
+  bool need_wisp_park(ObjectMonitor* monitor, ObjectWaiter* ow, bool is_sd_lock);
   static void park(long millis, const ObjectWaiter* ow);
   static void unpark(const ObjectWaiter* ow, TRAPS) {
-    unpark(ow->_park_wisp_id, ow->_using_wisp_park, ow->_proxy_wisp_unpark, ow->_event, THREAD);
+    unpark(ow->_park_wisp_id, ow->_using_wisp_park, ow->_proxy_wisp_unpark, ow->_event, (WispThread*)ow->_thread, THREAD);
   }
-  static void unpark(int task_id, bool using_wisp_park, bool proxy_unpark, ParkEvent* event, TRAPS);
+  static void unpark(int task_id, bool using_wisp_park, bool proxy_unpark, ParkEvent* event, WispThread* wisp_thread, TRAPS);
   static int get_proxy_unpark(jintArray res);
 
   static WispThread* current(Thread* thread) {

@@ -54,6 +54,9 @@
   product(bool, UseWisp2, false,                                            \
           "Enable Wisp2")                                                   \
                                                                             \
+  manageable(bool, PrintThreadCoroutineInfo, false,                         \
+          "print the park/unpark information for thread coroutine")         \
+                                                                            \
 
   //add new AJDK specific flags here
 

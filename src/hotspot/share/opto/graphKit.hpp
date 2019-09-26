@@ -279,9 +279,8 @@ class GraphKit : public Phase {
   // The call may deoptimize.  Supply required JVM state as debug info.
   // If must_throw is true, the call is guaranteed not to return normally.
   void add_safepoint_edges(SafePointNode* call,
-                           bool must_throw = false);
+                           bool must_throw = false, bool is_wisp = false);
 
-  void add_safepoint_edges_wisp(SafePointNode* call);
   // How many stack inputs does the current BC consume?
   // And, how does the stack change after the bytecode?
   // Returns false if unknown.
