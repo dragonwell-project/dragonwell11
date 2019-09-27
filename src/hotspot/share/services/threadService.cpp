@@ -354,13 +354,15 @@ Handle ThreadService::dump_coroutine_stack_trace(Coroutine *coro, TRAPS) {
 
   assert(dump_result.num_snapshots() == 1, "must only one stacktrace");
   ThreadStackTrace* stacktrace = dump_result.snapshots()->get_stack_trace();
+  Handle stacktrace_h;
   if (stacktrace == NULL) {
     // No stack trace
-    return Handle();
+    stacktrace_h = Handle();
   } else {
     // Construct an array of java/lang/StackTraceElement object
-    return stacktrace->allocate_fill_stack_trace_element_array(CHECK_NH);
+    stacktrace_h = stacktrace->allocate_fill_stack_trace_element_array(CHECK_NH);
   }
+  return stacktrace_h;
 }
 
 void ThreadService::reset_contention_count_stat(JavaThread* thread) {
