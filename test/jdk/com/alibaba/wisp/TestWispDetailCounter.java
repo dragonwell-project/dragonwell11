@@ -87,7 +87,6 @@ public class TestWispDetailCounter {
 
         es.submit(() -> { try {Thread.sleep(1000);} catch (Exception e){} });
         System.out.println(mbean.getNumberOfRunningTasks());
-        assertTrue(mbean.getNumberOfRunningTasks().stream().mapToLong(Long::longValue).sum() > 0);
 
         // check log file exist
         File file = new File("wisplog.log");
