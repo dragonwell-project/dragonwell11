@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.dyn.CoroutineSupport;
 
 /**
  * In wisp1 WispTask could run in ANY user created thread.
@@ -123,7 +124,16 @@ final class Wisp2Engine extends WispEngine {
      * @return if success
      */
     private static boolean steal(WispTask task, WispEngine current, boolean failOnContention) {
-        if (current.hasBeenShutdown) {
+        /* shutdown is an async operation in wisp2, SHUTDOWN task relies on runningTaskCount to
+        determine whether it's okay to exit the carrier, hence we need to make sure no more new
+        wispTasks are created or stolen for hasBeenShutdown engines
+        for example:
+        1. SHUTDOWN task found runningTaskCount equals 0 and exit
+        2. carrier's task queue may still has some remaining tasks, when tried to steal these tasks
+        we may encounter jvm crash.
+        TODO:// merge shutdown and handoff dependencies check
+        */
+        if (current.hasBeenShutdown || task.engine.hasBeenShutdown) {
             return false;
         }
         assert current == WispEngine.current();
@@ -367,10 +377,14 @@ final class Wisp2Engine extends WispEngine {
             @Override
             public void run() {
                 // set shutdownFinished true when SHUTDOWN-TASK finished
-                // SHUTDOWN-TASK would keep interrupting running tasks until
+                // SHUTDOWN TASK would keep interrupting running tasks until
                 // it is the only running one
                 assert runningTaskCount == 0;
-
+                try {
+                    group.shutdownBarrier.await();
+                } catch (Exception e) {
+                    System.out.println("[Wisp] unexpected barrier exception " + e + ", thread: " + thread);
+                }
                 thread.getCoroutineSupport().drain();
                 engine.shutdownFuture.countDown();
 
@@ -386,15 +400,12 @@ final class Wisp2Engine extends WispEngine {
 
     @Override
     protected void runTaskYieldEpilog() {
-        if (hasBeenShutdown) {
-            assert WispEngine.current().current.engine == this;
-            if (WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
-                || current == threadTask
-                || CoroutineSupport.isInClinit(current.ctx)) {
-                return;
-            }
-            UNSAFE.throwException(new ThreadDeath());
+        if (!hasBeenShutdown || WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
+            || current == threadTask) {
+          return;
         }
+        assert WispEngine.current().current.engine == this;
+        CoroutineSupport.checkAndThrowException(current.ctx);
     }
 
     /**

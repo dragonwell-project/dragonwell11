@@ -28,6 +28,7 @@ public class Wisp2Group extends AbstractExecutorService {
     final Wisp2Scheduler scheduler;
     final Set<Wisp2Engine> carrierEngines;
     final Queue<WispTask> groupTaskCache = new ConcurrentLinkedDeque<>();
+    final CyclicBarrier shutdownBarrier;
 
     /**
      * Create a new WispV2Group for executing tasks.
@@ -53,6 +54,8 @@ public class Wisp2Group extends AbstractExecutorService {
      */
     private Wisp2Group(String name) {
         carrierEngines = createEngineSet();
+        // detached group won't shut down
+        shutdownBarrier = null;
         scheduler = new Wisp2Scheduler(
                 WispConfiguration.WORKER_COUNT,
                 WispConfiguration.WISP_SCHEDULE_STEAL_RETRY,
@@ -72,6 +75,7 @@ public class Wisp2Group extends AbstractExecutorService {
 
     private Wisp2Group(int size, ThreadFactory tf) {
         carrierEngines = createEngineSet();
+        shutdownBarrier = new CyclicBarrier(size);
         scheduler = new Wisp2Scheduler(size, tf, this);
     }
 
@@ -85,6 +89,7 @@ public class Wisp2Group extends AbstractExecutorService {
 
     @Override
     public void shutdown() {
+        assert this != Wisp2Group.WISP2_ROOT_GROUP;
         for (Wisp2Engine worker : carrierEngines) {
             worker.shutdown();
         }

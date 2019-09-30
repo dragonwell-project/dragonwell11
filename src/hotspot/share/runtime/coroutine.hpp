@@ -150,6 +150,7 @@ public:
   void set_state(CoroutineState x)  { _state = x; }
 
   bool is_thread_coroutine() const  { return _is_thread_coroutine; }
+  bool is_yielding() const          { return _is_yielding; }
 
   JavaThread* thread() const        { return _thread; }
   void set_thread(JavaThread* x)    { _thread = x; }
@@ -209,6 +210,9 @@ public:
 
   oop print_stack_header_on(outputStream* st);
   void print_stack_on(outputStream* st);
+
+  bool is_coroutine_frame(vframe* f);
+  bool in_critical(JavaThread* thread);
 
   // GC support
   void oops_do(OopClosure* f, CodeBlobClosure* cf);

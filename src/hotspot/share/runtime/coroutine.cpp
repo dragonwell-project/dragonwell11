@@ -229,6 +229,74 @@ void Coroutine::frames_do(FrameClosure* fc) {
   }
 }
 
+bool Coroutine::is_coroutine_frame(vframe* f) {
+  javaVFrame* jvf = javaVFrame::cast(f);
+  InstanceKlass* k = jvf->method()->method_holder();
+  return (k == SystemDictionary::com_alibaba_wisp_engine_WispTask_klass()
+    || k == SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass()
+    || k->is_subtype_of(SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass())
+    || k == SystemDictionary::com_alibaba_wisp_engine_WispEventPump_klass()
+    || k == SystemDictionary::com_alibaba_wisp_engine_WispTask_CacheableCoroutine_klass()
+    || k == SystemDictionary::java_dyn_CoroutineBase_klass());
+}
+
+/* a typical wisp stack looks like:
+  at java.dyn.CoroutineSupport.unsafeSymmetricYieldTo(CoroutineSupport.java:134)
+  - parking to wait for  <0x00000007303e1c28> (a java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject)
+  at com.alibaba.wisp.engine.WispTask.switchTo(WispTask.java:254)
+  at com.alibaba.wisp.engine.WispEngine.yieldTo(WispEngine.java:613)
+  at com.alibaba.wisp.engine.Wisp2Engine.yieldToNext(Wisp2Engine.java:211)
+  at com.alibaba.wisp.engine.WispEngine.yieldOnBlocking(WispEngine.java:574)
+  at com.alibaba.wisp.engine.WispTask.parkInternal(WispTask.java:350)
+  at com.alibaba.wisp.engine.WispTask.jdkPark(WispTask.java:403)
+  at com.alibaba.wisp.engine.WispEngine$4.park(WispEngine.java:224)
+  at sun.misc.Unsafe.park(Unsafe.java:1029)
+  at java.util.concurrent.locks.LockSupport.park(LockSupport.java:176)
+  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:2047)
+  at java.util.concurrent.ArrayBlockingQueue.take(ArrayBlockingQueue.java:403)
+  at java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1077)
+  at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1137)
+  at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:627)
+  at java.lang.Thread.run(Thread.java:861)
+  at com.alibaba.wisp.engine.WispTask.coroutineCacheLoop(WispTask.java:213)
+  at com.alibaba.wisp.engine.WispTask.access$000(WispTask.java:33)
+  at com.alibaba.wisp.engine.WispTask$CacheableCoroutine.run(WispTask.java:153)
+  at java.dyn.CoroutineBase.startInternal(CoroutineBase.java:60)
+  Preempt should only happened when we're executing the non-wisp part.
+*/
+bool Coroutine::in_critical(JavaThread* thread) {
+  RegisterMap reg_map(thread);
+  bool has_wisp_frame = false;
+  bool has_other_frame = false;
+  for (vframe* f = thread->last_java_vframe(&reg_map); f; f = f->sender()) {
+    if (!f->is_java_frame()) {
+      continue;
+    }
+    /*
+      wisp_frame: wisp internal schedule related frames:
+      other_frame: non wisp_frame
+      under these two senarios current stack are consiedered in critical:
+      1. all frames are wisp_frame
+      2. a wisp_frame's sender is an other_frame
+     */
+    if (is_coroutine_frame(f)) {
+      has_wisp_frame = true;
+    } else {
+      if (has_wisp_frame) {
+        if (VerboseWisp) {
+          tty->print_cr("[WISP] preempt was blocked, because wisp internal method on the stack");
+        }
+        return true;
+      }
+      has_other_frame = true;
+    }
+  }
+  if (VerboseWisp && has_wisp_frame && !has_other_frame) {
+    tty->print_cr("[WISP] preempt was blocked, because only wisp method on the stack");
+  }
+  return has_wisp_frame && !has_other_frame;
+}
+
 class oops_do_Closure: public FrameClosure {
 private:
   OopClosure* _f;
@@ -851,84 +919,6 @@ const char* WispThread::print_blocking_status(int status) {
   }
 }
 
-class WispCriticalVerifier : public StackObj {
-  friend Coroutine;
-  /* a typical wisp stack looks like:
-    at java.dyn.CoroutineSupport.unsafeSymmetricYieldTo(CoroutineSupport.java:134)
-    - parking to wait for  <0x00000007303e1c28> (a java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject)
-    at com.alibaba.wisp.engine.WispTask.switchTo(WispTask.java:254)
-    at com.alibaba.wisp.engine.WispEngine.yieldTo(WispEngine.java:613)
-    at com.alibaba.wisp.engine.Wisp2Engine.yieldToNext(Wisp2Engine.java:211)
-    at com.alibaba.wisp.engine.WispEngine.yieldOnBlocking(WispEngine.java:574)
-    at com.alibaba.wisp.engine.WispTask.parkInternal(WispTask.java:350)
-    at com.alibaba.wisp.engine.WispTask.jdkPark(WispTask.java:403)
-    at com.alibaba.wisp.engine.WispEngine$4.park(WispEngine.java:224)
-    at sun.misc.Unsafe.park(Unsafe.java:1029)
-    at java.util.concurrent.locks.LockSupport.park(LockSupport.java:176)
-    at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:2047)
-    at java.util.concurrent.ArrayBlockingQueue.take(ArrayBlockingQueue.java:403)
-    at java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1077)
-    at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1137)
-    at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:627)
-    at java.lang.Thread.run(Thread.java:861)
-    at com.alibaba.wisp.engine.WispTask.coroutineCacheLoop(WispTask.java:213)
-    at com.alibaba.wisp.engine.WispTask.access$000(WispTask.java:33)
-    at com.alibaba.wisp.engine.WispTask$CacheableCoroutine.run(WispTask.java:153)
-    at java.dyn.CoroutineBase.startInternal(CoroutineBase.java:60)
-
-    Preempt should only happened when we're executing the non-wisp part.
-  */
-
-  bool _is_wisp_entry;
-  // see above, all the wisp task stacks are started with 'fixed' wisp frames,
-  // e.g. java.dyn.CoroutineBase, com.alibaba.wisp.engine.WispTask etc.
-  bool _found_non_bottom_wisp_frame;
-
-  WispCriticalVerifier(JavaThread* thread)
-    : _is_wisp_entry(true), _found_non_bottom_wisp_frame(false) {
-    if (!thread->has_last_Java_frame()) {
-      _is_wisp_entry = false;
-      return;
-    }
-
-    ResourceMark rm;
-    HandleMark   hm;
-    RegisterMap reg_map(thread);
-    transverse_frame(thread->last_java_vframe(&reg_map));
-  }
-
-  bool in_critical() {  return _is_wisp_entry || _found_non_bottom_wisp_frame; }
-
-  void transverse_frame(vframe* f);
-};
-
-void WispCriticalVerifier::transverse_frame(vframe* f) {
-  if (!f) return;
-  transverse_frame(f->sender()); // from bottom to top
-
-  // 1. skip wisp task entry frames
-  // 2. if a wisp frame is found, we're in critical
-  if (f->is_java_frame()) {
-    javaVFrame* jvf = javaVFrame::cast(f);
-    InstanceKlass* k = jvf->method()->method_holder();
-    if (_is_wisp_entry) {
-      if (k != SystemDictionary::com_alibaba_wisp_engine_WispTask_klass()
-          && k != SystemDictionary::com_alibaba_wisp_engine_WispTask_CacheableCoroutine_klass()
-          && k != SystemDictionary::java_dyn_CoroutineBase_klass()) {
-        _is_wisp_entry = false;
-      }
-    } else if (k == SystemDictionary::com_alibaba_wisp_engine_WispTask_klass()
-        || k == SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass()
-        || k->is_subtype_of(SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass())
-        || k == SystemDictionary::com_alibaba_wisp_engine_WispEventPump_klass()) {
-      _found_non_bottom_wisp_frame = true;
-      if (VerboseWisp) {
-        tty->print_cr("[WISP] preempt was blocked, because wisp internal method on the stack");
-      }
-    }
-  }
-}
-
 void Coroutine::after_safepoint(JavaThread* thread) {
   assert(Thread::current() == thread, "sanity check");
 
@@ -941,7 +931,7 @@ void Coroutine::after_safepoint(JavaThread* thread) {
       // rather than thread state transition.
       coroutine->_is_yielding || !thread->wisp_preempted() ||
       thread->has_pending_exception() || thread->has_async_condition() ||
-      WispCriticalVerifier(thread).in_critical()) {
+      coroutine->in_critical(thread)) {
     return;
   }
 

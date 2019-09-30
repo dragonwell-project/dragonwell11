@@ -10,6 +10,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.dyn.CoroutineSupport;
 
 /**
  * Per-thread self-scheduled implementation of WispEngine.
@@ -106,8 +107,11 @@ final class ScheduledWispEngine extends WispEngine {
                     return false;
                 } else {
                     WispEngine.current().countEnqueueTime(enqueueTime);
-                    runTaskInternal(target, name, t, ctxClassLoader);
-                    return true; // means real switch happened
+                    /*
+                     null is expected when we are trying to add new wispTask to a engine
+                     that has been shut down
+                    */
+                    return runTaskInternal(target, name, t, ctxClassLoader) != null; // means real switch happened
                 }
             };
             wakeupTask(pseudo);
@@ -601,7 +605,7 @@ final class ScheduledWispEngine extends WispEngine {
             thread.getCoroutineSupport().drain();
             shutdownFuture.countDown();
         } else {
-            UNSAFE.throwException(new ThreadDeath());
+            CoroutineSupport.checkAndThrowException(current.ctx);
         }
     }
 

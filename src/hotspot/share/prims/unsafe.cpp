@@ -1146,11 +1146,13 @@ JVM_ENTRY(jboolean, CoroutineSupport_stealCoroutine(JNIEnv* env, jclass klass, j
   return true;
 JVM_END
 
-JVM_ENTRY (jboolean, CoroutineSupport_isInClinit0(JNIEnv* env, jclass klass, jlong coroPtr))
+JVM_ENTRY (void, CoroutineSupport_checkAndThrowException0(JNIEnv* env, jclass klass, jlong coroPtr))
   assert(EnableCoroutine, "pre-condition");
   Coroutine* coro = (Coroutine*)coroPtr;
   assert(coro == thread->current_coroutine(), "invariant");
-  return coro->clinit_call_count() != 0;
+  if (!coro->is_yielding() && coro->clinit_call_count() == 0) {
+    throw_new(env, "ThreadDeath");
+  }
 JVM_END
 
 JVM_ENTRY (jobjectArray, CoroutineSupport_getCoroutineStack(JNIEnv* env, jclass klass, jlong coroPtr))
@@ -1269,7 +1271,7 @@ JNINativeMethod coroutine_support_methods[] = {
     {CC"moveCoroutine",           CC"(JJ)V",          FN_PTR(CoroutineSupport_moveCoroutine)},
     {CC"markThreadCoroutine",     CC"(J"COBA")V",     FN_PTR(CoroutineSupport_markThreadCoroutine)},
     {CC"getCoroutineStack",       CC"(J)["STE,        FN_PTR(CoroutineSupport_getCoroutineStack)},
-    {CC"isInClinit0",             CC"(J)Z",           FN_PTR(CoroutineSupport_isInClinit0)},
+    {CC"checkAndThrowException0", CC"(J)V",           FN_PTR(CoroutineSupport_checkAndThrowException0)},
 };
 
 #define COMPILE_CORO_METHODS_BEFORE (3)
