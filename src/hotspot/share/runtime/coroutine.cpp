@@ -265,6 +265,7 @@ bool Coroutine::is_coroutine_frame(vframe* f) {
   Preempt should only happened when we're executing the non-wisp part.
 */
 bool Coroutine::in_critical(JavaThread* thread) {
+  ResourceMark resMark;
   RegisterMap reg_map(thread);
   bool has_wisp_frame = false;
   bool has_other_frame = false;
