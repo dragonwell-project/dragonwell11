@@ -1,6 +1,7 @@
 package com.alibaba.wisp.engine;
 
 
+import java.dyn.Coroutine;
 import java.dyn.CoroutineSupport;
 import java.io.IOException;
 import java.nio.channels.SelectableChannel;
@@ -11,7 +12,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.dyn.CoroutineSupport;
 
 /**
  * In wisp1 WispTask could run in ANY user created thread.
@@ -47,6 +47,7 @@ final class Wisp2Engine extends WispEngine {
         }
         addTimer(System.nanoTime() + Integer.MAX_VALUE, false);
         cancelTimer();
+        Coroutine.StealResult.SUCCESS.ordinal();
     }
 
     Wisp2Group group;
@@ -120,10 +121,9 @@ final class Wisp2Engine extends WispEngine {
     /**
      * Steal task from it's carrier engine to current
      *
-     * @param failOnContention steal fail if there's too much lock contention
-     * @return if success
+     * @return steal result
      */
-    private static boolean steal(WispTask task, WispEngine current, boolean failOnContention) {
+    private static Coroutine.StealResult steal(WispTask task, WispEngine current) {
         /* shutdown is an async operation in wisp2, SHUTDOWN task relies on runningTaskCount to
         determine whether it's okay to exit the carrier, hence we need to make sure no more new
         wispTasks are created or stolen for hasBeenShutdown engines
@@ -134,7 +134,7 @@ final class Wisp2Engine extends WispEngine {
         TODO:// merge shutdown and handoff dependencies check
         */
         if (current.hasBeenShutdown || task.engine.hasBeenShutdown) {
-            return false;
+            return Coroutine.StealResult.FAIL_BY_STATUS;
         }
         assert current == WispEngine.current();
         assert !task.isThreadTask();
@@ -142,17 +142,18 @@ final class Wisp2Engine extends WispEngine {
             while (task.stealLock != 0) {/* wait until steal enabled */}
             assert task.status != WispTask.Status.RUNNABLE;
             assert task.parent == null;
-            if (!task.ctx.steal(failOnContention)) {
+            Coroutine.StealResult res = task.ctx.steal(true);
+            if (res != Coroutine.StealResult.SUCCESS) {
                 task.stealFailureCount++;
-                return false;
+                return res;
             }
             task.stealCount++;
             task.engine = current;
         }
-        return true;
+        return Coroutine.StealResult.SUCCESS;
     }
 
-    private static boolean tryStealAndResumeTask(WispTask task, boolean failOnContention) {
+    private static Coroutine.StealResult tryStealAndResumeTask(WispTask task) {
         WispEngine current = WispEngine.current();
         /*
          * Please be extremely cautious:
@@ -163,8 +164,9 @@ final class Wisp2Engine extends WispEngine {
          */
         if (task.engine != current) {
             Wisp2Engine source = (Wisp2Engine) task.engine;
-            if (!steal(task, current, failOnContention)) {
-                return false;
+            Coroutine.StealResult res = steal(task, current);
+            if (res != Coroutine.StealResult.SUCCESS) {
+                return res;
             }
             WispEngine.TASK_COUNT_UPDATER.decrementAndGet(source);
             WispEngine.TASK_COUNT_UPDATER.incrementAndGet(current);
@@ -177,7 +179,7 @@ final class Wisp2Engine extends WispEngine {
         task.resetEnqueueTime();
         current.yieldTo(task);
         current.runWispTaskEpilog();
-        return true;
+        return Coroutine.StealResult.SUCCESS;
     }
 
     @Override
@@ -188,8 +190,11 @@ final class Wisp2Engine extends WispEngine {
 
             @Override
             public void run() {
-                if (!tryStealAndResumeTask(task, true)) {
-                    stealEnable = false;
+                Coroutine.StealResult res = tryStealAndResumeTask(task);
+                if (res != Coroutine.StealResult.SUCCESS) {
+                    if (res != Coroutine.StealResult.FAIL_BY_CONTENTION) {
+                        stealEnable = false;
+                    }
                     wakeupTask(task);
                 }
             }
@@ -311,7 +316,7 @@ final class Wisp2Engine extends WispEngine {
             return null;
         }
         if (task.engine != this) {
-            if (!steal(task, this, true)) {
+            if (steal(task, this) != Coroutine.StealResult.SUCCESS) {
                 group.groupTaskCache.add(task);
                 return null;
             }
@@ -402,7 +407,7 @@ final class Wisp2Engine extends WispEngine {
     protected void runTaskYieldEpilog() {
         if (!hasBeenShutdown || WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
             || current == threadTask) {
-          return;
+            return;
         }
         assert WispEngine.current().current.engine == this;
         CoroutineSupport.checkAndThrowException(current.ctx);

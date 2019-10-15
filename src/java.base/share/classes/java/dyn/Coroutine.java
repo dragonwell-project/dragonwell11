@@ -67,6 +67,28 @@ import jdk.internal.misc.SharedSecrets;
  * @author Lukas Stadler
  */
 public class Coroutine extends CoroutineBase {
+    /**
+     * the result for steal
+     */
+    public enum StealResult {
+        /**
+         * steal successfully
+         */
+        SUCCESS,
+        /**
+         * steal failed due to lock failure
+         */
+        FAIL_BY_CONTENTION,
+        /**
+         * steal failed since the steal is forbiden with the status
+         */
+        FAIL_BY_STATUS,
+        /**
+         * steal failed since native frame isn't supported
+         */
+        FAIL_BY_NATIVE_FRAME
+    }
+
     private final Runnable target;
 
     /**
@@ -141,9 +163,10 @@ public class Coroutine extends CoroutineBase {
      * Steal a coroutine from it's carrier thread to current thread.
      *
      * @param failOnContention steal fail if there's too much lock contention
-     * @return if stealing succeeds. Also return true directly if coroutine's carrier thread is current.
+     *
+     * @return result described by Coroutine.STEAL_*. Also return SUCCESS directly if coroutine's carrier thread is current.
      */
-    public boolean steal(boolean failOnContention) {
+    public StealResult steal(boolean failOnContention) {
         return threadSupport.steal(this, failOnContention);
     }
 

@@ -38,7 +38,7 @@ public class EPollSelectorProvider
 {
     public AbstractSelector openSelector() throws IOException {
         AbstractSelector sel = new EPollSelectorImpl(this);
-        if (WispEngine.transparentWispSwitch() &&
+        if (WispEngine.enableThreadAsWisp() &&
                 SharedSecrets.getWispEngineAccess().ifSpinSelector()) {
             sel = new SleepSelector(sel);
         }

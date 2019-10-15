@@ -4,8 +4,8 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.threadPoolLimit=true -Dcom.alibaba.wisp.enableThreadAsWisp=true ThreadAsWispTest
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.threadPoolLimit=true -Dcom.alibaba.wisp.enableThreadAsWisp=true -Dcom.alibaba.wisp.version=2 -XX:ActiveProcessorCount=4 ThreadAsWispTest
+ * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.threadPoolLimit=true -Dcom.alibaba.wisp.enableThreadAsWisp=true TestThreadAsWisp
+ * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.threadPoolLimit=true -Dcom.alibaba.wisp.enableThreadAsWisp=true -Dcom.alibaba.wisp.version=2 -XX:ActiveProcessorCount=4 TestThreadAsWisp
 */
 
 
@@ -33,7 +33,7 @@ import java.util.stream.IntStream;
 import static jdk.testlibrary.Asserts.assertEQ;
 import static jdk.testlibrary.Asserts.assertTrue;
 
-public class ThreadAsWispTest {
+public class TestThreadAsWisp {
     static Thread mainThread;
 
     private static Lock lock = new ReentrantLock();
@@ -74,9 +74,9 @@ public class ThreadAsWispTest {
         System.setProperty("com.alibaba.wisp.config", f.getAbsolutePath());
         f.deleteOnExit();
         FileWriter writer = new FileWriter(f);
-        writer.write("com.alibaba.wisp.biz.manage=ThreadAsWispTest::main\n");
-        writer.write("com.alibaba.wisp.biz.current=ThreadAsWispTest::main\n");
-        writer.write("com.alibaba.wisp.biz.black=ThreadAsWispTest::shouldNotShift\n");
+        writer.write("com.alibaba.wisp.biz.manage=TestThreadAsWisp::main\n");
+        writer.write("com.alibaba.wisp.biz.current=TestThreadAsWisp::main\n");
+        writer.write("com.alibaba.wisp.biz.black=TestThreadAsWisp::shouldNotShift\n");
 
         writer.close();
 

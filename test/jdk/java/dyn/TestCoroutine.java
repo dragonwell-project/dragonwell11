@@ -25,7 +25,7 @@
 
 /* @test
  * @summary unit tests for coroutines
- * @run junit/othervm -XX:+EnableCoroutine test.java.dyn.CoroutineTest
+ * @run junit/othervm -XX:+EnableCoroutine test.java.dyn.TestCoroutine
  */
 
 package test.java.dyn;
@@ -39,7 +39,7 @@ import static org.junit.Assert.*;
 import org.junit.Before;
 import org.junit.Test;
 
-public class CoroutineTest {
+public class TestCoroutine {
 	private StringBuilder seq;
 
 	@Before

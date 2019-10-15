@@ -247,36 +247,39 @@ public class CoroutineSupport {
      * Steal coroutine from it's carrier thread to current thread.
      *
      * @param failOnContention steal fail if there's too much lock contention
-     * @param coroutine        to be stolen
+     *
+     * @param coroutine to be stolen
      */
-    boolean steal(Coroutine coroutine, boolean failOnContention) {
+    Coroutine.StealResult steal(Coroutine coroutine, boolean failOnContention) {
         assert coroutine.threadSupport.threadCoroutine() != coroutine;
         CoroutineSupport source = this;
         CoroutineSupport target = SharedSecrets.getJavaLangAccess().currentThread0().getCoroutineSupport();
 
         if (source == target) {
-            return true;
+            return Coroutine.StealResult.SUCCESS;
         }
 
         if (source.id < target.id) { // prevent dead lock
             if (!source.lockInternal(failOnContention)) {
-                return false;
+                return Coroutine.StealResult.FAIL_BY_CONTENTION;
             }
             target.lock();
         } else {
             target.lock();
             if (!source.lockInternal(failOnContention)) {
                 target.unlock();
-                return false;
+                return Coroutine.StealResult.FAIL_BY_CONTENTION;
             }
         }
 
         try {
             if (source.terminated || coroutine.finished ||
                     coroutine.threadSupport != source || // already been stolen
-                    source.currentCoroutine == coroutine || // running
-                    !stealCoroutine(coroutine.nativeCoroutine)) { // native frame
-                return false;
+                    source.currentCoroutine == coroutine) {
+                return Coroutine.StealResult.FAIL_BY_STATUS;
+            }
+            if (!stealCoroutine(coroutine.nativeCoroutine)) { // native frame
+                return Coroutine.StealResult.FAIL_BY_NATIVE_FRAME;
             }
             coroutine.threadSupport = target;
         } finally {
@@ -284,7 +287,7 @@ public class CoroutineSupport {
             target.unlock();
         }
 
-        return true;
+        return Coroutine.StealResult.SUCCESS;
     }
 
     /**

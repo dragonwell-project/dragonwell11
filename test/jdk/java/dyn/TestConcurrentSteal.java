@@ -1,6 +1,6 @@
 /* @test
  * @summary unit tests for steal in concurrent situation
- * @run junit/othervm/timeout=300 -XX:+EnableCoroutine ConcurrentStealTest
+ * @run junit/othervm/timeout=300 -XX:+EnableCoroutine TestConcurrentSteal
  */
 
 import org.junit.Test;
@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import static org.junit.Assert.*;
 
-public class ConcurrentStealTest {
+public class TestConcurrentSteal {
 
     @Test
     public void stealRunning() throws Exception {
@@ -41,12 +41,12 @@ public class ConcurrentStealTest {
 
         Thread.sleep(500);
 
-        assertFalse(coro[0].steal(true));
+        assertEquals(coro[0].steal(false), Coroutine.StealResult.FAIL_BY_STATUS);
     }
 
     final static int THREADS = Math.min(Runtime.getRuntime().availableProcessors(), 8);
     final static int CORO_PER_TH = 20;
-    final static int TIMEOUT = 10000;
+    final static int TIMEOUT = 10;
 
     @Test
     public void randomSteal() throws Exception {
@@ -144,7 +144,7 @@ public class ConcurrentStealTest {
                         cnt[cth].yieldCnt++;
                     } else {
                         CoroutineAdaptor target = workers[nxt].stealables.pollFirst();
-                        if (target != null && target.steal(true)) {
+                        if (target != null && target.steal(true) == Coroutine.StealResult.SUCCESS) {
                             stealables.add(target);
                             cnt[cth].stealCnt++;
                         } else {

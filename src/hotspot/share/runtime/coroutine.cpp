@@ -230,16 +230,11 @@ void Coroutine::frames_do(FrameClosure* fc) {
 }
 
 bool Coroutine::is_coroutine_frame(vframe* f) {
+  ResourceMark resMark;
   javaVFrame* jvf = javaVFrame::cast(f);
-  InstanceKlass* k = jvf->method()->method_holder();
-  return (k == SystemDictionary::com_alibaba_wisp_engine_WispTask_klass()
-    || k == SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass()
-    || k->is_subtype_of(SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass())
-    || k == SystemDictionary::com_alibaba_wisp_engine_WispEventPump_klass()
-    || k == SystemDictionary::com_alibaba_wisp_engine_WispTask_CacheableCoroutine_klass()
-    || k == SystemDictionary::java_dyn_CoroutineBase_klass());
+  const char* k_name = jvf->method()->method_holder()->name()->as_C_string();
+  return strstr(k_name, "com/alibaba/wisp/engine/") != 0 || strstr(k_name, "java/dyn/") != 0;
 }
-
 /* a typical wisp stack looks like:
   at java.dyn.CoroutineSupport.unsafeSymmetricYieldTo(CoroutineSupport.java:134)
   - parking to wait for  <0x00000007303e1c28> (a java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject)

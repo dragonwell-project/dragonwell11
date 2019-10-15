@@ -2,7 +2,7 @@
  * @test
  * @summary test basic coroutine steal mechanism
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine BasicStealTest
+ * @run main/othervm -XX:+EnableCoroutine TestBasicSteal
  */
 
 import java.dyn.Coroutine;
@@ -12,7 +12,7 @@ import java.util.function.Consumer;
 import static jdk.testlibrary.Asserts.assertEQ;
 import static jdk.testlibrary.Asserts.assertTrue;
 
-public class BasicStealTest {
+public class TestBasicSteal {
     public static void main(String[] args) {
         AtomicReference<Coroutine> toBeStolen = new AtomicReference<>();
         Thread main = Thread.currentThread();
@@ -50,7 +50,7 @@ public class BasicStealTest {
         while (toBeStolen.get() == null) {
         }
 
-        assertTrue(toBeStolen.get().steal(false));
+        assertEQ(toBeStolen.get().steal(false), Coroutine.StealResult.SUCCESS);
         Coroutine.yieldTo(toBeStolen.get());
 
     }
