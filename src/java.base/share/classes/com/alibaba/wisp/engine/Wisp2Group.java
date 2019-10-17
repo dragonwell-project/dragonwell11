@@ -27,7 +27,7 @@ public class Wisp2Group extends AbstractExecutorService {
 
     final Wisp2Scheduler scheduler;
     final Set<Wisp2Engine> carrierEngines;
-    final Queue<WispTask> groupTaskCache = new ConcurrentLinkedDeque<>();
+    final Queue<WispTask> groupTaskCache = new ConcurrentLinkedQueue<>();
     final CyclicBarrier shutdownBarrier;
 
     /**

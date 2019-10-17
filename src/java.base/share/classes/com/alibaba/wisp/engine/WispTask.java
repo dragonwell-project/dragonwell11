@@ -229,7 +229,6 @@ public class WispTask implements Comparable<WispTask> {
                         WispEngine.JLA.setWispAlive(threadWrapper, false);
                         if (isThreadAsWisp) {
                             ThreadAsWisp.exit(threadWrapper);
-                            threadWrapper = null; // else WispThreadWrapper could be reused
                         }
                         if (throwable instanceof CoroutineExitException) {
                             throw (CoroutineExitException) throwable;
@@ -504,6 +503,12 @@ public class WispTask implements Comparable<WispTask> {
     void setThreadWrapper(Thread thread) {
         threadWrapper = thread;
         WispEngine.JLA.setWispTask(thread, this);
+    }
+
+    void resetThreadWrapper() {
+        if (isThreadAsWisp) {
+            threadWrapper = null;
+        }
     }
 
     @Override

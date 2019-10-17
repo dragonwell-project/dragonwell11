@@ -707,7 +707,9 @@ public abstract class WispEngine extends AbstractExecutorService {
 
         unregisterEvent();
         returnTaskToCache(current);
-
+        // reset threadWrapper after call returnTaskToCache,
+        // since the threadWrapper will be used in Thread.currentThread()
+        current.resetThreadWrapper();
         counter.incrementCompleteTaskCount();
 
         if (runningTaskCount == 0 && threadTask.isRunnable()) {
