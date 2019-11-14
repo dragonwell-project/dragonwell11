@@ -1501,7 +1501,10 @@ void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
   EventJavaMonitorWait event;
 
   // check for a pending interrupt
-  if (interruptible && check_interrupt(Self, true) && !HAS_PENDING_EXCEPTION) {
+  if (interruptible && check_interrupt(Self, true) &&
+      !(UseWispMonitor ?
+        ((WispThread *)jt)->thread()->has_pending_exception()
+        : HAS_PENDING_EXCEPTION)) {
       // post monitor waited event.  Note that this is past-tense, we are done waiting.
     if (JvmtiExport::should_post_monitor_waited()) {
       // Note: 'false' parameter is passed here because the
@@ -1583,7 +1586,10 @@ void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
       // Thread is in thread_blocked state and oop access is unsafe.
       jt->set_suspend_equivalent();
 
-      if (interruptible && (check_interrupt(THREAD, false) || HAS_PENDING_EXCEPTION)) {
+      if (interruptible && (check_interrupt(THREAD, false) ||
+          (UseWispMonitor ?
+           ((WispThread *)jt)->thread()->has_pending_exception()
+           : HAS_PENDING_EXCEPTION))) {
         // Intentionally empty
       } else if (node._notified == 0) {
         if (UseWispMonitor) {
@@ -1721,7 +1727,10 @@ void ObjectMonitor::wait(jlong millis, bool interruptible, TRAPS) {
   if (!WasNotified) {
     // no, it could be timeout or Thread.interrupt() or both
     // check for interrupt event, otherwise it is timeout
-    if (interruptible && check_interrupt(Self, true) && !HAS_PENDING_EXCEPTION) {
+    if (interruptible && check_interrupt(Self, true) &&
+        !(UseWispMonitor ?
+          ((WispThread *)jt)->thread()->has_pending_exception()
+          : HAS_PENDING_EXCEPTION)) {
       TEVENT(Wait - throw IEX from epilog);
       THROW(vmSymbols::java_lang_InterruptedException());
     }

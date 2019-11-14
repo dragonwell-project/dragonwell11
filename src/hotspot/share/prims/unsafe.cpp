@@ -1151,6 +1151,7 @@ JVM_ENTRY (void, CoroutineSupport_checkAndThrowException0(JNIEnv* env, jclass kl
   Coroutine* coro = (Coroutine*)coroPtr;
   assert(coro == thread->current_coroutine(), "invariant");
   if (!coro->is_yielding() && coro->clinit_call_count() == 0) {
+    ThreadToNativeFromVM ttnfv(thread);
     throw_new(env, "java/lang/ThreadDeath");
   }
 JVM_END
