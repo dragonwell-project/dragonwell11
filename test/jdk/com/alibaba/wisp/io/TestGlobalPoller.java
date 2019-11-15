@@ -18,6 +18,7 @@ import java.lang.reflect.Field;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Properties;
 
 import static jdk.testlibrary.Asserts.assertTrue;
 import static jdk.testlibrary.Asserts.assertNotNull;
@@ -25,10 +26,26 @@ import static jdk.testlibrary.Asserts.assertNotNull;
 public class TestGlobalPoller {
     private static WispEngineAccess access = SharedSecrets.getWispEngineAccess();
 
+    static Properties p;
+    static String socketAddr;
+    static {
+        p = java.security.AccessController.doPrivileged(
+                new java.security.PrivilegedAction<Properties>() {
+                    public Properties run() {
+                        return System.getProperties();
+                    }
+                }
+        );
+        socketAddr = (String)p.get("test.wisp.socketAddress");
+        if (socketAddr == null) {
+            socketAddr = "www.example.com";
+        }
+    }
+
     public static void main(String[] args) throws Exception {
 
 
-        Socket so = new Socket("www.example.com", 80);
+        Socket so = new Socket(socketAddr, 80);
         so.getOutputStream().write("NOP\n\r\n\r".getBytes());
         // now server returns the data..
         // so is readable

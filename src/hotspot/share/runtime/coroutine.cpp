@@ -32,16 +32,8 @@
 #include "runtime/objectMonitor.inline.hpp"
 #include "services/threadService.hpp"
 
-#ifdef TARGET_ARCH_x86
-# include "vmreg_x86.inline.hpp"
-#endif
-#ifdef TARGET_ARCH_sparc
-# include "vmreg_sparc.inline.hpp"
-#endif
-#ifdef TARGET_ARCH_zero
-# include "vmreg_zero.inline.hpp"
-#endif
-
+#include CPU_HEADER(coroutine)
+#include CPU_HEADER_INLINE(vmreg)
 
 #ifdef _WINDOWS
 
@@ -152,12 +144,7 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
   jobject obj = JNIHandles::make_global(Handle(thread, coroutineObj));
 
   intptr_t** d = (intptr_t**)stack->stack_base();
-#ifdef X86
   set_coroutine_base(d, thread, obj, coro, coroutineObj, (address)coroutine_start);
-#else
-  // TODO: fix this on aarch64
-  guarantee(false, "Wisp is not supported on this arch");
-#endif // X86
 
   stack->set_last_sp((address) d);
 
@@ -485,12 +472,7 @@ void CoroutineStack::frames_do(FrameClosure* fc) {
 #endif
 
   StackFrameStream fst(_thread, fr);
-#ifdef X86
   fst.register_map()->set_location(get_fp_reg()->as_VMReg(), (address)_last_sp);
-#else
-  // TODO: fix this on aarch64
-  guarantee(false, "Wisp is not supported on this arch");
-#endif // X86
   fst.register_map()->set_include_argument_oops(false);
   for(; !fst.is_done(); fst.next()) {
       fc->frames_do(fst.current(), fst.register_map());
@@ -504,12 +486,7 @@ frame CoroutineStack::last_frame(Coroutine* coro, RegisterMap& map) const {
   address pc = ((address*)_last_sp)[1];
   intptr_t* sp = ((intptr_t*)_last_sp) + 2;
 
-#ifdef X86
   map.set_location(get_fp_reg()->as_VMReg(), (address)_last_sp);
-#else
-  // TODO: fix this on aarch64
-  guarantee(false, "Wisp is not supported on this arch");
-#endif // X86
   map.set_include_argument_oops(false);
 
   frame f(sp, fp, pc);

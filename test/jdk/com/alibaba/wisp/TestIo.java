@@ -16,8 +16,26 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Properties;
 
 public class TestIo {
+
+    static Properties p;
+    static String socketAddr;
+    static {
+        p = java.security.AccessController.doPrivileged(
+                new java.security.PrivilegedAction<Properties>() {
+                    public Properties run() {
+                        return System.getProperties();
+                    }
+                }
+        );
+        socketAddr = (String)p.get("test.wisp.socketAddress");
+        if (socketAddr == null) {
+            socketAddr = "www.example.com";
+        }
+    }
+
     public static void main(String[] args) {
         String result = http();
 
@@ -30,7 +48,7 @@ public class TestIo {
     }
 
     static String http() {
-        String host = "www.example.com";
+        String host = socketAddr;
 
         try {
             SocketChannel ch = SocketChannel.open();

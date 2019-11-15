@@ -209,7 +209,6 @@ CodeBlob* Runtime1::generate_blob(BufferBlob* buffer_blob, int stub_id, const ch
   assert(oop_maps == NULL || sasm->frame_size() != no_frame_size,
          "if stub has an oop map it must have a valid frame size");
   assert(!expect_oop_map || oop_maps != NULL, "must have an oopmap");
-
   // align so printing shows nop's instead of random code at the end (SimpleStubs are aligned)
   sasm->align(BytesPerWord);
   // make sure all code is in code buffer

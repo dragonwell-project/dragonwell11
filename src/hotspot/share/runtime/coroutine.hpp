@@ -255,6 +255,9 @@ public:
   static ByteSize last_SEH_offset()           { return byte_offset_of(Coroutine, _last_SEH); }
 #endif
   static ByteSize wisp_thread_offset()        { return byte_offset_of(Coroutine, _wisp_thread); }
+
+    void set_coroutine_base(int **base, JavaThread *thread, jobject obj, Coroutine *coro, oop coroutineObj,
+                            address coroutine_start);
 };
 
 class CoroutineStack: public CHeapObj<mtThread>, public DoublyLinkedList<CoroutineStack> {
@@ -526,9 +529,7 @@ public:
 //    V: VM frame (C/C++)
 //    v: Other frames running VM generated code (e.g. stubs, adapters, etc.)
 //    C: C/C++ frame
-#ifdef X86
 #include CPU_HEADER(coroutine)
-#endif
 #define WISP_THREAD_UPDATE get_thread(R_TH)
 #define WISP_CALLING_CONVENTION_V2J_UPDATE __ WISP_THREAD_UPDATE
 #define WISP_CALLING_CONVENTION_V2j_UPDATE __ WISP_THREAD_UPDATE
