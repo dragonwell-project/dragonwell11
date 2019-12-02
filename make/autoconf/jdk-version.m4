@@ -288,7 +288,7 @@ AC_DEFUN_ONCE([JDKVER_SETUP_JDK_VERSION_NUMBERS],
     elif test "x$with_version_build" = x; then
       VERSION_BUILD=
     else
-      JDKVER_CHECK_AND_SET_NUMBER(VERSION_BUILD, $with_version_build)
+      VERSION_BUILD=$with_version_build
     fi
   else
     if test "x$NO_DEFAULT_VERSION_PARTS" != xtrue; then
@@ -373,7 +373,7 @@ AC_DEFUN_ONCE([JDKVER_SETUP_JDK_VERSION_NUMBERS],
     elif test "x$with_version_patch" = x; then
       VERSION_PATCH=0
     else
-      JDKVER_CHECK_AND_SET_NUMBER(VERSION_PATCH, $with_version_patch)
+      VERSION_PATCH=$with_version_patch
     fi
   else
     if test "x$NO_DEFAULT_VERSION_PARTS" != xtrue; then
