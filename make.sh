@@ -35,6 +35,7 @@ bash ./configure --with-freetype=system \
                  --enable-unlimited-crypto \
                  --with-jvm-variants=server \
                  --with-debug-level=${DEBUG_LEVEL} \
+                 --with-cacerts-file=`pwd`/make/data/security/cacerts \
                  --with-vendor-name="Alibaba" \
                  --with-vendor-url="http://www.alibabagroup.com" \
                  --with-vendor-bug-url="mailto:dragonwell_use@googlegroups.com" \
