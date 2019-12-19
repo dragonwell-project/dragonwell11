@@ -17,25 +17,13 @@ import static jdk.testlibrary.Asserts.assertTrue;
  * @summary WispCounterMXBean unit test
  * @library /lib/testlibrary
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm/timeout=2000 -XX:ActiveProcessorCount=4 -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -Dcom.alibaba.shiftThreadModel=true -Dcom.alibaba.wisp.config=/tmp/wisp.config TestWispCounter
- */
-
+ * @run main/othervm/timeout=2000 -XX:+UseWisp2 -Dcom.alibaba.wisp.config=/tmp/wisp.config TestWispCounter
+*/
 public class TestWispCounter {
 
     public static void main(String[] args) throws Exception {
 
         startNetServer();
-        File f = new File("/tmp/wisp.config");
-        f.deleteOnExit();
-        FileWriter writer = new FileWriter(f);
-        writer.write("com.alibaba.wisp.biz.manage=TestWispCounter::main\n");
-        writer.close();
-
-        // WispBizSniffer has already been loaded;
-        // reload WispBizSniffer's config from file.
-        Method m = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredMethod("loadBizConfig");
-        m.setAccessible(true);
-        m.invoke(null);
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         WispCounterMXBean mbean = null;
@@ -69,25 +57,13 @@ public class TestWispCounter {
         System.out.println(mbean.getRunningStates());
         System.out.println(mbean.getQueueLength());
         // wait task complete
-        Thread.sleep(10_000L);
+        Thread.sleep(1_000L);
         System.out.println(mbean.getSwitchCount());
         assertTrue(mbean.getSwitchCount().stream().mapToLong(Long::longValue).sum() >= taskTotal);
         System.out.println(mbean.getSelectableIOCount());
         assertTrue(mbean.getSwitchCount().stream().mapToLong(Long::longValue).sum() > 0);
         System.out.println(mbean.getParkCount());
         assertTrue(mbean.getParkCount().stream().mapToLong(Long::longValue).sum() > 0);
-        System.out.println(mbean.getCreateTaskCount());
-        System.out.println(mbean.getCompleteTaskCount());
-        System.out.println(mbean.getEventLoopCount());
-        assertTrue(mbean.getEventLoopCount().stream().mapToLong(Long::longValue).sum() > 0);
-        System.out.println(mbean.getUnparkInterruptSelectorCount());
-        assertTrue(mbean.getTimeOutCount().stream().mapToLong(Long::longValue).sum() > 0);
-        System.out.println(mbean.getTimeOutCount());
-        assertTrue(mbean.getTimeOutCount().stream().mapToLong(Long::longValue).sum() > 0);
-        System.out.println(mbean.getWaitTimeTotal());
-        assertTrue(mbean.getWaitTimeTotal().stream().mapToLong(Long::longValue).sum() > 0);
-        System.out.println(mbean.getRunningTimeTotal());
-        assertTrue(mbean.getRunningTimeTotal().stream().mapToLong(Long::longValue).sum() > 0);
     }
 
     private static ServerSocket ss;

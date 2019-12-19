@@ -3,7 +3,6 @@
  * @summary Test WispEngine's destroy
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestWispDestroy
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestWispDestroy
 */
 
 import com.alibaba.wisp.engine.WispEngine;

@@ -3,7 +3,6 @@
  * @summary Test sleep
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestCancelTimerAndSleep
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestCancelTimerAndSleep
 */
 
 import jdk.internal.misc.SharedSecrets;

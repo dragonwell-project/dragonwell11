@@ -56,7 +56,7 @@ final public class WispCounter {
 
     public boolean getRunningState() {
         WispEngine e = engine;
-        return e != null ? e.isRunning() : false;
+        return e != null && e.isRunning();
     }
 
     void incrementSwitchCount() {

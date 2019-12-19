@@ -3,7 +3,6 @@
  * @summary test submit task to engine.
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestEngineExecutor
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestEngineExecutor 
 */
 
 import com.alibaba.wisp.engine.WispEngine;

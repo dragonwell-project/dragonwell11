@@ -4,7 +4,6 @@
  * @summary Test timer implementation
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+EnableCoroutine TestOverflow
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.version=2 TestOverflow
 */
 
 
@@ -26,7 +25,6 @@ public class TestOverflow {
     public static void main(String... arg) throws Exception {
 
         WispEngineAccess access = SharedSecrets.getWispEngineAccess();
-        access.eventLoop();
 
         AtomicReference<WispTask> task1 = new AtomicReference<>();
         AtomicBoolean doUnpark = new AtomicBoolean(false);

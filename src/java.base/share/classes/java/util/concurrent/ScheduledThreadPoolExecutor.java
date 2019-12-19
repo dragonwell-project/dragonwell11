@@ -35,8 +35,6 @@
 
 package java.util.concurrent;
 
-import com.alibaba.wisp.engine.WispEngine;
-
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -341,12 +339,6 @@ public class ScheduledThreadPoolExecutor
         if (isShutdown())
             reject(task);
         else {
-            if (WispEngine.transparentWispSwitch() &&
-                    WispEngine.enableThreadAsWisp() &&
-                    putToCurrentEngine() && !task.isPeriodic() && task.getDelay(TimeUnit.MICROSECONDS) <= 0) {
-                WispEngine.dispatch(task);
-                return;
-            }
             super.getQueue().add(task);
             if (!canRunInCurrentRunState(task) && remove(task))
                 task.cancel(false);

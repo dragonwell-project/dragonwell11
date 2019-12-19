@@ -2,7 +2,7 @@
  * @test
  * @summary Test low level coroutine implement
  * @run main/othervm -XX:+EnableCoroutine TestCoroutine
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.version=2 TestCoroutine
+ * @run main/othervm -XX:+EnableCoroutine  TestCoroutine
 */
 
 import java.dyn.Coroutine;

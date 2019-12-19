@@ -6,7 +6,7 @@
  * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.growCarrierTickUs=200000  TestAdjustCarrier
  */
 
-import com.alibaba.wisp.engine.Wisp2Group;
+import com.alibaba.wisp.engine.WispGroup;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -20,10 +20,10 @@ import static jdk.testlibrary.Asserts.assertTrue;
 public class TestAdjustCarrier {
 	public static void main(String[] args) throws Exception{
 		Thread.currentThread().setName("Wisp-Sysmon");
-		Class<?> claz = Class.forName("com.alibaba.wisp.engine.Wisp2Scheduler");
+		Class<?> claz = Class.forName("com.alibaba.wisp.engine.WispScheduler");
 		Method method = claz.getDeclaredMethod("checkAndGrowCarriers", int.class);
 		method.setAccessible(true);
-        ExecutorService g = Wisp2Group.createGroup(4, Thread::new);
+        ExecutorService g = WispGroup.createGroup(4, Thread::new);
 
 		CountDownLatch latch = new CountDownLatch(100);
 		CountDownLatch grow = new CountDownLatch(1);
@@ -39,7 +39,7 @@ public class TestAdjustCarrier {
             });
         }
 
-		Field scheduler = Class.forName("com.alibaba.wisp.engine.Wisp2Group").getDeclaredField("scheduler");
+		Field scheduler = Class.forName("com.alibaba.wisp.engine.WispGroup").getDeclaredField("scheduler");
 		scheduler.setAccessible(true);
 		method.invoke(scheduler.get(g), 100);
 		grow.countDown();

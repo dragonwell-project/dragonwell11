@@ -3,7 +3,6 @@
  * @summary Test AQS: CountDownLatch is implement by AQS
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestAQS
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestAQS
 */
 
 

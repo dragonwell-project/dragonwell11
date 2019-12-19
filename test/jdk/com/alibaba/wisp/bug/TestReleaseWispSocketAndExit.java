@@ -1,12 +1,12 @@
 /*
  * @test
+ * @library /lib/testlibrary
  * @summary handle this scenario:
  *      1. task A fetch a socket S and release it.
  *      2. task B get the socket S and block on IO.
  *      3. task A exit and clean S's event, now B waiting forever...
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=1 TestReleaseWispSocketAndExit
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestReleaseWispSocketAndExit
+ * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  TestReleaseWispSocketAndExit
 */
 
 
@@ -18,6 +18,9 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+import static jdk.testlibrary.Asserts.assertTrue;
 
 public class TestReleaseWispSocketAndExit {
     static byte buf[] = new byte[1000];
@@ -27,6 +30,7 @@ public class TestReleaseWispSocketAndExit {
         CountDownLatch latch = new CountDownLatch(1);
 
         CountDownLatch listen = new CountDownLatch(1);
+        CountDownLatch finish = new CountDownLatch(1);
 
         WispEngine.dispatch(() -> {
             try {
@@ -46,6 +50,7 @@ public class TestReleaseWispSocketAndExit {
             } catch (Exception e) {
                 throw new Error();
             }
+            finish.countDown();
         });
 
         listen.await();
@@ -62,6 +67,7 @@ public class TestReleaseWispSocketAndExit {
             } catch (Exception e) {
                 throw new Error();
             }
+            finish.countDown();
         });
 
         WispEngine.dispatch(() -> {
@@ -80,9 +86,10 @@ public class TestReleaseWispSocketAndExit {
             } catch (Exception e) {
                 throw new Error();
             }
+            finish.countDown();
         });
 
-        SharedSecrets.getWispEngineAccess().eventLoop();
+        assertTrue(finish.await(5, TimeUnit.SECONDS));
         System.out.println("passed");
     }
 }

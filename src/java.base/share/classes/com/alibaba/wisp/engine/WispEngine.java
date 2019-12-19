@@ -4,21 +4,18 @@ import jdk.internal.misc.JavaLangAccess;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.Unsafe;
 import jdk.internal.misc.WispEngineAccess;
+import sun.nio.ch.SelChImpl;
 
+import java.dyn.Coroutine;
 import java.dyn.CoroutineExitException;
 import java.dyn.CoroutineSupport;
 import java.io.IOException;
 import java.nio.channels.SelectableChannel;
-import java.nio.channels.Selector;
-import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.AbstractExecutorService;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Coroutine Runtime Engine. It's a "wisp" thing, as we want our asynchronization transformation to be transparent
@@ -30,8 +27,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p> A {@link WispEngine} instance is expected to run in a specific thread. Get per-thread instance by calling
  * {@link WispEngine#current()}.
  */
-public abstract class WispEngine extends AbstractExecutorService {
-
+public class WispEngine
+        extends AbstractExecutorService
+        implements Comparable<WispEngine> {
     /*
      some of our users change this field by reflection
      in the runtime to disable wisp temporarily.
@@ -75,10 +73,16 @@ public abstract class WispEngine extends AbstractExecutorService {
     private static Thread pollerThread;
     static Map<Long, WispCounter> managedEngineCounters;
 
-    static {
-        registerNatives();
-        setWispEngineAccess();
-    }
+    private static final ScheduledExecutorService timer = !WispConfiguration.WISP_HIGH_PRECISION_TIMER ? null :
+            Executors.newScheduledThreadPool(1, new ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread thread = new Thread(WispEngine.daemonThreadGroup, r);
+                    thread.setDaemon(true);
+                    thread.setName("Wisp-Timer");
+                    return thread;
+                }
+            });
 
     private static void initializeWispClass() {
         assert JLA != null : "WispEngine should be initialized after System";
@@ -118,10 +122,9 @@ public abstract class WispEngine extends AbstractExecutorService {
             unparker.setDaemon(true);
             unparker.start();
             WispSysmon.INSTANCE.startDaemon();
-            if (WispConfiguration.WISP_VERSION == 2) {
-                Wisp2Group.WISP2_ROOT_GROUP.scheduler.startCarrierThreads();
-            }
-            if (WispConfiguration.GLOBAL_POLLER && !WispConfiguration.CARRIER_AS_POLLER) {
+            WispGroup.WISP_ROOT_GROUP.scheduler.startCarrierThreads();
+
+            if (!WispConfiguration.CARRIER_AS_POLLER) {
                 pollerThread = new Thread(daemonThreadGroup, new Runnable() {
                     @Override
                     public void run() {
@@ -145,17 +148,6 @@ public abstract class WispEngine extends AbstractExecutorService {
             @Override
             public WispTask getCurrentTask() {
                 return WispEngine.current().getCurrentTask();
-            }
-
-            @Override
-            public void dispatch(Runnable runnable, String name) {
-                WispEngine engine = current();
-                engine.dispatchTask(runnable, name, null);
-            }
-
-            @Override
-            public void eventLoop() {
-                WispEngine.eventLoop();
             }
 
             @Override
@@ -228,22 +220,6 @@ public abstract class WispEngine extends AbstractExecutorService {
             }
 
             @Override
-            public <T> T runInCritical(CheckedSupplier<T> supplier) {
-                assert WispEngine.transparentWispSwitch();
-                WispEngine engine = WispEngine.current();
-                boolean critical0 = engine.isInCritical;
-                engine.isInCritical = true;
-                try {
-                    return supplier.get();
-                } catch (Throwable t) {
-                    UNSAFE.throwException(t);
-                    return null; // make compiler happy
-                } finally {
-                    engine.isInCritical = critical0;
-                }
-            }
-
-            @Override
             public boolean hasMoreTasks() {
                 return WispEngine.current().getTaskQueueLength() > 0;
             }
@@ -255,7 +231,7 @@ public abstract class WispEngine extends AbstractExecutorService {
 
             @Override
             public boolean usingWispEpoll() {
-                return WispConfiguration.WISP_VERSION == 2 && runningAsCoroutine(null);
+                return runningAsCoroutine(null);
             }
 
             public boolean isAlive(WispTask task) {
@@ -268,48 +244,14 @@ public abstract class WispEngine extends AbstractExecutorService {
             }
 
             @Override
-            public boolean isInterrupted(WispTask task) {
-                return task.isInterrupted();
-            }
-
-            @Override
             public boolean testInterruptedAndClear(WispTask task, boolean clear) {
                 return task.testInterruptedAndClear(clear);
             }
 
-            @Override
-            public boolean ifPutToCurrentEngine() {
-                return WispConfiguration.ifPutToCurrentEngine();
-            }
-
-            @Override
-            public boolean ifProxySelector() {
-                return WispConfiguration.ifProxySelector();
-            }
-
-            @Override
-            public boolean ifSpinSelector() {
-                return WispConfiguration.ifSpinSelector();
-            }
-
-            @Override
-            public boolean ifPutToManagedThread() {
-                return WispConfiguration.ifPutToManagedThread();
-            }
 
             @Override
             public boolean isAllThreadAsWisp() {
                 return WispConfiguration.ALL_THREAD_AS_WISP;
-            }
-
-            @Override
-            public boolean useThreadPoolLimit() {
-                return WispConfiguration.USE_THREAD_POOL_LIMIT;
-            }
-
-            @Override
-            public String getThreadUsage(String threadName) {
-                return WispWorkerContainer.getThreadUsage(threadName);
             }
 
             @Override
@@ -326,6 +268,11 @@ public abstract class WispEngine extends AbstractExecutorService {
             public boolean enableSocketLock() {
                 return WispConfiguration.WISP_ENABLE_SOCKET_LOCK;
             }
+
+            @Override
+            public StackTraceElement[] getStackTrace(WispTask task) {
+                return task.getStackTrace();
+            }
         });
     }
 
@@ -336,14 +283,21 @@ public abstract class WispEngine extends AbstractExecutorService {
             if (WispConfiguration.ENABLE_THREAD_AS_WISP) {
                 Class.forName(ThreadAsWisp.class.getName());
             }
-            if (WispConfiguration.GLOBAL_POLLER) {
-                Class.forName(WispEventPump.class.getName());
-            }
+            Class.forName(WispEventPump.class.getName());
             managedEngineCounters = new ConcurrentHashMap<>(100);
             if (WispConfiguration.WISP_PROFILE) {
                 Class.forName(WispPerfCounterMonitor.class.getName());
             }
-            WispEngine.current().preloadClasses();
+            if (WispConfiguration.WISP_HIGH_PRECISION_TIMER) {
+                timer.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                    }
+                });
+            }
+            WispEngine.current().addTimer(System.nanoTime() + Integer.MAX_VALUE, false);
+            WispEngine.current().cancelTimer();
+            Coroutine.StealResult.SUCCESS.ordinal();
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -355,26 +309,65 @@ public abstract class WispEngine extends AbstractExecutorService {
     }
 
     static boolean runningAsCoroutine(Thread t) {
-        if (WispConfiguration.WISP_VERSION == 1) {
-            // For wisp1:
-            // Any thread could create WispTask, we need
-            // hook all blocking API to avoid WispTask blocking each other
-            return true;
-        }
-        assert WispConfiguration.WISP_VERSION == 2;
-
         WispTask task = t == null ? WispEngine.current().getCurrentTask() : JLA.getWispTask(t);
         assert task != null;
         // For wisp2:
         // Only carrierThread could create WispTask, and
         // the carrierThread will listen on WispTask's wakeup.
-        // So we can safely letting the threadTask block the whore Thread.
+        // So we can safely letting the non-carrier wispTask block the whore Thread.
         return !task.isThreadTask();
     }
 
+    /**
+     * Constructor is private, so one can only get thread-specific engine by calling this method.
+     * This method's name indicates a task is created in current thread's engine.
+     * <p>
+     * We can not use ThreadLocal any more, because if transparentAsync, it behaves as a coroutine local.
+     *
+     * @return thread-specific engine
+     */
+    public static WispEngine current() {
+        Thread thread = JLA.currentThread0();
+        WispEngine engine = JLA.getWispEngine(thread);
+        if (engine == null) {
+            engine = new WispEngine(WispGroup.WISP_ROOT_GROUP);
+            if (engine.threadTask.ctx != null) {
+                JLA.setWispEngine(thread, engine);
+                engine.init();
+            } // else: fake engine used in jni attach
+        }
+        return engine;
+    }
 
-    WispEngine() {
+    final Thread thread;
+    // current running task
+    WispTask current;
+    WispGroup group;
+    WispScheduler.Carrier carrier;
+
+    private final WispTask threadTask;
+    private List<WispTask> taskCache = new ArrayList<>();
+
+    private int createdTasks;
+    volatile int runningTaskCount = 0;
+
+    boolean isInCritical;
+    volatile boolean hasBeenShutdown;
+
+    WispCounter counter;
+    int schedTick;
+    int lastSchedTick; // access by Sysmon
+    boolean terminated;
+    private long switchTimestamp = 0;
+    CountDownLatch shutdownFuture = new CountDownLatch(1);
+
+    private WispTask yieldingTask;
+    private TimeOut pendingTimer;
+
+
+    private WispEngine(WispGroup group) {
         thread = JLA.currentThread0();
+        this.group = group;
         CoroutineSupport cs = thread.getCoroutineSupport();
         current = threadTask = new WispTask(this,
                 cs == null ? null : cs.threadCoroutine(),
@@ -397,74 +390,6 @@ public abstract class WispEngine extends AbstractExecutorService {
     }
 
     /**
-     * Constructor is private, so one can only get thread-specific engine by calling this method.
-     * This method's name indicates a task is created in current thread's engine.
-     * <p>
-     * We can not use ThreadLocal any more, because if transparentAsync, it behaves as a coroutine local.
-     *
-     * @return thread-specific engine
-     */
-    public static WispEngine current() {
-        Thread thread = JLA.currentThread0();
-        WispEngine engine = JLA.getWispEngine(thread);
-        if (engine == null) {
-            engine = WispConfiguration.WISP_VERSION == 2 ?
-                    new Wisp2Engine(Wisp2Group.WISP2_ROOT_GROUP) :
-                    new ScheduledWispEngine();
-            if (engine.threadTask.ctx != null) {
-                JLA.setWispEngine(thread, engine);
-                engine.init();
-            } // else: fake engine used in jni attach
-        }
-        return engine;
-    }
-
-    protected final Thread thread;
-    // current running task
-    protected WispTask current;
-    protected final WispTask threadTask;
-    protected List<WispTask> taskCache = new ArrayList<>();
-
-    private int createdTasks;
-    protected volatile int runningTaskCount = 0;
-
-    protected boolean isInCritical;
-    volatile boolean hasBeenShutdown;
-
-    Statistics statistics = new Statistics();
-
-    WispCounter counter;
-    int schedTick;
-    int lastSchedTick; // access by Sysmon
-    boolean terminated;
-    private long switchTimestamp = 0;
-    CountDownLatch shutdownFuture = new CountDownLatch(1);
-
-    /**
-     * Entry point for running an engine.
-     * Please make sure calling {@code WispTask.createTask(...)} somewhere, so WispTasks were created before call
-     * {@code eventLoop()}
-     * <p>
-     * A typical server looks like this:
-     * <pre>
-     *  WispEngine.dispatch(() -> {
-     *      while (client = accept()) {
-     *          WispEngine.dispatch(
-     *                  () -> handle(client), "client handler");
-     *      }
-     *  }, "accepter");
-     *
-     *  WispEngine.eventLoop(); // loop forever
-     * <pre/>
-     */
-    private static void eventLoop() {
-        WispEngine engine = current();
-        while (engine.runningTaskCount > 0) {
-            engine.doSchedule();
-        }
-    }
-
-    /**
      * @return Currently running WispTask. Ensured by {@link #yieldTo(WispTask)}
      * If calling in a non-coroutine environment, return a thread-emulated WispTask.
      */
@@ -472,14 +397,9 @@ public abstract class WispEngine extends AbstractExecutorService {
         return current;
     }
 
-    WispCounter getCounter() {
-        return counter;
-    }
-
     /**
      * Each WispEngine has a corresponding thread. Thread can't be changed for WispEngine.
      * Use thread id as WispEngine id.
-     *
      * @return WispEngine id
      */
     public long getId() {
@@ -503,38 +423,30 @@ public abstract class WispEngine extends AbstractExecutorService {
         engine.dispatchTask(target, "dispatch task", null);
     }
 
-    public static WispCounter getWispCounter(long id) {
-        if (WispConfiguration.WISP_PROFILE) {
-            return WispPerfCounterMonitor.INSTANCE.getWispCounter(id);
-        } else {
-            return null;
-        }
-    }
+    /**
+     * Create a wisp task and run.
+     *
+     * @param target the task to execute
+     * @param name   task name
+     */
+    void dispatchTask(Runnable target, String name, Thread thread) {
+        // wisp2 DO NOT ALLOW running task in non-scheduler thread
+        ClassLoader ctxClassLoader = current.ctxClassLoader;
+        long enqueueTime = getNanoTime();
 
-    public void registerPerfCounter() {
-        SharedSecrets.getWispEngineAccess().runInCritical(() -> {
-            if (WispConfiguration.WISP_PROFILE) {
-                WispPerfCounterMonitor.INSTANCE.register(counter);
+        group.scheduler.execute(new StealAwareRunnable() {
+            @Override
+            public void run() {
+                WispEngine current = WispEngine.current();
+                current.countEnqueueTime(enqueueTime);
+                current.runTaskInternal(target, name, thread, ctxClassLoader);
             }
-            managedEngineCounters.put(getId(), counter);
-            return null;
-        });
-    }
-
-    void deRegisterPerfCounter() {
-        SharedSecrets.getWispEngineAccess().runInCritical(() -> {
-            if (WispConfiguration.WISP_PROFILE) {
-                WispPerfCounterMonitor.INSTANCE.deRegister(counter);
-            }
-            managedEngineCounters.remove(getId());
-            counter.cleanup();
-            return null;
         });
     }
 
     final WispTask runTaskInternal(Runnable target, String name, Thread thread, ClassLoader ctxLoader) {
         if (hasBeenShutdown && !WispTask.SHUTDOWN_TASK_NAME.equals(name)) {
-            return null;
+            throw new RejectedExecutionException("Wisp engine has been shutdown");
         }
         boolean isInCritical0 = isInCritical;
         isInCritical = true;
@@ -561,13 +473,80 @@ public abstract class WispEngine extends AbstractExecutorService {
 
 
     /**
-     * Wake up a {@link WispTask} that belongs to this engine,
-     * and caller will also do a {@link Selector#wakeup()} if engine's thread is being blocked on Selector.
-     *
-     * @param task target task
+     * The only exit path of a task.
+     * WispTask must call {@code taskExit()} to exit safely.
      */
-    boolean wakeupTask(WispTask task) {
-        return wakeupTask(task, false);
+    void taskExit() { // and exit
+        current.status = WispTask.Status.ZOMBIE;
+        TASK_COUNT_UPDATER.decrementAndGet(this);
+
+        current.countExecutionTime(switchTimestamp);
+        switchTimestamp = 0;
+
+        unregisterEvent();
+        returnTaskToCache(current);
+
+        // reset threadWrapper after call returnTaskToCache,
+        // since the threadWrapper will be used in Thread.currentThread()
+        current.resetThreadWrapper();
+        counter.incrementCompleteTaskCount();
+
+        // In Tenant killing process, we have an pending exception,
+        // WispTask.Coroutine's loop will be break
+        // invoke an explicit reschedule instead of return
+        schedule();
+    }
+
+    /**
+     * @return task from global cached theScheduler
+     */
+    private WispTask getTaskFromCache() {
+        assert WispEngine.current() == this;
+        if (!taskCache.isEmpty()) {
+            return taskCache.remove(taskCache.size() - 1);
+        }
+        if (hasBeenShutdown) {
+            return null;
+        }
+        WispTask task = group.groupTaskCache.poll();
+        if (task == null) {
+            return null;
+        }
+        if (task.engine != this) {
+            if (steal(task) != Coroutine.StealResult.SUCCESS) {
+                group.groupTaskCache.add(task);
+                return null;
+            }
+        }
+        assert task.engine == this;
+        return task;
+    }
+
+    /**
+     * return task back to global cache
+     */
+    private void returnTaskToCache(WispTask task) {
+        // reuse exited wispTasks from shutdown wispEngine is very tricky, so we'd better not return
+        // these tasks to global cache
+        if (taskCache.size() > WispConfiguration.WISP_ENGINE_TASK_CACHE_SIZE && !hasBeenShutdown) {
+            group.groupTaskCache.add(task);
+        } else {
+            taskCache.add(task);
+        }
+    }
+
+    /**
+     * hook for yield wispTask
+     */
+    private void runWispTaskEpilog() {
+        processPendingTimer();
+        processYield();
+    }
+
+    private void destroy() {
+        WispTask.cleanExitedTasks(taskCache);
+        WispTask.cleanExitedTask(threadTask);
+        terminated = true;
     }
 
     /**
@@ -575,22 +554,128 @@ public abstract class WispEngine extends AbstractExecutorService {
      * Typically called when resource is not ready.
      */
     protected final void schedule() {
+        assert WispEngine.current() == this;
+        WispTask current = this.current;
         current.countExecutionTime(switchTimestamp);
-        if (current.status == WispTask.Status.RUNNABLE) {
-            current.status = WispTask.Status.BLOCKED;
-        }
-
-        if (current.parent != null && current.parent.isRunnable()) {
-            WispTask parent = current.parent;
+        WispTask parent = current.parent;
+        if (parent != null) {
+            assert parent.isRunnable();
             assert parent.engine == this;
             // DESIGN:
             // only the first park of wisp should go back to parent
             current.parent = null;
             yieldTo(parent);
         } else {
-            doSchedule();
+            assert current.resumeEntry != null && current != threadTask
+                    : "call `schedule()` in scheduler";
+            current.resumeEntry.setStealEnable(true);
+            yieldTo(threadTask); // letting the scheduler choose runnable task
         }
-        runTaskYieldEpilog();
+        if (hasBeenShutdown && current != threadTask
+                && !WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())) {
+            CoroutineSupport.checkAndThrowException(current.ctx);
+        }
+    }
+
+    /**
+     * Wake up a {@link WispTask} that belongs to this engine
+     *
+     * @param task target task
+     */
+    void wakeupTask(WispTask task) {
+        assert !task.isThreadTask();
+        assert task.resumeEntry != null;
+        assert task.engine == this;
+        task.updateEnqueueTime();
+        group.scheduler.executeWithCarrierThread(task.resumeEntry, thread);
+    }
+
+    /**
+     * create a Entry runnable for wisp task,
+     * used for bridge coroutine and Executor interface.
+     */
+    StealAwareRunnable createResumeEntry(WispTask task) {
+        assert !task.isThreadTask();
+        return new StealAwareRunnable() {
+            boolean stealEnable = true;
+
+            @Override
+            public void run() {
+                WispEngine current = WispEngine.current();
+                /*
+                 * Please be extremely cautious:
+                 * task.engine can not be changed here by other thread
+                 * is base on our implementation of using park instead of
+                 * direct schedule, so only one thread could receive
+                 * this closure.
+                 */
+                WispEngine source = task.engine;
+                if (source != current) {
+                    Coroutine.StealResult res = current.steal(task);
+                    if (res != Coroutine.StealResult.SUCCESS) {
+                        if (res != Coroutine.StealResult.FAIL_BY_CONTENTION) {
+                            stealEnable = false;
+                        }
+                        source.wakeupTask(task);
+                        return;
+                    }
+                    WispEngine.TASK_COUNT_UPDATER.decrementAndGet(source);
+                    WispEngine.TASK_COUNT_UPDATER.incrementAndGet(current);
+                    // notify detached empty carrier to exit
+                    if (source.carrier.detached && WispEngine.TASK_COUNT_UPDATER.get(source) == 0) {
+                        source.carrier.signal();
+                    }
+                }
+                current.countEnqueueTime(task.getEnqueueTime());
+                task.resetEnqueueTime();
+                current.yieldTo(task);
+                current.runWispTaskEpilog();
+            }
+
+            @Override
+            public void setStealEnable(boolean b) {
+                stealEnable = b;
+            }
+
+            @Override
+            public boolean isStealEnable() {
+                return stealEnable;
+            }
+        };
+    }
+
+    /**
+     * Steal task from it's carrier engine to this engine
+     *
+     * @return steal result
+     */
+    private Coroutine.StealResult steal(WispTask task) {
+        /* shutdown is an async operation in wisp2, SHUTDOWN task relies on runningTaskCount to
+        determine whether it's okay to exit the carrier, hence we need to make sure no more new
+        wispTasks are created or stolen for hasBeenShutdown engines
+        for example:
+        1. SHUTDOWN task found runningTaskCount equals 0 and exit
+        2. carrier's task queue may still has some remaining tasks, when tried to steal these tasks
+        we may encounter jvm crash.
+        TODO:// merge shutdown and handoff dependencies check
+        */
+        if (hasBeenShutdown || task.engine.hasBeenShutdown) {
+            return Coroutine.StealResult.FAIL_BY_STATUS;
+        }
+        assert WispEngine.current() == this;
+        assert !task.isThreadTask();
+        if (task.engine != this) {
+            while (task.stealLock != 0) {/* wait until steal enabled */}
+            assert task.parent == null;
+            Coroutine.StealResult res = task.ctx.steal(true);
+            if (res != Coroutine.StealResult.SUCCESS) {
+                task.stealFailureCount++;
+                return res;
+            }
+            task.stealCount++;
+            task.setEngine(this);
+        }
+        return Coroutine.StealResult.SUCCESS;
     }
 
     /**
@@ -599,22 +684,11 @@ public abstract class WispEngine extends AbstractExecutorService {
      *
      * @param task coroutine to run
      */
-    protected final boolean yieldTo(WispTask task) {
-        if (task == null) {
-            return false;
-        }
-        schedTick++;
-
+    private final boolean yieldTo(WispTask task) {
+        assert task != null;
+        assert WispEngine.current() == this;
         assert task.engine == this;
-
-        if (task == current) {
-            task.status = WispTask.Status.RUNNABLE;
-            switchTimestamp = getNanoTime();
-            return true;
-        }
-
-        if (task.status == WispTask.Status.BLOCKED)
-            task.status = WispTask.Status.RUNNABLE;
+        assert task != current;
 
         if (task.status == WispTask.Status.ZOMBIE) {
             unregisterEvent(task);
@@ -624,37 +698,46 @@ public abstract class WispEngine extends AbstractExecutorService {
         WispTask from = current;
         current = task;
         counter.incrementSwitchCount();
-        task.engine.switchTimestamp = getNanoTime();
+        switchTimestamp = getNanoTime();
         assert !isInCritical;
         WispTask.switchTo(from, task);
         // Since engine is changed with stealing, we shouldn't directly access engine's member any more.
-        assert !WispEngine.current().isInCritical;
+        assert WispEngine.current().current == from;
+        assert !from.engine.isInCritical;
         return true;
     }
 
 
     /**
-     * 1. In Wisp2, each WispEngine's runningTask is modified when WispTask is stolen, we can't guarantee
-     * the accuracy of the task set.
-     * 2. this function is only called in shutdown, so it's not performance sensitive
-     * 3. this function should only be called by current WispTask
+     * Telling to the scheduler that the current thread is willing to yield
+     * its current use of a processor.
+     * <p>
+     * Called by {@link Thread#yield()}
      */
-    protected final List<WispTask> getRunningTasks() {
-        assert WispEngine.current() == this;
-        ArrayList<WispTask> runningTasks = new ArrayList<>();
-        boolean isInCritical0 = isInCritical;
-        isInCritical = true;
-        try {
-            for (WispTask task : WispTask.id2Task.values()) {
-                if (task.engine == this && !task.isThreadTask()) {
-                    runningTasks.add(task);
-                }
+    void yield() {
+        if (!WispConfiguration.WISP_HIGH_PRECISION_TIMER && carrier != null) {
+            carrier.processTimer();
+        }
+        if (WispEngine.runningAsCoroutine(current.getThreadWrapper())) {
+            if (getTaskQueueLength() > 0) {
+                assert yieldingTask == null;
+                yieldingTask = current;
+                // delay it, make sure wakeupTask is called after yield out
+                schedule();
             }
-            return runningTasks;
-        } finally {
-            isInCritical = isInCritical0;
+        } else {
+            JLA.yield0();
         }
     }
+
+    private void processYield() {
+        assert current.isThreadTask();
+        if (yieldingTask != null) {
+            wakeupTask(yieldingTask);
+            yieldingTask = null;
+        }
+    }
+
 
 
     /**
@@ -675,6 +758,18 @@ public abstract class WispEngine extends AbstractExecutorService {
     }
 
     /**
+     * register target {@link WispTask}'s interest channel and event.
+     *
+     * @param ch     the channel that is related to the current WispTask
+     * @param events interest event
+     * @throws IOException
+     */
+    private void registerEvent(WispTask target, SelectableChannel ch, int events) throws IOException {
+        if (ch != null && ch.isOpen() && events != 0) {
+            WispEventPump.INSTANCE.registerEvent(target, ((SelChImpl) ch).getFDVal(), events);
+        }
+    }
+    /**
      * Clean current task's interest event before an non-IO blocking operation
      * or task exit to prevent unexpected wake up.
      */
@@ -684,82 +779,10 @@ public abstract class WispEngine extends AbstractExecutorService {
 
     private void unregisterEvent(WispTask target) {
         if (target.ch != null) {
-            try {
-                registerEvent(target, target.ch, 0);
-                target.resetRegisterEventTime();
-                target.ch = null;
-            } catch (IOException e) {
-                // pass
-            }
+            target.resetRegisterEventTime();
+            target.ch = null;
         }
     }
-
-    /**
-     * The only exit path of a task.
-     * WispTask must call {@code taskExit()} to exit safely.
-     */
-    void taskExit() { // and exit
-        current.status = WispTask.Status.ZOMBIE;
-        TASK_COUNT_UPDATER.decrementAndGet(this);
-
-        current.countExecutionTime(switchTimestamp);
-        switchTimestamp = 0;
-
-        unregisterEvent();
-        returnTaskToCache(current);
-        // reset threadWrapper after call returnTaskToCache,
-        // since the threadWrapper will be used in Thread.currentThread()
-        current.resetThreadWrapper();
-        counter.incrementCompleteTaskCount();
-
-        if (runningTaskCount == 0 && threadTask.isRunnable()) {
-            // finish the event loop
-            yieldTo(threadTask);
-        } else {
-
-            // In Tenant killing process, we have an pending exception,
-            // WispTask.Coroutine's loop will be break
-            // invoke an explicit reschedule instead of return
-            schedule();
-        }
-    }
-
-    private void destroy() {
-        WispTask.cleanExitedTasks(taskCache);
-        WispTask.cleanExitedTask(threadTask);
-        closeEngineSelector();
-        terminated = true;
-    }
-
-    // ----------------------------------------------- initialization
-
-    /**
-     * Preload wisp runtime used class.
-     * Only called when WispEngine is loading.
-     */
-    protected abstract void preloadClasses() throws Exception;
-
-
-    // ----------------------------------------------- lifecycle hooks
-
-    /**
-     * hook for leave wispTask entry
-     */
-    protected void runWispTaskEpilog() {
-    }
-
-    /**
-     * hook for shutdown check on yield
-     */
-    protected abstract void runTaskYieldEpilog();
-
-
-    // ----------------------------------------------- schedule/timer
-
-    /**
-     * Implement scheduling strategy.
-     */
-    protected abstract void doSchedule();
 
     /**
      * Add a timer for current {@link WispTask},
@@ -768,93 +791,85 @@ public abstract class WispEngine extends AbstractExecutorService {
      * @param deadlineNano deadline of the timer
      * @param fromJvm      synchronized or obj.wait()
      */
-    protected abstract void addTimer(long deadlineNano, boolean fromJvm);
+    protected void addTimer(long deadlineNano, boolean fromJvm) {
+        WispTask task = current;
+        TimeOut timeOut = new TimeOut(task, deadlineNano, fromJvm);
+        task.timeOut = timeOut;
+
+        if (WispConfiguration.WISP_HIGH_PRECISION_TIMER) {
+            if (task.isThreadTask()) {
+                scheduleInTimer(timeOut);
+            } else {
+                /*
+                 * timer.schedule may enter park() again
+                 * we delegate this operation to thread coroutine
+                 * (which always use native park)
+                 */
+                pendingTimer = timeOut;
+            }
+        } else {
+            group.scheduler.addTimer(timeOut, thread);
+        }
+    }
+
 
     /**
      * Cancel the timer added by {@link #addTimer(long, boolean)}.
      */
-    protected abstract void cancelTimer();
-
-
-    // -----------------------------------------------  yielding
-
-    /**
-     * Telling to the scheduler that the current thread is willing to yield
-     * its current use of a processor.
-     * <p>
-     * Called by {@link Thread#yield()}
-     */
-    protected abstract void yield();
-
-
-    // -----------------------------------------------  event related
-
-    /**
-     * register target {@link WispTask}'s interest channel and event.
-     *
-     * @param ch     the channel that is related to the current WispTask
-     * @param events interest event
-     * @throws IOException
-     */
-    protected abstract void registerEvent(WispTask target, SelectableChannel ch, int events) throws IOException;
-
-    // -----------------------------------------------  task related
-
-    /**
-     * Create a wisp task and run.
-     *
-     * @param target the task to execute
-     * @param name   task name
-     */
-    protected abstract void dispatchTask(Runnable target, String name, Thread thread);
-
-    /**
-     * Wake up a {@link WispTask} that belongs to Wisp Implement,
-     * and caller may need call {@link Selector#wakeup()} if engine's thread is being blocked on Selector.
-     *
-     * @param task   target task
-     * @param urgent give the task a high priority to be schedule, not promised for all implementation
-     */
-    protected abstract boolean wakeupTask(WispTask task, boolean urgent);
-
-    /**
-     * @return task from global cached theScheduler
-     */
-    abstract WispTask getTaskFromCache();
-
-    /**
-     * return task back to global cache
-     */
-    abstract void returnTaskToCache(WispTask task);
-
-    /**
-     * create a Entry runnable for wisp task,
-     * used for bridge coroutine and Executor interface.
-     */
-    StealAwareRunnable createResumeEntry(WispTask task) {
-        return null;
+    protected void cancelTimer() {
+        if (current.timeOut != null) {
+            current.timeOut.canceled = true;
+            group.scheduler.cancelTimer(current.timeOut, thread);
+            current.timeOut = null;
+        }
+        pendingTimer = null;
     }
 
-
-    // -----------------------------------------------  WispSelector/poller
-
-    /**
-     * clean resource
-     */
-    protected void closeEngineSelector() {
+    private void processPendingTimer() {
+        assert current.isThreadTask();
+        if (WispConfiguration.WISP_HIGH_PRECISION_TIMER && pendingTimer != null) {
+            scheduleInTimer(pendingTimer);
+            pendingTimer = null;
+        }
     }
 
-    // ----------------------------------------------- status fetch
+    private void scheduleInTimer(TimeOut timeOut) {
+        boolean isInCritical0 = isInCritical;
+        final long timeout = timeOut.deadlineNano - System.nanoTime();
+        isInCritical = true;
+        if (timeout > 0) {
+            timer.schedule(new Runnable() {
+                @Override
+                public void run() {
+                    if (!timeOut.canceled) {
+                        timeOut.doUnpark();
+                    }
+                }
+            }, timeout, TimeUnit.NANOSECONDS);
+        } else if (!timeOut.canceled) {
+            timeOut.task.jdkUnpark();
+        }
+        isInCritical = isInCritical0;
+    }
 
     /**
      * @return if current engine is busy
      */
-    protected abstract boolean isRunning();
+    boolean isRunning() {
+        return current != threadTask;
+    }
 
     /**
      * @return queue length. used for mxBean report
      */
-    protected abstract int getTaskQueueLength();
+    int getTaskQueueLength() {
+        if (carrier == null) {
+            return 0;
+        }
+        int ql = carrier.queueLength;
+        // use a local copy to avoid queueLength change to negative.
+        return ql > 0 ? ql : 0;
+    }
 
     /**
      * @return running task number, used for mxBean report
@@ -866,16 +881,132 @@ public abstract class WispEngine extends AbstractExecutorService {
     // -----------------------------------------------  shutdown support
 
     @Override
-    public abstract void shutdown();
+    public void shutdown() {
+        if (hasBeenShutdown) {
+            return;
+        }
+        hasBeenShutdown = true;
+        deRegisterPerfCounter();
+        group.scheduler.executeWithCarrierThread(new StealAwareRunnable() {
+            @Override
+            public void run() {
+                WispEngine current = current();
+                current.runTaskInternal(new Runnable() {
+                    @Override
+                    public void run() {
+                        notifyAndWaitTasksForShutdown(WispEngine.this);
+                    }
+                }, WispTask.SHUTDOWN_TASK_NAME, null, null);
+            }
 
+            @Override
+            public boolean isStealEnable() {
+                return false;
+            }
+        }, thread);
+    }
 
-    // -----------------------------------------------  retake
+    private void notifyAndWaitTasksForShutdown(WispEngine engine) {
+        // wait until current 'shutdown wispTask' is the only
+        // running wispTask on this engine
+        while (runningTaskCount != 1) {
+            List<WispTask> runningTasks = getRunningTasks();
+            for (WispTask task : runningTasks) {
+                if (task.engine == this && task.isAlive()) {
+                    task.interrupt();
+                }
+            }
+            yield();
+        }
+
+        assert WispTask.SHUTDOWN_TASK_NAME.equals(current.getName());
+
+        carrier.pushAndSignal(new StealAwareRunnable() {
+            @Override
+            public void run() {
+                // set shutdownFinished true when SHUTDOWN-TASK finished
+                // SHUTDOWN-TASK would keep interrupting running tasks until
+                // it is the only running one
+                assert runningTaskCount == 0;
+
+                try {
+                    group.shutdownBarrier.await();
+                } catch (Exception e) {
+                    System.out.println("[Wisp] unexpected barrier exception " + e + ", thread: " + thread);
+                }
+                thread.getCoroutineSupport().drain();
+                engine.shutdownFuture.countDown();
+
+                //exit carrier
+                carrier.detached = true;
+            }
+
+            @Override
+            public boolean isStealEnable() {
+                return false;
+            }
+        });
+    }
 
     /**
-     * hand off wispEngine for blocking system calls.
+     * 1. In Wisp2, each WispEngine's runningTask is modified when WispTask is stolen, we can't guarantee
+     * the accuracy of the task set.
+     * 2. this function is only called in shutdown, so it's not performance sensitive
+     * 3. this function should only be called by current WispTask
      */
-    protected void handOff() {
+    private List<WispTask> getRunningTasks() {
+        assert WispEngine.current() == this;
+        ArrayList<WispTask> runningTasks = new ArrayList<>();
+        boolean isInCritical0 = isInCritical;
+        isInCritical = true;
+        try {
+            for (WispTask task : WispTask.id2Task.values()) {
+                if (task.engine == this && !task.isThreadTask()) {
+                    runningTasks.add(task);
+                }
+            }
+            return runningTasks;
+        } finally {
+            isInCritical = isInCritical0;
+        }
     }
+
+    void handOff() {
+        group.scheduler.handOffCarrierThread(thread);
+    }
+
+    // ----------------------------------------------- Monitoring
+
+    WispCounter getCounter() {
+        return counter;
+    }
+
+    static public WispCounter getWispCounter(long id) {
+        return WispConfiguration.WISP_PROFILE ? WispPerfCounterMonitor.INSTANCE.getWispCounter(id) : null;
+    }
+
+    void registerPerfCounter() {
+        runInCritical(() -> {
+            if (WispConfiguration.WISP_PROFILE) {
+                WispPerfCounterMonitor.INSTANCE.register(counter);
+            }
+            managedEngineCounters.put(getId(), counter);
+            return null;
+        });
+    }
+
+    void deRegisterPerfCounter() {
+        runInCritical(() -> {
+            if (WispConfiguration.WISP_PROFILE) {
+                WispPerfCounterMonitor.INSTANCE.deRegister(counter);
+            }
+            managedEngineCounters.remove(getId());
+            counter.cleanup();
+            return null;
+        });
+    }
+
+    // -----------------------------------------------  retake
 
     static long getNanoTime() {
         return WispConfiguration.WISP_PROFILE ? System.nanoTime() : 0;
@@ -887,45 +1018,14 @@ public abstract class WispEngine extends AbstractExecutorService {
         }
     }
 
-    long exponentialSmoothed(long accumulator, long newVal) {
-        return (accumulator * 88 + newVal * 12) / 100;
-    }
-
-    class Statistics {
-        int maxRunning;
-        int maxReschedule;
-        int doubleCheckWakeup;
-
-        int eventLoops;
-        int nonBlockSelectCount;
-        int selectNothingActive;
-        int selectNothingPassive;
-        int proxyBlockingSelect;
-        int proxySelectNow;
-        int ioEventCount;
-
-        int doIO;
-        int doWakeup;
-        int doTimer;
-
-        // not precision, because modified by multi-thread
-        int wakeupCount;
-        int realWakeupCount;
-        int innerEngineWakeup;
-        int alreadyWakeup;
-
-        int selectorRebuild;
-        int retryCanceledKey;
+    @Override
+    public String toString() {
+        return "WispEngine on " + thread.getName();
     }
 
     @Override
-    public String toString() {
-        return new SimpleDateFormat("MM-dd HH:mm:ss.SSS").format(new Date()) + "\n" +
-                "Engine (" + thread.getName() + ") Runtime Info:" +
-                "\nrunningTaskCount\t" + runningTaskCount +
-                "\ncreatedTasks\t" + createdTasks +
-                "\neventLoops\t" + statistics.eventLoops +
-                "\nswitchCount\t" + schedTick;
+    public void execute(Runnable command) {
+        dispatchTask(command, "execute task", null);
     }
 
     @Override
@@ -948,10 +1048,36 @@ public abstract class WispEngine extends AbstractExecutorService {
         return shutdownFuture.await(timeout, unit);
     }
 
+    @Override
+    public int compareTo(WispEngine o) {
+        return Long.compare(getId(), o.getId());
+    }
+
+
+    /*** DO NOT use this helper inside WispEngine,
+     * because lambda may cause class loading.
+     */
+    static <T> T runInCritical(Supplier<T> supplier) {
+        WispEngine engine = WispEngine.current();
+        boolean critical0 = engine.isInCritical;
+        engine.isInCritical = true;
+        try {
+            return supplier.get();
+        } finally {
+            engine.isInCritical = critical0;
+            }
+    }
+
+
     protected static final AtomicIntegerFieldUpdater<WispEngine> TASK_COUNT_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(WispEngine.class, "runningTaskCount");
 
     private static native void registerNatives();
 
     private static native int getProxyUnpark(int[] res);
+
+    static {
+        registerNatives();
+        setWispEngineAccess();
+    }
 }

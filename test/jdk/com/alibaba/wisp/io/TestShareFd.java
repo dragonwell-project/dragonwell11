@@ -2,8 +2,7 @@
  * @test
  * @library /lib/testlibrary
  * @summary test support fd use acorss coroutines
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.version=1  TestShareFd
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.version=2  TestShareFd
+ * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true    TestShareFd
  */
 
 import java.net.InetSocketAddress;

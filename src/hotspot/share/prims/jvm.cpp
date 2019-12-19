@@ -403,9 +403,8 @@ JVM_ENTRY(jobject, JVM_InitProperties(JNIEnv *env, jobject properties))
   {
     if (UseWisp2) {
       PUTPROP(props, "com.alibaba.wisp.transparentWispSwitch", "true");
-      PUTPROP(props, "com.alibaba.wisp.enableThreadAsWisp", "true");
-      PUTPROP(props, "com.alibaba.wisp.version", "2");
       if (Arguments::get_property("com.alibaba.wisp.allThreadAsWisp") == NULL) {
+        PUTPROP(props, "com.alibaba.wisp.enableThreadAsWisp", "true");
         PUTPROP(props, "com.alibaba.wisp.allThreadAsWisp", "true");
       }
     }

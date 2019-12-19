@@ -32,23 +32,19 @@ enum WispEventPump {
     WispEventPump() {
         sun.nio.ch.IOUtil.load();
         EA = SharedSecrets.getEpollAccess();
-        if (WispConfiguration.GLOBAL_POLLER) {
-            try {
-                epfd = EA.epollCreate();
-                int[] a = new int[2];
-                EA.socketpair(a);
-                pipe0 = a[0];
-                pipe1 = a[1];
-                if (EA.epollCtl(epfd, EpollAccess.EPOLL_CTL_ADD, pipe0, Net.POLLIN) != 0) {
-                    throw new IOException("epoll_ctl fail");
-                }
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
+        try {
+            epfd = EA.epollCreate();
+            int[] a = new int[2];
+            EA.socketpair(a);
+            pipe0 = a[0];
+            pipe1 = a[1];
+            if (EA.epollCtl(epfd, EpollAccess.EPOLL_CTL_ADD, pipe0, Net.POLLIN) != 0) {
+                throw new IOException("epoll_ctl fail");
             }
-            epollArray = EA.allocatePollArray(MAX_EVENTS_TO_POLL);
-        } else {
-            epollArray = epfd = pipe0 = pipe1 = 0;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
+        epollArray = EA.allocatePollArray(MAX_EVENTS_TO_POLL);
     }
 
     /**
@@ -113,12 +109,6 @@ enum WispEventPump {
         return task;
     }
 
-    void registerEvent(WispTask task, SelectableChannel ch, int event) throws IOException {
-        if (ch != null && ch.isOpen()) {
-            registerEvent(task, ((SelChImpl) ch).getFDVal(), event);
-        }
-    }
-
     void registerEvent(WispTask task, int fd, int event) throws IOException {
         int ev = 0;
         // Translates an interest operation set into a native poll event set
@@ -159,7 +149,7 @@ enum WispEventPump {
                          AtomicReference<Object> status, final Object INTERRUPTED) throws IOException {
         assert pollArray != 0;
         WispTask me = WispEngine.current().current;
-        if (!(WispConfiguration.WISP_VERSION == 2 && WispEngine.runningAsCoroutine(me.getThreadWrapper()))) {
+        if (!(WispEngine.runningAsCoroutine(me.getThreadWrapper()))) {
             return EA.epollWait(epfd, pollArray, arraySize, (int) timeout);
         }
         if (WispConfiguration.MONOLITHIC_POLL) {
@@ -289,20 +279,20 @@ enum WispEventPump {
         }
     }
 
-    volatile Wisp2Scheduler.Carrier owner;
+    volatile WispScheduler.Carrier owner;
 
-    boolean tryAcquire(Wisp2Scheduler.Carrier carrier) {
+    boolean tryAcquire(WispScheduler.Carrier carrier) {
         assert WispConfiguration.CARRIER_AS_POLLER;
         return owner == null && OWNER_UPDATER.compareAndSet(this, null, carrier);
     }
 
-    void release(Wisp2Scheduler.Carrier carrier) {
+    void release(WispScheduler.Carrier carrier) {
         assert owner == carrier;
         OWNER_UPDATER.lazySet(this, null);
     }
 
-    private final static AtomicReferenceFieldUpdater<WispEventPump, Wisp2Scheduler.Carrier> OWNER_UPDATER =
-            AtomicReferenceFieldUpdater.newUpdater(WispEventPump.class, Wisp2Scheduler.Carrier.class, "owner");
+    private final static AtomicReferenceFieldUpdater<WispEventPump, WispScheduler.Carrier> OWNER_UPDATER =
+            AtomicReferenceFieldUpdater.newUpdater(WispEventPump.class, WispScheduler.Carrier.class, "owner");
     private final static AtomicIntegerFieldUpdater<WispEventPump> WAKEUP_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(WispEventPump.class, "wakeupCount");
 }

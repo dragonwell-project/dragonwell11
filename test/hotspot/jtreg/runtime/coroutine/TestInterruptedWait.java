@@ -2,8 +2,7 @@
  * @test
  * @summary test obj.wait() could be interrupted
  * @library /test/lib
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestInterruptedWait
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestInterruptedWait
+ * @run main/othervm -XX:+UseWisp2 TestInterruptedWait
  */
 
 import java.util.concurrent.atomic.AtomicBoolean;

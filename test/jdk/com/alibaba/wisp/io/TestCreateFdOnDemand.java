@@ -3,7 +3,6 @@
  * @library /lib/testlibrary
  * @summary Test fix of unconnected Socket fd leak.
  * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestCreateFdOnDemand
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestCreateFdOnDemand
 */
 
 import java.io.File;

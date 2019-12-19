@@ -27,13 +27,9 @@ public class TestWisp2Switch {
             }
         });
         System.out.println("TestWisp2Switch.main");
-        Field f = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredField("WISP_VERSION");
-        f.setAccessible(true);
-        int version = f.getInt(null);
-        assertTrue(version == 2, "Wisp Version isn't Wisp2");
 
         boolean isEnabled;
-        f = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredField("TRANSPARENT_WISP_SWITCH");
+        Field f = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredField("TRANSPARENT_WISP_SWITCH");
         f.setAccessible(true);
         isEnabled = f.getBoolean(null);
         assertTrue(isEnabled == true, "The property com.alibaba.wisp.transparentWispSwitch isn't enabled");

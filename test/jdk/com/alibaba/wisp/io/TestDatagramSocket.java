@@ -4,7 +4,6 @@
  * @summary Test WispEngine's DatagramSocket, InitialDirContext use dup socket to query dns.
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestDatagramSocket
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestDatagramSocket
 */
 
 
@@ -15,15 +14,19 @@ import javax.naming.directory.InitialDirContext;
 import java.io.IOException;
 import java.net.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import static jdk.testlibrary.Asserts.*;
 
 public class TestDatagramSocket {
+    static CountDownLatch latch = new CountDownLatch(10);
+
     public static void main(String[] args) throws Exception {
         for (int i = 0; i < 10; i++) {
             WispEngine.dispatch(TestDatagramSocket::foo);
         }
 
-        SharedSecrets.getWispEngineAccess().eventLoop();
+        latch.await(5, TimeUnit.SECONDS);
         testSetAndGetReceiveBufferSize();
         testSendAndReceive();
     }
@@ -35,6 +38,7 @@ public class TestDatagramSocket {
         } catch (Throwable e) {
             throw new Error("query dns error");
         }
+        latch.countDown();
     }
 
     static public void testSetAndGetReceiveBufferSize() throws Exception {

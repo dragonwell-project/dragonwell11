@@ -1,8 +1,7 @@
 /*
  * @test
  * @summary test shutdown a thread pool which contains non-fully-started thread
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=1 TestThreadPoolFastShutdownBug
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestThreadPoolFastShutdownBug
+ * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  TestThreadPoolFastShutdownBug
 
  */
 

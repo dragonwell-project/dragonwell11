@@ -2,11 +2,10 @@
  * @test
  * @summary test wisp time slice preempt
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.carrierEngines=1 -Dcom.alibaba.wisp.enableHandOff=true -Dcom.alibaba.wisp.version=2 TestPreempt
-
+ * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.carrierEngines=1 TestPreempt
  */
 
-import com.alibaba.wisp.engine.WispWorkerContainer;
+import com.alibaba.wisp.engine.WispEngine;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -18,20 +17,13 @@ import static jdk.testlibrary.Asserts.assertTrue;
 
 public class TestPreempt {
     public static void main(String[] args) throws Exception {
-        doTest(TestPreempt::complexLoop);
         doTest(TestPreempt::simpleLoop);
-        doTest(new Runnable() {
-            @Override
-            public void run() {
-                stackTrace(0);
-            }
-        });
     }
 
     private static void doTest(Runnable r) throws Exception {
-        WispWorkerContainer.INSTANCE.dispatch("test", "test", r, null);
+        WispEngine.dispatch(r);
         CountDownLatch latch = new CountDownLatch(1);
-        WispWorkerContainer.INSTANCE.dispatch("test", "test", latch::countDown, null);
+        WispEngine.dispatch(latch::countDown);
         assertTrue(latch.await(5, TimeUnit.SECONDS));
     }
 
@@ -55,19 +47,6 @@ public class TestPreempt {
             x = n;
         } while (x == n);
     }
-
-
-    private static void stackTrace(int i) {
-        if (i == 10000) {
-            int x;
-            do {
-                x = n;
-            } while (x == n);
-        } else {
-            stackTrace(i + 1);
-        }
-    }
-
 
     // TODO: handle safepoint consumed by state switch
 

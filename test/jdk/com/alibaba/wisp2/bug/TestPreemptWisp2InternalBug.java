@@ -6,7 +6,6 @@
  * @run main TestPreemptWisp2InternalBug
  */
 
-import com.alibaba.wisp.engine.Wisp2Group;
 import com.alibaba.wisp.engine.WispEngine;
 import jdk.internal.misc.SharedSecrets;
 
@@ -56,6 +55,7 @@ public class TestPreemptWisp2InternalBug {
 			while (System.currentTimeMillis() - start < 2000) {
 				for (int i = 0; i < 100; i++) {
 					SharedSecrets.getWispEngineAccess().addTimer(System.nanoTime() + 1008611);
+                    SharedSecrets.getWispEngineAccess().cancelTimer();
 				}
 			}
 			return null;

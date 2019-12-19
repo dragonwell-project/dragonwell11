@@ -16,12 +16,7 @@ enum WispSysmon {
         registerNatives();
     }
 
-    private Set<WispEngine> engines = new ConcurrentSkipListSet<>(new Comparator<WispEngine>() {
-        @Override
-        public int compare(WispEngine o1, WispEngine o2) {
-            return o1.threadTask.compareTo(o2.threadTask);
-        }
-    });
+    private Set<WispEngine> engines = new ConcurrentSkipListSet<>();
     final static String WISP_SYSMON_NAME = "Wisp-Sysmon";
 
     void startDaemon() {
@@ -45,8 +40,8 @@ enum WispSysmon {
         final long carrierCheckRate = TimeUnit.MICROSECONDS.toNanos(WispConfiguration.SYSMON_CARRIER_GROW_TICK_US);
         final long checkCarrierOnNthTick = carrierCheckRate / interval;
         final boolean checkCarrier = WispConfiguration.CARRIER_GROW && checkCarrierOnNthTick > 0
-                                    // Detach group's worker cnt is not specified by configuration
-                                    && WispConfiguration.WORKER_COUNT == Runtime.getRuntime().availableProcessors();
+                // Detach group's worker cnt is not specified by configuration
+                && WispConfiguration.WORKER_COUNT == Runtime.getRuntime().availableProcessors();
         long nextTick = System.nanoTime() + interval;
         int tick = 0;
 
@@ -58,7 +53,7 @@ enum WispSysmon {
                 } while ((timeout = nextTick - System.nanoTime()) > 0);
                 handleLongOccupation();
                 if (checkCarrier && tick++ == checkCarrierOnNthTick) {
-                    Wisp2Group.WISP2_ROOT_GROUP.scheduler.checkAndGrowCarriers(Runtime.getRuntime().availableProcessors());
+                    WispGroup.WISP_ROOT_GROUP.scheduler.checkAndGrowCarriers(Runtime.getRuntime().availableProcessors());
                     tick = 0;
                 }
             } // else: we're too slow, skip a tick
@@ -96,7 +91,7 @@ enum WispSysmon {
     }
 
     enum Policy {
-        HAND_OFF { // handOff the carrier (Only supported in wisp2)
+        HAND_OFF { // handOff the carrier
             @Override
             void handle(WispEngine engine, boolean isLast) {
                 if (JLA.isInSameNative(engine.thread)) {

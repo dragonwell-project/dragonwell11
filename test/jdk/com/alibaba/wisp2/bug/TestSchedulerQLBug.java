@@ -7,7 +7,7 @@
  * @run main/othervm -XX:+UseWisp2 TestDisableStealBug
  */
 
-import com.alibaba.wisp.engine.Wisp2Group;
+import com.alibaba.wisp.engine.WispGroup;
 import com.alibaba.wisp.engine.WispEngine;
 import jdk.internal.misc.SharedSecrets;
 
@@ -18,9 +18,9 @@ import static jdk.testlibrary.Asserts.assertLT;
 
 public class TestSchedulerQLBug {
     public static void main(String[] args) throws Exception {
-        Wisp2Group wisp2Group = Wisp2Group.createGroup(2, Thread::new);
+        WispGroup g = WispGroup.createGroup(2, Thread::new);
         CountDownLatch latch = new CountDownLatch(1);
-        wisp2Group.execute(() -> {
+        WispGroup.execute(() -> {
             TestDisableStealBug.setOrGetStealEnable(SharedSecrets.getWispEngineAccess().getCurrentTask(), true, false);
             latch.countDown();
             while (true) {
@@ -33,12 +33,12 @@ public class TestSchedulerQLBug {
         });
         latch.await();
         for (int i = 0; i < 10; i++) { // trigger steal
-            wisp2Group.execute(() -> { /**/});
+            g.execute(() -> { /**/});
         }
 
         Thread.sleep(100);
         for (int i = 0; i < 10; i++) {
-            int ql = wisp2Group.submit(() -> {
+            int ql = g.submit(() -> {
                 try {
                     Method m = WispEngine.class.getDeclaredMethod("getTaskQueueLength");
                     m.setAccessible(true);

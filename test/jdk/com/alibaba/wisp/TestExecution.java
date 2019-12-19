@@ -3,7 +3,7 @@
  * @summary Test WispEngine's multi-task schedule
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestExecution
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestExecution
+ * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  TestExecution
 */
 
 
@@ -91,7 +91,7 @@ public class TestExecution {
             // the 3 tree should finish after 100ms+, but the switch need warm up, give more time..
             if (finishCnt != 3) throw new Error("not finished");
         });
-        SharedSecrets.getWispEngineAccess().eventLoop(); // run the engine
+        SharedSecrets.getWispEngineAccess().sleep(200);
     }
 
     static String nodeA() {

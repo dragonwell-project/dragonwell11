@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
  * others' queue, execute stolen task, then check local queue.
  * Again and again, until all the queue is empty.
  */
-class Wisp2Scheduler {
+class WispScheduler {
 
     private static final SchedulingPolicy SCHEDULING_POLICY = WispConfiguration.SCHEDULING_POLICY;
 
@@ -39,16 +39,16 @@ class Wisp2Scheduler {
     // to array elements, so make the array volatile.
     private volatile Carrier[] carriers;
     private final ThreadFactory threadFactory;
-    private final Wisp2Group group;
+    private final WispGroup group;
     private int sharedSeed = randomSeed();
 
-    Wisp2Scheduler(int parallelism, ThreadFactory threadFactory, Wisp2Group group) {
+    WispScheduler(int parallelism, ThreadFactory threadFactory, WispGroup group) {
         this(parallelism, Math.max(1, parallelism / 2), parallelism,
                 Math.max(1, parallelism / 4), threadFactory, group, false);
     }
 
-    Wisp2Scheduler(int parallelism, int stealRetry, int pushRetry, int helpStealRetry,
-                   ThreadFactory threadFactory, Wisp2Group group, boolean isRootCarrier) {
+    WispScheduler(int parallelism, int stealRetry, int pushRetry, int helpStealRetry,
+                  ThreadFactory threadFactory, WispGroup group, boolean isRootCarrier) {
         assert parallelism > 0;
         PARALLEL = parallelism;
         STEAL_RETRY = stealRetry;
@@ -107,7 +107,7 @@ class Wisp2Scheduler {
         @Override
         public void run() {
             try {
-                Wisp2Engine engine = (Wisp2Engine) WispEngine.current();
+                WispEngine engine = WispEngine.current();
                 engine.group = group;
                 engine.carrier = this;
                 group.carrierEngines.add(engine);
@@ -119,7 +119,7 @@ class Wisp2Scheduler {
         }
 
         private void runCarrier(final WispEngine engine) {
-            int r = (int) System.nanoTime();
+            int r = randomSeed();
             Runnable task;
             while (true) {
                 while ((task = pollTask(false)) != null) {
@@ -237,8 +237,8 @@ class Wisp2Scheduler {
             }
         }
 
-        Wisp2Scheduler theScheduler() {
-            return Wisp2Scheduler.this;
+        WispScheduler theScheduler() {
+            return WispScheduler.this;
         }
     }
 
@@ -320,8 +320,7 @@ class Wisp2Scheduler {
         if (thread == null) {
             return null;
         }
-        Wisp2Engine engine = (Wisp2Engine) JLA.getWispEngine(thread);
-        Carrier carrier = engine.carrier;
+        Carrier carrier = JLA.getWispEngine(thread).carrier;
         if (carrier == null || carrier.theScheduler() != this) {
             return null;
         } else {
@@ -380,7 +379,7 @@ class Wisp2Scheduler {
             // always enqueue to the bounded carrier, but carriers will steal tasks from each other.
             @Override
             void enqueue(Carrier carrier, boolean stealEnable, StealAwareRunnable command) {
-                Wisp2Scheduler scheduler = carrier.theScheduler();
+                WispScheduler scheduler = carrier.theScheduler();
                 if (!carrier.pushAndSignal(command) && stealEnable && scheduler.HELP_STEAL_RETRY > 0) {
                     scheduler.signalIdleCarrierToHelpSteal();
                 }
@@ -395,7 +394,7 @@ class Wisp2Scheduler {
             // never try to pull other carrier's queues, but choose an idle carrier when we're enqueueing
             @Override
             void enqueue(Carrier carrier, boolean stealEnable, StealAwareRunnable command) {
-                Wisp2Scheduler scheduler = carrier.theScheduler();
+                WispScheduler scheduler = carrier.theScheduler();
                 if (stealEnable
                         && !(carrier.idleOrPolling() || carrier.isProcessingTimer())
                         && scheduler.STEAL_RETRY > 0
@@ -462,8 +461,7 @@ class Wisp2Scheduler {
                 last = cs[i];
             }
             carriers = cs;
-            Wisp2Engine engine = (Wisp2Engine) JLA.getWispEngine(thread);
-            engine.deRegisterPerfCounter();
+            JLA.getWispEngine(thread).deRegisterPerfCounter();
         }
     }
 

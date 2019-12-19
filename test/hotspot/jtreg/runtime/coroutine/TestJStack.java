@@ -4,7 +4,7 @@
  * @summary Test jstack steal counter
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @modules java.base/java.dyn:+open
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -Dcom.alibaba.wisp.version=2 -XX:ActiveProcessorCount=2 TestJStack
+ * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -XX:ActiveProcessorCount=2 TestJStack
  */
 
 import com.alibaba.wisp.engine.WispEngine;

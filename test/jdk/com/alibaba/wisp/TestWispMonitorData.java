@@ -1,3 +1,11 @@
+/* @test
+ * @summary WispCounterMXBean unit test for Detail profile data using the API with the specified WispEngine
+ * @library /lib/testlibrary
+ * @modules java.base/jdk.internal.misc
+ * @modules java.base/com.alibaba.wisp.engine:+open
+ * @run main/othervm/timeout=2000 -XX:+UseWisp2 -Dcom.alibaba.wisp.config=/tmp/wisp.config -Dcom.alibaba.wisp.profile=true TestWispMonitorData
+ */
+
 import com.alibaba.management.WispCounterMXBean;
 import com.alibaba.management.WispCounterData;
 import com.alibaba.wisp.engine.WispCounter;
@@ -18,30 +26,12 @@ import jdk.internal.misc.SharedSecrets;
 import java.lang.reflect.Field;
 import static jdk.testlibrary.Asserts.assertTrue;
 
-/* @test
- * @summary WispCounterMXBean unit test for Detail profile data using the API with the specified WispEngine
- * @library /lib/testlibrary
- * @modules java.base/jdk.internal.misc
- * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm/timeout=2000 -XX:+EnableCoroutine -XX:+UseWispMonitor  -XX:ActiveProcessorCount=4  -Dcom.alibaba.transparentAsync=true -Dcom.alibaba.shiftThreadModel=true -Dcom.alibaba.wisp.config=/tmp/wisp.config -Dcom.alibaba.wisp.profile=true TestWispMonitorData
- * @run main/othervm/timeout=2000 -XX:+EnableCoroutine -XX:+UseWispMonitor  -XX:ActiveProcessorCount=4  -Dcom.alibaba.wisp.version=2 -Dcom.alibaba.transparentAsync=true -Dcom.alibaba.shiftThreadModel=true -Dcom.alibaba.wisp.config=/tmp/wisp.config -Dcom.alibaba.wisp.profile=true TestWispMonitorData
- */
 
 public class TestWispMonitorData {
 
     public static void main(String[] args) throws Exception {
 
         startNetServer();
-        File f = new File("/tmp/wisp.config");
-        f.deleteOnExit();
-        FileWriter writer = new FileWriter(f);
-        writer.write("com.alibaba.wisp.biz.manage=TestWispMonitorData::main\n");
-        writer.close();
-
-        // reload WispBizSniffer's config from file.
-        Method m = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredMethod("loadBizConfig");
-        m.setAccessible(true);
-        m.invoke(null);
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         WispCounterMXBean mbean = null;
@@ -70,7 +60,7 @@ public class TestWispMonitorData {
                 doNetIO();
             });
         }
-        Thread.sleep(5_000L);
+        Thread.sleep(1_000L);
        
         Class<?> clazz = Class.forName("com.alibaba.wisp.engine.WispEngine");
         Field field = clazz.getDeclaredField("carrierThreads");

@@ -3,7 +3,6 @@
  * @summary T12212948
  * @library /lib/testlibrary
  * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestLazyUnparkBug
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestLazyUnparkBug
 */
  
 public class TestLazyUnparkBug {

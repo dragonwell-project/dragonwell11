@@ -2,9 +2,7 @@
  * @test
  * @library /lib/testlibrary
  * @summary test close will wake up blocking wispTask
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.version=1  TestWispSocketClose
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.version=1  -Dcom.alibaba.globalPoller=false TestWispSocketClose
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.version=2  TestWispSocketClose
+ * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true    TestWispSocketClose
  */
 
 import java.io.IOException;

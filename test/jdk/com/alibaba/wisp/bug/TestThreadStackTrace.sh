@@ -28,13 +28,8 @@ JAVA=${TESTJAVA}${FS}bin${FS}java
 JAVAC=${TESTJAVA}${FS}bin${FS}javac
 TEST_CLASS=TmpThreadStackTrace
 TEST_SOURCE=${TEST_CLASS}.java
-TEST_WISP_CONFIG=$(mktemp)
 
 ###################################################################################
-
-cat > ${TEST_WISP_CONFIG} << EOF
-com.alibaba.wisp.biz.manage=TmpThreadStackTrace::foo\n
-EOF
 
 cat > ${TESTCLASSES}${FS}$TEST_SOURCE << EOF
 import com.alibaba.wisp.engine.WispEngine;
@@ -115,7 +110,7 @@ then
 fi
 
 #run
-${JAVA} -XX:+PrintSafepointStatistics  -XX:PrintSafepointStatisticsCount=1 -Dcom.alibaba.wisp.config=${TEST_WISP_CONFIG} -XX:-UseBiasedLocking -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.enableThreadAsWisp=true -cp ${TESTCLASSES} ${TEST_CLASS} > output.txt  2>&1
+${JAVA} -XX:+PrintSafepointStatistics  -XX:PrintSafepointStatisticsCount=1 -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=1 -cp ${TESTCLASSES} ${TEST_CLASS} > output.txt  2>&1
 rm -f $TEST_WISP_CONFIG
 cat output.txt
 

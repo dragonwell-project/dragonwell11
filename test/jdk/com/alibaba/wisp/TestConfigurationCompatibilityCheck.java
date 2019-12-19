@@ -11,12 +11,9 @@ import jdk.test.lib.process.ProcessTools;
 
 public class TestConfigurationCompatibilityCheck {
     public static void main(String[] args) throws Exception {
-        incompatibility("-Dcom.alibaba.wisp.version=65536");
         incompatibility("-Dcom.alibaba.wisp.enableThreadAsWisp=true");
         incompatibility("-Dcom.alibaba.wisp.enableThreadAsWisp=true", "-Dcom.alibaba.wisp.transparentWispSwitch=false");
-        incompatibility("-Dcom.alibaba.wisp.version=2", "-Dcom.alibaba.globalPoller=false");
         incompatibility("-Dcom.alibaba.wisp.allThreadAsWisp=true");
-        incompatibility("-Dcom.alibaba.wisp.allThreadAsWisp=true", "-Dcom.alibaba.wisp.version=1");
         incompatibility("-Dcom.alibaba.wisp.allThreadAsWisp=true", "-Dcom.alibaba.wisp.enableThreadAsWisp=false");
     }
 

@@ -20,21 +20,15 @@ enum WispPerfCounterMonitor {
     private PrintStream printStream;
     private SimpleDateFormat localDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    private WispEngineAccess WEA;
-
     WispPerfCounterMonitor() {
-        WEA = SharedSecrets.getWispEngineAccess();
         if (WispConfiguration.WISP_PROFILE) {
             managedEngineCounters = new ConcurrentHashMap<>(100);
         }
         if (WispConfiguration.WISP_PROFILE_LOG_ENABLED) {
             String logPath = WispConfiguration.WISP_PROFILE_LOG_PATH;
             try {
-                if (logPath == null) {
-                    printStream = new PrintStream(new File("wisplog.log"));
-                } else {
-                    printStream = new PrintStream(new File(logPath + File.separator + "wisplog%g.log"));
-                }
+                printStream = new PrintStream(new File(logPath == null?
+                        "wisplog.log" : logPath + File.separator + "wisplog%g.log"));
                 fileHandleEnable = true;
             } catch (IOException e) {
                 e.printStackTrace();
@@ -57,17 +51,13 @@ enum WispPerfCounterMonitor {
 
     void deRegister(WispCounter counter) {
         if (WispConfiguration.WISP_PROFILE) {
-            long id = counter.engine.getId();
-            WispPerfCounter perfCounter = managedEngineCounters.get(id);
             managedEngineCounters.remove(counter.engine.getId());
         }
     }
 
     WispCounter getWispCounter(long id) {
-        WispPerfCounter perfCounter;
-        perfCounter = WEA.runInCritical(() -> {
-                    return managedEngineCounters.get(id);
-                });
+        WispPerfCounter perfCounter = WispEngine.runInCritical(
+                () -> managedEngineCounters.get(id));
         if (perfCounter == null) {
             return null;
         }
@@ -78,7 +68,7 @@ enum WispPerfCounterMonitor {
     private void perfCounterLoop() {
         while (true) {
             try {
-                Thread.sleep((long)WispConfiguration.WISP_PROFILE_LOG_INTERVAL_MS);
+                Thread.sleep((long) WispConfiguration.WISP_PROFILE_LOG_INTERVAL_MS);
             } catch (InterruptedException e) {
                 // pass
             }
@@ -88,11 +78,9 @@ enum WispPerfCounterMonitor {
 
     private void appendLogString(StringBuilder strb, String dateTime, String item, int workerID, long data) {
         strb.append(dateTime)
-        .append("\t" + item + "\t\t")
-        .append("worker" + workerID)
-        .append("\t\t")
-        .append(data)
-        .append("\n");
+                .append("\t").append(item).append("\t\t")
+                .append("worker").append(workerID).append("\t\t")
+                .append(data).append("\n");
     }
 
     private void dumpCounter() {
@@ -141,7 +129,7 @@ enum WispPerfCounterMonitor {
                 return 0;
             }
             long totalNanos = timeFunc.apply(counter) - timeFunc.apply(prevCounterValue);
-            return totalNanos/count;
+            return totalNanos / count;
         }
 
         long getAverageEnqueueTime() {
@@ -168,7 +156,7 @@ enum WispPerfCounterMonitor {
             counter.resetMaxValue();
         }
 
-        public WispPerfCounter(WispCounter counter) {
+        WispPerfCounter(WispCounter counter) {
             this.counter = counter;
             this.prevCounterValue = new WispCounter();
             this.prevCounterValue.assign(counter);

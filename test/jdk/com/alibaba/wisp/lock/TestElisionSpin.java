@@ -3,7 +3,7 @@
  * @summary Test elision spin
  * @modules java.base/jdk.internal.misc
  * @library /lib/testlibrary
- * @run main/othervm  -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.useStealLock=false TestElisionSpin
+ * @run main/othervm  -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=1 TestElisionSpin
  */
 
 import com.alibaba.wisp.engine.WispEngine;

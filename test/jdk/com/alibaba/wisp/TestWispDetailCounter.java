@@ -15,25 +15,14 @@ import static jdk.testlibrary.Asserts.assertTrue;
  * @summary WispCounterMXBean unit test for Detail profile data
  * @library /lib/testlibrary
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm/timeout=2000 -XX:+EnableCoroutine -XX:+UseWispMonitor  -XX:ActiveProcessorCount=4  -Dcom.alibaba.transparentAsync=true -Dcom.alibaba.shiftThreadModel=true -Dcom.alibaba.wisp.config=/tmp/wisp.config -Dcom.alibaba.wisp.profile=true -Dcom.alibaba.wisp.enableProfileLog=true -Dcom.alibaba.wisp.logTimeInternalMillis=3000 TestWispDetailCounter
- * @run main/othervm/timeout=2000 -XX:+EnableCoroutine -XX:+UseWispMonitor  -XX:ActiveProcessorCount=4  -Dcom.alibaba.wisp.version=2 -Dcom.alibaba.transparentAsync=true -Dcom.alibaba.shiftThreadModel=true -Dcom.alibaba.wisp.config=/tmp/wisp.config -Dcom.alibaba.wisp.profile=true -Dcom.alibaba.wisp.enableProfileLog=true -Dcom.alibaba.wisp.logTimeInternalMillis=3000 TestWispDetailCounter
- */
+ * @run main/othervm/timeout=2000 -XX:+UseWisp2 -Dcom.alibaba.wisp.config=/tmp/wisp.config -Dcom.alibaba.wisp.profile=true -Dcom.alibaba.wisp.enableProfileLog=true -Dcom.alibaba.wisp.logTimeInternalMillis=3000 TestWispDetailCounter
+*/
 
 public class TestWispDetailCounter {
 
     public static void main(String[] args) throws Exception {
 
         startNetServer();
-        File f = new File("/tmp/wisp.config");
-        f.deleteOnExit();
-        FileWriter writer = new FileWriter(f);
-        writer.write("com.alibaba.wisp.biz.manage=TestWispDetailCounter::main\n");
-        writer.close();
-
-        // reload WispBizSniffer's config from file.
-        Method m = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredMethod("loadBizConfig");
-        m.setAccessible(true);
-        m.invoke(null);
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         WispCounterMXBean mbean = null;
@@ -53,7 +42,7 @@ public class TestWispDetailCounter {
                 synchronized (TestWispDetailCounter.class) {
                     // do sleep
                     try {
-                        Thread.sleep(10L);
+                        Thread.sleep(1L);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }

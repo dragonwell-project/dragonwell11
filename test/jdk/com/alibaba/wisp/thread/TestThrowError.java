@@ -3,7 +3,6 @@
  * @summary test coroutine throw Error
  * @library /lib/testlibrary
  * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestThrowError
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestThrowError
 */
 
 import com.alibaba.wisp.engine.WispEngine;

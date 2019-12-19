@@ -3,8 +3,7 @@
  * @summary test thread.isAlive() of wispTask
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.enableThreadAsWisp=true TestIsAlive
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.enableThreadAsWisp=true -Dcom.alibaba.wisp.version=2 TestIsAlive
+ * @run main/othervm -XX:+UseWisp2 TestIsAlive
  *
  */
 
@@ -22,11 +21,6 @@ import static jdk.testlibrary.Asserts.assertTrue;
 
 public class TestIsAlive {
     public static void main(String[] args) throws Exception {
-        testCurrentDispatch();
-        testContainerDispatch();
-    }
-
-    private static void testCurrentDispatch() {
         AtomicBoolean isAlive = new AtomicBoolean();
         AtomicReference<Thread> t = new AtomicReference<>();
         final CountDownLatch cond = new CountDownLatch(1);
@@ -43,16 +37,5 @@ public class TestIsAlive {
         }
         assertTrue(isAlive.get());
         assertFalse(t.get().isAlive());
-    }
-
-    private static void testContainerDispatch() throws Exception {
-        Field f = Class.forName("com.alibaba.wisp.engine.WispConfiguration").getDeclaredField("PUT_TO_MANAGED_THREAD_STACK_LIST");
-        f.setAccessible(true);
-        f.set(null, Collections.singletonList("TestIsAlive::testContainerDispatch"));
-        AtomicBoolean finish = new AtomicBoolean();
-        Thread t = new Thread(() -> finish.set(true));
-        t.start();
-
-        assertTrue(t.isAlive() || finish.get());
     }
 }
