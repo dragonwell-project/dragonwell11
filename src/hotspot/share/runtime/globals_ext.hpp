@@ -38,6 +38,9 @@
                          manageable,                                        \
                          product_rw,                                        \
                          lp64_product)                                      \
+  manageable(intx, ArrayAllocationWarningSize, (512*M),                     \
+             "Desired size in bytes of array space allocation before "      \
+             "printing a warning")                                          \
 //add new Dragonwell specific flags here
 
 DRAGONWELL_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, \
