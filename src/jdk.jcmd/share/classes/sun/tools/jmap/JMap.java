@@ -170,6 +170,7 @@ public class JMap {
         String subopts[] = options.split(",");
         String filename = null;
         String liveopt = "-all";
+        String miniopt = null;
 
         for (int i = 0; i < subopts.length; i++) {
             String subopt = subopts[i];
@@ -180,6 +181,8 @@ public class JMap {
                 if (subopt.length() > 5) {
                     filename = subopt.substring(5);
                 }
+            } else if (subopt.startsWith("mini")) {
+                miniopt = "-mini";
             }
         }
 
@@ -193,7 +196,11 @@ public class JMap {
         // is executed.
         filename = new File(filename).getCanonicalPath();
         // dumpHeap is not the same as jcmd GC.heap_dump
-        executeCommandForPid(pid, "dumpheap", filename, liveopt);
+        if (miniopt == null) {
+            executeCommandForPid(pid, "dumpheap", filename, liveopt);
+        } else {
+            executeCommandForPid(pid, "dumpheap", filename, liveopt, miniopt);
+        }
     }
 
     private static void checkForUnsupportedOptions(String[] args) {
@@ -259,6 +266,7 @@ public class JMap {
         System.err.println("                   all objects in the heap are dumped.");
         System.err.println("      format=b     binary format");
         System.err.println("      file=<file>  dump heap to <file>");
+        System.err.println("      mini         use minidump format (Dragonwell only)");
         System.err.println("");
         System.err.println("    Example: jmap -dump:live,format=b,file=heap.bin <pid>");
         System.exit(exit);
