@@ -28,21 +28,58 @@
 #include "runtime/flags/jvmFlag.hpp"
 
 // globals_extension.hpp extension
+#define DRAGONWELL_FLAGS(develop,                                           \
+                         develop_pd,                                        \
+                         product,                                           \
+                         product_pd,                                        \
+                         diagnostic,                                        \
+                         experimental,                                      \
+                         notproduct,                                        \
+                         manageable,                                        \
+                         product_rw,                                        \
+                         lp64_product)                                      \
+//add new Dragonwell specific flags here
+
+DRAGONWELL_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, \
+                 DECLARE_PD_PRODUCT_FLAG, DECLARE_DIAGNOSTIC_FLAG, DECLARE_EXPERIMENTAL_FLAG, \
+                 DECLARE_NOTPRODUCT_FLAG, DECLARE_MANAGEABLE_FLAG, DECLARE_PRODUCT_RW_FLAG, \
+                 DECLARE_LP64_PRODUCT_FLAG)
 
 // Additional JVMFlags enum values
-#define JVMFLAGS_EXT
+#define JVMFLAGS_EXT DRAGONWELL_FLAGS(RUNTIME_DEVELOP_FLAG_MEMBER, RUNTIME_PD_DEVELOP_FLAG_MEMBER,      \
+                                      RUNTIME_PRODUCT_FLAG_MEMBER, RUNTIME_PD_PRODUCT_FLAG_MEMBER,      \
+                                      RUNTIME_DIAGNOSTIC_FLAG_MEMBER, RUNTIME_EXPERIMENTAL_FLAG_MEMBER, \
+                                      RUNTIME_NOTPRODUCT_FLAG_MEMBER, RUNTIME_MANAGEABLE_FLAG_MEMBER,   \
+                                      RUNTIME_PRODUCT_RW_FLAG_MEMBER, RUNTIME_LP64_PRODUCT_FLAG_MEMBER) 
 
 // Additional JVMFlagsWithType enum values
-#define JVMFLAGSWITHTYPE_EXT
+#define JVMFLAGSWITHTYPE_EXT DRAGONWELL_FLAGS(RUNTIME_DEVELOP_FLAG_MEMBER_WITH_TYPE,       \
+                                              RUNTIME_PD_DEVELOP_FLAG_MEMBER_WITH_TYPE,    \
+                                              RUNTIME_PRODUCT_FLAG_MEMBER_WITH_TYPE,       \
+                                              RUNTIME_PD_PRODUCT_FLAG_MEMBER_WITH_TYPE,    \
+                                              RUNTIME_DIAGNOSTIC_FLAG_MEMBER_WITH_TYPE,    \
+                                              RUNTIME_EXPERIMENTAL_FLAG_MEMBER_WITH_TYPE,  \
+                                              RUNTIME_NOTPRODUCT_FLAG_MEMBER_WITH_TYPE,    \
+                                              RUNTIME_MANAGEABLE_FLAG_MEMBER_WITH_TYPE,    \
+                                              RUNTIME_PRODUCT_RW_FLAG_MEMBER_WITH_TYPE,    \
+                                              RUNTIME_LP64_PRODUCT_FLAG_MEMBER_WITH_TYPE)
 
 
 // globals.cpp extension
 
 // Additional flag definitions
-#define MATERIALIZE_FLAGS_EXT
+#define MATERIALIZE_FLAGS_EXT DRAGONWELL_FLAGS(MATERIALIZE_DEVELOPER_FLAG, MATERIALIZE_PD_DEVELOPER_FLAG,  \
+                                               MATERIALIZE_PRODUCT_FLAG, MATERIALIZE_PD_PRODUCT_FLAG,      \
+                                               MATERIALIZE_DIAGNOSTIC_FLAG, MATERIALIZE_EXPERIMENTAL_FLAG, \
+                                               MATERIALIZE_NOTPRODUCT_FLAG, MATERIALIZE_MANAGEABLE_FLAG,   \
+                                               MATERIALIZE_PRODUCT_RW_FLAG, MATERIALIZE_LP64_PRODUCT_FLAG)
 
 // Additional flag descriptors: see flagTable definition
-#define FLAGTABLE_EXT
+#define FLAGTABLE_EXT DRAGONWELL_FLAGS(RUNTIME_DEVELOP_FLAG_STRUCT, RUNTIME_PD_DEVELOP_FLAG_STRUCT,      \
+                                       RUNTIME_PRODUCT_FLAG_STRUCT, RUNTIME_PD_PRODUCT_FLAG_STRUCT,      \
+                                       RUNTIME_DIAGNOSTIC_FLAG_STRUCT, RUNTIME_EXPERIMENTAL_FLAG_STRUCT, \
+                                       RUNTIME_NOTPRODUCT_FLAG_STRUCT, RUNTIME_MANAGEABLE_FLAG_STRUCT,   \
+                                       RUNTIME_PRODUCT_RW_FLAG_STRUCT, RUNTIME_LP64_PRODUCT_FLAG_STRUCT)
 
 
 // Default method implementations
