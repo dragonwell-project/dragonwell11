@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,10 +47,12 @@ class HeapDumper : public StackObj {
   bool _print_to_tty;
   bool _gc_before_heap_dump;
   bool _oome;
+  bool _mini_dump;
   elapsedTimer _t;
 
   HeapDumper(bool gc_before_heap_dump, bool print_to_tty, bool oome) :
-    _gc_before_heap_dump(gc_before_heap_dump), _error(NULL), _print_to_tty(print_to_tty), _oome(oome) { }
+    _gc_before_heap_dump(gc_before_heap_dump), _error(NULL),
+    _print_to_tty(print_to_tty), _oome(oome), _mini_dump(false) { }
 
   // string representation of error
   char* error() const                   { return _error; }
@@ -65,8 +67,12 @@ class HeapDumper : public StackObj {
   static void dump_heap(bool oome);
 
  public:
-  HeapDumper(bool gc_before_heap_dump) :
-    _gc_before_heap_dump(gc_before_heap_dump), _error(NULL), _print_to_tty(false), _oome(false) { }
+  HeapDumper(bool gc_before_heap_dump, bool mini_dump = false) :
+    _gc_before_heap_dump(gc_before_heap_dump),
+    _error(NULL),
+    _print_to_tty(false),
+    _oome(false),
+    _mini_dump(mini_dump) { }
 
   ~HeapDumper();
 
@@ -79,6 +85,8 @@ class HeapDumper : public StackObj {
   static void dump_heap()    NOT_SERVICES_RETURN;
 
   static void dump_heap_from_oome()    NOT_SERVICES_RETURN;
+
+  inline bool is_mini_dump() const { return _mini_dump; }
 };
 
 #endif // SHARE_VM_SERVICES_HEAPDUMPER_HPP
