@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -73,6 +73,9 @@ protected:
     return MemRegion((HeapWord*)obj, _word_size);
   }
 
+  // verify if size of allocation request satisfies certain policy
+  virtual void verify_size() const { }
+
 public:
   oop allocate() const;
   virtual oop initialize(HeapWord* mem) const = 0;
@@ -90,6 +93,7 @@ class ObjArrayAllocator: public MemAllocator {
   const bool _do_zero;
 protected:
   virtual MemRegion obj_memory_range(oop obj) const;
+  virtual void verify_size() const;
 
 public:
   ObjArrayAllocator(Klass* klass, size_t word_size, int length, bool do_zero,
