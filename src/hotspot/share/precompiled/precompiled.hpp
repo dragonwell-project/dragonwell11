@@ -93,6 +93,8 @@
 # include "gc/shared/collectorCounters.hpp"
 # include "gc/shared/collectorPolicy.hpp"
 # include "gc/shared/gcCause.hpp"
+# include "gc/shared/allocTracer.hpp"
+# include "gc/shared/allocTracer.inline.hpp"
 # include "gc/shared/gcLocker.hpp"
 # include "gc/shared/gcStats.hpp"
 # include "gc/shared/gcUtil.hpp"

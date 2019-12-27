@@ -550,4 +550,8 @@ public final class PlatformRecorder {
         target.setStopTime(endTime);
         target.setInternalDuration(Duration.between(startTime, endTime));
     }
+
+    public boolean isEnabled(String eventName) {
+        return MetadataRepository.getInstance().isEnabled(eventName);
+    }
 }

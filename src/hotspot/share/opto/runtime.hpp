@@ -177,6 +177,8 @@ public:
   static void monitor_notify_C(oopDesc* obj, JavaThread* thread);
   static void monitor_notifyAll_C(oopDesc* obj, JavaThread* thread);
 
+  // JFR support
+  static void jfr_fast_object_alloc_C(oopDesc* obj, jint bci, JavaThread* thread);
 private:
 
   // Implicit exception support
@@ -317,6 +319,9 @@ private:
   // Dtrace support
   static const TypeFunc* dtrace_method_entry_exit_Type();
   static const TypeFunc* dtrace_object_alloc_Type();
+
+  // JFR support
+  static const TypeFunc* jfr_fast_object_alloc_Type();
 
  private:
  static NamedCounter * volatile _named_counters;

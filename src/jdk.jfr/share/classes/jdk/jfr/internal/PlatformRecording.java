@@ -774,4 +774,8 @@ public final class PlatformRecording implements AutoCloseable {
     public SafePath getDumpOnExitDirectory()  {
         return this.dumpOnExitDirectory;
     }
+
+    public boolean isRecorderEnabled(String eventName) {
+        return recorder.isEnabled(eventName);
+    }
 }

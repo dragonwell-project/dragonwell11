@@ -918,6 +918,17 @@
     <Field type="ulong" name="value" label="Value" />
   </Event>
 
+  <Event name="OptoInstanceObjectAllocation" category="Java Virtual Machine, Runtime" label="Opto instance object allocation" description="Allocation by Opto jitted method" thread="true" stackTrace="true" startTime="false">
+    <Field type="Class" name="objectClass" label="Object Class" description="Class of allocated instance object"/>
+    <Field type="ulong" contentType="address" name="address" label="Opto Instance Object Allocation Address" description="Address of allocated instance object"/>
+  </Event>
+
+  <Event name="OptoArrayObjectAllocation" category="Java Virtual Machine, Runtime" label="Opto array object allocation" description="Array Allocation by Opto jitted method" thread="true" stackTrace="true" startTime="false">
+    <Field type="Class" name="objectClass" label="Object Class" description="Class of allocated array object"/>
+    <Field type="ulong" contentType="address" name="address" label="Opto Array Object Allocation Address" description="Address of allocated instance object"/>
+    <Field type="ulong" name="allocationSize" label="Object Size" description="The Array Object Size" />
+  </Event>
+
   <Type name="ZStatisticsCounterType" label="Z Statistics Counter">
     <Field type="string" name="counter" label="Counter" />
   </Type>
@@ -948,6 +959,7 @@
     <Field type="Symbol" name="name" label="Name" />
     <Field type="Package" name="package" label="Package" />
     <Field type="int" name="modifiers" label="Access Modifiers" />
+    <Field type="int" name="objectSize" label="Object Size"/>
   </Type>
 
   <Type name="ClassLoader" label="Java Class Loader">
