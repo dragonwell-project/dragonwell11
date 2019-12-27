@@ -28,6 +28,8 @@
 #include "gc/shared/collectedHeap.hpp"
 #include "oops/oop.inline.hpp"
 #include "utilities/align.hpp"
+#include "jfr/recorder/service/jfrOptionSet.hpp"
+#include "jfr/objectprofiler/objectProfiler.hpp"
 
 inline HeapWord* CollectedHeap::align_allocation_or_fail(HeapWord* addr,
                                                          HeapWord* end,

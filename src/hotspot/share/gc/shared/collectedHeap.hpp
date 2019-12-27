@@ -27,6 +27,7 @@
 
 #include "gc/shared/gcCause.hpp"
 #include "gc/shared/gcWhen.hpp"
+#include "gc/shared/allocTracer.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/handles.hpp"
 #include "runtime/perfData.hpp"
@@ -180,6 +181,15 @@ class CollectedHeap : public CHeapObj<mtInternal> {
     Epsilon,
     Z
   };
+
+  // Implicit Jfr inline methods.
+  static void trace_slow_allocation(Klass* klass, oop obj, size_t alloc_size, Thread* thread) {
+    AllocTracer::send_slow_allocation_event(klass, obj, alloc_size, thread);
+  }
+
+  static void trace_allocation_outside_tlab(Klass* klass, HeapWord* obj, size_t alloc_size, Thread* thread) {
+    AllocTracer::send_allocation_outside_tlab(klass, obj, alloc_size, thread);
+  }
 
   static inline size_t filler_array_max_size() {
     return _filler_array_max_size;

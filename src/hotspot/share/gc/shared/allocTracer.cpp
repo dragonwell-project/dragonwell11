@@ -22,7 +22,6 @@
  *
  */
 
-#include "precompiled.hpp"
 #include "gc/shared/allocTracer.hpp"
 #include "jfr/jfrEvents.hpp"
 #include "runtime/handles.hpp"

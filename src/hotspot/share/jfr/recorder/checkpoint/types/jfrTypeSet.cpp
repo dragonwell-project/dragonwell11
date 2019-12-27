@@ -39,6 +39,7 @@
 #include "jfr/recorder/storage/jfrBuffer.hpp"
 #include "jfr/utilities/jfrHashtable.hpp"
 #include "jfr/utilities/jfrTypes.hpp"
+#include "jfr/objectprofiler/objectProfiler.hpp"
 #include "memory/iterator.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/instanceKlass.hpp"
@@ -146,6 +147,16 @@ int write__artifact__klass(JfrCheckpointWriter* writer, JfrArtifactSet* artifact
   writer->write((traceid)CREATE_SYMBOL_ID(symbol_id));
   writer->write(pkg_id);
   writer->write((s4)klass->access_flags().get_flags());
+  if (klass->is_array_klass()) {
+    // The object array size can not be determined statically from klass.
+    // It is determined by the elements length in object layout.
+    // So we put a place holder here to make the event parser ignore it.
+    writer->write((s4)ARRAY_OBJECT_SIZE_PLACE_HOLDER);
+  } else {
+    assert(klass->is_instance_klass(), "invariant");
+    jint instanceSize = ((InstanceKlass*) klass)->size_helper() * HeapWordSize;
+    writer->write((s4)instanceSize);
+  }
   return 1;
 }
 

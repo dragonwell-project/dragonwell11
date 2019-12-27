@@ -58,6 +58,7 @@ class MemAllocator::Allocation: StackObj {
   void notify_allocation_jvmti_sampler();
   void notify_allocation_low_memory_detector();
   void notify_allocation_jfr_sampler();
+  void notify_allocation_jfr_object_profiling();
   void notify_allocation_dtrace_sampler();
   void check_for_bad_heap_word_value() const;
 #ifdef ASSERT
@@ -250,6 +251,11 @@ void MemAllocator::Allocation::notify_allocation_jfr_sampler() {
   }
 }
 
+void MemAllocator::Allocation::notify_allocation_jfr_object_profiling() {
+  size_t size_in_bytes = _allocator._word_size * HeapWordSize;
+  CollectedHeap::trace_slow_allocation(_allocator._klass, obj(), size_in_bytes, _thread);
+}
+
 void MemAllocator::Allocation::notify_allocation_dtrace_sampler() {
   if (DTraceAllocProbes) {
     // support for Dtrace object alloc event (no-op most of the time)
@@ -264,6 +270,7 @@ void MemAllocator::Allocation::notify_allocation_dtrace_sampler() {
 void MemAllocator::Allocation::notify_allocation() {
   notify_allocation_low_memory_detector();
   notify_allocation_jfr_sampler();
+  notify_allocation_jfr_object_profiling();
   notify_allocation_dtrace_sampler();
   notify_allocation_jvmti_sampler();
 }

@@ -35,9 +35,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import jdk.jfr.EventNames;
 import jdk.jfr.FlightRecorder;
 import jdk.jfr.Recording;
 import jdk.jfr.internal.JVM;
+import jdk.jfr.internal.Options;
 import jdk.jfr.internal.LogLevel;
 import jdk.jfr.internal.LogTag;
 import jdk.jfr.internal.Logger;
@@ -111,7 +113,7 @@ final class DCmdStart extends AbstractDCmd {
             try {
                 s.putAll(JFC.createKnown(configName).getSettings());
             } catch (IOException | ParseException e) {
-                throw new DCmdException("Could not parse setting " + settings[0], e);
+                throw new DCmdException("Could not parse setting " + configName, e);
             }
         }
 
@@ -145,6 +147,14 @@ final class DCmdStart extends AbstractDCmd {
         }
         recording.setSettings(s);
         SafePath safePath = null;
+
+        if (recording.isRecorderEnabled(EventNames.OptoInstanceObjectAllocation) ||
+            recording.isRecorderEnabled(EventNames.OptoArrayObjectAllocation)) {
+            if (!Options.getSampleObjectAllocations()) {
+                println("Please add -XX:FlightRecorderOptions=sampleobjectallocations=true in JVM options.");
+                return getResult();
+            }
+        }
 
         if (path != null) {
             try {
