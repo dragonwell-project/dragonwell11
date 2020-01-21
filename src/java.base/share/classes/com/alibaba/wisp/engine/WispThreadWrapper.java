@@ -25,7 +25,7 @@ class WispThreadWrapper extends Thread {
 
     @Override
     public CoroutineSupport getCoroutineSupport() {
-        return JLA.getWispTask(this).engine.thread.getCoroutineSupport();
+        return JLA.getWispTask(this).carrier.thread.getCoroutineSupport();
     }
 
     @Override
@@ -56,17 +56,17 @@ class WispThreadWrapper extends Thread {
 
     @Override
     public State getState() {
-        return JLA.getWispTask(this).engine.thread.getState();
+        return JLA.getWispTask(this).carrier.thread.getState();
     }
 
     @Override
     public UncaughtExceptionHandler getUncaughtExceptionHandler() {
-        return JLA.getWispTask(this).engine.thread.getUncaughtExceptionHandler();
+        return JLA.getWispTask(this).carrier.thread.getUncaughtExceptionHandler();
     }
 
     @Override
     public void setUncaughtExceptionHandler(UncaughtExceptionHandler eh) {
-        JLA.getWispTask(this).engine.thread.setUncaughtExceptionHandler(eh);
+        JLA.getWispTask(this).carrier.thread.setUncaughtExceptionHandler(eh);
     }
 
     @Override

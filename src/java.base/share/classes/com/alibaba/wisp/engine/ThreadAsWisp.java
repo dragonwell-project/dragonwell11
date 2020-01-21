@@ -20,7 +20,7 @@ class ThreadAsWisp {
      * Try to "start thread" as wisp if all listed condition is satisfied:
      * <p>
      * 1. not in java.lang or blacklisted package/class
-     * 2. not a WispEngine Thread
+     * 2. not a WispEngine internal Thread
      * 3. allThreadAsWisp is true and not match the blacklist
      *
      * @param thread the thread
@@ -46,7 +46,7 @@ class ThreadAsWisp {
 
         // pthread_create always return before new thread started, so we should not wait here
         WispEngine.JLA.setWispAlive(thread, true); // thread.isAlive() should be true
-        WispEngine.current().dispatchTask(thread, thread.getName(), thread);
+        WispEngine.current().startAsThread(thread, thread.getName(), thread);
         return true;
     }
 

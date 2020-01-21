@@ -1,13 +1,14 @@
 /*
  * @test
  * @library /lib/testlibrary
+ * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @summary Verify yield not really happened when queue is empty
  * @run main/othervm  -XX:+UseWisp2 TestYieldEmptyQueue
  */
 
 import com.alibaba.wisp.engine.WispEngine;
-
+import jdk.internal.misc.SharedSecrets;
 import java.lang.reflect.Field;
 import java.util.concurrent.Executors;
 
@@ -16,10 +17,11 @@ import static jdk.testlibrary.Asserts.assertTrue;
 public class TestYieldEmptyQueue {
     public static void main(String[] args) throws Exception {
         assertTrue(Executors.newSingleThreadExecutor().submit(() -> {
-            long sc = (long) new ObjAccess(WispEngine.current()).ref("counter").ref("switchCount").obj;
+            long sc = (long) new ObjAccess(SharedSecrets.getJavaLangAccess().getWispTask(Thread.currentThread()))
+                    .ref("carrier").ref("counter").ref("switchCount").obj;
             Thread.yield();
-            return (long) new ObjAccess(WispEngine.current()).ref("counter").ref("switchCount").obj == sc;
-        }).get());
+            return (long) new ObjAccess(SharedSecrets.getJavaLangAccess().getWispTask(Thread.currentThread()))
+                    .ref("carrier").ref("counter").ref("switchCount").obj == sc;        }).get());
     }
 
     static class ObjAccess {

@@ -229,9 +229,8 @@ void Coroutine::frames_do(FrameClosure* fc) {
   }
 }
 
-bool Coroutine::is_coroutine_frame(vframe* f) {
+bool Coroutine::is_coroutine_frame(javaVFrame* jvf) {
   ResourceMark resMark;
-  javaVFrame* jvf = javaVFrame::cast(f);
   const char* k_name = jvf->method()->method_holder()->name()->as_C_string();
   return strstr(k_name, "com/alibaba/wisp/engine/") != 0 || strstr(k_name, "java/dyn/") != 0;
 }
@@ -253,6 +252,7 @@ bool Coroutine::is_coroutine_frame(vframe* f) {
   at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1137)
   at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:627)
   at java.lang.Thread.run(Thread.java:861)
+  at com.alibaba.wisp.engine.WispTask.runOutsideWisp(WispTask.java:253)
   at com.alibaba.wisp.engine.WispTask.coroutineCacheLoop(WispTask.java:213)
   at com.alibaba.wisp.engine.WispTask.access$000(WispTask.java:33)
   at com.alibaba.wisp.engine.WispTask$CacheableCoroutine.run(WispTask.java:153)
@@ -262,35 +262,37 @@ bool Coroutine::is_coroutine_frame(vframe* f) {
 bool Coroutine::in_critical(JavaThread* thread) {
   ResourceMark resMark;
   RegisterMap reg_map(thread);
-  bool has_wisp_frame = false;
-  bool has_other_frame = false;
   for (vframe* f = thread->last_java_vframe(&reg_map); f; f = f->sender()) {
     if (!f->is_java_frame()) {
       continue;
     }
+    javaVFrame* jvf = javaVFrame::cast(f);
+    assert(WispThread::runOutsideWispMethod != NULL, "runOutsideWispMethod resolved");
     /*
-      wisp_frame: wisp internal schedule related frames:
-      other_frame: non wisp_frame
-      under these two senarios current stack are consiedered in critical:
-      1. all frames are wisp_frame
-      2. a wisp_frame's sender is an other_frame
-     */
-    if (is_coroutine_frame(f)) {
-      has_wisp_frame = true;
-    } else {
-      if (has_wisp_frame) {
-        if (VerboseWisp) {
-          tty->print_cr("[WISP] preempt was blocked, because wisp internal method on the stack");
-        }
-        return true;
+      Marked WispThread::runOutsideWispMethod as a seperator for wisp and non wisp code on
+    stack,preempt is allowed under the only senarios when ther is no wisp frame upon
+    WispThread::runOutsideWispMethod.
+      We are using a more strict check because old preempt check rules leave out cases where
+    wisp inner logic calls util classes, for example:
+      - at java.util.concurrent.ConcurrentSkipListSet.add
+      - at com.alibaba.wisp.engine.WispTask.returnTaskTocache
+      - at com.alibaba.wisp.engine.WispTask.taskExit
+      - at com.alibaba.wisp.engine.WispTask.coroutineCacheLoop
+      Preempt this stack may cause crash during shutdown
+    */
+    if (jvf->method() == WispThread::runOutsideWispMethod) {
+      return false;
+    } else if (is_coroutine_frame(jvf)) {
+      if (VerboseWisp) {
+        tty->print_cr("[WISP] preempt was blocked, because wisp internal method on the stack");
       }
-      has_other_frame = true;
+      return true;
     }
   }
-  if (VerboseWisp && has_wisp_frame && !has_other_frame) {
-    tty->print_cr("[WISP] preempt was blocked, because only wisp method on the stack");
+  if (VerboseWisp) {
+    tty->print_cr("[WISP] preempt was blocked, because wisp internal method on the stack");
   }
-  return has_wisp_frame && !has_other_frame;
+  return true;
 }
 
 class oops_do_Closure: public FrameClosure {
@@ -566,6 +568,7 @@ void Coroutine::print_stack_on(outputStream* st) {
 bool WispThread::_wisp_booted = false;
 Method* WispThread::parkMethod = NULL;
 Method* WispThread::unparkMethod = NULL;
+Method* WispThread::runOutsideWispMethod = NULL;
 GrowableArray<int>* WispThread::_proxy_unpark = NULL;
 
 void WispThread::set_wisp_booted(Thread* thread) {
@@ -583,6 +586,13 @@ void WispThread::set_wisp_booted(Thread* thread) {
   method = callinfo.selected_method();
   assert(method.not_null(), "should have thrown exception");
   unparkMethod = method();
+
+
+  LinkInfo link_info_runOutsideWisp(SystemDictionary::com_alibaba_wisp_engine_WispTask_klass(), vmSymbols::runOutsideWisp_name(), vmSymbols::runnable_void_signature());
+  LinkResolver::resolve_static_call(callinfo, link_info_runOutsideWisp, true, thread);
+  method = callinfo.selected_method();
+  assert(method.not_null(), "should have thrown exception");
+  runOutsideWispMethod = method();
 
   if (UseWispMonitor) {
     _proxy_unpark = new (ResourceObj::C_HEAP, mtWisp) GrowableArray<int>(30, true);
@@ -602,7 +612,7 @@ void WispThread::set_wisp_booted(Thread* thread) {
  *   are already loaded after _wisp_booted is set(as true). Otherwise it might result in loading class during execution of WispTask.park.
  *   Coroutine switch caused by object monitors in class loading might lead to recursive deadlock.
  *
- * - !com_alibaba_wisp_engine_WispEngine::is_critical(_coroutine->wisp_engine()):
+ * - !com_alibaba_wisp_engine_WispCarrier::is_critical(_coroutine->wisp_engine()):
  *   If the program is already running in kernel code of wisp engine(marked by WispEngine.isInCritical at Java level),  we don't expect 
  *   the switch while coroutine running into 'synchronized' block which is heavily used by Java NIO library.
  *   Otherwise, it might lead to potential recursive deadlock.
@@ -642,7 +652,7 @@ bool WispThread::need_wisp_park(ObjectMonitor* monitor, ObjectWaiter* ow, bool i
     _os_park_reason = _wisp_id_not_set;
     return false;
   }
-  if (com_alibaba_wisp_engine_WispEngine::in_critical(_coroutine->wisp_engine())) {
+  if (com_alibaba_wisp_engine_WispCarrier::in_critical(_coroutine->wisp_engine())) {
     _os_park_reason = _wispengine_in_critical;
     return false;
   }

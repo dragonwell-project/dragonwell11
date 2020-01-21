@@ -24,6 +24,7 @@ class WispConfiguration {
     static final WispSysmon.Policy HANDOFF_POLICY;
     static final int SYSMON_TICK_US;
     static final int MIN_PARK_NANOS;
+    static final int POLLER_SHARDING_SIZE;
 
     static final int SYSMON_CARRIER_GROW_TICK_US;
     // monitor
@@ -70,9 +71,10 @@ class WispConfiguration {
         PARK_ONE_MS_AT_LEAST = parseBooleanParameter(p, "com.alibaba.wisp.parkOneMs", true);
         WORKER_COUNT = parsePositiveIntegerParameter(p, "com.alibaba.wisp.carrierEngines",
                 Runtime.getRuntime().availableProcessors());
+        POLLER_SHARDING_SIZE = parsePositiveIntegerParameter(p, "com.alibaba.pollerShardingSize", 8);
         ENABLE_HANDOFF = parseBooleanParameter(p, "com.alibaba.wisp.enableHandOff",
                 TRANSPARENT_WISP_SWITCH);
-        // handoff carrier thread implementation is not stable enough,
+        // handoff worker thread implementation is not stable enough,
         // use preempt by default, and we'll move to ADAPTIVE in the future
         HANDOFF_POLICY = WispSysmon.Policy.valueOf(
                 p.getProperty("com.alibaba.wisp.handoffPolicy", WispSysmon.Policy.PREEMPT.name()));
@@ -174,7 +176,7 @@ class WispConfiguration {
         if (path == null || !new File(path).isFile()) {
             path = java.security.AccessController.doPrivileged(
                     new GetPropertyAction("java.home")) +
-                    File.separator + "conf" + File.separator + "wisp.properties";
+                    File.separator + "lib" + File.separator + "wisp.properties";
         }
 
         File f = new File(path);
@@ -185,10 +187,9 @@ class WispConfiguration {
             } catch (IOException e) {
                 // ignore, all STACK_LIST are empty
             }
-            THREAD_AS_WISP_BLACKLIST = parseListParameter(p, confProp, "com.alibaba.wisp.threadAsWisp.black");
-        } else {
-            System.out.println(f + " not exist");
         }
+        THREAD_AS_WISP_BLACKLIST = parseListParameter(p, confProp, "com.alibaba.wisp.threadAsWisp.black");
+
     }
 
     private static final int UNLOADED = 0, LOADING = 1, LOADED = 2;
@@ -213,5 +214,4 @@ class WispConfiguration {
         assert THREAD_AS_WISP_BLACKLIST != null;
         return THREAD_AS_WISP_BLACKLIST;
     }
-
 }

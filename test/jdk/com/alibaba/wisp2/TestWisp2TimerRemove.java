@@ -41,8 +41,9 @@ public class TestWisp2TimerRemove {
                 WispEngine engine = WispEngine.current();
                 TimeUnit.MILLISECONDS.sleep(1);
                 assertEQ(engine, WispEngine.current());
-                return new FieldAccessor(WispEngine.current())
+                return new FieldAccessor(SharedSecrets.getJavaLangAccess().getWispTask(Thread.currentThread()))
                         .access("carrier")
+                        .access("worker")
                         .access("timerManager")
                         .access("queue")
                         .getInt("size");

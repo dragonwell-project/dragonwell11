@@ -48,15 +48,15 @@ final public class WispCounter {
 
     private long unparkFromJvmCount = 0;
 
-    WispEngine engine;
+    WispCarrier carrier;
 
-    private WispCounter(WispEngine engine) {
-        this.engine = engine;
+    private WispCounter(WispCarrier carrier) {
+        this.carrier = carrier;
     }
 
     public boolean getRunningState() {
-        WispEngine e = engine;
-        return e != null && e.isRunning();
+        WispCarrier c = carrier;
+        return c != null ? c.isRunning() : false;
     }
 
     void incrementSwitchCount() {
@@ -205,13 +205,13 @@ final public class WispCounter {
     }
 
     public long getTaskQueueLength() {
-        WispEngine e = engine;
-        return e != null ? e.getTaskQueueLength() : 0;
+        WispCarrier c = carrier;
+        return c != null ? c.getTaskQueueLength() : 0;
     }
 
     public long getRunningTaskCount() {
-        WispEngine e = engine;
-        return e != null ? e.getRunningTaskCount() : 0;
+        WispCarrier c = carrier;
+        return c != null ? c.getRunningTaskCount() : 0;
     }
 
     void incrementUnparkFromJvmCount() {
@@ -267,10 +267,10 @@ final public class WispCounter {
     }
 
     void cleanup() {
-        engine = null;
+        carrier = null;
     }
 
-    static WispCounter create(WispEngine engine) {
-        return new WispCounter(engine);
+    static WispCounter create(WispCarrier carrier) {
+        return new WispCounter(carrier);
     }
 }

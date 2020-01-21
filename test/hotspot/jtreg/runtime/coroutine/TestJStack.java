@@ -4,6 +4,7 @@
  * @summary Test jstack steal counter
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @modules java.base/java.dyn:+open
+ * @modules java.base/jdk.internal.misc:+open
  * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -XX:ActiveProcessorCount=2 TestJStack
  */
 
@@ -23,11 +24,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.lang.reflect.Field;
-
+import jdk.internal.misc.SharedSecrets;
+import jdk.internal.misc.WispEngineAccess;
 import static jdk.test.lib.Asserts.*;
 
 public class TestJStack {
-
+    private static WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
     private static Field wisptask = null;
     private static Field stealCount = null;
     private static Field ctx = null;
@@ -35,12 +37,6 @@ public class TestJStack {
     private static Field jvmParkStatus = null;
 
     static {
-        try {
-            wisptask = WispEngine.class.getDeclaredField("current");
-            wisptask.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
-        }
         try {
             stealCount = WispTask.class.getDeclaredField("stealCount");
             stealCount.setAccessible(true);
@@ -79,7 +75,7 @@ public class TestJStack {
                 synchronized (o) {
                     lock.lock(); // block until outter call unlock()
                     try {
-                        WispTask current = (WispTask) wisptask.get(WispEngine.current());
+                        WispTask current = WEA.getCurrentTask();
                         long coroutine = (Long) data.get(ctx.get(current));
                         int count = (Integer) stealCount.get(current);
                         map.put("0x"+Long.toHexString(coroutine), count);

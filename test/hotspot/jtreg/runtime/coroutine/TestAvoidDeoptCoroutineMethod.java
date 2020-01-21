@@ -25,8 +25,7 @@ public class TestAvoidDeoptCoroutineMethod {
 
     private static void runSomeCoroutines(Coroutine threadCoro) throws Exception {
         for (int i = 0; i < 10000; i++) {
-            new Coroutine(() -> {});
-            Coroutine.yieldTo(threadCoro); // switch to new created coroutine and let it die
+            Coroutine.yieldTo(new Coroutine(() -> {})); // switch to new created coroutine and let it die
         }
         System.out.println("end of run");
     }

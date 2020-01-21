@@ -20,6 +20,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
 import static jdk.testlibrary.Asserts.assertTrue;
+import static jdk.testlibrary.Asserts.assertNotNull;
 
 public class TestGlobalPoller {
     private static WispEngineAccess access = SharedSecrets.getWispEngineAccess();
@@ -35,14 +36,21 @@ public class TestGlobalPoller {
         SocketChannel ch = so.getChannel();
         access.registerEvent(ch, SelectionKey.OP_READ);
 
-        Class<?> clazz = Class.forName("com.alibaba.wisp.engine.WispEventPump");
-        Field f = clazz.getDeclaredField("fd2ReadTaskLow");
-        f.setAccessible(true);
-        WispTask[] fd2TaskLow = (WispTask[]) f.get(clazz.getEnumConstants()[0]);
+        Class<?> clazz = Class.forName("com.alibaba.wisp.engine.WispEventPump$Pool");
+        Field pumps = clazz.getDeclaredField("pumps");
+        pumps.setAccessible(true);
+        Object[] a = (Object[]) pumps.get(clazz.getEnumConstants()[0]);
+        WispTask[] fd2TaskLow = null;
         int fd = ((SelChImpl) ch).getFDVal();
-        assertTrue(fd2TaskLow[fd] != null);
-
-        System.out.println(fd2TaskLow[fd].getName());
+        for (Object pump : a) {
+            Field f = Class.forName("com.alibaba.wisp.engine.WispEventPump").getDeclaredField("fd2ReadTaskLow");
+            f.setAccessible(true);
+            WispTask[] map = (WispTask[]) f.get(pump);
+            if (map[fd] != null) {
+                fd2TaskLow = map;
+            }
+        }
+        assertNotNull(fd2TaskLow);
 
         access.park(-1);
 

@@ -40,7 +40,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import com.alibaba.wisp.engine.WispEngine;
 import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.module.ServicesCatalog;
 import jdk.internal.reflect.ConstantPool;
@@ -314,10 +313,6 @@ public interface JavaLangAccess {
     Thread currentThread0();
 
     void yield0();
-
-    void setWispEngine(Thread thread, WispEngine engine);
-
-    WispEngine getWispEngine(Thread thread);
 
     void setWispTask(Thread thread, WispTask task);
 

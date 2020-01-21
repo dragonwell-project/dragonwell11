@@ -6,15 +6,11 @@
  * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestWisp2Shutdown
  */
 
-import java.lang.reflect.Constructor;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.alibaba.wisp.engine.WispEngine;
-import com.alibaba.wisp.engine.WispGroup;
 
 import static jdk.testlibrary.Asserts.assertEQ;
 import static jdk.testlibrary.Asserts.assertTrue;
@@ -25,7 +21,7 @@ public class TestWisp2Shutdown {
     private static void basicShutDownTest() throws Exception {
         AtomicInteger n = new AtomicInteger();
 
-        WispGroup g = WispGroup.createGroup(4, Thread::new);
+        WispEngine g = WispEngine.createEngine(4, Thread::new);
 
         for (int i = 0; i < 888; i++) {
             g.execute(() -> {

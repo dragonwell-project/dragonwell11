@@ -4,17 +4,18 @@ import jdk.internal.misc.JavaLangAccess;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.UnsafeAccess;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 /**
- * Wisp2 work-stealing implementation.
- * <p>
- * Every carrier thread has a {@link ConcurrentLinkedQueue} to
+ * Wisp work-stealing scheduler.
+ * Every worker thread has a {@link ConcurrentLinkedQueue} to
  * receive tasks.
- * Once local queue is empty, carrier will scan
+ * Once local queue is empty, worker will scan
  * others' queue, execute stolen task, then check local queue.
  * Again and again, until all the queue is empty.
  */
@@ -32,46 +33,46 @@ class WispScheduler {
     private int HELP_STEAL_RETRY;
     private final boolean IS_ROOT_CARRIER;
 
-    // carriers could be changed by handOff(),
-    // add volatile to avoiding carriers's elements
+    // workers could be changed by handOff(),
+    // add volatile to avoiding workers's elements
     // to be allocated in register.
     // we could not add volatile volatile modifier
     // to array elements, so make the array volatile.
-    private volatile Carrier[] carriers;
+    private volatile Worker[] workers;
     private final ThreadFactory threadFactory;
-    private final WispGroup group;
+    private final WispEngine engine;
     private int sharedSeed = randomSeed();
 
-    WispScheduler(int parallelism, ThreadFactory threadFactory, WispGroup group) {
+    WispScheduler(int parallelism, ThreadFactory threadFactory, WispEngine group) {
         this(parallelism, Math.max(1, parallelism / 2), parallelism,
                 Math.max(1, parallelism / 4), threadFactory, group, false);
     }
 
     WispScheduler(int parallelism, int stealRetry, int pushRetry, int helpStealRetry,
-                  ThreadFactory threadFactory, WispGroup group, boolean isRootCarrier) {
+                  ThreadFactory threadFactory, WispEngine engine, boolean isRootCarrier) {
         assert parallelism > 0;
         PARALLEL = parallelism;
         STEAL_RETRY = stealRetry;
         PUSH_RETRY = pushRetry;
         HELP_STEAL_RETRY = helpStealRetry;
         IS_ROOT_CARRIER = isRootCarrier;
-        this.group = group;
+        this.engine = engine;
         this.threadFactory = threadFactory;
-        carriers = new Carrier[PARALLEL];
+        workers = new Worker[PARALLEL];
         for (int i = parallelism - 1; i >= 0; i--) {
-            carriers[i] = new Carrier();
-            carriers[i].next = i == PARALLEL - 1 ? null : carriers[i + 1];
+            workers[i] = new Worker(i);
+            workers[i].next = i == PARALLEL - 1 ? null : workers[i + 1];
         }
-        carriers[PARALLEL - 1].next = carriers[0];
+        workers[PARALLEL - 1].next = workers[0];
         if (!isRootCarrier) {
-            // root carrier threads are started in startWispDaemons()
-            startCarrierThreads();
+            // root worker threads are started in startWispDaemons()
+            startWorkerThreads();
         }
     }
 
-    void startCarrierThreads() {
-        for (Carrier carrier : carriers) {
-            carrier.thread.start();
+    void startWorkerThreads() {
+        for (Worker worker : workers) {
+            worker.thread.start();
         }
     }
 
@@ -79,25 +80,27 @@ class WispScheduler {
         return sharedSeed = nextRandom(sharedSeed);
     }
 
-    class Carrier implements Runnable {
+    class Worker implements Runnable {
         ConcurrentLinkedQueue<StealAwareRunnable> taskQueue;
         private final TimeOut.TimerManager timerManager;
         private final Thread thread;
-        volatile boolean detached = false;
-        private Carrier next;
+        private final WispEventPump pump; // ONE pump verse N worker relationship
+        volatile boolean hasBeenHandoff = false;
+        private Worker next;
 
         private final static int QL_PROCESSING_TIMER = -1; // idle than ql=0, but not really idle
-        private final static int QL_POLLING = -102;
-        private final static int QL_IDLE = -202;
+        private final static int QL_POLLING = -1000002;
+        private final static int QL_IDLE = -2000002;
 
         volatile int queueLength;
 
-        Carrier() {
+        Worker(int index) {
             thread = threadFactory.newThread(this);
             WispEngine.carrierThreads.add(thread);
             taskQueue = new ConcurrentLinkedQueue<>();
             timerManager = new TimeOut.TimerManager();
             queueLength = 0;
+            pump = WispConfiguration.CARRIER_AS_POLLER && IS_ROOT_CARRIER ? WispEventPump.Pool.INSTANCE.getPump(index) : null;
         }
 
         void processTimer() {
@@ -107,18 +110,28 @@ class WispScheduler {
         @Override
         public void run() {
             try {
-                WispEngine engine = WispEngine.current();
-                engine.group = group;
-                engine.carrier = this;
-                group.carrierEngines.add(engine);
-                engine.registerPerfCounter();
-                runCarrier(engine);
+                WispCarrier carrier = WispCarrier.current();
+                carrier.engine = WispScheduler.this.engine;
+                carrier.worker = this;
+                WispScheduler.this.engine.carrierEngines.add(carrier);
+                WispEngine.registerPerfCounter(carrier);
+                WispSysmon.INSTANCE.register(carrier);
+                runCarrier(carrier);
             } finally {
                 WispEngine.carrierThreads.remove(thread);
+                try {
+                    engine.shutdownBarrier.await();
+                } catch (Exception e) {
+                    StringWriter sw = new StringWriter();
+                    e.printStackTrace(new PrintWriter(sw));
+                    System.out.println("[Wisp-ERROR] unexpected error "
+                            + "on current" + Thread.currentThread() + "has exception"
+                            + sw.toString());
+                }
             }
         }
 
-        private void runCarrier(final WispEngine engine) {
+        private void runCarrier(final WispCarrier carrier) {
             int r = randomSeed();
             Runnable task;
             while (true) {
@@ -126,10 +139,8 @@ class WispScheduler {
                     doExec(task);
                 }
 
-                if (detached) {
-                    if (engine.runningTaskCount == 0) {
-                        return;
-                    }
+                if (carrier.engine.detached) {
+                    return;
                 } else if ((task = SCHEDULING_POLICY.steal(this, r = nextRandom(r))) != null) {
                     doExec(task);
                     continue; // process local queue
@@ -147,9 +158,7 @@ class WispScheduler {
             final long deadline = timerManager.processTimeoutEventsAndGetWaitDeadline(now);
             assert deadline != 0;
             if (queueLength == st) {
-                int update = WispConfiguration.CARRIER_AS_POLLER && IS_ROOT_CARRIER &&
-                        WispEventPump.INSTANCE.tryAcquire(this) ?
-                        QL_POLLING : QL_IDLE;
+                int update = pump != null && pump.tryAcquire(this) ? QL_POLLING : QL_IDLE;
                 if (LENGTH_UPDATER.compareAndSet(this, st, update)) {
                     st = update;
                     if (taskQueue.peek() == null) {
@@ -161,7 +170,7 @@ class WispScheduler {
                     }
                 }
                 if (update == QL_POLLING) {
-                    WispEventPump.INSTANCE.release(this);
+                    pump.release(this);
                 }
             }
             LENGTH_UPDATER.addAndGet(this, -st);
@@ -169,7 +178,7 @@ class WispScheduler {
 
         private void doPolling(final long deadline, long now) {
             while ((deadline < 0 || deadline > now) &&
-                    !WispEventPump.INSTANCE.pollAndDispatchEvents(
+                    !pump.pollAndDispatchEvents(
                             deadline < 0 ? -1 : TimeOut.nanos2Millis(deadline - now)) &&
                     queueLength == QL_POLLING) { // if wakened by event, we can still waiting..
                 now = deadline < 0 ? now : System.nanoTime();
@@ -185,7 +194,7 @@ class WispScheduler {
                 if (len == QL_IDLE) {
                     UA.unpark0(this.thread);
                 } else if (len == QL_POLLING) {
-                    WispEventPump.INSTANCE.wakeup();
+                    pump.wakeup();
                 }
             }
             return len < 0;
@@ -207,7 +216,7 @@ class WispScheduler {
                     // disable steal is a very uncommon case,
                     // The overhead of re-enqueue is acceptable
                     // use pushAndSignal rather than offer,
-                    // let the carrier execute the task as soon as possible.
+                    // let the worker execute the task as soon as possible.
                     pushAndSignal(task);
                     return null;
                 }
@@ -227,12 +236,12 @@ class WispScheduler {
             doSignalIfNecessary(queueLength);
         }
 
-        void copyContextFromDetachedCarrier(Carrier detachedCarrier) {
+        void copyContextFromDetachedCarrier(Worker detachedWorker) {
             // copy timers
-            timerManager.copyTimer(detachedCarrier.timerManager.queue);
+            timerManager.copyTimer(detachedWorker.timerManager.queue);
             // drain wispTasks
             StealAwareRunnable task;
-            while ((task = detachedCarrier.taskQueue.poll()) != null) {
+            while ((task = detachedWorker.taskQueue.poll()) != null) {
                 pushAndSignal(task);
             }
         }
@@ -243,179 +252,179 @@ class WispScheduler {
     }
 
     /**
-     * try steal one task from the most busy carrier's queue
+     * try steal one task from the most busy worker's queue
      *
      * @param r random seed
      */
     private Runnable trySteal(int r) {
-        Carrier busyCarrier = null;
+        Worker busyWorker = null;
         for (int i = 0; i < STEAL_RETRY; i++) {
-            final Carrier c = getCarrier(r + i);
-            int ql = c.queueLength;
+            final Worker w = getWorker(r + i);
+            int ql = w.queueLength;
             if (ql >= STEAL_HIGH_WATER_LEVEL) {
-                Runnable task = c.pollTask(true);
+                Runnable task = w.pollTask(true);
                 if (task != null) {
                     return task;
                 }
             }
-            if (busyCarrier == null || ql > busyCarrier.queueLength) {
-                busyCarrier = c;
+            if (busyWorker == null || ql > busyWorker.queueLength) {
+                busyWorker = w;
             }
         }
         // If busyCarrier's head is disable steal, we also miss the
-        // chance of steal from second busy carrier..
+        // chance of steal from second busy worker..
         // For disable steal is uncommon path, current implementation is good enough..
-        return busyCarrier == null ? null : busyCarrier.pollTask(true);
+        return busyWorker == null ? null : busyWorker.pollTask(true);
     }
 
     /**
-     * Find an idle carrier, and push task to it's work queue
+     * Find an idle worker, and push task to it's work queue
      *
      * @param n       retry times
      * @param command the task
-     * @param force   push even all carriers are busy
-     * @return success push to a idle carrier
+     * @param force   push even all workers are busy
+     * @return success push to a idle worker
      */
     private boolean tryPush(int n, StealAwareRunnable command, boolean force) {
         assert n > 0;
         int r = generateRandom();
-        Carrier idleCarrier = null;
+        Worker idleWorker = null;
         int idleQl = Integer.MAX_VALUE;
 
-        Carrier c = getCarrier(r);
-        for (int i = 0; i < n; i++, c = c.next) {
-            if (c.idleOrPolling()) {
+        Worker w = getWorker(r);
+        for (int i = 0; i < n; i++, w = w.next) {
+            if (w.idleOrPolling()) {
                 if (command != null) {
-                    c.pushAndSignal(command);
+                    w.pushAndSignal(command);
                 } else {
-                    c.signal();
+                    w.signal();
                 }
                 return true;
             }
-            int ql = c.queueLength;
+            int ql = w.queueLength;
             if (ql < idleQl) {
-                idleCarrier = c;
+                idleWorker = w;
                 idleQl = ql;
             }
         }
         if (force) {
-            assert idleCarrier != null && command != null;
-            idleCarrier.pushAndSignal(command);
+            assert idleWorker != null && command != null;
+            idleWorker.pushAndSignal(command);
             return true;
         }
         return false;
     }
 
-    private Carrier getCarrier(int r) {
-        return carriers[(r & IDX_MASK) % PARALLEL];
+    private Worker getWorker(int r) {
+        return workers[(r & IDX_MASK) % PARALLEL];
     }
 
     /**
-     * cast thread to carrier
+     * cast thread to worker
      *
-     * @param detachedAsNull treat detached carrier as not carrier thread if detachedAsNull is true.
-     * @return null means thread is not considered as a carrier
+     * @param detachedAsNull treat detached worker as not worker thread if detachedAsNull is true.
+     * @return null means thread is not considered as a worker
      */
-    private Carrier castToCarrier(Thread thread, boolean detachedAsNull) {
+    private Worker castToWorker(Thread thread, boolean detachedAsNull) {
         if (thread == null) {
             return null;
         }
-        Carrier carrier = JLA.getWispEngine(thread).carrier;
-        if (carrier == null || carrier.theScheduler() != this) {
+        Worker worker = JLA.getWispTask(thread).carrier.worker;
+        if (worker == null || worker.theScheduler() != this) {
             return null;
         } else {
-            return (detachedAsNull && carrier.detached) ? null : carrier;
+            return detachedAsNull && worker.hasBeenHandoff ? null : worker;
         }
     }
 
     void addTimer(TimeOut timeOut, Thread current) {
-        Carrier carrier = castToCarrier(current, true);
-        if (carrier != null) {
-            carrier.timerManager.addTimer(timeOut);
+        Worker worker = castToWorker(current, true);
+        if (worker != null) {
+            worker.timerManager.addTimer(timeOut);
         } else {
             tryPush(1, new StealAwareRunnable() {
                 @Override
                 public void run() {
-                    //Adding timer to detached carrier is ok since we rely on 
+                    //Adding timer to detached worker is ok since we rely on
                     //interrupt to wakeup all wispTasks in shutdown
-                    Carrier carrier = castToCarrier(JLA.currentThread0(), false);
-                    assert carrier != null;
-                    carrier.timerManager.addTimer(timeOut);
+                    Worker worker = castToWorker(JLA.currentThread0(), false);
+                    assert worker != null;
+                    worker.timerManager.addTimer(timeOut);
                 }
             }, true);
         }
     }
 
     void cancelTimer(TimeOut timeOut, Thread current) {
-        Carrier carrier = castToCarrier(current, true);
-        if (carrier != null) {
-            carrier.timerManager.cancelTimer(timeOut);
+        Worker worker = castToWorker(current, true);
+        if (worker != null) {
+            worker.timerManager.cancelTimer(timeOut);
         }
     }
 
     /**
      * Run the command on the specified thread.
      * Used to implement Thread affinity for scheduler.
-     * When execute with detached carrier thread, we try to execute this task by
-     * other carriers, if this step failed command would be marked as can't be stolen,
-     * then we push this command to detached carrier.
+     * When execute with detached worker thread, we try to execute this task by
+     * other workers, if this step failed command would be marked as can't be stolen,
+     * then we push this command to detached worker.
      *
      * @param command the code
      * @param thread  target thread
      */
-    void executeWithCarrierThread(StealAwareRunnable command, Thread thread) {
-        final Carrier carrier = castToCarrier(thread, false);
+    void executeWithWorkerThread(StealAwareRunnable command, Thread thread) {
+        final Worker worker = castToWorker(thread, false);
         boolean stealEnable = command.isStealEnable();
-        if (carrier == null || carrier.detached && stealEnable) {
-            // detached carrier try to execute from global scheduler at first
+        if (worker == null || worker.hasBeenHandoff && stealEnable) {
+            // detached worker try to execute from global scheduler at first
             execute(command);
         } else {
-            SCHEDULING_POLICY.enqueue(carrier, stealEnable, command);
+            SCHEDULING_POLICY.enqueue(worker, stealEnable, command);
         }
     }
 
     enum SchedulingPolicy {
         PULL {
-            // always enqueue to the bounded carrier, but carriers will steal tasks from each other.
+            // always enqueue to the bounded worker, but workers will steal tasks from each other.
             @Override
-            void enqueue(Carrier carrier, boolean stealEnable, StealAwareRunnable command) {
-                WispScheduler scheduler = carrier.theScheduler();
-                if (!carrier.pushAndSignal(command) && stealEnable && scheduler.HELP_STEAL_RETRY > 0) {
-                    scheduler.signalIdleCarrierToHelpSteal();
+            void enqueue(Worker worker, boolean stealEnable, StealAwareRunnable command) {
+                WispScheduler scheduler = worker.theScheduler();
+                if (!worker.pushAndSignal(command) && stealEnable && scheduler.HELP_STEAL_RETRY > 0) {
+                    scheduler.signalIdleWorkerToHelpSteal();
                 }
             }
 
             @Override
-            Runnable steal(Carrier carrier, int r) {
-                return carrier.theScheduler().trySteal(r);
+            Runnable steal(Worker worker, int r) {
+                return worker.theScheduler().trySteal(r);
             }
         },
         PUSH {
-            // never try to pull other carrier's queues, but choose an idle carrier when we're enqueueing
+            // never try to pull other worker's queues, but choose an idle worker when we're enqueueing
             @Override
-            void enqueue(Carrier carrier, boolean stealEnable, StealAwareRunnable command) {
-                WispScheduler scheduler = carrier.theScheduler();
+            void enqueue(Worker worker, boolean stealEnable, StealAwareRunnable command) {
+                WispScheduler scheduler = worker.theScheduler();
                 if (stealEnable
-                        && !(carrier.idleOrPolling() || carrier.isProcessingTimer())
+                        && !(worker.idleOrPolling() || worker.isProcessingTimer())
                         && scheduler.STEAL_RETRY > 0
                         && scheduler.tryPush(scheduler.STEAL_RETRY, command, false)) {
                     return;
                 }
-                carrier.pushAndSignal(command);
+                worker.pushAndSignal(command);
             }
 
             @Override
-            Runnable steal(Carrier carrier, int r) {
+            Runnable steal(Worker worker, int r) {
                 return null;
             }
         };
 
-        abstract void enqueue(Carrier carrier, boolean stealEnable, StealAwareRunnable command);
+        abstract void enqueue(Worker worker, boolean stealEnable, StealAwareRunnable command);
 
-        abstract Runnable steal(Carrier carrier, int r);
+        abstract Runnable steal(Worker worker, int r);
     }
 
-    private void signalIdleCarrierToHelpSteal() {
+    private void signalIdleWorkerToHelpSteal() {
         tryPush(HELP_STEAL_RETRY, null, false);
     }
 
@@ -430,71 +439,71 @@ class WispScheduler {
     }
 
     /**
-     * Detach carrier and create a new carrier to replace it.
+     * Detach worker and create a new worker to replace it.
      * This function should only be called by Wisp-Sysmon
      */
-    void handOffCarrierThread(Thread thread) {
+    void handOffWorkerThread(Thread thread) {
         assert WispSysmon.WISP_SYSMON_NAME.equals(Thread.currentThread().getName());
-        Carrier carrier = castToCarrier(thread, true);
-        if (carrier != null && !carrier.detached) {
-            carrier.detached = true;
-            carrier.pushAndSignal(new StealAwareRunnable() {
+        Worker worker = castToWorker(thread, true);
+        if (worker != null && !worker.hasBeenHandoff) {
+            worker.hasBeenHandoff = true;
+            worker.pushAndSignal(new StealAwareRunnable() {
                 @Override
                 public void run() {
                 }
             }); // ensure `detached` visibility
-            carrier.thread.setName(carrier.thread.getName() + " (HandOff)");
-            Carrier[] cs = Arrays.copyOf(this.carriers, carriers.length);
-            Carrier last = cs[PARALLEL - 1];
+            worker.thread.setName(worker.thread.getName() + " (HandOff)");
+            Worker[] cs = Arrays.copyOf(this.workers, workers.length);
+            Worker last = cs[PARALLEL - 1];
             for (int i = 0; i < PARALLEL; i++) {
-                if (cs[i] == carrier) {
-                    cs[i] = new Carrier();
-                    // tasks blocked on detached carrier may not be scheduled in time
+                if (cs[i] == worker) {
+                    cs[i] = new Worker(i);
+                    // tasks blocked on detached worker may not be scheduled in time
                     // because it's in long-time syscall, so we try our best to delegate
-                    // all context to the new carrier
-                    cs[i].copyContextFromDetachedCarrier(carrier);
-                    cs[i].next = carrier.next;
+                    // all context to the new worker
+                    cs[i].copyContextFromDetachedCarrier(worker);
+                    cs[i].next = worker.next;
                     last.next = cs[i];
                     cs[i].thread.start();
                     break;
                 }
                 last = cs[i];
             }
-            carriers = cs;
-            JLA.getWispEngine(thread).deRegisterPerfCounter();
+            workers = cs;
+            WispEngine.deRegisterPerfCounter(JLA.getWispTask(thread).carrier);
         }
     }
 
     /**
-     * Check if current processor number exceeds carriers.length, if so we add new carriers
+     * Check if current processor number exceeds workers.length, if so we add new workers
      * to this scheduler.
      * This function should only be called by Wisp-Sysmon
      */
-    void checkAndGrowCarriers(int availableProcessors) {
+    void checkAndGrowWorkers(int availableProcessors) {
         assert WispSysmon.WISP_SYSMON_NAME.equals(Thread.currentThread().getName());
-        if (availableProcessors <= carriers.length) {
+        if (availableProcessors <= workers.length) {
             return;
         }
-        double growFactor = (double) availableProcessors / (double) carriers.length;
-        Carrier[] cs = Arrays.copyOf(this.carriers, availableProcessors);
-        for (int i = availableProcessors - 1; i >= carriers.length; i--) {
+        double growFactor = (double) availableProcessors / (double) workers.length;
+        Worker[] cs = Arrays.copyOf(this.workers, availableProcessors);
+        for (int i = availableProcessors - 1; i >= workers.length; i--) {
             if (cs[i] == null) {
-                cs[i] = new Carrier();
+                cs[i] = new Worker(i);
                 cs[i].next = i == availableProcessors - 1 ? cs[0] : cs[i + 1];
             }
         }
-        cs[carriers.length - 1].next = cs[carriers.length];
-        for (int i = carriers.length; i < availableProcessors; i++) {
+        cs[workers.length - 1].next = cs[workers.length];
+        for (int i = workers.length; i < availableProcessors; i++) {
             cs[i].thread.start();
         }
-        int originLength = carriers.length;
-        carriers = cs;
+        int originLength = workers.length;
+        workers = cs;
         adjustParameters(originLength, growFactor);
     }
 
     private void adjustParameters(int originLength, double growFactor) {
         PARALLEL = Integer.min((int) Math.round((double) originLength * growFactor),
-                carriers.length);
+                workers.length);
         PUSH_RETRY = ((int) (PARALLEL * growFactor));
         STEAL_RETRY = ((int) (STEAL_RETRY * growFactor));
         HELP_STEAL_RETRY = ((int) (HELP_STEAL_RETRY * growFactor));
@@ -522,8 +531,8 @@ class WispScheduler {
         return r;
     }
 
-    private static final AtomicIntegerFieldUpdater<Carrier> LENGTH_UPDATER =
-            AtomicIntegerFieldUpdater.newUpdater(Carrier.class, "queueLength");
+    private static final AtomicIntegerFieldUpdater<Worker> LENGTH_UPDATER =
+            AtomicIntegerFieldUpdater.newUpdater(Worker.class, "queueLength");
     private static final UnsafeAccess UA = SharedSecrets.getUnsafeAccess();
     private static final JavaLangAccess JLA = SharedSecrets.getJavaLangAccess();
 }

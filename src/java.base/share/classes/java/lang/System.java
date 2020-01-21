@@ -2222,16 +2222,6 @@ public final class System {
             }
 
             @Override
-            public void setWispEngine(Thread thread, WispEngine engine) {
-                thread.wispEngine = engine;
-            }
-
-            @Override
-            public WispEngine getWispEngine(Thread thread) {
-                return thread.wispEngine;
-            }
-
-            @Override
             public void setWispTask(Thread thread, WispTask task) {
                 thread.wispTask = task;
             }

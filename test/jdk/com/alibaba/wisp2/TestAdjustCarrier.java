@@ -6,7 +6,7 @@
  * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.growCarrierTickUs=200000  TestAdjustCarrier
  */
 
-import com.alibaba.wisp.engine.WispGroup;
+import com.alibaba.wisp.engine.WispEngine;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -21,9 +21,9 @@ public class TestAdjustCarrier {
 	public static void main(String[] args) throws Exception{
 		Thread.currentThread().setName("Wisp-Sysmon");
 		Class<?> claz = Class.forName("com.alibaba.wisp.engine.WispScheduler");
-		Method method = claz.getDeclaredMethod("checkAndGrowCarriers", int.class);
+		Method method = claz.getDeclaredMethod("checkAndGrowWorkers", int.class);
 		method.setAccessible(true);
-        ExecutorService g = WispGroup.createGroup(4, Thread::new);
+        ExecutorService g = WispEngine.createEngine(4, Thread::new);
 
 		CountDownLatch latch = new CountDownLatch(100);
 		CountDownLatch grow = new CountDownLatch(1);
@@ -39,7 +39,7 @@ public class TestAdjustCarrier {
             });
         }
 
-		Field scheduler = Class.forName("com.alibaba.wisp.engine.WispGroup").getDeclaredField("scheduler");
+        Field scheduler = Class.forName("com.alibaba.wisp.engine.WispEngine").getDeclaredField("scheduler");
 		scheduler.setAccessible(true);
 		method.invoke(scheduler.get(g), 100);
 		grow.countDown();
@@ -49,7 +49,7 @@ public class TestAdjustCarrier {
         }
 
 		latch.await();
-		Field f = claz.getDeclaredField("carriers");
+		Field f = claz.getDeclaredField("workers");
 		f.setAccessible(true);
 		System.out.println(f.get(scheduler.get(g)).getClass().toString());
 		assertTrue(((Object[]) (f.get(scheduler.get(g)))).length == 100);

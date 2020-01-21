@@ -7,10 +7,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Function;
-import jdk.internal.misc.SharedSecrets;
-import jdk.internal.misc.WispEngineAccess;
 
 enum WispPerfCounterMonitor {
     INSTANCE;
@@ -45,13 +42,13 @@ enum WispPerfCounterMonitor {
     void register(WispCounter counter) {
         if (WispConfiguration.WISP_PROFILE) {
             WispPerfCounter wispPerfCounter = new WispPerfCounter(counter);
-            managedEngineCounters.put(counter.engine.getId(), wispPerfCounter);
+            managedEngineCounters.put(counter.carrier.getId(), wispPerfCounter);
         }
     }
 
     void deRegister(WispCounter counter) {
         if (WispConfiguration.WISP_PROFILE) {
-            managedEngineCounters.remove(counter.engine.getId());
+            managedEngineCounters.remove(counter.carrier.getId());
         }
     }
 

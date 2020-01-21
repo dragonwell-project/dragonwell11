@@ -16,7 +16,7 @@ enum WispSysmon {
         registerNatives();
     }
 
-    private Set<WispEngine> engines = new ConcurrentSkipListSet<>();
+    private Set<WispCarrier> carriers = new ConcurrentSkipListSet<>();
     final static String WISP_SYSMON_NAME = "Wisp-Sysmon";
 
     void startDaemon() {
@@ -29,9 +29,9 @@ enum WispSysmon {
         }
     }
 
-    void register(WispEngine engine) {
+    void register(WispCarrier carrier) {
         if (WispConfiguration.ENABLE_HANDOFF) {
-            engines.add(engine);
+            carriers.add(carrier);
         }
     }
 
@@ -40,7 +40,7 @@ enum WispSysmon {
         final long carrierCheckRate = TimeUnit.MICROSECONDS.toNanos(WispConfiguration.SYSMON_CARRIER_GROW_TICK_US);
         final long checkCarrierOnNthTick = carrierCheckRate / interval;
         final boolean checkCarrier = WispConfiguration.CARRIER_GROW && checkCarrierOnNthTick > 0
-                // Detach group's worker cnt is not specified by configuration
+                // Detach carrier's worker cnt is not specified by configuration
                 && WispConfiguration.WORKER_COUNT == Runtime.getRuntime().availableProcessors();
         long nextTick = System.nanoTime() + interval;
         int tick = 0;
@@ -53,7 +53,7 @@ enum WispSysmon {
                 } while ((timeout = nextTick - System.nanoTime()) > 0);
                 handleLongOccupation();
                 if (checkCarrier && tick++ == checkCarrierOnNthTick) {
-                    WispGroup.WISP_ROOT_GROUP.scheduler.checkAndGrowCarriers(Runtime.getRuntime().availableProcessors());
+                    WispEngine.WISP_ROOT_ENGINE.scheduler.checkAndGrowWorkers(Runtime.getRuntime().availableProcessors());
                     tick = 0;
                 }
             } // else: we're too slow, skip a tick
@@ -61,29 +61,29 @@ enum WispSysmon {
         }
     }
 
-    private List<WispEngine> longOccupationEngines = new ArrayList<>();
+    private List<WispCarrier> longOccupationEngines = new ArrayList<>();
 
     /**
-     * Handle a WispTask occupied a carrier thread for long time.
+     * Handle a WispTask occupied a worker thread for long time.
      */
     private void handleLongOccupation() {
-        for (WispEngine engine : engines) {
-            if (engine.terminated) {
+        for (WispCarrier carrier : carriers) {
+            if (carrier.terminated) {
                 // remove in iteration is OK for ConcurrentSkipListSet
-                engines.remove(engine);
+                carriers.remove(carrier);
                 continue;
             }
-            if (engine.isRunning() && engine.schedTick == engine.lastSchedTick) {
-                longOccupationEngines.add(engine);
+            if (carrier.isRunning() && carrier.schedTick == carrier.lastSchedTick) {
+                longOccupationEngines.add(carrier);
             }
-            engine.lastSchedTick = engine.schedTick;
+            carrier.lastSchedTick = carrier.schedTick;
         }
 
         if (!longOccupationEngines.isEmpty()) {
-            Iterator<WispEngine> itr = longOccupationEngines.iterator();
+            Iterator<WispCarrier> itr = longOccupationEngines.iterator();
             while (itr.hasNext()) {
-                WispEngine engine = itr.next();
-                WispConfiguration.HANDOFF_POLICY.handle(engine, !itr.hasNext());
+                WispCarrier carrier = itr.next();
+                WispConfiguration.HANDOFF_POLICY.handle(carrier, !itr.hasNext());
                 itr.remove();
             }
         }
@@ -91,34 +91,34 @@ enum WispSysmon {
     }
 
     enum Policy {
-        HAND_OFF { // handOff the carrier
+        HAND_OFF { // handOff the worker
             @Override
-            void handle(WispEngine engine, boolean isLast) {
-                if (JLA.isInSameNative(engine.thread)) {
-                    engine.handOff();
-                    INSTANCE.engines.remove(engine);
+            void handle(WispCarrier carrier, boolean isLast) {
+                if (JLA.isInSameNative(carrier.thread)) {
+                    carrier.handOff();
+                    INSTANCE.carriers.remove(carrier);
                 }
             }
         },
         PREEMPT { // insert a yield() after next safepoint
             @Override
-            void handle(WispEngine engine, boolean isLast) {
-                markPreempted(engine.thread, isLast);
+            void handle(WispCarrier carrier, boolean isLast) {
+                markPreempted(carrier.thread, isLast);
             }
         },
         ADAPTIVE { // depends on thread status
             @Override
-            void handle(WispEngine engine, boolean isLast) {
-                if (JLA.isInSameNative(engine.thread)) {
-                    engine.handOff();
-                    INSTANCE.engines.remove(engine);
+            void handle(WispCarrier carrier, boolean isLast) {
+                if (JLA.isInSameNative(carrier.thread)) {
+                    carrier.handOff();
+                    INSTANCE.carriers.remove(carrier);
                 } else {
-                    markPreempted(engine.thread, isLast);
+                    markPreempted(carrier.thread, isLast);
                 }
             }
         };
 
-        abstract void handle(WispEngine engine, boolean isLast);
+        abstract void handle(WispCarrier carrier, boolean isLast);
 
     }
 

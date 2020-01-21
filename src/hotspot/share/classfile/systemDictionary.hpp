@@ -222,6 +222,7 @@ class OopStorage;
   do_klass(com_alibaba_wisp_engine_WispTask_CacheableCoroutine_klass,                                                    \
                                                         com_alibaba_wisp_engine_WispTask_CacheableCoroutine, Opt       ) \
   do_klass(com_alibaba_wisp_engine_WispEngine_klass,    com_alibaba_wisp_engine_WispEngine,        Opt                 ) \
+  do_klass(com_alibaba_wisp_engine_WispCarrier_klass,   com_alibaba_wisp_engine_WispCarrier,        Opt                 ) \
   do_klass(com_alibaba_wisp_engine_WispEventPump_klass, com_alibaba_wisp_engine_WispEventPump,     Opt                 ) \
   /* JVMCI classes. These are loaded on-demand. */                                                                       \
   JVMCI_WK_KLASSES_DO(do_klass)                                                                                          \

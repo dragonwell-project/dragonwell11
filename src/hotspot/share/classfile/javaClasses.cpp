@@ -4461,21 +4461,21 @@ void java_dyn_CoroutineBase::set_data(oop obj, jlong value) {
 #define WISPENGINE_FIELDS_DO(macro) \
   macro(_isInCritical_offset, k, vmSymbols::isInCritical_name(), bool_signature, false)
 
-int com_alibaba_wisp_engine_WispEngine::_isInCritical_offset = 0;
+int com_alibaba_wisp_engine_WispCarrier::_isInCritical_offset = 0;
 
-void com_alibaba_wisp_engine_WispEngine::compute_offsets() {
-  InstanceKlass* k = SystemDictionary::com_alibaba_wisp_engine_WispEngine_klass();
+void com_alibaba_wisp_engine_WispCarrier::compute_offsets() {
+  InstanceKlass* k = SystemDictionary::com_alibaba_wisp_engine_WispCarrier_klass();
   assert(k != NULL, "WispEngine_klass is null");
   WISPENGINE_FIELDS_DO(FIELD_COMPUTE_OFFSET);
 }
 
 #if INCLUDE_CDS
-void com_alibaba_wisp_engine_WispEngine::serialize(SerializeClosure* f) {
+void com_alibaba_wisp_engine_WispCarrier::serialize(SerializeClosure* f) {
   WISPENGINE_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
 }
 #endif
 
-bool com_alibaba_wisp_engine_WispEngine::in_critical(oop obj) {
+bool com_alibaba_wisp_engine_WispCarrier::in_critical(oop obj) {
   return obj->bool_field(_isInCritical_offset);
 }
 
@@ -4630,7 +4630,7 @@ void JavaClasses::compute_offsets() {
 
   if (EnableCoroutine) {
     java_dyn_CoroutineBase::compute_offsets();
-    com_alibaba_wisp_engine_WispEngine::compute_offsets();
+    com_alibaba_wisp_engine_WispCarrier::compute_offsets();
     com_alibaba_wisp_engine_WispTask::compute_offsets();
   }
 }

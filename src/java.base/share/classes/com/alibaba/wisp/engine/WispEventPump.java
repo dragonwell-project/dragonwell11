@@ -16,22 +16,23 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 
-enum WispEventPump {
 
-    INSTANCE;
-
+class WispEventPump {
     private static final int LOW_FD_BOUND = 1024 * 10;
     private static final int MAX_EVENTS_TO_POLL = 512;
+    private static final EpollAccess EA;
 
-    private final EpollAccess EA;
     private final int epfd;
     private final int pipe0;
     private final int pipe1;
     private final long epollArray;
 
-    WispEventPump() {
+    static {
         sun.nio.ch.IOUtil.load();
         EA = SharedSecrets.getEpollAccess();
+    }
+
+    private WispEventPump() {
         try {
             epfd = EA.epollCreate();
             int[] a = new int[2];
@@ -45,6 +46,63 @@ enum WispEventPump {
             throw new UncheckedIOException(e);
         }
         epollArray = EA.allocatePollArray(MAX_EVENTS_TO_POLL);
+    }
+
+    enum Pool {
+        INSTANCE;
+        private final int mask;
+        private final WispEventPump[] pumps;
+
+        Pool() {
+            int n = Math.max(1, WispConfiguration.WORKER_COUNT / WispConfiguration.POLLER_SHARDING_SIZE);
+            n = (n & (n - 1)) == 0 ? n : Integer.highestOneBit(n) * 2; // next power of 2
+            mask = n - 1;
+            pumps = new WispEventPump[n];
+            for (int i = 0; i < pumps.length; i++) {
+                pumps[i] = new WispEventPump();
+            }
+        }
+
+        void startPollerThreads() {
+            int i = 0;
+            for (WispEventPump pump : pumps) {
+                Thread t = new Thread(WispEngine.daemonThreadGroup, new Runnable() {
+                    @Override
+                    public void run() {
+                        while (true) {
+                            pump.pollAndDispatchEvents(-1);
+                        }
+                    }
+                }, "Wisp-Poller-" + i++);
+                t.setDaemon(true);
+                t.start();
+            }
+        }
+
+        private static int hash(int x) {
+            // implementation of Knuth multiplicative algorithm.
+            return x * (int) 2654435761L;
+        }
+
+        void registerEvent(WispTask task, SelectableChannel ch, int event) throws IOException {
+            if (ch != null && ch.isOpen()) {
+                int fd = ((SelChImpl) ch).getFDVal();
+                pumps[hash(fd) & mask].registerEvent(task, fd, event);
+            }
+        }
+
+        int epollWaitForWisp(int epfd, long pollArray, int arraySize, long timeout, AtomicReference<Object> status,
+                             final Object INTERRUPTED) throws IOException {
+            return pumps[hash(epfd) & mask].epollWaitForWisp(epfd, pollArray, arraySize, timeout, status, INTERRUPTED);
+        }
+
+        void interruptEpoll(AtomicReference<Object> status, Object INTERRUPTED, int interruptFd) {
+            WispEventPump.interruptEpoll(status, INTERRUPTED, interruptFd);
+        }
+
+        WispEventPump getPump(int ord) {
+            return pumps[ord & mask];
+        }
     }
 
     /**
@@ -109,7 +167,7 @@ enum WispEventPump {
         return task;
     }
 
-    void registerEvent(WispTask task, int fd, int event) throws IOException {
+    private void registerEvent(WispTask task, int fd, int event) throws IOException {
         int ev = 0;
         // Translates an interest operation set into a native poll event set
         if ((event & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0) ev |= Net.POLLIN;
@@ -124,7 +182,7 @@ enum WispEventPump {
         recordTaskByFD(fd, task, ev);
         task.setRegisterEventTime();
         // we can do it multi-thread, because epoll is protected by spin lock in kernel
-        // When the EPOLLONESHOT flag is specified, it is the caller's responsibility to 
+        // When the EPOLLONESHOT flag is specified, it is the caller's responsibility to
         // rearm the file descriptor using epoll_ctl with EPOLL_CTL_MOD
         int res = EA.epollCtl(epfd, EpollAccess.EPOLL_CTL_MOD, fd, ev); // rearm
         if (res != 0 && !(res == EpollAccess.ENOENT && (res = EA.epollCtl(epfd, EpollAccess.EPOLL_CTL_ADD, fd, ev)) == 0)) {
@@ -145,11 +203,11 @@ enum WispEventPump {
      * @param INTERRUPTED const indicate for interrupted
      * @return selected event num
      */
-    int epollWaitForWisp(int epfd, long pollArray, int arraySize, long timeout,
-                         AtomicReference<Object> status, final Object INTERRUPTED) throws IOException {
+    private int epollWaitForWisp(int epfd, long pollArray, int arraySize, long timeout,
+                                 AtomicReference<Object> status, final Object INTERRUPTED) throws IOException {
         assert pollArray != 0;
-        WispTask me = WispEngine.current().current;
-        if (!(WispEngine.runningAsCoroutine(me.getThreadWrapper()))) {
+        WispTask me = WispCarrier.current().current;
+        if (!WispEngine.runningAsCoroutine(me.getThreadWrapper())) {
             return EA.epollWait(epfd, pollArray, arraySize, (int) timeout);
         }
         if (WispConfiguration.MONOLITHIC_POLL) {
@@ -201,7 +259,7 @@ enum WispEventPump {
         task.setEpollEventNum(EA.epollWait(fd, epollArray, task.epollArraySize, 0));
     }
 
-    void interruptEpoll(AtomicReference<Object> status, Object INTERRUPTED, int interruptFd) {
+    private static void interruptEpoll(AtomicReference<Object> status, Object INTERRUPTED, int interruptFd) {
         assert WispConfiguration.USE_DIRECT_SELECTOR_WAKEUP;
         while (true) {
             final Object st = status.get();
@@ -279,20 +337,20 @@ enum WispEventPump {
         }
     }
 
-    volatile WispScheduler.Carrier owner;
+    volatile WispScheduler.Worker owner;
 
-    boolean tryAcquire(WispScheduler.Carrier carrier) {
+    boolean tryAcquire(WispScheduler.Worker worker) {
         assert WispConfiguration.CARRIER_AS_POLLER;
-        return owner == null && OWNER_UPDATER.compareAndSet(this, null, carrier);
+        return owner == null && OWNER_UPDATER.compareAndSet(this, null, worker);
     }
 
-    void release(WispScheduler.Carrier carrier) {
-        assert owner == carrier;
+    void release(WispScheduler.Worker worker) {
+        assert owner == worker;
         OWNER_UPDATER.lazySet(this, null);
     }
 
-    private final static AtomicReferenceFieldUpdater<WispEventPump, WispScheduler.Carrier> OWNER_UPDATER =
-            AtomicReferenceFieldUpdater.newUpdater(WispEventPump.class, WispScheduler.Carrier.class, "owner");
+    private final static AtomicReferenceFieldUpdater<WispEventPump, WispScheduler.Worker> OWNER_UPDATER =
+            AtomicReferenceFieldUpdater.newUpdater(WispEventPump.class, WispScheduler.Worker.class, "owner");
     private final static AtomicIntegerFieldUpdater<WispEventPump> WAKEUP_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(WispEventPump.class, "wakeupCount");
 }

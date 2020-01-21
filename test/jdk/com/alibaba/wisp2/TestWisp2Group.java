@@ -19,7 +19,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.alibaba.wisp.engine.WispGroup;
+import com.alibaba.wisp.engine.WispEngine;
 import jdk.internal.misc.SharedSecrets;
 import static jdk.testlibrary.Asserts.assertTrue;
 
@@ -81,9 +81,9 @@ public class TestWisp2Group {
     };
 
     static class WispMultiThreadExecutor extends AbstractExecutorService {
-        private final WispGroup delegated;
+        private final WispEngine delegated;
         public WispMultiThreadExecutor(int threadCount, ThreadFactory threadFactory) {
-            delegated = WispGroup.createGroup(threadCount, threadFactory);
+            delegated = WispEngine.createEngine(threadCount, threadFactory);
         }
 
         @Override

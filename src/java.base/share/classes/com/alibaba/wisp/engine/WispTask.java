@@ -13,8 +13,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.*;
-import java.util.function.Supplier;
-
 
 /**
  * {@link WispTask} provides high-level semantics of {link @Coroutine}
@@ -23,7 +21,7 @@ import java.util.function.Supplier;
  * blocking IO operation in {@link WispTask}s to become concurrent.
  * <p>
  * The creator and a newly created {@link WispTask} will automatically have parent-children relationship.
- * When the child gets blocked on something, the {@link WispEngine} will try to execute parent first.
+ * When the child gets blocked on something, the {@link WispCarrier} will try to execute parent first.
  * <p>
  * A {@link WispTask}'s exit will wake up the waiting parent.
  */
@@ -31,71 +29,71 @@ public class WispTask implements Comparable<WispTask> {
     private final static AtomicInteger idGenerator = new AtomicInteger();
 
     static final Map<Integer, WispTask> id2Task = new ConcurrentHashMap<>(360);
-    // global table used for all WispEngines
+    // global table used for all WispCarriers
 
     static WispTask fromId(int id) {
-        WispEngine engine = WispEngine.current();
-        boolean isInCritical0 = engine.isInCritical;
-        engine.isInCritical = true;
+        WispCarrier carrier = WispCarrier.current();
+        boolean isInCritical0 = carrier.isInCritical;
+        carrier.isInCritical = true;
         try {
             return id2Task.get(id);
         } finally {
-            engine.isInCritical = isInCritical0;
+            carrier.isInCritical = isInCritical0;
         }
     }
 
     static void cleanExitedTasks(List<WispTask> tasks) {
         if (!tasks.isEmpty()) {
-            WispEngine engine = tasks.get(0).engine;
-            boolean isInCritical0 = engine.isInCritical;
-            engine.isInCritical = true;
+            WispCarrier carrier = tasks.get(0).carrier;
+            boolean isInCritical0 = carrier.isInCritical;
+            carrier.isInCritical = true;
             try {
                 for (WispTask t : tasks) {
                     id2Task.remove(t.id);
                     t.cleanup();
                 }
             } finally {
-                engine.isInCritical = isInCritical0;
+                carrier.isInCritical = isInCritical0;
             }
         }
     }
 
     static void cleanExitedTask(WispTask task) {
-        WispEngine engine = WispEngine.current();
-        boolean isInCritical0 = engine.isInCritical;
-        engine.isInCritical = true;
+        WispCarrier carrier = WispCarrier.current();
+        boolean isInCritical0 = carrier.isInCritical;
+        carrier.isInCritical = true;
         try {
             // cleanup shouldn't be executed for thread task
             id2Task.remove(task.id);
         } finally {
-            engine.isInCritical = isInCritical0;
+            carrier.isInCritical = isInCritical0;
         }
     }
 
     static void trackTask(WispTask task) {
-        WispEngine engine = WispEngine.current();
-        boolean isInCritical0 = engine.isInCritical;
-        engine.isInCritical = true;
+        WispCarrier carrier = WispCarrier.current();
+        boolean isInCritical0 = carrier.isInCritical;
+        carrier.isInCritical = true;
         try {
             id2Task.put(task.id, task);
         } finally {
-            engine.isInCritical = isInCritical0;
+            carrier.isInCritical = isInCritical0;
         }
     }
 
     private final int id;
 
     enum Status {
-        ALIVE,      // all running, parked, runnable
+        ALIVE,      // ALIVE
         ZOMBIE      // exited
     }
 
     private Runnable runnable; // runnable for created task
 
     /**
-     * Task is running in that engine.
+     * Task is running in that carrier.
      */
-    volatile WispEngine engine;
+    volatile WispCarrier carrier;
 
     private String name;
     final Coroutine ctx;                // the low-level coroutine implement
@@ -136,38 +134,37 @@ public class WispTask implements Comparable<WispTask> {
     private volatile int epollEventNum;
     int epollArraySize;
 
-    WispTask(WispEngine engine, Coroutine ctx, boolean isRealTask, boolean isThreadTask) {
+    WispTask(WispCarrier carrier, Coroutine ctx, boolean isRealTask, boolean isThreadTask) {
         this.isThreadTask = isThreadTask;
         this.id = isRealTask ? idGenerator.addAndGet(1) : -1;
-        setEngine(engine);
-        this.engine = engine;
+        setCarrier(carrier);
         if (isRealTask) {
             this.ctx = ctx != null ? ctx : new CacheableCoroutine(WispConfiguration.STACK_SIZE);
-            this.ctx.setWispTask(id, this, engine);
+            this.ctx.setWispTask(id, this, carrier);
         } else {
             this.ctx = null;
         }
-        resumeEntry = isThreadTask ? null : engine.createResumeEntry(this);
+        resumeEntry = isThreadTask ? null : carrier.createResumeEntry(this);
     }
 
     void reset(Runnable runnable, WispTask parent, String name, Thread thread, ClassLoader ctxLoader) {
         assert ctx != null;
-        this.status     = Status.ALIVE;
-        this.runnable   = runnable;
-        this.parent     = parent;
-        this.name       = name;
-        interrupted     = 0;
-        ctxClassLoader  = ctxLoader;
-        ch              = null;
-        enqueueTime     = 0;
-        parkTime        = 0;
-        blockingTime    = 0;
+        this.status       = Status.ALIVE;
+        this.runnable     = runnable;
+        this.parent       = parent;
+        this.name         = name;
+        interrupted       = 0;
+        ctxClassLoader    = ctxLoader;
+        ch                = null;
+        enqueueTime       = 0;
+        parkTime          = 0;
+        blockingTime      = 0;
         registerEventTime = 0;
 
-        activeCount     = 0;
-        stealCount      = 0;
+        activeCount       = 0;
+        stealCount        = 0;
         stealFailureCount = 0;
-        preemptCount    = 0;
+        preemptCount      = 0;
 
         // thread status
         if (thread != null) { // calling from Thread.start()
@@ -191,18 +188,18 @@ public class WispTask implements Comparable<WispTask> {
         }
     }
 
-    void setEngine(WispEngine engine) {
-        ENGINE_UPDATER.lazySet(this, engine);
+    void setCarrier(WispCarrier carrier) {
+        CARRIER_UPDATER.lazySet(this, carrier);
     }
 
-    void cleanup() {
-        setEngine(null);
+    private void cleanup() {
+        setCarrier(null);
         threadWrapper = null;
         ctxClassLoader = null;
     }
 
     class CacheableCoroutine extends Coroutine {
-        public CacheableCoroutine(long stacksize) {
+        CacheableCoroutine(long stacksize) {
             super(stacksize);
         }
 
@@ -210,12 +207,12 @@ public class WispTask implements Comparable<WispTask> {
         protected void run() {
             while (true) {
                 assert !WispConfiguration.WISP_USE_STEAL_LOCK || stealLock != 0;
-                assert WispEngine.current() == engine;
-                assert engine.current == WispTask.this;
+                assert WispCarrier.current() == carrier;
+                assert carrier.current == WispTask.this;
                 if (runnable != null) {
                     Throwable throwable = null;
                     try {
-                        runnable.run();
+                        runOutsideWisp(runnable);
                     } catch (Throwable t) {
                         throwable = t;
                     } finally {
@@ -228,24 +225,35 @@ public class WispTask implements Comparable<WispTask> {
                         if (throwable instanceof CoroutineExitException) {
                             throw (CoroutineExitException) throwable;
                         }
-                        engine.taskExit();
+                        carrier.taskExit();
                     }
                 } else {
-                    engine.schedule();
+                    carrier.schedule();
                 }
             }
         }
     }
 
     /**
+     * Mark if wisp is running internal scheduling code or user code, this would
+     * be used in preempt to identify if it's okay to preempt
+     * Modify Coroutine::is_usermark_frame accordingly if you need to change this
+     * method, because it's name and sig are used
+     */
+    private static void runOutsideWisp(Runnable runnable) {
+        runnable.run();
+    }
+
+    /**
      * Switch task. we need the information of {@code from} task param
      * to do classloader switch etc..
-     *
-     * {@link #stealLock} is used in {@link WispEngine#steal(WispTask, WispEngine, boolean)} .
+     * <p>
+     * {@link #stealLock} is used in {@link WispCarrier#steal(WispTask)} .
      */
     static void switchTo(WispTask current, WispTask next) {
         assert next.ctx != null;
-        assert current.engine == next.engine;
+        assert WispCarrier.current() == current.carrier;
+        assert current.carrier == next.carrier;
         next.activeCount++;
         if (WispConfiguration.WISP_USE_STEAL_LOCK) {
             assert current.isThreadTask() || next.isThreadTask();
@@ -253,13 +261,13 @@ public class WispTask implements Comparable<WispTask> {
             STEAL_LOCK_UPDATER.lazySet(next, 1);
             // store load barrier is not necessary
         }
-        current.engine.thread.getCoroutineSupport().unsafeSymmetricYieldTo(next.ctx);
+        current.carrier.thread.getCoroutineSupport().unsafeSymmetricYieldTo(next.ctx);
         if (WispConfiguration.WISP_USE_STEAL_LOCK) {
             assert current.stealLock != 0;
             STEAL_LOCK_UPDATER.lazySet(current.from, 0);
         }
-        assert WispEngine.current() == current.engine;
-        assert current.engine.current == current;
+        assert WispCarrier.current() == current.carrier;
+        assert current.carrier.current == current;
     }
 
     /**
@@ -278,9 +286,9 @@ public class WispTask implements Comparable<WispTask> {
         if (ms < 0) throw new IllegalArgumentException();
 
         if (ms == 0) {
-            WispEngine.current().yield();
+            WispCarrier.current().yield();
         } else {
-            WispEngine.current().unregisterEvent();
+            WispCarrier.current().unregisterEvent();
             jdkPark(TimeUnit.MILLISECONDS.toNanos(ms));
         }
     }
@@ -325,40 +333,40 @@ public class WispTask implements Comparable<WispTask> {
      */
     private void parkInternal(long timeoutNano, boolean fromJvm) {
         if (timeoutNano > 0 && timeoutNano < WispConfiguration.MIN_PARK_NANOS) {
-            engine.yield();
+            carrier.yield();
             return;
         }
         final AtomicIntegerFieldUpdater<WispTask> statusUpdater = fromJvm ? JVM_PARK_UPDATER : JDK_PARK_UPDATER;
-
-        final boolean isInCritical0 = engine.isInCritical;
-        engine.isInCritical = true;
+        final boolean isInCritical0 = carrier.isInCritical;
+        carrier.isInCritical = true;
         try {
-            engine.getCounter().incrementParkCount();
+            carrier.getCounter().incrementParkCount();
             for (;;) {
                 int s = statusUpdater.get(this);
                 assert s != WAITING; // if parkStatus == WAITING, should already blocked
+
                 if (s == FREE && statusUpdater.compareAndSet(this, FREE, WAITING)) {
                     // may become PERMITTED here; need retry.
                     // another thread unpark here is ok:
                     // current task is put to unpark queue,
                     // and will wake up eventually
                     if (WispEngine.runningAsCoroutine(threadWrapper) && timeoutNano > 0) {
-                        engine.addTimer(timeoutNano + System.nanoTime(), fromJvm);
+                        carrier.addTimer(timeoutNano + System.nanoTime(), fromJvm);
                     }
-                    engine.isInCritical = isInCritical0;
+                    carrier.isInCritical = isInCritical0;
                     try {
                         if (WispEngine.runningAsCoroutine(threadWrapper)) {
                             setParkTime();
-                            engine.schedule();
+                            carrier.schedule();
                         } else {
                             UA.park0(false, timeoutNano < 0 ? 0 : timeoutNano);
                         }
                     } finally {
-                        engine.isInCritical = true;
+                        carrier.isInCritical = true;
                         if (timeoutNano > 0) {
-                            engine.cancelTimer();
+                            carrier.cancelTimer();
                         }
-                        // we'may direct wakeup by current engine
+                        // we'may direct wakeup by current carrier
                         // the statue may be still WAITING..
                         statusUpdater.lazySet(this, FREE);
                     }
@@ -370,7 +378,7 @@ public class WispTask implements Comparable<WispTask> {
                 }
             }
         } finally {
-            engine.isInCritical = isInCritical0;
+            carrier.isInCritical = isInCritical0;
         }
     }
 
@@ -385,7 +393,7 @@ public class WispTask implements Comparable<WispTask> {
             if (s == WAITING && statusUpdater.compareAndSet(this, WAITING, FREE)) {
                 if (WispEngine.runningAsCoroutine(threadWrapper)) {
                     recordOnUnpark(fromJvm);
-                    engine.wakeupTask(this);
+                    carrier.wakeupTask(this);
                 } else {
                     UA.unpark0(threadWrapper);
                 }
@@ -402,7 +410,7 @@ public class WispTask implements Comparable<WispTask> {
      * Park Invoked by jdk, include IO, JUC etc..
      */
     static void jdkPark(long timeoutNano) {
-        WispEngine.current().getCurrentTask().parkInternal(timeoutNano, false);
+        WispCarrier.current().getCurrentTask().parkInternal(timeoutNano, false);
     }
 
     void jdkUnpark() {
@@ -413,7 +421,7 @@ public class WispTask implements Comparable<WispTask> {
      * Invoked by VM to support coroutine switch in object monitor case.
      */
     private static void park(long timeoutNano) {
-        WispEngine.current().getCurrentTask().parkInternal(timeoutNano, true);
+        WispCarrier.current().getCurrentTask().parkInternal(timeoutNano, true);
     }
 
     void unpark() {
@@ -540,7 +548,7 @@ public class WispTask implements Comparable<WispTask> {
 
     void countWaitSocketIOTime() {
         if (registerEventTime != 0) {
-            engine.counter.incrementTotalWaitSocketIOTime(System.nanoTime() - registerEventTime);
+            carrier.counter.incrementTotalWaitSocketIOTime(System.nanoTime() - registerEventTime);
             registerEventTime = 0;
         }
     }
@@ -550,7 +558,7 @@ public class WispTask implements Comparable<WispTask> {
     }
 
     /* When unpark is called, the time is set.
-     * Since the unpark may be called by non-carrier thread, the count is delayed.
+     * Since the unpark may be called by non-worker thread, the count is delayed.
      */
     private void recordOnUnpark(boolean fromJVM) {
         if (!WispConfiguration.WISP_PROFILE) {
@@ -564,7 +572,7 @@ public class WispTask implements Comparable<WispTask> {
             parkTime = 0;
         }
         if (fromJVM) {
-            engine.counter.incrementUnparkFromJvmCount();
+            carrier.counter.incrementUnparkFromJvmCount();
         }
     }
 
@@ -574,18 +582,18 @@ public class WispTask implements Comparable<WispTask> {
         if (!WispConfiguration.WISP_PROFILE || beginTime == 0) {
             return;
         }
-        engine.counter.incrementTotalExecutionTime(System.nanoTime() - beginTime);
+        carrier.counter.incrementTotalExecutionTime(System.nanoTime() - beginTime);
         if (blockingTime != 0) {
-            engine.counter.incrementTotalBlockingTime(blockingTime);
+            carrier.counter.incrementTotalBlockingTime(blockingTime);
             blockingTime = 0;
         }
     }
 
-    public StackTraceElement[] getStackTrace() {
+    StackTraceElement[] getStackTrace() {
         return this.ctx.getCoroutineStack();
     }
 
-    private static final AtomicReferenceFieldUpdater<WispTask, WispEngine> ENGINE_UPDATER;
+    private static final AtomicReferenceFieldUpdater<WispTask, WispCarrier> CARRIER_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> JVM_PARK_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> JDK_PARK_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> INTERRUPTED_UPDATER;
@@ -601,7 +609,7 @@ public class WispTask implements Comparable<WispTask> {
     private static native boolean checkAndClearNativeInterruptForWisp(Thread cur);
 
     static {
-        ENGINE_UPDATER = AtomicReferenceFieldUpdater.newUpdater(WispTask.class, WispEngine.class, "engine");
+        CARRIER_UPDATER = AtomicReferenceFieldUpdater.newUpdater(WispTask.class, WispCarrier.class, "carrier");
         JVM_PARK_UPDATER = AtomicIntegerFieldUpdater.newUpdater(WispTask.class, "jvmParkStatus");
         JDK_PARK_UPDATER = AtomicIntegerFieldUpdater.newUpdater(WispTask.class, "jdkParkStatus");
         INTERRUPTED_UPDATER = AtomicIntegerFieldUpdater.newUpdater(WispTask.class, "interrupted");
