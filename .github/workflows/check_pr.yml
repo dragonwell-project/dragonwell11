@@ -46,6 +46,22 @@ jobs:
           TEST_JDK_HOME=build/linux-x86_64-normal-server-release/images/jdk
           ${TEST_JDK_HOME}/bin/java -version
 
+  build_fastdebug_jdk:
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/dragonwelljdk/build_jdk:11u
+    steps:
+      - uses: actions/checkout@v2
+      - name: Compile fastdebug mode
+        run: |
+          chmod 755 configure
+          bash make.sh fastdebug
+
+      - name: Sanity test
+        run: |
+          TEST_JDK_HOME=build/linux-x86_64-normal-server-fastdebug/images/jdk
+          ${TEST_JDK_HOME}/bin/java -version
+
   build_slowdebug_jdk:
     runs-on: ubuntu-latest
     container:
