@@ -1052,7 +1052,7 @@ address TemplateInterpreterGenerator::generate_native_entry(bool synchronized) {
   if (EnableCoroutine) {
     // it is a little hard to present method signature check here: because interpreter
     // will directly jump into this entry, which is in runtime.
-    WISP_X86_CONVENTION_V2j_UPDATE;
+    WISP_CALLING_CONVENTION_V2j_UPDATE;
   }
 
   // Verify or restore cpu control state after JNI call

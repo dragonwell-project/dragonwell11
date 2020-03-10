@@ -136,6 +136,8 @@ private:
 
   void frames_do(FrameClosure* fc);
 
+  static void set_coroutine_base(intptr_t **&base, JavaThread* thread, jobject obj, Coroutine *coro, oop coroutineObj, address coroutine_start);
+
 public:
   virtual ~Coroutine();
 
@@ -272,6 +274,8 @@ private:
   // objects of this type can only be created via static functions
   CoroutineStack(intptr_t size) : _reserved_space(size) { }
   virtual ~CoroutineStack() { }
+
+  static Register get_fp_reg();
 
 public:
   static CoroutineStack* create_thread_stack(JavaThread* thread);
@@ -522,11 +526,13 @@ public:
 //    V: VM frame (C/C++)
 //    v: Other frames running VM generated code (e.g. stubs, adapters, etc.)
 //    C: C/C++ frame
-#define WISP_THREAD_UPDATE get_thread(r15)
-#define WISP_X86_CONVENTION_V2J_UPDATE __ WISP_THREAD_UPDATE
-#define WISP_X86_CONVENTION_V2j_UPDATE __ WISP_THREAD_UPDATE
+#ifdef X86
+#include CPU_HEADER(coroutine)
+#endif
+#define WISP_THREAD_UPDATE get_thread(R_TH)
+#define WISP_CALLING_CONVENTION_V2J_UPDATE __ WISP_THREAD_UPDATE
+#define WISP_CALLING_CONVENTION_V2j_UPDATE __ WISP_THREAD_UPDATE
 #define WISP_COMPILER_RESTORE_FORCE_UPDATE __ WISP_THREAD_UPDATE
-#define WISP_j2v_UPDATE __ movptr(thread, r15_thread)
 #define WISP_V2v_UPDATE WISP_THREAD_UPDATE
 
 class WispPostStealHandleUpdateMark;

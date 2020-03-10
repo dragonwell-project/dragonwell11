@@ -149,15 +149,15 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
     return NULL;
   }
 
-  intptr_t** d = (intptr_t**)stack->stack_base();
-  *(--d) = NULL;          // Make it to be 16 bytes(original is 8*5=40 bytes) aligned which be required by some instruction likes movaps otherwise we will incur crash.
-  *(--d) = NULL;
   jobject obj = JNIHandles::make_global(Handle(thread, coroutineObj));
-  *(--d) = (intptr_t*)obj;
-  *(--d) = (intptr_t*)coro;
-  *(--d) = NULL;
-  *(--d) = (intptr_t*)coroutine_start;
-  *(--d) = NULL;
+
+  intptr_t** d = (intptr_t**)stack->stack_base();
+#ifdef X86
+  set_coroutine_base(d, thread, obj, coro, coroutineObj, (address)coroutine_start);
+#else
+  // TODO: fix this on aarch64
+  guarantee(false, "Wisp is not supported on this arch");
+#endif // X86
 
   stack->set_last_sp((address) d);
 
@@ -485,7 +485,12 @@ void CoroutineStack::frames_do(FrameClosure* fc) {
 #endif
 
   StackFrameStream fst(_thread, fr);
-  fst.register_map()->set_location(rbp->as_VMReg(), (address)_last_sp);
+#ifdef X86
+  fst.register_map()->set_location(get_fp_reg()->as_VMReg(), (address)_last_sp);
+#else
+  // TODO: fix this on aarch64
+  guarantee(false, "Wisp is not supported on this arch");
+#endif // X86
   fst.register_map()->set_include_argument_oops(false);
   for(; !fst.is_done(); fst.next()) {
       fc->frames_do(fst.current(), fst.register_map());
@@ -499,7 +504,12 @@ frame CoroutineStack::last_frame(Coroutine* coro, RegisterMap& map) const {
   address pc = ((address*)_last_sp)[1];
   intptr_t* sp = ((intptr_t*)_last_sp) + 2;
 
-  map.set_location(rbp->as_VMReg(), (address)_last_sp);
+#ifdef X86
+  map.set_location(get_fp_reg()->as_VMReg(), (address)_last_sp);
+#else
+  // TODO: fix this on aarch64
+  guarantee(false, "Wisp is not supported on this arch");
+#endif // X86
   map.set_include_argument_oops(false);
 
   frame f(sp, fp, pc);

@@ -1840,7 +1840,7 @@ void generate_thread_fix(MacroAssembler *masm, Method *method) {
       // see: https://www.cs.cmu.edu/~aplatzer/course/Compilers11/calling_conventions.pdf, callee saved registers
       // the r15 register will be saved at method entry, and restored implicitly at method exit
       // so we have to fix it manually here after the method returns.
-      WISP_X86_CONVENTION_V2J_UPDATE;
+      WISP_CALLING_CONVENTION_V2J_UPDATE;
     }
   }
 }
