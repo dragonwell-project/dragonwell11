@@ -5,7 +5,7 @@
  * @modules java.base/jdk.internal.misc
  * @run main/othervm  -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestMultiThread
  * @run main/othervm  -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true  TestMultiThread
-*/
+ */
 
 
 import com.alibaba.wisp.engine.WispEngine;
@@ -93,53 +93,50 @@ public class TestMultiThread {
             this.ord = ord;
         }
 
-        @Override
-        public void run() {
-            while (current < N) {
-                if (JUC) {
-                    lock.lock();
-                    try {
-                        while (current % runners.length != ord) {
-                            try {
-                                //System.out.println("wait" + SharedSecrets.getJavaLangAccess().currentThread0().getName());
-                                cond.await();
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
+        private void runJUC() {
+            lock.lock();
+            try {
+                while (current < N) {
+                    while (current % runners.length != ord) {
+                        try {
+                            cond.await();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
                         }
-                        if (++current % 10000 == 0) // pass the token
-                            System.out.println(SharedSecrets.getJavaLangAccess().currentThread0().getName() + "\t" + current);
-                    } finally {
-                        lock.unlock();
                     }
-                } else {
-                    synchronized (lock) {
-                        while (current % runners.length != ord) {
-                            try {
-                                lock.wait();
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                        if (++current % 10000 == 0) // pass the token
-                            System.out.println(SharedSecrets.getJavaLangAccess().currentThread0().getName() + "\t" + current);
-                    }
+                    if (++current % 10000 == 0) // pass the token
+                        System.out.println(SharedSecrets.getJavaLangAccess().currentThread0().getName() + "\t" + current);
+                    cond.signalAll();
                 }
+            } finally {
+                lock.unlock();
+            }
+        }
 
-                if (JUC) {
-                    lock.lock();
-                    try {
-                        cond.signalAll();
-                    } finally {
-                        lock.unlock();
+        private void runMonitor() {
+            synchronized (lock) {
+                while (current < N) {
+                    while (current % runners.length != ord) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                     }
-                } else {
-                    synchronized (lock) {
-                        lock.notifyAll();
-                    }
+                    if (++current % 10000 == 0) // pass the token
+                        System.out.println(SharedSecrets.getJavaLangAccess().currentThread0().getName() + "\t" + current);
+                    lock.notifyAll();
                 }
             }
-            System.out.println(SharedSecrets.getJavaLangAccess().currentThread0().getName() + " down"); 
+        }
+
+        @Override
+        public void run() {
+            if (JUC) {
+                runJUC();
+            } else {
+                runMonitor();
+            }
             finishLatch.countDown();
         }
     }
