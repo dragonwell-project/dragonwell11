@@ -1567,7 +1567,7 @@ class vmSymbols: AllStatic {
     FIRST_SID = NO_SID + 1
   };
   enum {
-    log2_SID_LIMIT = 10         // checked by an assert at start-up
+    log2_SID_LIMIT = 12         // checked by an assert at start-up
   };
 
  private:

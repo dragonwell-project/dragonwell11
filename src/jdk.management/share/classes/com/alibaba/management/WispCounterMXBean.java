@@ -121,5 +121,5 @@ public interface WispCounterMXBean extends PlatformManagedObject {
      * @param id WispEngine id
      * @return WispCounterData
      */
-    WispCounterData getWispCounterData(long id);
+    WispCounterData getWispCounter(long id);
 }

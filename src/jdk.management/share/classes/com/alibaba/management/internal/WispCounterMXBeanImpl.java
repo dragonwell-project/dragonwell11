@@ -134,9 +134,9 @@ public class WispCounterMXBeanImpl implements com.alibaba.management.WispCounter
      * @return WispCounterData
      */
     @Override
-    public WispCounterData getWispCounterData(long id) {
+    public WispCounterData getWispCounter(long id) {
         WispCounter counter = WispEngine.getWispCounter(id);
-        return new WispCounterData(counter);
+        return counter != null ? new WispCounterData(counter) : null;
     }
 
     private <T> List<T> aggregate(Function<WispCounter, T> getter) {
