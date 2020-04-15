@@ -3281,6 +3281,8 @@ public final class Files {
         Objects.requireNonNull(cs);
 
         byte[] ba = readAllBytes(path);
+        if (path.getClass().getModule() != Object.class.getModule())
+            ba = ba.clone();
         return JLA.newStringNoRepl(ba, cs);
     }
 
@@ -3484,8 +3486,8 @@ public final class Files {
         // ensure lines is not null before opening file
         Objects.requireNonNull(lines);
         CharsetEncoder encoder = cs.newEncoder();
-        OutputStream out = newOutputStream(path, options);
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out, encoder))) {
+        try (OutputStream out = newOutputStream(path, options);
+             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out, encoder))) {
             for (CharSequence line: lines) {
                 writer.append(line);
                 writer.newLine();

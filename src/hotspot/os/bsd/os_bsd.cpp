@@ -184,6 +184,22 @@ julong os::Bsd::available_memory() {
   return available;
 }
 
+// for more info see :
+// https://man.openbsd.org/sysctl.2
+void os::Bsd::print_uptime_info(outputStream* st) {
+  struct timeval boottime;
+  size_t len = sizeof(boottime);
+  int mib[2];
+  mib[0] = CTL_KERN;
+  mib[1] = KERN_BOOTTIME;
+
+  if (sysctl(mib, 2, &boottime, &len, NULL, 0) >= 0) {
+    time_t bootsec = boottime.tv_sec;
+    time_t currsec = time(NULL);
+    os::print_dhm(st, "OS uptime:", (long) difftime(currsec, bootsec));
+  }
+}
+
 julong os::physical_memory() {
   return Bsd::physical_memory();
 }
@@ -1279,15 +1295,27 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen) {
 #ifdef STATIC_BUILD
   return os::get_default_process_handle();
 #else
+  log_info(os)("attempting shared library load of %s", filename);
+
   void * result= ::dlopen(filename, RTLD_LAZY);
   if (result != NULL) {
+    Events::log(NULL, "Loaded shared library %s", filename);
     // Successful loading
+    log_info(os)("shared library load of %s was successful", filename);
     return result;
   }
 
-  // Read system error message into ebuf
-  ::strncpy(ebuf, ::dlerror(), ebuflen-1);
-  ebuf[ebuflen-1]='\0';
+  const char* error_report = ::dlerror();
+  if (error_report == NULL) {
+    error_report = "dlerror returned no error description";
+  }
+  if (ebuf != NULL && ebuflen > 0) {
+    // Read system error message into ebuf
+    ::strncpy(ebuf, error_report, ebuflen-1);
+    ebuf[ebuflen-1]='\0';
+  }
+  Events::log(NULL, "Loading shared library %s failed, %s", filename, error_report);
+  log_info(os)("shared library load of %s failed, %s", filename, error_report);
 
   return NULL;
 #endif // STATIC_BUILD
@@ -1297,18 +1325,29 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen) {
 #ifdef STATIC_BUILD
   return os::get_default_process_handle();
 #else
+  log_info(os)("attempting shared library load of %s", filename);
   void * result= ::dlopen(filename, RTLD_LAZY);
   if (result != NULL) {
+    Events::log(NULL, "Loaded shared library %s", filename);
     // Successful loading
+    log_info(os)("shared library load of %s was successful", filename);
     return result;
   }
 
   Elf32_Ehdr elf_head;
 
-  // Read system error message into ebuf
-  // It may or may not be overwritten below
-  ::strncpy(ebuf, ::dlerror(), ebuflen-1);
-  ebuf[ebuflen-1]='\0';
+  const char* const error_report = ::dlerror();
+  if (error_report == NULL) {
+    error_report = "dlerror returned no error description";
+  }
+  if (ebuf != NULL && ebuflen > 0) {
+    // Read system error message into ebuf
+    ::strncpy(ebuf, error_report, ebuflen-1);
+    ebuf[ebuflen-1]='\0';
+  }
+  Events::log(NULL, "Loading shared library %s failed, %s", filename, error_report);
+  log_info(os)("shared library load of %s failed, %s", filename, error_report);
+
   int diag_msg_max_length=ebuflen-strlen(ebuf);
   char* diag_msg_buf=ebuf+strlen(ebuf);
 
@@ -1583,6 +1622,8 @@ void os::print_os_info(outputStream* st) {
   st->print("OS:");
 
   os::Posix::print_uname_info(st);
+
+  os::Bsd::print_uptime_info(st);
 
   os::Posix::print_rlimit_info(st);
 
@@ -3789,7 +3830,7 @@ int os::loadavg(double loadavg[], int nelem) {
 void os::pause() {
   char filename[MAX_PATH];
   if (PauseAtStartupFile && PauseAtStartupFile[0]) {
-    jio_snprintf(filename, MAX_PATH, PauseAtStartupFile);
+    jio_snprintf(filename, MAX_PATH, "%s", PauseAtStartupFile);
   } else {
     jio_snprintf(filename, MAX_PATH, "./vm.paused.%d", current_process_id());
   }
@@ -3881,11 +3922,30 @@ int os::fork_and_exec(char* cmd, bool use_vfork_if_available) {
   }
 }
 
-// Get the default path to the core file
+// Get the kern.corefile setting, or otherwise the default path to the core file
 // Returns the length of the string
 int os::get_core_path(char* buffer, size_t bufferSize) {
-  int n = jio_snprintf(buffer, bufferSize, "/cores/core.%d", current_process_id());
+  int n = 0;
+#ifdef __APPLE__
+  char coreinfo[MAX_PATH];
+  size_t sz = sizeof(coreinfo);
+  int ret = sysctlbyname("kern.corefile", coreinfo, &sz, NULL, 0);
+  if (ret == 0) {
+    char *pid_pos = strstr(coreinfo, "%P");
+    // skip over the "%P" to preserve any optional custom user pattern
+    const char* tail = (pid_pos != NULL) ? (pid_pos + 2) : "";
 
+    if (pid_pos != NULL) {
+      *pid_pos = '\0';
+      n = jio_snprintf(buffer, bufferSize, "%s%d%s", coreinfo, os::current_process_id(), tail);
+    } else {
+      n = jio_snprintf(buffer, bufferSize, "%s", coreinfo);
+    }
+  } else
+#endif
+  {
+    n = jio_snprintf(buffer, bufferSize, "/cores/core.%d", os::current_process_id());
+  }
   // Truncate if theoretical string was longer than bufferSize
   n = MIN2(n, (int)bufferSize);
 

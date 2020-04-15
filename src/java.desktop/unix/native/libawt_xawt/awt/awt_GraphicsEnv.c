@@ -123,7 +123,15 @@ static char *x11GraphicsConfigClassName = "sun/awt/X11GraphicsConfig";
  */
 
 #define MAXFRAMEBUFFERS 16
-#if defined(__linux__) || defined(MACOSX)
+#if defined(__solaris__)
+typedef Status XineramaGetInfoFunc(Display* display, int screen_number,
+         XRectangle* framebuffer_rects, unsigned char* framebuffer_hints,
+         int* num_framebuffers);
+typedef Status XineramaGetCenterHintFunc(Display* display, int screen_number,
+                                         int* x, int* y);
+
+XineramaGetCenterHintFunc* XineramaSolarisCenterFunc = NULL;
+#else /* Linux, Mac, AIX */
 typedef struct {
    int   screen_number;
    short x_org;
@@ -133,15 +141,6 @@ typedef struct {
 } XineramaScreenInfo;
 
 typedef XineramaScreenInfo* XineramaQueryScreensFunc(Display*, int*);
-
-#else /* SOLARIS */
-typedef Status XineramaGetInfoFunc(Display* display, int screen_number,
-         XRectangle* framebuffer_rects, unsigned char* framebuffer_hints,
-         int* num_framebuffers);
-typedef Status XineramaGetCenterHintFunc(Display* display, int screen_number,
-                                         int* x, int* y);
-
-XineramaGetCenterHintFunc* XineramaSolarisCenterFunc = NULL;
 #endif
 
 Bool usingXinerama = False;
@@ -210,6 +209,10 @@ findWithTemplate(XVisualInfo *vinfo,
         int id = -1;
         VisualID defaultVisual = XVisualIDFromVisual(DefaultVisual(awt_display, vinfo->screen));
         defaultConfig = ZALLOC(_AwtGraphicsConfigData);
+        if (defaultConfig == NULL) {
+            XFree(visualList);
+            return NULL;
+        }
         for (i = 0; i < visualsMatched; i++) {
             memcpy(&defaultConfig->awt_visInfo, &visualList[i], sizeof(XVisualInfo));
             defaultConfig->awt_depth = visualList[i].depth;
@@ -442,6 +445,7 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
     if (XQueryExtension(awt_display, "RENDER",
                         &major_opcode, &first_event, &first_error))
     {
+        DTRACE_PRINTLN("RENDER extension available");
         xrenderLibHandle = dlopen("libXrender.so.1", RTLD_LAZY | RTLD_GLOBAL);
 
 #ifdef MACOSX
@@ -455,18 +459,30 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
                                       RTLD_LAZY | RTLD_GLOBAL);
         }
 
-#ifndef __linux__ /* SOLARIS */
+#if defined(__solaris__)
         if (xrenderLibHandle == NULL) {
             xrenderLibHandle = dlopen("/usr/lib/libXrender.so.1",
                                       RTLD_LAZY | RTLD_GLOBAL);
         }
+#elif defined(_AIX)
+        if (xrenderLibHandle == NULL) {
+            xrenderLibHandle = dlopen("libXrender.a(libXrender.so.0)",
+                                      RTLD_MEMBER | RTLD_LAZY | RTLD_GLOBAL);
+        }
 #endif
-
         if (xrenderLibHandle != NULL) {
+            DTRACE_PRINTLN("Loaded libXrender");
             xrenderFindVisualFormat =
                 (XRenderFindVisualFormatFunc*)dlsym(xrenderLibHandle,
                                                     "XRenderFindVisualFormat");
+            if (xrenderFindVisualFormat == NULL) {
+                DTRACE_PRINTLN1("Can't find 'XRenderFindVisualFormat' in libXrender (%s)", dlerror());
+            }
+        } else {
+            DTRACE_PRINTLN1("Can't load libXrender (%s)", dlerror());
         }
+    } else {
+        DTRACE_PRINTLN("RENDER extension NOT available");
     }
 
     for (i = 0; i < nTrue; i++) {
@@ -478,22 +494,31 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
         } else {
             ind = nConfig++;
         }
-        graphicsConfigs [ind] = ZALLOC (_AwtGraphicsConfigData);
-        graphicsConfigs [ind]->awt_depth = pVITrue [i].depth;
+        graphicsConfigs[ind] = ZALLOC (_AwtGraphicsConfigData);
+        if (graphicsConfigs[ind] == NULL) {
+            JNU_ThrowOutOfMemoryError(env, "allocation in getAllConfigs failed");
+            goto cleanup;
+        }
+        graphicsConfigs[ind]->awt_depth = pVITrue [i].depth;
         memcpy (&graphicsConfigs [ind]->awt_visInfo, &pVITrue [i],
                 sizeof (XVisualInfo));
-       if (xrenderFindVisualFormat != NULL) {
+        if (xrenderFindVisualFormat != NULL) {
             XRenderPictFormat *format = xrenderFindVisualFormat (awt_display,
-                    pVITrue [i].visual);
+                                                                 pVITrue [i].visual);
             if (format &&
                 format->type == PictTypeDirect &&
                 format->direct.alphaMask)
             {
+                DTRACE_PRINTLN1("GraphicsConfig[%d] supports Translucency", ind);
                 graphicsConfigs [ind]->isTranslucencySupported = 1;
                 memcpy(&graphicsConfigs [ind]->renderPictFormat, format,
                         sizeof(*format));
+            } else {
+                DTRACE_PRINTLN1(format ?
+                                "GraphicsConfig[%d] has no Translucency support" :
+                                "Error calling 'XRenderFindVisualFormat'", ind);
             }
-        }
+       }
     }
 
     if (xrenderLibHandle != NULL) {
@@ -508,8 +533,12 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
         } else {
             ind = nConfig++;
         }
-        graphicsConfigs [ind] = ZALLOC (_AwtGraphicsConfigData);
-        graphicsConfigs [ind]->awt_depth = pVI8p [i].depth;
+        graphicsConfigs[ind] = ZALLOC (_AwtGraphicsConfigData);
+        if (graphicsConfigs[ind] == NULL) {
+            JNU_ThrowOutOfMemoryError(env, "allocation in getAllConfigs failed");
+            goto cleanup;
+        }
+        graphicsConfigs[ind]->awt_depth = pVI8p [i].depth;
         memcpy (&graphicsConfigs [ind]->awt_visInfo, &pVI8p [i],
                 sizeof (XVisualInfo));
     }
@@ -521,8 +550,12 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
         } else {
             ind = nConfig++;
         }
-        graphicsConfigs [ind] = ZALLOC (_AwtGraphicsConfigData);
-        graphicsConfigs [ind]->awt_depth = pVI12p [i].depth;
+        graphicsConfigs[ind] = ZALLOC (_AwtGraphicsConfigData);
+        if (graphicsConfigs[ind] == NULL) {
+            JNU_ThrowOutOfMemoryError(env, "allocation in getAllConfigs failed");
+            goto cleanup;
+        }
+        graphicsConfigs[ind]->awt_depth = pVI12p [i].depth;
         memcpy (&graphicsConfigs [ind]->awt_visInfo, &pVI12p [i],
                 sizeof (XVisualInfo));
     }
@@ -534,8 +567,12 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
         } else {
             ind = nConfig++;
         }
-        graphicsConfigs [ind] = ZALLOC (_AwtGraphicsConfigData);
-        graphicsConfigs [ind]->awt_depth = pVI8s [i].depth;
+        graphicsConfigs[ind] = ZALLOC (_AwtGraphicsConfigData);
+        if (graphicsConfigs[ind] == NULL) {
+            JNU_ThrowOutOfMemoryError(env, "allocation in getAllConfigs failed");
+            goto cleanup;
+        }
+        graphicsConfigs[ind]->awt_depth = pVI8s [i].depth;
         memcpy (&graphicsConfigs [ind]->awt_visInfo, &pVI8s [i],
                 sizeof (XVisualInfo));
     }
@@ -547,8 +584,12 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
         } else {
             ind = nConfig++;
         }
-        graphicsConfigs [ind] = ZALLOC (_AwtGraphicsConfigData);
-        graphicsConfigs [ind]->awt_depth = pVI8gs [i].depth;
+        graphicsConfigs[ind] = ZALLOC (_AwtGraphicsConfigData);
+        if (graphicsConfigs[ind] == NULL) {
+            JNU_ThrowOutOfMemoryError(env, "allocation in getAllConfigs failed");
+            goto cleanup;
+        }
+        graphicsConfigs[ind]->awt_depth = pVI8gs [i].depth;
         memcpy (&graphicsConfigs [ind]->awt_visInfo, &pVI8gs [i],
                 sizeof (XVisualInfo));
     }
@@ -560,8 +601,12 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
         } else {
             ind = nConfig++;
         }
-        graphicsConfigs [ind] = ZALLOC (_AwtGraphicsConfigData);
-        graphicsConfigs [ind]->awt_depth = pVI8sg [i].depth;
+        graphicsConfigs[ind] = ZALLOC (_AwtGraphicsConfigData);
+        if (graphicsConfigs[ind] == NULL) {
+            JNU_ThrowOutOfMemoryError(env, "allocation in getAllConfigs failed");
+            goto cleanup;
+        }
+        graphicsConfigs[ind]->awt_depth = pVI8sg [i].depth;
         memcpy (&graphicsConfigs [ind]->awt_visInfo, &pVI8sg [i],
                 sizeof (XVisualInfo));
     }
@@ -573,12 +618,20 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
         } else {
             ind = nConfig++;
         }
-        graphicsConfigs [ind] = ZALLOC (_AwtGraphicsConfigData);
-        graphicsConfigs [ind]->awt_depth = pVI1sg [i].depth;
+        graphicsConfigs[ind] = ZALLOC (_AwtGraphicsConfigData);
+        if (graphicsConfigs[ind] == NULL) {
+            JNU_ThrowOutOfMemoryError(env, "allocation in getAllConfigs failed");
+            goto cleanup;
+        }
+        graphicsConfigs[ind]->awt_depth = pVI1sg [i].depth;
         memcpy (&graphicsConfigs [ind]->awt_visInfo, &pVI1sg [i],
                 sizeof (XVisualInfo));
     }
 
+    screenDataPtr->numConfigs = nConfig;
+    screenDataPtr->configs = graphicsConfigs;
+
+cleanup:
     if (n8p != 0)
        XFree (pVI8p);
     if (n12p != 0)
@@ -592,14 +645,11 @@ getAllConfigs (JNIEnv *env, int screen, AwtScreenDataPtr screenDataPtr) {
     if (n1sg != 0)
        XFree (pVI1sg);
 
-    screenDataPtr->numConfigs = nConfig;
-    screenDataPtr->configs = graphicsConfigs;
-
     AWT_UNLOCK ();
 }
 
 #ifndef HEADLESS
-#if defined(__linux__) || defined(MACOSX)
+#if defined(__linux__) || defined(MACOSX) || defined(_AIX)
 static void xinerama_init_linux()
 {
     void* libHandle = NULL;
@@ -612,14 +662,18 @@ static void xinerama_init_linux()
     libHandle = dlopen(VERSIONED_JNI_LIB_NAME("Xinerama", "1"),
                        RTLD_LAZY | RTLD_GLOBAL);
     if (libHandle == NULL) {
+#if defined(_AIX)
+        libHandle = dlopen("libXext.a(shr_64.o)", RTLD_MEMBER | RTLD_LAZY | RTLD_GLOBAL);
+#else
         libHandle = dlopen(JNI_LIB_NAME("Xinerama"), RTLD_LAZY | RTLD_GLOBAL);
+#endif
     }
     if (libHandle != NULL) {
         XineramaQueryScreens = (XineramaQueryScreensFunc*)
             dlsym(libHandle, XineramaQueryScreensName);
 
         if (XineramaQueryScreens != NULL) {
-            DTRACE_PRINTLN("calling XineramaQueryScreens func on Linux");
+            DTRACE_PRINTLN("calling XineramaQueryScreens func");
             xinInfo = (*XineramaQueryScreens)(awt_display, &locNumScr);
             if (xinInfo != NULL && locNumScr > XScreenCount(awt_display)) {
                 int32_t idx;
@@ -639,7 +693,10 @@ static void xinerama_init_linux()
                     fbrects[idx].y = xinInfo[idx].y_org;
                 }
             } else {
-                DTRACE_PRINTLN("calling XineramaQueryScreens didn't work");
+                DTRACE_PRINTLN((xinInfo == NULL) ?
+                               "calling XineramaQueryScreens didn't work" :
+                               "XineramaQueryScreens <= XScreenCount"
+                               );
             }
         } else {
             DTRACE_PRINTLN("couldn't load XineramaQueryScreens symbol");
@@ -649,8 +706,7 @@ static void xinerama_init_linux()
         DTRACE_PRINTLN1("\ncouldn't open shared library: %s\n", dlerror());
     }
 }
-#endif
-#if !defined(__linux__) && !defined(MACOSX) /* Solaris */
+#elif defined(__solaris__)
 static void xinerama_init_solaris()
 {
     void* libHandle = NULL;
@@ -710,11 +766,11 @@ static void xineramaInit(void) {
     }
 
     DTRACE_PRINTLN("Xinerama extension is available");
-#if defined(__linux__) || defined(MACOSX)
-    xinerama_init_linux();
-#else /* Solaris */
+#if defined(__solaris__)
     xinerama_init_solaris();
-#endif /* __linux__ || MACOSX */
+#else /* Linux, Mac, AIX */
+    xinerama_init_linux();
+#endif
 }
 #endif /* HEADLESS */
 
@@ -1615,7 +1671,7 @@ Java_sun_awt_X11GraphicsEnvironment_getXineramaCenterPoint(JNIEnv *env,
 {
     jobject point = NULL;
 #ifndef HEADLESS    /* return NULL in HEADLESS, Linux */
-#if !defined(__linux__) && !defined(MACOSX)
+#if defined(__solaris__)
     int x,y;
 
     AWT_LOCK();
@@ -1628,7 +1684,7 @@ Java_sun_awt_X11GraphicsEnvironment_getXineramaCenterPoint(JNIEnv *env,
         DTRACE_PRINTLN("unable to call XineramaSolarisCenterFunc: symbol is null");
     }
     AWT_FLUSH_UNLOCK();
-#endif /* __linux __ || MACOSX */
+#endif /* __solaris__ */
 #endif /* HEADLESS */
     return point;
 }

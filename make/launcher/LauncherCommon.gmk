@@ -86,7 +86,7 @@ JAVA_MANIFEST := $(TOPDIR)/src/java.base/windows/native/launcher/java.manifest
 # LIBS_windows   Additional LIBS_windows
 # LDFLAGS_solaris Additional LDFLAGS_solaris
 # RC_FLAGS   Additional RC_FLAGS
-# MACOSX_SIGNED   On macosx, sign this binary
+# MACOSX_PRIVILEGED   On macosx, allow to access other processes
 # OPTIMIZATION   Override default optimization level (LOW)
 # OUTPUT_DIR   Override default output directory
 # VERSION_INFO_RESOURCE   Override default Windows resource file
@@ -117,9 +117,8 @@ define SetupBuildLauncherBody
 
   $1_LIBS :=
   ifeq ($(OPENJDK_TARGET_OS), macosx)
-    ifeq ($$($1_MACOSX_SIGNED), true)
+    ifeq ($$($1_MACOSX_PRIVILEGED), true)
       $1_PLIST_FILE := Info-privileged.plist
-        $1_CODESIGN := true
     else
       $1_PLIST_FILE := Info-cmdline.plist
     endif
@@ -153,7 +152,7 @@ define SetupBuildLauncherBody
     $1_LIBS += -lz
   endif
 
-  $1_WINDOWS_JLI_LIB := $(SUPPORT_OUTPUTDIR)/native/java.base/libjli/jli.lib
+  $1_WINDOWS_JLI_LIB := $(call FindStaticLib, java.base, jli, /libjli)
 
   $$(eval $$(call SetupJdkExecutable, BUILD_LAUNCHER_$1, \
       NAME := $1, \
@@ -165,7 +164,6 @@ define SetupBuildLauncherBody
           -DLAUNCHER_NAME='"$(LAUNCHER_NAME)"' \
           -DPROGNAME='"$1"' \
           $$($1_CFLAGS), \
-      CFLAGS_linux := -fPIC, \
       CFLAGS_solaris := -KPIC -DHAVE_GETHRTIME, \
       CFLAGS_windows := $$($1_CFLAGS_windows), \
       LDFLAGS := $$(LDFLAGS_JDKEXE) \
@@ -190,18 +188,17 @@ define SetupBuildLauncherBody
       EXTRA_RC_FLAGS := $$($1_EXTRA_RC_FLAGS), \
       MANIFEST := $(JAVA_MANIFEST), \
       MANIFEST_VERSION := $(VERSION_NUMBER_FOUR_POSITIONS), \
-      CODESIGN := $$($1_CODESIGN), \
   ))
 
   $1 += $$(BUILD_LAUNCHER_$1)
   TARGETS += $$($1)
 
   ifeq ($(OPENJDK_TARGET_OS), aix)
-    $$(BUILD_LAUNCHER_$1): $(SUPPORT_OUTPUTDIR)/native/java.base/libjli_static.a
+    $$(BUILD_LAUNCHER_$1): $(call FindStaticLib, java.base, jli_static)
   endif
 
   ifeq ($(OPENJDK_TARGET_OS), windows)
-    $$(BUILD_LAUNCHER_$1): $(SUPPORT_OUTPUTDIR)/native/java.base/libjava/java.lib \
+    $$(BUILD_LAUNCHER_$1): $(call FindStaticLib, java.base, java, /libjava) \
         $$($1_WINDOWS_JLI_LIB)
   endif
 endef

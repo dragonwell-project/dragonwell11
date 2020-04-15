@@ -204,12 +204,12 @@ AWT_NS_WINDOW_IMPLEMENTATION
     if (IS(styleBits, DECORATED)) {
         type |= NSTitledWindowMask;
         if (IS(styleBits, CLOSEABLE))   type |= NSClosableWindowMask;
-        if (IS(styleBits, MINIMIZABLE)) type |= NSMiniaturizableWindowMask;
         if (IS(styleBits, RESIZABLE))   type |= NSResizableWindowMask;
     } else {
         type |= NSBorderlessWindowMask;
     }
 
+    if (IS(styleBits, MINIMIZABLE))   type |= NSMiniaturizableWindowMask;
     if (IS(styleBits, TEXTURED))      type |= NSTexturedBackgroundWindowMask;
     if (IS(styleBits, UNIFIED))       type |= NSUnifiedTitleAndToolbarWindowMask;
     if (IS(styleBits, UTILITY))       type |= NSUtilityWindowMask;
@@ -1183,6 +1183,15 @@ JNF_COCOA_ENTER(env);
         // ensure we repaint the whole window after the resize operation
         // (this will also re-enable screen updates, which were disabled above)
         // TODO: send PaintEvent
+
+        // the macOS may ignore our "setFrame" request, in this, case the
+        // windowDidMove() will not come and we need to manually resync the
+        // "java.awt.Window" and NSWindow locations, because "java.awt.Window"
+        // already uses location ignored by the macOS.
+        // see sun.lwawt.LWWindowPeer#notifyReshape()
+        if (!NSEqualRects(rect, [nsWindow frame])) {
+            [window _deliverMoveResizeEvent];
+        }
     }];
 
 JNF_COCOA_EXIT(env);

@@ -50,11 +50,12 @@ class SampleList : public JfrCHeapObj {
   SampleList(size_t limit, size_t cache_size = 0);
   ~SampleList();
 
-  void set_last_resolved(const ObjectSample* sample);
   ObjectSample* get();
+  ObjectSample* first() const;
   ObjectSample* last() const;
-  void release(ObjectSample* sample);
   const ObjectSample* last_resolved() const;
+  void set_last_resolved(const ObjectSample* sample);
+  void release(ObjectSample* sample);
   ObjectSample* reuse(ObjectSample* sample);
   bool is_full() const;
   size_t count() const;

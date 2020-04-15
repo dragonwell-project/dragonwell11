@@ -47,6 +47,7 @@
 #include "prims/jvmtiTagMap.hpp"
 #include "prims/jvmtiThreadState.inline.hpp"
 #include "runtime/arguments.hpp"
+#include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/handles.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/javaCalls.hpp"
@@ -1181,6 +1182,7 @@ bool              JvmtiExport::_can_post_method_entry                     = fals
 bool              JvmtiExport::_can_post_method_exit                      = false;
 bool              JvmtiExport::_can_pop_frame                             = false;
 bool              JvmtiExport::_can_force_early_return                    = false;
+bool              JvmtiExport::_can_get_owned_monitor_info                = false;
 
 bool              JvmtiExport::_early_vmstart_recorded                    = false;
 

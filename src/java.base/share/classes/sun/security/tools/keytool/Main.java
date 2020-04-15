@@ -2347,9 +2347,9 @@ public final class Main {
         out.println(form.format(source));
         out.println();
 
-        for (Enumeration<String> e = keyStore.aliases();
-                                        e.hasMoreElements(); ) {
-            String alias = e.nextElement();
+        List<String> aliases = Collections.list(keyStore.aliases());
+        aliases.sort(String::compareTo);
+        for (String alias : aliases) {
             doPrintEntry("<" + alias + ">", alias, out);
             if (verbose || rfc) {
                 out.println(rb.getString("NEWLINE"));
@@ -3451,6 +3451,11 @@ public final class Main {
         throws Exception
     {
         Key key = null;
+
+        if (KeyStoreUtil.isWindowsKeyStore(storetype)) {
+            key = keyStore.getKey(alias, null);
+            return Pair.of(key, null);
+        }
 
         if (keyStore.containsAlias(alias) == false) {
             MessageFormat form = new MessageFormat

@@ -5,7 +5,7 @@
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
  * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the Classpath exception as provided
+ * particular file as subject to the "Classpath" exception as provided
  * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
@@ -31,6 +31,13 @@
  * Provides services that allow Java programming language agents to instrument
  * programs running on the JVM. The mechanism for instrumentation is modification
  * of the byte-codes of methods.
+ *
+ * <p> Note: developers/admininstrators are responsible for verifying
+ * the trustworthiness of content and structure of the Java Agents they deploy,
+ * since those are able to arbitrarily transform the bytecode from other JAR files.
+ * Since that happens after the Jars containing the bytecode have been verified
+ * as trusted, the trustworthiness of a Java Agent can determine the trust towards
+ * the entire program.
  *
  * <p> An agent is deployed as a JAR file. An attribute in the JAR file manifest
  * specifies the agent class which will be loaded to start the agent. Agents can

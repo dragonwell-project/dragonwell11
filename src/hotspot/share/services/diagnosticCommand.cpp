@@ -35,6 +35,7 @@
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/typeArrayOop.inline.hpp"
+#include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/flags/jvmFlag.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
@@ -126,7 +127,7 @@ void DCmdRegistrant::register_dcmds(){
 
   // Debug on cmd (only makes sense with JVMTI since the agentlib needs it).
 #if INCLUDE_JVMTI
-  DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<DebugOnCmdStartDCmd>(full_export, true, false));
+  DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<DebugOnCmdStartDCmd>(full_export, true, true));
 #endif // INCLUDE_JVMTI
 
 }

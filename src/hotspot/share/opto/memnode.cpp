@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,8 @@
 #include "precompiled.hpp"
 #include "classfile/systemDictionary.hpp"
 #include "compiler/compileLog.hpp"
+#include "gc/shared/barrierSet.hpp"
+#include "gc/shared/c2/barrierSetC2.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/objArrayKlass.hpp"
@@ -1437,7 +1439,7 @@ Node *LoadNode::split_through_phi(PhaseGVN *phase) {
 
   // Do nothing here if Identity will find a value
   // (to avoid infinite chain of value phis generation).
-  if (!phase->eqv(this, this->Identity(phase)))
+  if (!phase->eqv(this, phase->apply_identity(this)))
     return NULL;
 
   // Select Region to split through.
@@ -1527,7 +1529,7 @@ Node *LoadNode::split_through_phi(PhaseGVN *phase) {
       // otherwise it will be not updated during igvn->transform since
       // igvn->type(x) is set to x->Value() already.
       x->raise_bottom_type(t);
-      Node *y = x->Identity(igvn);
+      Node *y = igvn->apply_identity(x);
       if (y != x) {
         x = y;
       } else {
@@ -2252,6 +2254,12 @@ Node* LoadNode::klass_identity_common(PhaseGVN* phase) {
   const TypeOopPtr* toop = phase->type(adr)->isa_oopptr();
   if (toop == NULL)     return this;
 
+  // Step over potential GC barrier for OopHandle resolve
+  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+  if (bs->is_gc_barrier_node(base)) {
+    base = bs->step_over_gc_barrier(base);
+  }
+
   // We can fetch the klass directly through an AllocateNode.
   // This works even if the klass is not constant (clone or newArray).
   if (offset == oopDesc::klass_offset_in_bytes()) {
@@ -2269,10 +2277,6 @@ Node* LoadNode::klass_identity_common(PhaseGVN* phase) {
   // mirror go completely dead.  (Current exception:  Class
   // mirrors may appear in debug info, but we could clean them out by
   // introducing a new debug info operator for Klass.java_mirror).
-  //
-  // If the code pattern requires a barrier for
-  //   mirror = ((OopHandle)mirror)->resolve();
-  // this won't match.
 
   if (toop->isa_instptr() && toop->klass() == phase->C->env()->Class_klass()
       && offset == java_lang_Class::klass_offset_in_bytes()) {
@@ -4131,7 +4135,7 @@ intptr_t InitializeNode::find_next_fullword_store(uint start, PhaseGVN* phase) {
 Node* InitializeNode::complete_stores(Node* rawctl, Node* rawmem, Node* rawptr,
                                       intptr_t header_size,
                                       Node* size_in_bytes,
-                                      PhaseGVN* phase) {
+                                      PhaseIterGVN* phase) {
   assert(!is_complete(), "not already complete");
   assert(stores_are_sane(phase), "");
   assert(allocation() != NULL, "must be present");
@@ -4223,7 +4227,7 @@ Node* InitializeNode::complete_stores(Node* rawctl, Node* rawmem, Node* rawptr,
     }
 
     // Collect the store and move on:
-    st->set_req(MemNode::Memory, inits);
+    phase->replace_input_of(st, MemNode::Memory, inits);
     inits = st;                 // put it on the linearized chain
     set_req(i, zmem);           // unhook from previous position
 

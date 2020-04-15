@@ -334,7 +334,7 @@ public final class SSLSocketImpl
                 SSLLogger.severe("handshake failed", ioe);
             }
 
-            return SSLSessionImpl.nullSession;
+            return new SSLSessionImpl();
         }
 
         return conContext.conSession;
@@ -342,15 +342,8 @@ public final class SSLSocketImpl
 
     @Override
     public synchronized SSLSession getHandshakeSession() {
-        if (conContext.handshakeContext != null) {
-            synchronized (this) {
-                if (conContext.handshakeContext != null) {
-                    return conContext.handshakeContext.handshakeSession;
-                }
-            }
-        }
-
-        return null;
+        return conContext.handshakeContext == null ?
+                null : conContext.handshakeContext.handshakeSession;
     }
 
     @Override
@@ -849,8 +842,7 @@ public final class SSLSocketImpl
          *
          * This implementation is somewhat less efficient than possible, but
          * not badly so (redundant copy).  We reuse the read() code to keep
-         * things simpler. Note that SKIP_ARRAY is static and may garbled by
-         * concurrent use, but we are not interested in the data anyway.
+         * things simpler.
          */
         @Override
         public synchronized long skip(long n) throws IOException {

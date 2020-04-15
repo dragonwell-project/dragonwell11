@@ -1479,6 +1479,7 @@ G1CollectedHeap::G1CollectedHeap(G1CollectorPolicy* collector_policy) :
 
   // Initialize the G1EvacuationFailureALot counters and flags.
   NOT_PRODUCT(reset_evacuation_should_fail();)
+  _gc_tracer_stw->initialize();
 
   guarantee(_task_queues != NULL, "task_queues allocation failure.");
 }
@@ -2040,6 +2041,12 @@ void G1CollectedHeap::collect(GCCause::Cause cause) {
           }
         }
       }
+    } else if (GCLocker::should_discard(cause, gc_count_before)) {
+      // Return false to be consistent with VMOp failure due to
+      // another collection slipping in after our gc_count but before
+      // our request is processed.  _gc_locker collections upgraded by
+      // GCLockerInvokesConcurrent are handled above and never discarded.
+      return;
     } else {
       if (cause == GCCause::_gc_locker || cause == GCCause::_wb_young_gc
           DEBUG_ONLY(|| cause == GCCause::_scavenge_alot)) {

@@ -1801,7 +1801,7 @@ void IdealLoopTree::split_fall_in( PhaseIdealLoop *phase, int fall_in_cnt ) {
       // disappear it.  In JavaGrande I have a case where this useless
       // Phi is the loop limit and prevents recognizing a CountedLoop
       // which in turn prevents removing an empty loop.
-      Node *id_old_phi = old_phi->Identity( &igvn );
+      Node *id_old_phi = igvn.apply_identity(old_phi);
       if( id_old_phi != old_phi ) { // Found a simple identity?
         // Note that I cannot call 'replace_node' here, because
         // that will yank the edge from old_phi to the Region and
@@ -2713,7 +2713,10 @@ bool PhaseIdealLoop::process_expensive_nodes() {
 //----------------------------build_and_optimize-------------------------------
 // Create a PhaseLoop.  Build the ideal Loop tree.  Map each Ideal Node to
 // its corresponding LoopNode.  If 'optimize' is true, do some loop cleanups.
-void PhaseIdealLoop::build_and_optimize(bool do_split_ifs, bool skip_loop_opts, bool last_round) {
+void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
+  bool do_split_ifs = (mode == LoopOptsDefault || mode == LoopOptsLastRound);
+  bool skip_loop_opts = (mode == LoopOptsNone);
+
   ResourceMark rm;
 
   int old_progress = C->major_progress();
@@ -2955,9 +2958,9 @@ void PhaseIdealLoop::build_and_optimize(bool do_split_ifs, bool skip_loop_opts, 
   // that require basic-block info (like cloning through Phi's)
   if( SplitIfBlocks && do_split_ifs ) {
     visited.Clear();
-    split_if_with_blocks( visited, nstack, last_round );
+    split_if_with_blocks( visited, nstack, mode == LoopOptsLastRound );
     NOT_PRODUCT( if( VerifyLoopOptimizations ) verify(); );
-    if (last_round) {
+    if (mode == LoopOptsLastRound) {
       C->set_major_progress();
     }
   }

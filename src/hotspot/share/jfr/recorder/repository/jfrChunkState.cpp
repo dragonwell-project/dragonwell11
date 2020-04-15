@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,7 +39,7 @@ JfrChunkState::JfrChunkState() :
   _start_nanos(0),
   _previous_start_ticks(0),
   _previous_start_nanos(0),
-  _previous_checkpoint_offset(0) {}
+  _last_checkpoint_offset(0) {}
 
 JfrChunkState::~JfrChunkState() {
   reset();
@@ -50,15 +50,15 @@ void JfrChunkState::reset() {
     JfrCHeapObj::free(_path, strlen(_path) + 1);
     _path = NULL;
   }
-  set_previous_checkpoint_offset(0);
+  set_last_checkpoint_offset(0);
 }
 
-void JfrChunkState::set_previous_checkpoint_offset(int64_t offset) {
-  _previous_checkpoint_offset = offset;
+void JfrChunkState::set_last_checkpoint_offset(int64_t offset) {
+  _last_checkpoint_offset = offset;
 }
 
-int64_t JfrChunkState::previous_checkpoint_offset() const {
-  return _previous_checkpoint_offset;
+int64_t JfrChunkState::last_checkpoint_offset() const {
+  return _last_checkpoint_offset;
 }
 
 int64_t JfrChunkState::previous_start_ticks() const {
@@ -100,8 +100,7 @@ static char* copy_path(const char* path) {
   assert(path != NULL, "invariant");
   const size_t path_len = strlen(path);
   char* new_path = JfrCHeapObj::new_array<char>(path_len + 1);
-  strncpy(new_path, path, path_len);
-  new_path[path_len] = '\0';
+  strncpy(new_path, path, path_len + 1);
   return new_path;
 }
 

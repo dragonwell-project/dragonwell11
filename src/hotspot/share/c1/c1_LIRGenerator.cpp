@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1285,9 +1285,10 @@ void LIRGenerator::do_getClass(Intrinsic* x) {
   // FIXME T_ADDRESS should actually be T_METADATA but it can't because the
   // meaning of these two is mixed up (see JDK-8026837).
   __ move(new LIR_Address(rcvr.result(), oopDesc::klass_offset_in_bytes(), T_ADDRESS), temp, info);
-  __ move_wide(new LIR_Address(temp, in_bytes(Klass::java_mirror_offset()), T_ADDRESS), result);
+  __ move_wide(new LIR_Address(temp, in_bytes(Klass::java_mirror_offset()), T_ADDRESS), temp);
   // mirror = ((OopHandle)mirror)->resolve();
-  __ move_wide(new LIR_Address(result, T_OBJECT), result);
+  access_load(IN_NATIVE, T_OBJECT,
+              LIR_OprFact::address(new LIR_Address(temp, T_OBJECT)), result);
 }
 
 // java.lang.Class::isPrimitive()
@@ -1305,7 +1306,7 @@ void LIRGenerator::do_isPrimitive(Intrinsic* x) {
   }
 
   __ move(new LIR_Address(rcvr.result(), java_lang_Class::klass_offset_in_bytes(), T_ADDRESS), temp, info);
-  __ cmp(lir_cond_notEqual, temp, LIR_OprFact::intConst(0));
+  __ cmp(lir_cond_notEqual, temp, LIR_OprFact::metadataConst(0));
   __ cmove(lir_cond_notEqual, LIR_OprFact::intConst(0), LIR_OprFact::intConst(1), result, T_BOOLEAN);
 }
 
@@ -1620,6 +1621,18 @@ void LIRGenerator::access_load_at(DecoratorSet decorators, BasicType type,
     _barrier_set->BarrierSetC1::load_at(access, result);
   } else {
     _barrier_set->load_at(access, result);
+  }
+}
+
+void LIRGenerator::access_load(DecoratorSet decorators, BasicType type,
+                               LIR_Opr addr, LIR_Opr result) {
+  decorators |= C1_READ_ACCESS;
+  LIRAccess access(this, decorators, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, type);
+  access.set_resolved_addr(addr);
+  if (access.is_raw()) {
+    _barrier_set->BarrierSetC1::load(access, result);
+  } else {
+    _barrier_set->load(access, result);
   }
 }
 
@@ -2207,7 +2220,7 @@ void LIRGenerator::do_SwitchRanges(SwitchRangeArray* x, LIR_Opr value, BlockBegi
   int lng = x->length();
 
   for (int i = 0; i < lng; i++) {
-    SwitchRange* one_range = x->at(i);
+    C1SwitchRange* one_range = x->at(i);
     int low_key = one_range->low_key();
     int high_key = one_range->high_key();
     BlockBegin* dest = one_range->sux();
@@ -2239,7 +2252,7 @@ SwitchRangeArray* LIRGenerator::create_lookup_ranges(TableSwitch* x) {
     BlockBegin* sux = x->sux_at(0);
     int key = x->lo_key();
     BlockBegin* default_sux = x->default_sux();
-    SwitchRange* range = new SwitchRange(key, sux);
+    C1SwitchRange* range = new C1SwitchRange(key, sux);
     for (int i = 0; i < len; i++, key++) {
       BlockBegin* new_sux = x->sux_at(i);
       if (sux == new_sux) {
@@ -2250,7 +2263,7 @@ SwitchRangeArray* LIRGenerator::create_lookup_ranges(TableSwitch* x) {
         if (sux != default_sux) {
           res->append(range);
         }
-        range = new SwitchRange(key, new_sux);
+        range = new C1SwitchRange(key, new_sux);
       }
       sux = new_sux;
     }
@@ -2268,7 +2281,7 @@ SwitchRangeArray* LIRGenerator::create_lookup_ranges(LookupSwitch* x) {
     BlockBegin* default_sux = x->default_sux();
     int key = x->key_at(0);
     BlockBegin* sux = x->sux_at(0);
-    SwitchRange* range = new SwitchRange(key, sux);
+    C1SwitchRange* range = new C1SwitchRange(key, sux);
     for (int i = 1; i < len; i++) {
       int new_key = x->key_at(i);
       BlockBegin* new_sux = x->sux_at(i);
@@ -2280,7 +2293,7 @@ SwitchRangeArray* LIRGenerator::create_lookup_ranges(LookupSwitch* x) {
         if (range->sux() != default_sux) {
           res->append(range);
         }
-        range = new SwitchRange(new_key, new_sux);
+        range = new C1SwitchRange(new_key, new_sux);
       }
       key = new_key;
       sux = new_sux;
@@ -2956,7 +2969,10 @@ void LIRGenerator::do_getEventWriter(Intrinsic* x) {
   __ move_wide(jobj_addr, result);
   __ cmp(lir_cond_equal, result, LIR_OprFact::oopConst(NULL));
   __ branch(lir_cond_equal, T_OBJECT, L_end->label());
-  __ move_wide(new LIR_Address(result, T_OBJECT), result);
+
+  LIR_Opr jobj = new_register(T_OBJECT);
+  __ move(result, jobj);
+  access_load(IN_NATIVE, T_OBJECT, LIR_OprFact::address(new LIR_Address(jobj, T_OBJECT)), result);
 
   __ branch_destination(L_end->label());
 }

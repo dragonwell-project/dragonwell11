@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,18 +42,17 @@ class BarrierSetC1;
 class LIRGenerator;
 class LIREmitter;
 class Invoke;
-class SwitchRange;
 class LIRItem;
 
 typedef GrowableArray<LIRItem*> LIRItemList;
 
-class SwitchRange: public CompilationResourceObj {
+class C1SwitchRange: public CompilationResourceObj {
  private:
   int _low_key;
   int _high_key;
   BlockBegin* _sux;
  public:
-  SwitchRange(int start_key, BlockBegin* sux): _low_key(start_key), _high_key(start_key), _sux(sux) {}
+  C1SwitchRange(int start_key, BlockBegin* sux): _low_key(start_key), _high_key(start_key), _sux(sux) {}
   void set_high_key(int key) { _high_key = key; }
 
   int high_key() const { return _high_key; }
@@ -61,8 +60,8 @@ class SwitchRange: public CompilationResourceObj {
   BlockBegin* sux() const { return _sux; }
 };
 
-typedef GrowableArray<SwitchRange*> SwitchRangeArray;
-typedef GrowableArray<SwitchRange*> SwitchRangeList;
+typedef GrowableArray<C1SwitchRange*> SwitchRangeArray;
+typedef GrowableArray<C1SwitchRange*> SwitchRangeList;
 
 class ResolveNode;
 
@@ -287,6 +286,9 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   void access_load_at(DecoratorSet decorators, BasicType type,
                       LIRItem& base, LIR_Opr offset, LIR_Opr result,
                       CodeEmitInfo* patch_info = NULL, CodeEmitInfo* load_emit_info = NULL);
+
+  void access_load(DecoratorSet decorators, BasicType type,
+                   LIR_Opr addr, LIR_Opr result);
 
   LIR_Opr access_atomic_cmpxchg_at(DecoratorSet decorators, BasicType type,
                                    LIRItem& base, LIRItem& offset, LIRItem& cmp_value, LIRItem& new_value);

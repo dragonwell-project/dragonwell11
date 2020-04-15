@@ -24,6 +24,7 @@
  */
 package jdk.jfr.internal.dcmd;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -107,7 +108,9 @@ final class DCmdStart extends AbstractDCmd {
         if (duration == null && Boolean.FALSE.equals(dumpOnExit) && path != null) {
             throw new DCmdException("Filename can only be set for a time bound recording or if dumponexit=true. Set duration/dumponexit or omit filename.");
         }
-
+        if (settings.length == 1 && settings[0].length() == 0) {
+            throw new DCmdException("No settings specified. Use settings=none to start without any settings");
+        }
         Map<String, String> s = new HashMap<>();
         for (String configName : settings) {
             try {

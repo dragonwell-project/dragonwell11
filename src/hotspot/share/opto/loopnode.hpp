@@ -743,12 +743,14 @@ private:
   }
 
   Node* cast_incr_before_loop(Node* incr, Node* ctrl, Node* loop);
-  void duplicate_predicates_helper(Node* predicate, Node* castii, IdealLoopTree* outer_loop,
+  void duplicate_predicates_helper(Node* predicate, Node* start, Node* end, IdealLoopTree* outer_loop,
                                    LoopNode* outer_main_head, uint dd_main_head);
-  void duplicate_predicates(CountedLoopNode* pre_head, Node* castii, IdealLoopTree* outer_loop,
+  void duplicate_predicates(CountedLoopNode* pre_head, Node* start, Node* end, IdealLoopTree* outer_loop,
                             LoopNode* outer_main_head, uint dd_main_head);
-  Node* update_skeleton_predicate(Node* iff, Node* value, Node* predicate = NULL, Node* uncommon_proj = NULL,
-                                  Node* current_proj = NULL, IdealLoopTree* outer_loop = NULL, Node* prev_proj = NULL);
+  Node* clone_skeleton_predicate(Node* iff, Node* value, Node* predicate, Node* uncommon_proj,
+                                  Node* current_proj, IdealLoopTree* outer_loop, Node* prev_proj);
+  bool skeleton_predicate_has_opaque(IfNode* iff);
+  void update_skeleton_predicates(Node* ctrl, CountedLoopNode* loop_head, Node* init, int stride_con);
   void insert_loop_limit_check(ProjNode* limit_check_proj, Node* cmp_limit, Node* bol);
 
 public:
@@ -923,11 +925,11 @@ public:
     _dom_lca_tags(arena()), // Thread::resource_area
     _verify_me(NULL),
     _verify_only(true) {
-    build_and_optimize(false, false);
+    build_and_optimize(LoopOptsVerify);
   }
 
   // build the loop tree and perform any requested optimizations
-  void build_and_optimize(bool do_split_if, bool skip_loop_opts, bool last_round = false);
+  void build_and_optimize(LoopOptsMode mode);
 
   // Dominators for the sea of nodes
   void Dominators();
@@ -937,23 +939,23 @@ public:
   Node *dom_lca_internal( Node *n1, Node *n2 ) const;
 
   // Compute the Ideal Node to Loop mapping
-  PhaseIdealLoop( PhaseIterGVN &igvn, bool do_split_ifs, bool skip_loop_opts = false, bool last_round = false) :
+  PhaseIdealLoop(PhaseIterGVN &igvn, LoopOptsMode mode) :
     PhaseTransform(Ideal_Loop),
     _igvn(igvn),
     _dom_lca_tags(arena()), // Thread::resource_area
     _verify_me(NULL),
     _verify_only(false) {
-    build_and_optimize(do_split_ifs, skip_loop_opts, last_round);
+    build_and_optimize(mode);
   }
 
   // Verify that verify_me made the same decisions as a fresh run.
-  PhaseIdealLoop( PhaseIterGVN &igvn, const PhaseIdealLoop *verify_me) :
+  PhaseIdealLoop(PhaseIterGVN &igvn, const PhaseIdealLoop *verify_me) :
     PhaseTransform(Ideal_Loop),
     _igvn(igvn),
     _dom_lca_tags(arena()), // Thread::resource_area
     _verify_me(verify_me),
     _verify_only(false) {
-    build_and_optimize(false, false);
+    build_and_optimize(LoopOptsVerify);
   }
 
   // Build and verify the loop tree without modifying the graph.  This
@@ -1119,7 +1121,7 @@ public:
                                       Deoptimization::DeoptReason reason);
   Node* add_range_check_predicate(IdealLoopTree* loop, CountedLoopNode* cl,
                                   Node* predicate_proj, int scale_con, Node* offset,
-                                  Node* limit, jint stride_con);
+                                  Node* limit, jint stride_con, Node* value);
 
   // Helper function to collect predicate for eliminating the useless ones
   void collect_potentially_useful_predicates(IdealLoopTree *loop, Unique_Node_List &predicate_opaque1);

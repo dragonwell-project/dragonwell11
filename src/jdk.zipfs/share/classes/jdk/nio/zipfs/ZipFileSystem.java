@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,6 +43,8 @@ import java.nio.channels.WritableByteChannel;
 import java.nio.file.*;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFileAttributes;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.UserPrincipalLookupService;
 import java.nio.file.spi.FileSystemProvider;
 import java.security.AccessController;
@@ -304,6 +306,14 @@ class ZipFileSystem extends FileSystem {
                 def.end();
         }
 
+        beginWrite();                // lock and sync
+        try {
+            // Clear the map so that its keys & values can be garbage collected
+            inodes = null;
+        } finally {
+            endWrite();
+        }
+
         IOException ioe = null;
         synchronized (tmppaths) {
             for (Path p : tmppaths) {
@@ -409,23 +419,31 @@ class ZipFileSystem extends FileSystem {
     }
 
     // returns the list of child paths of "path"
-    Iterator<Path> iteratorOf(byte[] path,
+    Iterator<Path> iteratorOf(ZipPath dir,
                               DirectoryStream.Filter<? super Path> filter)
         throws IOException
     {
         beginWrite();    // iteration of inodes needs exclusive lock
         try {
             ensureOpen();
+            byte[] path = dir.getResolvedPath();
             IndexNode inode = getInode(path);
             if (inode == null)
                 throw new NotDirectoryException(getString(path));
             List<Path> list = new ArrayList<>();
             IndexNode child = inode.child;
             while (child != null) {
-                // assume all path from zip file itself is "normalized"
-                ZipPath zp = new ZipPath(this, child.name, true);
-                if (filter == null || filter.accept(zp))
-                    list.add(zp);
+                // (1) Assume each path from the zip file itself is "normalized"
+                // (2) IndexNode.name is absolute. see IndexNode(byte[],int,int)
+                // (3) If parent "dir" is relative when ZipDirectoryStream
+                //     is created, the returned child path needs to be relative
+                //     as well.
+                byte[] cname = child.name;
+                ZipPath childPath = new ZipPath(this, cname, true);
+                ZipPath childFileName = childPath.getFileName();
+                ZipPath zpath = dir.resolve(childFileName);
+                if (filter == null || filter.accept(zpath))
+                    list.add(zpath);
                 child = child.sibling;
             }
             return list.iterator();
@@ -876,7 +894,7 @@ class ZipFileSystem extends FileSystem {
     }
 
     private static byte[] ROOTPATH = new byte[] { '/' };
-    private static byte[] getParent(byte[] path) {
+    static byte[] getParent(byte[] path) {
         int off = getParentOff(path);
         if (off <= 1)
             return ROOTPATH;
@@ -891,11 +909,11 @@ class ZipFileSystem extends FileSystem {
         return off;
     }
 
-    private final void beginWrite() {
+    final void beginWrite() {
         rwlock.writeLock().lock();
     }
 
-    private final void endWrite() {
+    final void endWrite() {
         rwlock.writeLock().unlock();
     }
 
@@ -918,7 +936,7 @@ class ZipFileSystem extends FileSystem {
     private final ReadWriteLock rwlock = new ReentrantReadWriteLock();
 
     // name -> pos (in cen), IndexNode itself can be used as a "key"
-    private LinkedHashMap<IndexNode, IndexNode> inodes;
+    LinkedHashMap<IndexNode, IndexNode> inodes;
 
     final byte[] getBytes(String name) {
         return zc.getBytes(name);
@@ -1096,9 +1114,7 @@ class ZipFileSystem extends FileSystem {
 
     // Creates a new empty temporary file in the same directory as the
     // specified file.  A variant of Files.createTempFile.
-    private Path createTempFileInSameDirectoryAs(Path path)
-        throws IOException
-    {
+    private Path createTempFileInSameDirectoryAs(Path path) throws IOException {
         Path parent = path.toAbsolutePath().getParent();
         Path dir = (parent == null) ? path.getFileSystem().getPath(".") : parent;
         Path tmpPath = Files.createTempFile(dir, "zipfstmp", null);
@@ -1244,6 +1260,7 @@ class ZipFileSystem extends FileSystem {
         }
         if (!hasUpdate)
             return;
+        PosixFileAttributes attrs = getPosixAttributes(zfpath);
         Path tmpFile = createTempFileInSameDirectoryAs(zfpath);
         try (OutputStream os = new BufferedOutputStream(Files.newOutputStream(tmpFile, WRITE))) {
             ArrayList<Entry> elist = new ArrayList<>(inodes.size());
@@ -1320,8 +1337,36 @@ class ZipFileSystem extends FileSystem {
             Files.delete(zfpath);
         }
 
+        // Set the POSIX permissions of the original Zip File if available
+        // before moving the temp file
+        if (attrs != null) {
+            Files.setPosixFilePermissions(tmpFile, attrs.permissions());
+        }
         Files.move(tmpFile, zfpath, REPLACE_EXISTING);
         hasUpdate = false;    // clear
+    }
+
+    /**
+     * Returns a file's POSIX file attributes.
+     * @param path The path to the file
+     * @return The POSIX file attributes for the specified file or
+     *         null if the POSIX attribute view is not available
+     * @throws IOException If an error occurs obtaining the POSIX attributes for
+     *                    the specified file
+     */
+    private PosixFileAttributes getPosixAttributes(Path path) throws IOException {
+        try {
+            PosixFileAttributeView view =
+                    Files.getFileAttributeView(path, PosixFileAttributeView.class);
+            // Return if the attribute view is not supported
+            if (view == null) {
+                return null;
+            }
+            return view.readAttributes();
+        } catch (UnsupportedOperationException e) {
+            // PosixFileAttributes not available
+            return null;
+        }
     }
 
     IndexNode getInode(byte[] path) {
@@ -1433,12 +1478,6 @@ class ZipFileSystem extends FileSystem {
             super(os, getDeflater());
             this.e = Objects.requireNonNull(e, "Zip entry is null");
             this.crc = new CRC32();
-        }
-
-        @Override
-        public synchronized void write(int b) throws IOException {
-            super.write(b);
-            crc.update(b);
         }
 
         @Override
@@ -1864,7 +1903,7 @@ class ZipFileSystem extends FileSystem {
             this.pos = pos;
         }
 
-        // constructor for cenInit() (1) remove trailing '/' (2) pad leading '/'
+        // constructor for initCEN() (1) remove trailing '/' (2) pad leading '/'
         IndexNode(byte[] cen, int pos, int nlen) {
             int noff = pos + CENHDR;
             if (cen[noff + nlen - 1] == '/') {
@@ -1878,8 +1917,49 @@ class ZipFileSystem extends FileSystem {
                 System.arraycopy(cen, noff, name, 1, nlen);
                 name[0] = '/';
             }
-            name(name);
+            name(normalize(name));
             this.pos = pos;
+        }
+
+        // Normalize the IndexNode.name field.
+        private byte[] normalize(byte[] path) {
+            int len = path.length;
+            if (len == 0)
+                return path;
+            byte prevC = 0;
+            for (int pathPos = 0; pathPos < len; pathPos++) {
+                byte c = path[pathPos];
+                if (c == '/' && prevC == '/')
+                    return normalize(path, pathPos - 1);
+                prevC = c;
+            }
+            if (len > 1 && prevC == '/') {
+                return Arrays.copyOf(path, len - 1);
+            }
+            return path;
+        }
+
+        private byte[] normalize(byte[] path, int off) {
+            // As we know we have at least one / to trim, we can reduce
+            // the size of the resulting array
+            byte[] to = new byte[path.length - 1];
+            int pathPos = 0;
+            while (pathPos < off) {
+                to[pathPos] = path[pathPos];
+                pathPos++;
+            }
+            int toPos = pathPos;
+            byte prevC = 0;
+            while (pathPos < path.length) {
+                byte c = path[pathPos++];
+                if (c == '/' && prevC == '/')
+                    continue;
+                to[toPos++] = c;
+                prevC = c;
+            }
+            if (toPos > 1 && to[toPos - 1] == '/')
+                toPos--;
+            return (toPos == to.length) ? to : Arrays.copyOf(to, toPos);
         }
 
         private static final ThreadLocal<IndexNode> cachedKey = new ThreadLocal<>();

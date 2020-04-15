@@ -31,7 +31,6 @@
 // Sets the default values for platform dependent flags used by the runtime system.
 // (see globals.hpp)
 
-define_pd_global(bool, ShareVtableStubs,         true);
 define_pd_global(bool, NeedsDeoptSuspend,        false); // only register window machines need this
 
 define_pd_global(bool, ImplicitNullChecks,       true);  // Generate code for implicit null checks
@@ -216,5 +215,15 @@ define_pd_global(bool, ThreadLocalHandshakes, false);
           "Use BMI2 instructions")                                          \
                                                                             \
   diagnostic(bool, UseLibmIntrinsic, true,                                  \
-          "Use Libm Intrinsics")
+          "Use Libm Intrinsics")                                            \
+                                                                            \
+  /* Minimum array size in bytes to use AVX512 intrinsics */                \
+  /* for copy, inflate and fill which don't bail out early based on any */  \
+  /* condition. When this value is set to zero compare operations like */   \
+  /* compare, vectorizedMismatch, compress can also use AVX512 intrinsics.*/\
+  diagnostic(int, AVX3Threshold, 4096,                                      \
+             "Minimum array size in bytes to use AVX512 intrinsics"         \
+             "for copy, inflate and fill. When this value is set as zero"   \
+             "compare operations can also use AVX512 intrinsics.")          \
+          range(0, max_jint)
 #endif // CPU_X86_VM_GLOBALS_X86_HPP

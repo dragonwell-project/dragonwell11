@@ -40,7 +40,7 @@
 #include "runtime/thread.inline.hpp"
 #include "runtime/threadSMR.hpp"
 #include "runtime/vmThread.hpp"
-#include "runtime/vm_operations.hpp"
+#include "runtime/vmOperations.hpp"
 #include "runtime/vm_version.hpp"
 #include "runtime/flags/jvmFlag.hpp"
 #include "services/memTracker.hpp"
@@ -1190,16 +1190,6 @@ void VMError::print_vm_info(outputStream* st) {
 
 volatile intptr_t VMError::first_error_tid = -1;
 
-// An error could happen before tty is initialized or after it has been
-// destroyed.
-// Please note: to prevent large stack allocations, the log- and
-// output-stream use a global scratch buffer for format printing.
-// (see VmError::report_and_die(). Access to those streams is synchronized
-// in  VmError::report_and_die() - there is only one reporting thread at
-// any given time.
-fdStream VMError::out(defaultStream::output_fd());
-fdStream VMError::log; // error log used by VMError::report_and_die()
-
 /** Expand a pattern into a buffer starting at pos and open a file using constructed path */
 static int expand_and_open(const char* pattern, char* buf, size_t buflen, size_t pos) {
   int fd = -1;
@@ -1304,9 +1294,25 @@ void VMError::report_and_die(int id, const char* message, const char* detail_fmt
                              Thread* thread, address pc, void* siginfo, void* context, const char* filename,
                              int lineno, size_t size)
 {
-  // Don't allocate large buffer on stack
+  // A single scratch buffer to be used from here on.
+  // Do not rely on it being preserved across function calls.
   static char buffer[O_BUFLEN];
+
+  // File descriptor to tty to print an error summary to.
+  // Hard wired to stdout; see JDK-8215004 (compatibility concerns).
+  static const int fd_out = 1; // stdout
+
+  // File descriptor to the error log file.
+  static int fd_log = -1;
+
+  // Use local fdStream objects only. Do not use global instances whose initialization
+  // relies on dynamic initialization (see JDK-8214975). Do not rely on these instances
+  // to carry over into recursions or invocations from other threads.
+  fdStream out(fd_out);
   out.set_scratch_buffer(buffer, sizeof(buffer));
+
+  // Depending on the re-entrance depth at this point, fd_log may be -1 or point to an open hs-err file.
+  fdStream log(fd_log);
   log.set_scratch_buffer(buffer, sizeof(buffer));
 
   // How many errors occurred in error handler when reporting first_error.
@@ -1438,9 +1444,13 @@ void VMError::report_and_die(int id, const char* message, const char* detail_fmt
     }
   }
 
-  // print to screen
+  // Part 1: print an abbreviated version (the '#' section) to stdout.
   if (!out_done) {
-    report(&out, false);
+    // Suppress this output if we plan to print Part 2 to stdout too.
+    // No need to have the "#" section twice.
+    if (!(ErrorFileToStdout && out.fd() == 1)) {
+      report(&out, false);
+    }
 
     out_done = true;
 
@@ -1448,24 +1458,31 @@ void VMError::report_and_die(int id, const char* message, const char* detail_fmt
     _current_step_info = "";
   }
 
+  // Part 2: print a full error log file (optionally to stdout or stderr).
   // print to error log file
   if (!log_done) {
     // see if log file is already open
     if (!log.is_open()) {
       // open log file
-      int fd = prepare_log_file(ErrorFile, "hs_err_pid%p.log", buffer, sizeof(buffer));
-      if (fd != -1) {
-        out.print_raw("# An error report file with more information is saved as:\n# ");
-        out.print_raw_cr(buffer);
-
-        log.set_fd(fd);
+      if (ErrorFileToStdout) {
+        fd_log = 1;
+      } else if (ErrorFileToStderr) {
+        fd_log = 2;
       } else {
-        out.print_raw_cr("# Can not save log file, dump to screen..");
-        log.set_fd(defaultStream::output_fd());
-        /* Error reporting currently needs dumpfile.
-         * Maybe implement direct streaming in the future.*/
-        transmit_report_done = true;
+        fd_log = prepare_log_file(ErrorFile, "hs_err_pid%p.log", buffer, sizeof(buffer));
+        if (fd_log != -1) {
+          out.print_raw("# An error report file with more information is saved as:\n# ");
+          out.print_raw_cr(buffer);
+
+        } else {
+          out.print_raw_cr("# Can not save log file, dump to screen..");
+          fd_log = 1;
+          /* Error reporting currently needs dumpfile.
+           * Maybe implement direct streaming in the future.*/
+          transmit_report_done = true;
+        }
       }
+      log.set_fd(fd_log);
     }
 
     report(&log, true);
@@ -1487,11 +1504,17 @@ void VMError::report_and_die(int id, const char* message, const char* detail_fmt
       }
     }
 
-    if (log.fd() != defaultStream::output_fd()) {
-      close(log.fd());
+    if (fd_log > 3) {
+      close(fd_log);
+      fd_log = -1;
     }
 
     log.set_fd(-1);
+  }
+
+  if (PrintNMTStatistics) {
+    fdStream fds(fd_out);
+    MemTracker::final_report(&fds);
   }
 
   static bool skip_replay = ReplayCompiles; // Do not overwrite file during replay

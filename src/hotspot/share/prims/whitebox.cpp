@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -53,6 +53,7 @@
 #include "runtime/arguments.hpp"
 #include "runtime/compilationPolicy.hpp"
 #include "runtime/deoptimization.hpp"
+#include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/flags/jvmFlag.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/handshake.hpp"
@@ -88,6 +89,9 @@
 #include "services/memTracker.hpp"
 #include "utilities/nativeCallStack.hpp"
 #endif // INCLUDE_NMT
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif // INCLUDE_AOT
 
 #ifdef LINUX
 #include "osContainer_linux.hpp"
@@ -174,6 +178,15 @@ WB_ENTRY(jboolean, WB_IsClassAlive(JNIEnv* env, jobject target, jstring name))
 
   return closure.found();
 WB_END
+
+WB_ENTRY(jint, WB_GetSymbolRefcount(JNIEnv* env, jobject unused, jstring name))
+  oop h_name = JNIHandles::resolve(name);
+  if (h_name == NULL) return false;
+  Symbol* sym = java_lang_String::as_symbol(h_name, CHECK_0);
+  TempNewSymbol tsym(sym); // Make sure to decrement reference count on sym on return
+  return (jint)sym->refcount();
+WB_END
+
 
 WB_ENTRY(void, WB_AddToBootstrapClassLoaderSearch(JNIEnv* env, jobject o, jstring segment)) {
 #if INCLUDE_JVMTI
@@ -1457,9 +1470,6 @@ WB_ENTRY(jobjectArray, WB_GetCodeHeapEntries(JNIEnv* env, jobject o, jint blob_t
       blobs.append(stub);
     }
   }
-  if (blobs.length() == 0) {
-    return NULL;
-  }
   ThreadToNativeFromVM ttn(thread);
   jobjectArray result = NULL;
   jclass clazz = env->FindClass(vmSymbols::java_lang_Object()->as_C_string());
@@ -1994,6 +2004,13 @@ WB_ENTRY(void, WB_DisableElfSectionCache(JNIEnv* env))
 #endif
 WB_END
 
+WB_ENTRY(jint, WB_AotLibrariesCount(JNIEnv* env, jobject o))
+  jint result = 0;
+#if INCLUDE_AOT
+  result = (jint) AOTLoader::heaps_count();
+#endif
+  return result;
+WB_END
 
 #define CC (char*)
 
@@ -2008,6 +2025,7 @@ static JNINativeMethod methods[] = {
   {CC"getHeapSpaceAlignment",            CC"()J",                   (void*)&WB_GetHeapSpaceAlignment},
   {CC"getHeapAlignment",                 CC"()J",                   (void*)&WB_GetHeapAlignment},
   {CC"isClassAlive0",                    CC"(Ljava/lang/String;)Z", (void*)&WB_IsClassAlive      },
+  {CC"getSymbolRefcount",                CC"(Ljava/lang/String;)I", (void*)&WB_GetSymbolRefcount },
   {CC"parseCommandLine0",
       CC"(Ljava/lang/String;C[Lsun/hotspot/parser/DiagnosticCommand;)[Ljava/lang/Object;",
       (void*) &WB_ParseCommandLine
@@ -2218,6 +2236,7 @@ static JNINativeMethod methods[] = {
   {CC"isContainerized",           CC"()Z",            (void*)&WB_IsContainerized },
   {CC"printOsInfo",               CC"()V",            (void*)&WB_PrintOsInfo },
   {CC"disableElfSectionCache",    CC"()V",            (void*)&WB_DisableElfSectionCache },
+  {CC"aotLibrariesCount", CC"()I",                    (void*)&WB_AotLibrariesCount },
 };
 
 

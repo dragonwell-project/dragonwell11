@@ -40,7 +40,7 @@
 #include "runtime/safepoint.hpp"
 #include "runtime/thread.inline.hpp"
 #include "runtime/vmThread.hpp"
-#include "runtime/vm_operations.hpp"
+#include "runtime/vmOperations.hpp"
 #include "services/runtimeService.hpp"
 #include "utilities/dtrace.hpp"
 #include "utilities/events.hpp"
@@ -552,6 +552,7 @@ void VMThread::loop() {
           _cur_vm_operation = safepoint_ops;
           if (_cur_vm_operation != NULL) {
             do {
+              EventMark em("Executing coalesced safepoint VM operation: %s", _cur_vm_operation->name());
               log_debug(vmthread)("Evaluating coalesced safepoint VM operation: %s", _cur_vm_operation->name());
               // evaluate_operation deletes the op object so we have
               // to grab the next op now

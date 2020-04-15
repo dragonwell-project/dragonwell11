@@ -32,7 +32,7 @@
 #include "runtime/handles.hpp"
 #include "runtime/jniHandles.hpp"
 #include "runtime/synchronizer.hpp"
-#include "runtime/vm_operations.hpp"
+#include "runtime/vmOperations.hpp"
 
 // The following class hierarchy represents
 // a set of operations (VM_Operation) related to GC.
@@ -194,7 +194,8 @@ class VM_GenCollectFull: public VM_GC_Operation {
                     uint full_gc_count_before,
                     GCCause::Cause gc_cause,
                     GenCollectedHeap::GenerationType max_generation)
-    : VM_GC_Operation(gc_count_before, gc_cause, full_gc_count_before, true /* full */),
+    : VM_GC_Operation(gc_count_before, gc_cause, full_gc_count_before,
+                      max_generation != GenCollectedHeap::YoungGen /* full */),
       _max_generation(max_generation) { }
   ~VM_GenCollectFull() {}
   virtual VMOp_Type type() const { return VMOp_GenCollectFull; }

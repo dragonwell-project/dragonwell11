@@ -522,7 +522,7 @@ var getJibProfilesProfiles = function (input, common, data) {
         .forEach(function (name) {
             var maketestName = name + "-testmake";
             profiles[maketestName] = concatObjects(profiles[name], testmakeBase);
-            profiles[maketestName].default_make_targets = [ "test-make" ];
+            profiles[maketestName].default_make_targets = [ "test-make", "test-compile-commands" ];
         });
 
     // Profiles for building the zero jvm variant. These are used for verification.
@@ -747,16 +747,16 @@ var getJibProfilesProfiles = function (input, common, data) {
         "run-test-prebuilt": {
             target_os: input.build_os,
             target_cpu: input.build_cpu,
-            src: "src.conf",
-            dependencies: [ "jtreg", "gnumake", "boot_jdk", "jib", testedProfile + ".jdk",
-                testedProfile + ".test", "src.full"
+            dependencies: [
+                "jtreg", "gnumake", "boot_jdk", "devkit", "jib", testedProfile + ".jdk",
+                testedProfile + ".test"
             ],
-            work_dir: input.get("src.full", "install_path") + "/test",
+            src: "src.conf",
+            make_args: [ "run-test-prebuilt", "LOG_CMDLINES=true" ],
             environment: {
-                "JT_JAVA": common.boot_jdk_home,
-                "PRODUCT_HOME": input.get(testedProfile + ".jdk", "home_path"),
-                "TEST_IMAGE_DIR": input.get(testedProfile + ".test", "home_path"),
-                "TEST_OUTPUT_DIR": input.src_top_dir
+                "BOOT_JDK": common.boot_jdk_home,
+                "JDK_IMAGE_DIR": input.get(testedProfile + ".jdk", "home_path"),
+                "TEST_IMAGE_DIR": input.get(testedProfile + ".test", "home_path")
             },
             labels: "test"
         }
@@ -782,7 +782,6 @@ var getJibProfilesProfiles = function (input, common, data) {
     // This gives us a guaranteed working version of lldb for the jtreg failure handler.
     if (input.build_os == "macosx") {
         macosxRunTestExtra = {
-            dependencies: [ "devkit" ],
             environment_path: input.get("devkit", "install_path")
                 + "/Xcode.app/Contents/Developer/usr/bin"
         };
@@ -794,11 +793,32 @@ var getJibProfilesProfiles = function (input, common, data) {
         windowsRunTestPrebuiltExtra = {
             dependencies: [ testedProfile + ".jdk_symbols" ],
             environment: {
-                "PRODUCT_SYMBOLS_HOME": input.get(testedProfile + ".jdk_symbols", "home_path"),
+                "SYMBOLS_IMAGE_DIR": input.get(testedProfile + ".jdk_symbols", "home_path"),
             }
         };
         profiles["run-test-prebuilt"] = concatObjects(profiles["run-test-prebuilt"],
             windowsRunTestPrebuiltExtra);
+    }
+
+    // The profile run-test-prebuilt defines src.conf as the src bundle. When
+    // running in Mach 5, this reduces the time it takes to populate the
+    // considerably. But with just src.conf, we cannot actually run any tests,
+    // so if running from a workspace with just src.conf in it, we need to also
+    // get src.full as a dependency, and define the work_dir (where make gets
+    // run) to be in the src.full install path. By running in the install path,
+    // the same cached installation of the full src can be reused for multiple
+    // test tasks. Care must however be taken not to polute that work dir by
+    // setting the appropriate make variables to control output directories.
+    //
+    // Use the existance of the top level README as indication of if this is
+    // the full source or just src.conf.
+    if (!new java.io.File(__DIR__, "../../README").exists()) {
+        var runTestPrebuiltSrcFullExtra = {
+            dependencies: "src.full",
+            work_dir: input.get("src.full", "install_path"),
+        }
+        profiles["run-test-prebuilt"] = concatObjects(profiles["run-test-prebuilt"],
+            runTestPrebuiltSrcFullExtra);
     }
 
     // Generate the missing platform attributes
@@ -824,11 +844,11 @@ var getJibProfilesDependencies = function (input, common) {
         windows_x64: "VS2017-15.5.5+1.0",
         linux_aarch64: (input.profile != null && input.profile.indexOf("arm64") >= 0
                     ? "gcc-linaro-aarch64-linux-gnu-4.8-2013.11_linux+1.0"
-                    : "gcc7.3.0-Fedora27+1.0"),
+                    : "gcc7.3.0-Fedora27+1.1"),
         linux_arm: (input.profile != null && input.profile.indexOf("hflt") >= 0
                     ? "gcc-linaro-arm-linux-gnueabihf-raspbian-2012.09-20120921_linux+1.0"
-                    : (input.profile.indexOf("arm32") >= 0
-                       ? "gcc7.3.0-Fedora27+1.0"
+                    : (input.profile != null && input.profile.indexOf("arm32") >= 0
+                       ? "gcc7.3.0-Fedora27+1.1"
                        : "arm-linaro-4.7+1.0"
                        )
                     )
@@ -862,7 +882,10 @@ var getJibProfilesDependencies = function (input, common) {
             organization: common.organization,
             ext: "tar.gz",
             module: "devkit-" + devkit_platform,
-            revision: devkit_platform_revisions[devkit_platform]
+            revision: devkit_platform_revisions[devkit_platform],
+            environment: {
+                "DEVKIT_HOME": input.get("devkit", "home_path"),
+            }
         },
 
         build_devkit: {
@@ -941,9 +964,9 @@ var getJibProfilesDependencies = function (input, common) {
             ext: "zip",
             classifier: "distribution",
             revision: "3.0-SNAPSHOT",
-            environment_name: "JIB_JAR",
+            environment_name: "JIB_HOME",
             environment_value: input.get("jib", "install_path")
-                + "/jib-3.0-SNAPSHOT-distribution/lib/jib-3.0-SNAPSHOT.jar"
+                + "/jib-3.0-SNAPSHOT-distribution"
         },
 
         ant: {
@@ -962,14 +985,6 @@ var getJibProfilesDependencies = function (input, common) {
             environment_name: "GRAALUNIT_LIB"
         },
     };
-
-    // Need to add a value for the Visual Studio tools variable to make
-    // jaot be able to pick up the Visual Studio linker in testing.
-    if (input.target_os == "windows") {
-        dependencies.devkit.environment = {
-            VS120COMNTOOLS: input.get("devkit", "install_path") + "/Common7/Tools"
-        };
-    }
 
     return dependencies;
 };
@@ -1152,10 +1167,16 @@ var versionArgs = function(input, common) {
     var args = ["--with-version-build=" + common.build_number];
     if (input.build_type == "promoted") {
         args = concat(args,
-                      // This needs to be changed when we start building release candidates
-                      // with-version-pre must be set to ea for 'ea' and empty for fcs build
-                      "--with-version-pre=",
+                      "--with-version-pre=" + version_numbers.get("DEFAULT_PROMOTED_VERSION_PRE"),
                       "--without-version-opt");
+    } else if (input.build_type == "ci") {
+        var optString = input.build_id_data.ciBuildNumber;
+        var preString = input.build_id_data.projectName;
+        if (preString == "jdk") {
+            preString = version_numbers.get("DEFAULT_PROMOTED_VERSION_PRE");
+        }
+        args = concat(args, "--with-version-pre=" + preString,
+                     "--with-version-opt=" + optString);
     } else {
         args = concat(args, "--with-version-opt=" + common.build_id);
     }

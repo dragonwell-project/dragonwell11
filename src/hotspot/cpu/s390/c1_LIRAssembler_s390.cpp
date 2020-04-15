@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2016, 2017, SAP SE. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, SAP SE. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -993,7 +993,7 @@ void LIR_Assembler::stack2reg(LIR_Opr src, LIR_Opr dest, BasicType type) {
     if (type == T_ARRAY || type == T_OBJECT) {
       __ mem2reg_opt(dest->as_register(), frame_map()->address_for_slot(src->single_stack_ix()), true);
       __ verify_oop(dest->as_register());
-    } else if (type == T_METADATA) {
+    } else if (type == T_METADATA || type == T_ADDRESS) {
       __ mem2reg_opt(dest->as_register(), frame_map()->address_for_slot(src->single_stack_ix()), true);
     } else {
       __ mem2reg_opt(dest->as_register(), frame_map()->address_for_slot(src->single_stack_ix()), false);
@@ -1021,7 +1021,7 @@ void LIR_Assembler::reg2stack(LIR_Opr src, LIR_Opr dest, BasicType type, bool po
     if (type == T_OBJECT || type == T_ARRAY) {
       __ verify_oop(src->as_register());
       __ reg2mem_opt(src->as_register(), dst, true);
-    } else if (type == T_METADATA) {
+    } else if (type == T_METADATA || type == T_ADDRESS) {
       __ reg2mem_opt(src->as_register(), dst, true);
     } else {
       __ reg2mem_opt(src->as_register(), dst, false);
@@ -1307,6 +1307,15 @@ void LIR_Assembler::comp_op(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2,
           __ z_clfi(reg1, c->as_jint());
         } else {
           __ z_cfi(reg1, c->as_jint());
+        }
+      } else if (c->type() == T_METADATA) {
+        // We only need, for now, comparison with NULL for metadata.
+        assert(condition == lir_cond_equal || condition == lir_cond_notEqual, "oops");
+        Metadata* m = c->as_metadata();
+        if (m == NULL) {
+          __ z_cghi(reg1, 0);
+        } else {
+          ShouldNotReachHere();
         }
       } else if (c->type() == T_OBJECT || c->type() == T_ARRAY) {
         // In 64bit oops are single register.
@@ -1969,7 +1978,6 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
       return;
     }
 
-    Label done;
     // Save outgoing arguments in callee saved registers (C convention) in case
     // a call to System.arraycopy is needed.
     Register callee_saved_src     = Z_R10;
@@ -2141,7 +2149,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
       store_parameter(src_klass, 0); // sub
       store_parameter(dst_klass, 1); // super
       emit_call_c(Runtime1::entry_for (Runtime1::slow_subtype_check_id));
-      CHECK_BAILOUT();
+      CHECK_BAILOUT2(cont, slow);
       // Sets condition code 0 for match (2 otherwise).
       __ branch_optimized(Assembler::bcondEqual, cont);
 
@@ -2200,7 +2208,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
         __ z_lg(Z_ARG5, Address(Z_ARG5, ObjArrayKlass::element_klass_offset()));
         __ z_lg(Z_ARG4, Address(Z_ARG5, Klass::super_check_offset_offset()));
         emit_call_c(copyfunc_addr);
-        CHECK_BAILOUT();
+        CHECK_BAILOUT2(cont, slow);
 
 #ifndef PRODUCT
         if (PrintC1Statistics) {
@@ -2555,7 +2563,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
       store_parameter(klass_RInfo, 0); // sub
       store_parameter(k_RInfo, 1);     // super
       emit_call_c(a); // Sets condition code 0 for match (2 otherwise).
-      CHECK_BAILOUT();
+      CHECK_BAILOUT2(profile_cast_failure, profile_cast_success);
       __ branch_optimized(Assembler::bcondNotEqual, *failure_target);
       // Fall through to success case.
     }
@@ -2638,7 +2646,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
     store_parameter(klass_RInfo, 0); // sub
     store_parameter(k_RInfo, 1);     // super
     emit_call_c(a); // Sets condition code 0 for match (2 otherwise).
-    CHECK_BAILOUT();
+    CHECK_BAILOUT3(profile_cast_success, profile_cast_failure, done);
     __ branch_optimized(Assembler::bcondNotEqual, *failure_target);
     // Fall through to success case.
 

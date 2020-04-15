@@ -46,7 +46,7 @@
 #include "runtime/threadSMR.hpp"
 #include "runtime/vframe.hpp"
 #include "runtime/vmThread.hpp"
-#include "runtime/vm_operations.hpp"
+#include "runtime/vmOperations.hpp"
 #include "services/heapDumper.hpp"
 #include "services/threadService.hpp"
 #include "utilities/macros.hpp"
@@ -757,7 +757,7 @@ void DumperSupport::dump_field_value(DumpWriter* writer, char type, oop obj, int
   switch (type) {
     case JVM_SIGNATURE_CLASS :
     case JVM_SIGNATURE_ARRAY : {
-      oop o = obj->obj_field_access<ON_UNKNOWN_OOP_REF>(offset);
+      oop o = obj->obj_field_access<ON_UNKNOWN_OOP_REF | AS_NO_KEEPALIVE>(offset);
       assert(oopDesc::is_oop_or_null(o), "Expected an oop or NULL at " PTR_FORMAT, p2i(o));
       writer->write_objectID(o);
       break;

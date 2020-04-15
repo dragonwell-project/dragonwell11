@@ -230,8 +230,7 @@ class CompileBroker: AllStatic {
   static volatile int _print_compilation_warning;
 
   static Handle create_thread_oop(const char* name, TRAPS);
-  static JavaThread* make_thread(jobject thread_oop, CompileQueue* queue,
-                                 AbstractCompiler* comp, bool compiler_thread, TRAPS);
+  static JavaThread* make_thread(jobject thread_oop, CompileQueue* queue, AbstractCompiler* comp, TRAPS);
   static void init_compiler_sweeper_threads();
   static void possibly_add_compiler_threads();
   static bool compilation_is_prohibited(const methodHandle& method, int osr_bci, int comp_level, bool excluded);
@@ -401,6 +400,8 @@ public:
     assert(idx < _c2_count, "oob");
     return _compiler2_objects[idx];
   }
+
+  static bool can_remove(CompilerThread *ct, bool do_it);
 
   static CompileLog* get_log(CompilerThread* ct);
 

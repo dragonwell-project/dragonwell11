@@ -70,7 +70,7 @@
 #include "runtime/synchronizer.hpp"
 #include "runtime/thread.inline.hpp"
 #include "runtime/timerTrace.hpp"
-#include "runtime/vm_operations.hpp"
+#include "runtime/vmOperations.hpp"
 #include "services/memoryService.hpp"
 #include "utilities/align.hpp"
 #include "utilities/copy.hpp"
@@ -516,8 +516,11 @@ void Universe::fixup_mirrors(TRAPS) {
   // that the number of objects allocated at this point is very small.
   assert(SystemDictionary::Class_klass_loaded(), "java.lang.Class should be loaded");
   HandleMark hm(THREAD);
-  // Cache the start of the static fields
-  InstanceMirrorKlass::init_offset_of_static_fields();
+
+  if (!UseSharedSpaces) {
+    // Cache the start of the static fields
+    InstanceMirrorKlass::init_offset_of_static_fields();
+  }
 
   GrowableArray <Klass*>* list = java_lang_Class::fixup_mirror_list();
   int list_length = list->length();
@@ -1151,8 +1154,9 @@ void Universe::initialize_verify_flags() {
   size_t length = strlen(VerifySubSet);
   char* subset_list = NEW_C_HEAP_ARRAY(char, length + 1, mtInternal);
   strncpy(subset_list, VerifySubSet, length + 1);
+  char* save_ptr;
 
-  char* token = strtok(subset_list, delimiter);
+  char* token = strtok_r(subset_list, delimiter, &save_ptr);
   while (token != NULL) {
     if (strcmp(token, "threads") == 0) {
       verify_flags |= Verify_Threads;
@@ -1177,7 +1181,7 @@ void Universe::initialize_verify_flags() {
     } else {
       vm_exit_during_initialization(err_msg("VerifySubSet: \'%s\' memory sub-system is unknown, please correct it", token));
     }
-    token = strtok(NULL, delimiter);
+    token = strtok_r(NULL, delimiter, &save_ptr);
   }
   FREE_C_HEAP_ARRAY(char, subset_list);
 }

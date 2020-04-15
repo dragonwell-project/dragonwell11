@@ -35,7 +35,7 @@
 #include "oops/symbol.hpp"
 #include "prims/jniCheck.hpp"
 #include "prims/jvm_misc.hpp"
-#include "runtime/fieldDescriptor.hpp"
+#include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/jfieldIDWorkaround.hpp"
@@ -1927,6 +1927,12 @@ JNI_ENTRY_CHECKED(void,
   checked_jni_DeleteWeakGlobalRef(JNIEnv *env,
                                   jweak ref))
     functionEnterExceptionAllowed(thr);
+    IN_VM(
+      if (ref && !JNIHandles::is_weak_global_handle(ref)) {
+        ReportJNIFatalError(thr,
+             "Invalid weak global JNI handle passed to DeleteWeakGlobalRef");
+      }
+    )
     UNCHECKED()->DeleteWeakGlobalRef(env, ref);
     functionExit(thr);
 JNI_END
@@ -1994,9 +2000,6 @@ JNI_ENTRY_CHECKED(jobject,
   checked_jni_GetModule(JNIEnv *env,
                         jclass clazz))
     functionEnter(thr);
-    IN_VM(
-      jniCheck::validate_class(thr, clazz, false);
-    )
     jobject result = UNCHECKED()->GetModule(env,clazz);
     functionExit(thr);
     return result;

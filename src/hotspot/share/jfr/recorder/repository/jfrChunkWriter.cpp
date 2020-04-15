@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,13 +46,9 @@ bool JfrChunkWriter::initialize() {
   return _chunkstate != NULL;
 }
 
-static fio_fd open_existing(const char* path) {
-  return os::open(path, O_RDWR, S_IREAD | S_IWRITE);
-}
-
 static fio_fd open_chunk(const char* path) {
   assert(JfrStream_lock->owned_by_self(), "invariant");
-  return path != NULL ? open_existing(path) : invalid_fd;
+  return path != NULL ? os::open(path, O_CREAT | O_RDWR, S_IREAD | S_IWRITE) : invalid_fd;
 }
 
 bool JfrChunkWriter::open() {
@@ -90,7 +86,7 @@ void JfrChunkWriter::write_header(int64_t metadata_offset) {
   // Chunk size
   this->write_be_at_offset(size_written(), CHUNK_SIZE_OFFSET);
   // initial checkpoint event offset
-  this->write_be_at_offset(_chunkstate->previous_checkpoint_offset(), CHUNK_SIZE_OFFSET + (1 * FILEHEADER_SLOT_SIZE));
+  this->write_be_at_offset(_chunkstate->last_checkpoint_offset(), CHUNK_SIZE_OFFSET + (1 * FILEHEADER_SLOT_SIZE));
   // metadata event offset
   this->write_be_at_offset(metadata_offset, CHUNK_SIZE_OFFSET + (2 * FILEHEADER_SLOT_SIZE));
   // start of chunk in nanos since epoch
@@ -109,12 +105,12 @@ int64_t JfrChunkWriter::size_written() const {
   return this->is_valid() ? this->current_offset() : 0;
 }
 
-int64_t JfrChunkWriter::previous_checkpoint_offset() const {
-  return _chunkstate->previous_checkpoint_offset();
+int64_t JfrChunkWriter::last_checkpoint_offset() const {
+  return _chunkstate->last_checkpoint_offset();
 }
 
-void JfrChunkWriter::set_previous_checkpoint_offset(int64_t offset) {
-  _chunkstate->set_previous_checkpoint_offset(offset);
+void JfrChunkWriter::set_last_checkpoint_offset(int64_t offset) {
+  _chunkstate->set_last_checkpoint_offset(offset);
 }
 
 void JfrChunkWriter::time_stamp_chunk_now() {

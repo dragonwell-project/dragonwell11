@@ -37,6 +37,7 @@
 #include "opto/node.hpp"
 #include "opto/opcodes.hpp"
 #include "opto/regmask.hpp"
+#include "opto/rootnode.hpp"
 #include "opto/type.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/macros.hpp"
@@ -701,8 +702,25 @@ bool Node::is_dead() const {
   dump();
   return true;
 }
-#endif
 
+bool Node::is_reachable_from_root() const {
+  ResourceMark rm;
+  Unique_Node_List wq;
+  wq.push((Node*)this);
+  RootNode* root = Compile::current()->root();
+  for (uint i = 0; i < wq.size(); i++) {
+    Node* m = wq.at(i);
+    if (m == root) {
+      return true;
+    }
+    for (DUIterator_Fast jmax, j = m->fast_outs(jmax); j < jmax; j++) {
+      Node* u = m->fast_out(j);
+      wq.push(u);
+    }
+  }
+  return false;
+}
+#endif
 
 //------------------------------is_unreachable---------------------------------
 bool Node::is_unreachable(PhaseIterGVN &igvn) const {
@@ -2100,7 +2118,8 @@ void Node::verify_edges(Unique_Node_List &visited) {
       }
       assert( cnt == 0,"Mismatched edge count.");
     } else if (n == NULL) {
-      assert(i >= req() || i == 0 || is_Region() || is_Phi(), "only regions or phis have null data edges");
+      assert(i >= req() || i == 0 || is_Region() || is_Phi() || is_ArrayCopy()
+              || (is_Unlock() && i == req()-1), "only region, phi, arraycopy or unlock nodes have null data edges");
     } else {
       assert(n->is_top(), "sanity");
       // Nothing to check.
@@ -2113,9 +2132,6 @@ void Node::verify_edges(Unique_Node_List &visited) {
       in(i)->verify_edges(visited);
   }
 }
-
-//------------------------------verify_recur-----------------------------------
-static const Node *unique_top = NULL;
 
 void Node::verify_recur(const Node *n, int verify_depth,
                         VectorSet &old_space, VectorSet &new_space) {

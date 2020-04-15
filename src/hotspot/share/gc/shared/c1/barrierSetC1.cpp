@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -62,9 +62,13 @@ LIR_Opr BarrierSetC1::resolve_address(LIRAccess& access, bool resolve_in_registe
 
   if (resolve_in_register) {
     LIR_Opr resolved_addr = gen->new_pointer_register();
-    __ leal(addr_opr, resolved_addr);
-    resolved_addr = LIR_OprFact::address(new LIR_Address(resolved_addr, access.type()));
-    return resolved_addr;
+    if (needs_patching) {
+      __ leal(addr_opr, resolved_addr, lir_patch_normal, access.patch_emit_info());
+      access.clear_decorators(C1_NEEDS_PATCHING);
+    } else {
+      __ leal(addr_opr, resolved_addr);
+    }
+    return LIR_OprFact::address(new LIR_Address(resolved_addr, access.type()));
   } else {
     return addr_opr;
   }
@@ -87,6 +91,13 @@ void BarrierSetC1::load_at(LIRAccess& access, LIR_Opr result) {
 
   LIR_Opr resolved = resolve_address(access, false);
   access.set_resolved_addr(resolved);
+  load_at_resolved(access, result);
+}
+
+void BarrierSetC1::load(LIRAccess& access, LIR_Opr result) {
+  DecoratorSet decorators = access.decorators();
+  bool in_heap = (decorators & IN_HEAP) != 0;
+  assert(!in_heap, "consider using load_at");
   load_at_resolved(access, result);
 }
 
@@ -159,13 +170,16 @@ void BarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result) {
   bool is_volatile = (((decorators & MO_SEQ_CST) != 0) || AlwaysAtomicAccesses) && os::is_MP();
   bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
   bool mask_boolean = (decorators & C1_MASK_BOOLEAN) != 0;
+  bool in_native = (decorators & IN_NATIVE) != 0;
 
   if (support_IRIW_for_not_multiple_copy_atomic_cpu && is_volatile) {
     __ membar();
   }
 
   LIR_PatchCode patch_code = needs_patching ? lir_patch_normal : lir_patch_none;
-  if (is_volatile && !needs_patching) {
+  if (in_native) {
+    __ move_wide(access.resolved_addr()->as_address_ptr(), result);
+  } else if (is_volatile && !needs_patching) {
     gen->volatile_field_load(access.resolved_addr()->as_address_ptr(), result, access.access_emit_info());
   } else {
     __ load(access.resolved_addr()->as_address_ptr(), result, access.access_emit_info(), patch_code);
