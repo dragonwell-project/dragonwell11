@@ -67,7 +67,7 @@ public class TestMemLeak {
 
         int rss1 = getRssInKb();
         System.out.println(rss1);
-        if (rss1 - rss0 > 1024) { // 1M
+        if (rss1 - rss0 > 1024 * 2) { // 2M
             throw new Error("user created coroutine mem leak");
         }
     }

@@ -128,6 +128,7 @@ module java.base {
     exports javax.security.auth.spi;
     exports javax.security.auth.x500;
     exports javax.security.cert;
+    exports com.alibaba.rcm;
     exports com.alibaba.wisp.engine;
 
 

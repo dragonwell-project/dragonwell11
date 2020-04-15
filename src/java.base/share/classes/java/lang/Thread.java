@@ -39,6 +39,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.LockSupport;
 
 import jdk.internal.misc.TerminatingThreadLocal;
+import com.alibaba.rcm.internal.AbstractResourceContainer;
 import com.alibaba.wisp.engine.WispEngine;
 import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.misc.SharedSecrets;
@@ -220,6 +221,19 @@ class Thread implements Runnable {
      * Java thread status for tools, default indicates thread 'not yet started'
      */
     private volatile int threadStatus;
+
+    /**
+    /**
+     * The thread attached {@code ResourceContainer}
+     */
+    AbstractResourceContainer resourceContainer;
+
+    /**
+     * {@code ResourceContainer} inherited from parent
+     */
+    AbstractResourceContainer inheritedResourceContainer;
+
+
 
     /**
      * The argument supplied to the current call to
@@ -546,6 +560,10 @@ class Thread implements Runnable {
 
         /* Set thread ID */
         this.tid = nextThreadID();
+
+        // com.alibaba.rcm API
+        this.resourceContainer = AbstractResourceContainer.root();
+        this.inheritedResourceContainer = parent.resourceContainer;
     }
 
     /**

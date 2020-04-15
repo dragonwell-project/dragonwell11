@@ -138,9 +138,11 @@ public class WispEngine extends AbstractExecutorService {
             new ConcurrentLinkedQueue<>().iterator();
             new ConcurrentSkipListMap<>().keySet().iterator();
             WispCarrier carrier = WispCarrier.current();
-            carrier.addTimer(System.nanoTime() + Integer.MAX_VALUE, false);
+            carrier.addTimer(System.nanoTime() + Integer.MAX_VALUE, TimeOut.Action.JDK_UNPARK);
             carrier.cancelTimer();
             carrier.createResumeEntry(new WispTask(carrier, null, false, false));
+            // preload classes used by by constraintInResourceContainer method.
+            WispTask.wrapRunOutsideWisp(null);
             registerPerfCounter(carrier);
             deRegisterPerfCounter(carrier);
         } catch (Exception e) {
@@ -211,7 +213,7 @@ public class WispEngine extends AbstractExecutorService {
 
             @Override
             public void addTimer(long deadlineNano) {
-                WispCarrier.current().addTimer(deadlineNano, false);
+                WispCarrier.current().addTimer(deadlineNano, TimeOut.Action.JDK_UNPARK);
             }
 
             @Override

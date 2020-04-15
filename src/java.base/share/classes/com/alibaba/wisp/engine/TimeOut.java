@@ -4,17 +4,24 @@ import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
+
 /**
  * Represents {@link WispTask} related time out
  */
 public class TimeOut {
+    enum Action {
+        JVM_UNPARK,
+        JDK_UNPARK,
+        RESUME
+    }
+    private final Action action;
+
     final WispTask task;
     long deadlineNano;
     boolean canceled = false;
     /**
      * its position in the heapArray, -1 indicates that TimeOut has been deleted
      */
-    private final boolean fromJvm;
     private int queueIdx;
     private TimerManager manager;
 
@@ -22,10 +29,10 @@ public class TimeOut {
      * @param task         related {@link WispTask}
      * @param deadlineNano wake up related {@link WispTask} at {@code deadline} if not canceled
      */
-    public TimeOut(WispTask task, long deadlineNano, boolean fromJvm) {
+    public TimeOut(WispTask task, long deadlineNano, TimeOut.Action action) {
         this.task = task;
         this.deadlineNano = deadlineNano;
-        this.fromJvm = fromJvm;
+        this.action = action;
     }
 
     /**
@@ -36,13 +43,19 @@ public class TimeOut {
     }
 
     /**
-     * unpark the blocked task
+     * unpark the blocked task or resume the pending timeout task.
      */
-    void doUnpark() {
-        if (fromJvm) {
-            task.unpark();
-        } else {
-            task.jdkUnpark();
+    void doAction() {
+        switch (action) {
+            case RESUME:
+                task.carrier.wakeupTask(task);
+                break;
+            case JDK_UNPARK:
+                task.jdkUnpark();
+                break;
+            case JVM_UNPARK:
+                task.unpark();
+                break;
         }
     }
 
@@ -100,7 +113,7 @@ public class TimeOut {
                         queue.poll();
                     } else if (timeOut.deadlineNano <= now) {
                         queue.poll();
-                        timeOut.doUnpark();
+                        timeOut.doAction();
                     } else {
                         deadline = timeOut.deadlineNano;
                         break;
