@@ -2,7 +2,7 @@
  * @test
  * @summary Test unpark in JNI critical case
  * @modules java.base/jdk.internal.misc
- * @run main/othervm   -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true  TestJNICritical
+ * @run main/othervm   -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:StartFlightRecording=dumponexit=true,filename=1.jfr  TestJNICritical
  */
 
 

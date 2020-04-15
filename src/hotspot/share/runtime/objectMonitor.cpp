@@ -324,7 +324,8 @@ void ObjectMonitor::enter(TRAPS) {
   // Ensure the object-monitor relationship remains stable while there's contention.
   Atomic::inc(&_count);
 
-  JFR_ONLY(JfrConditionalFlushWithStacktrace<EventJavaMonitorEnter> flush(jt);)
+  JFR_ONLY(JfrConditionalFlushWithStacktrace<EventJavaMonitorEnter> flush(UseWispMonitor ? ((WispThread*)jt)->thread() : jt);)
+  JFR_ONLY(WispPostStealHandleUpdateMark w(flush.thread_ref());)
   EventJavaMonitorEnter event;
   if (event.should_commit()) {
     event.set_monitorClass(((oop)this->object())->klass());
