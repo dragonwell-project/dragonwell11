@@ -2046,7 +2046,7 @@ int ObjectSynchronizer::verify_objmon_isinpool(ObjectMonitor *monitor) {
 #endif
 
 void SystemDictObjMonitor::lock(BasicLock* lock, TRAPS) {
-  assert(UseWispMonitor, "SystemDictObjMonitor if only for UseWispMonitor");
+  assert(UseWispMonitor, "SystemDictObjMonitor is only for UseWispMonitor");
   if (!is_obj_lock()) {
     _monitor->lock();
     if (is_obj_lock()) {
@@ -2062,7 +2062,7 @@ void SystemDictObjMonitor::lock(BasicLock* lock, TRAPS) {
 }
 
 void SystemDictObjMonitor::unlock(BasicLock* lock, TRAPS) {
-  assert(UseWispMonitor, "SystemDictObjMonitor if only for UseWispMonitor");
+  assert(UseWispMonitor, "SystemDictObjMonitor is only for UseWispMonitor");
   if (!is_obj_lock()) {
     _monitor->unlock();
   } else {
@@ -2071,7 +2071,7 @@ void SystemDictObjMonitor::unlock(BasicLock* lock, TRAPS) {
 }
 
 void SystemDictObjMonitor::wait(BasicLock* lock, TRAPS) {
-  assert(UseWispMonitor, "SystemDictObjMonitor if only for UseWispMonitor");
+  assert(UseWispMonitor, "SystemDictObjMonitor is only for UseWispMonitor");
   if (!is_obj_lock()) {
     _monitor->wait();
     if (is_obj_lock()) {
@@ -2079,12 +2079,14 @@ void SystemDictObjMonitor::wait(BasicLock* lock, TRAPS) {
       ObjectSynchronizer::fast_enter(Handle(THREAD, _obj), lock, false, THREAD);
     }
   } else {
-    ObjectSynchronizer::wait(Handle(THREAD, _obj), 0, THREAD);
+    // The purpose of using waitUninterruptibly is to keep
+    // the behavior consistent with Monitor::wait
+    ObjectSynchronizer::waitUninterruptibly(Handle(THREAD, _obj), 0, THREAD);
   }
 }
 
 void SystemDictObjMonitor::notify_all(TRAPS) {
-  assert(UseWispMonitor, "SystemDictObjMonitor if only for UseWispMonitor");
+  assert(UseWispMonitor, "SystemDictObjMonitor is only for UseWispMonitor");
   if (!is_obj_lock()) {
     _monitor->notify_all();
   } else {
