@@ -6,7 +6,7 @@ if [ $# != 1 ]; then
 fi
 
 # incr by every Dragonwell release
-DRAGONWELL_VERSION=1
+DRAGONWELL_VERSION=2
 LC_ALL=C
 BUILD_MODE=$1
 
@@ -44,7 +44,7 @@ bash ./configure --with-freetype=system \
                  --with-vendor-url="http://www.alibabagroup.com" \
                  --with-vendor-bug-url="mailto:dragonwell_use@googlegroups.com" \
                  --with-vendor-version-string="(Alibaba Dragonwell)" \
-                 --with-version-pre="preview" \
+                 --with-version-pre="" \
                  --with-version-opt="" \
                  --with-version-build="${BUILD_NUMBER}" \
                  --with-version-feature="11" \
