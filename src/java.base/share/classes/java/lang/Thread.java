@@ -39,7 +39,9 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.LockSupport;
 
 import jdk.internal.misc.TerminatingThreadLocal;
+import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.rcm.internal.RCMUnsafe;
 import com.alibaba.wisp.engine.WispEngine;
 import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.misc.SharedSecrets;
@@ -563,7 +565,12 @@ class Thread implements Runnable {
 
         // com.alibaba.rcm API
         this.resourceContainer = AbstractResourceContainer.root();
-        this.inheritedResourceContainer = parent.resourceContainer;
+        if (SharedSecrets.getRCMAccess().getResourceContainerInheritancePredicate(
+                parent.resourceContainer).test(this)) {
+            this.inheritedResourceContainer = parent.resourceContainer;
+        } else {
+            this.inheritedResourceContainer = AbstractResourceContainer.root();
+        }
     }
 
     /**

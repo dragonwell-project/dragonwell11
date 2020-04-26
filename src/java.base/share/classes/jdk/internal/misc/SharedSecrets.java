@@ -81,6 +81,7 @@ public class SharedSecrets {
     private static JavaxCryptoSealedObjectAccess javaxCryptoSealedObjectAccess;
     private static WispEngineAccess wispEngineAccess;
     private static EpollAccess epollAccess;
+    private static RCMAccesss rcmAccesss;
 
     public static JavaUtilJarAccess javaUtilJarAccess() {
         if (javaUtilJarAccess == null) {
@@ -388,5 +389,13 @@ public class SharedSecrets {
 
     public static void setEpollAccess(EpollAccess epollAccess) {
         SharedSecrets.epollAccess = epollAccess;
+    }
+
+    public static RCMAccesss getRCMAccess() {
+        return rcmAccesss;
+    }
+
+    public static void setRCMAccesss(RCMAccesss rcmAccesss) {
+        SharedSecrets.rcmAccesss = rcmAccesss;
     }
 }

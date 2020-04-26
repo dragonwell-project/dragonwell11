@@ -2,10 +2,12 @@ package com.alibaba.rcm.internal;
 
 import com.alibaba.rcm.Constraint;
 import com.alibaba.rcm.ResourceContainer;
+import jdk.internal.misc.RCMAccesss;
 import jdk.internal.misc.VM;
 import jdk.internal.misc.SharedSecrets;
 
 import java.util.Collections;
+import java.util.function.Predicate;
 
 /**
  * A skeletal implementation of {@link ResourceContainer} that practices
@@ -18,7 +20,29 @@ import java.util.Collections;
 
 public abstract class AbstractResourceContainer implements ResourceContainer {
 
+    static {
+        setRCMAccess();
+    }
+
+    private static final Predicate<Thread> DEFAULT_PREDICATE = new Predicate<Thread>() {
+        @Override
+        public boolean test(Thread thread) {
+            return true;
+        }
+    };
+
+    private static void setRCMAccess() {
+        SharedSecrets.setRCMAccesss(new RCMAccesss(){
+
+            @Override
+            public Predicate<Thread> getResourceContainerInheritancePredicate(ResourceContainer container) {
+                return ((AbstractResourceContainer) container).threadInherited;
+            }
+        });
+    }
+
     protected final static AbstractResourceContainer ROOT = new RootContainer();
+    private Predicate<Thread> threadInherited = DEFAULT_PREDICATE;
 
     public static AbstractResourceContainer root() {
         return ROOT;
@@ -76,6 +100,11 @@ public abstract class AbstractResourceContainer implements ResourceContainer {
     protected void detach() {
         SharedSecrets.getJavaLangAccess().setResourceContainer(Thread.currentThread(), root());
     }
+
+    void setUnsafeThreadInheritancePredicate(Predicate<Thread> predicate) {
+        this.threadInherited = predicate;
+    }
+
 
     private static class RootContainer extends AbstractResourceContainer {
         @Override
