@@ -225,9 +225,16 @@ final class WispCarrier implements Comparable<WispCarrier> {
         }
         current.resumeEntry.setStealEnable(true);
         yieldTo(threadTask); // letting the scheduler choose runnable task
-        if (engine.hasBeenShutdown && current != threadTask
-                && !WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())) {
-            CoroutineSupport.checkAndThrowException(current.ctx);
+        current.carrier.checkAndDispatchShutdown();
+    }
+
+    private void checkAndDispatchShutdown() {
+        assert WispCarrier.current() == this;
+        if ((engine.hasBeenShutdown || current.inDestoryedGroup())
+                && !WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
+                && current.isAlive()
+                && CoroutineSupport.checkAndThrowException(current.ctx)) {
+            throw new ThreadDeath();
         }
     }
 
@@ -273,7 +280,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
                         source.wakeupTask(task);
                         return;
                     }
-                    // notify detached empty worker to exit
+                    // notify terminated empty worker to exit
                     if (source.worker.hasBeenHandoff && TASK_COUNT_UPDATER.get(source.engine) == 0) {
                         source.worker.signal();
                     }
@@ -391,6 +398,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
                 // delay it, make sure wakeupTask is called after yield out
                 schedule();
             }
+            current.carrier.checkAndDispatchShutdown();
         } else {
             WispEngine.JLA.yield0();
         }

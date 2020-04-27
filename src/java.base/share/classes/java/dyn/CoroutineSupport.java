@@ -104,9 +104,10 @@ public class CoroutineSupport {
     /**
      * check if we should throw a TenantDeath or ThreqadDeathException
      * @param coroutine the coroutine
+     * @return if coroutine should throw exception
      */
-    public static void checkAndThrowException(Coroutine coroutine) {
-        checkAndThrowException0(coroutine.nativeCoroutine);
+    public static boolean checkAndThrowException(Coroutine coroutine) {
+        return shouldThrowException0(coroutine.nativeCoroutine);
     }
 
 
@@ -429,5 +430,5 @@ public class CoroutineSupport {
 
     private static native boolean isInClinit0(long coroPtr);
 
-    private static native void checkAndThrowException0(long coroPtr);
+    private static native boolean shouldThrowException0(long coroPtr);
 }

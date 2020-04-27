@@ -139,7 +139,7 @@ class WispScheduler {
                     doExec(task);
                 }
 
-                if (carrier.engine.detached) {
+                if (carrier.engine.terminated) {
                     return;
                 } else if ((task = SCHEDULING_POLICY.steal(this, r = nextRandom(r))) != null) {
                     doExec(task);
@@ -322,7 +322,7 @@ class WispScheduler {
     /**
      * cast thread to worker
      *
-     * @param detachedAsNull treat detached worker as not worker thread if detachedAsNull is true.
+     * @param detachedAsNull treat terminated worker as not worker thread if detachedAsNull is true.
      * @return null means thread is not considered as a worker
      */
     private Worker castToWorker(Thread thread, boolean detachedAsNull) {
@@ -345,7 +345,7 @@ class WispScheduler {
             tryPush(1, new StealAwareRunnable() {
                 @Override
                 public void run() {
-                    //Adding timer to detached worker is ok since we rely on
+                    //Adding timer to terminated worker is ok since we rely on
                     //interrupt to wakeup all wispTasks in shutdown
                     Worker worker = castToWorker(JLA.currentThread0(), false);
                     assert worker != null;
@@ -365,9 +365,9 @@ class WispScheduler {
     /**
      * Run the command on the specified thread.
      * Used to implement Thread affinity for scheduler.
-     * When execute with detached worker thread, we try to execute this task by
+     * When execute with terminated worker thread, we try to execute this task by
      * other workers, if this step failed command would be marked as can't be stolen,
-     * then we push this command to detached worker.
+     * then we push this command to terminated worker.
      *
      * @param command the code
      * @param thread  target thread
@@ -376,7 +376,7 @@ class WispScheduler {
         final Worker worker = castToWorker(thread, false);
         boolean stealEnable = command.isStealEnable();
         if (worker == null || worker.hasBeenHandoff && stealEnable) {
-            // detached worker try to execute from global scheduler at first
+            // terminated worker try to execute from global scheduler at first
             execute(command);
         } else {
             SCHEDULING_POLICY.enqueue(worker, stealEnable, command);
@@ -451,14 +451,14 @@ class WispScheduler {
                 @Override
                 public void run() {
                 }
-            }); // ensure `detached` visibility
+            }); // ensure `terminated` visibility
             worker.thread.setName(worker.thread.getName() + " (HandOff)");
             Worker[] cs = Arrays.copyOf(this.workers, workers.length);
             Worker last = cs[PARALLEL - 1];
             for (int i = 0; i < PARALLEL; i++) {
                 if (cs[i] == worker) {
                     cs[i] = new Worker(i);
-                    // tasks blocked on detached worker may not be scheduled in time
+                    // tasks blocked on terminated worker may not be scheduled in time
                     // because it's in long-time syscall, so we try our best to delegate
                     // all context to the new worker
                     cs[i].copyContextFromDetachedCarrier(worker);

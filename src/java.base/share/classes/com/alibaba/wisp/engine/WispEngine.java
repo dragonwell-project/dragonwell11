@@ -12,7 +12,6 @@ import java.nio.channels.SelectableChannel;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Supplier;
@@ -121,10 +120,12 @@ public class WispEngine extends AbstractExecutorService {
             Class.forName(WispThreadWrapper.class.getName());
             Class.forName(TaskDispatcher.class.getName());
             Class.forName(StartShutdown.class.getName());
-            Class.forName(NotifyAndWaitTasksForShutdown.class.getName());
             Class.forName(Coroutine.StealResult.class.getName());
             Class.forName(ThreadAsWisp.class.getName());
             Class.forName(WispEventPump.class.getName());
+            Class.forName(ShutdownEngine.class.getName());
+            Class.forName(AbstractShutdownTask.class.getName());
+            Class.forName(ShutdownControlGroup.class.getName());
             if (WispConfiguration.WISP_PROFILE) {
                 Class.forName(WispPerfCounterMonitor.class.getName());
             }
@@ -322,7 +323,7 @@ public class WispEngine extends AbstractExecutorService {
     volatile int runningTaskCount = 0;
     private CountDownLatch shutdownFuture;
     volatile Boolean hasBeenShutdown = false;
-    volatile boolean detached;
+    volatile boolean terminated;
 
     /**
      * Create a new WispEngine for executing tasks.
@@ -339,7 +340,7 @@ public class WispEngine extends AbstractExecutorService {
      */
     private WispEngine(String name) {
         carrierEngines = new ConcurrentSkipListSet<>();
-        // detached carrier won't shut down
+        // terminated carrier won't shut down
         shutdownBarrier = null;
         scheduler = new WispScheduler(
                 WispConfiguration.WORKER_COUNT,
@@ -437,7 +438,11 @@ public class WispEngine extends AbstractExecutorService {
         for (WispCarrier carrier : carrierEngines) {
             deRegisterPerfCounter(carrier);
         }
-        scheduler.execute(new StartShutdown());
+        scheduler.execute(new StartShutdown(null));
+    }
+
+    void shutdown(WispControlGroup group) {
+        scheduler.execute(new StartShutdown(group));
     }
 
     @Override
@@ -445,67 +450,111 @@ public class WispEngine extends AbstractExecutorService {
         throw new UnsupportedOperationException();
     }
 
-    class StartShutdown extends StealDisabledRunnable {
+    class StartShutdown implements StealAwareRunnable {
+        private final WispControlGroup wispControlGroup;
+
+        /**
+         * @param wispControlGroup which WispControlGroup to shutdown,
+         *                         null indicates the whole engine.
+         */
+        StartShutdown(WispControlGroup wispControlGroup) {
+            this.wispControlGroup = wispControlGroup;
+        }
+
         @Override
         public void run() {
-            WispCarrier.current().runTaskInternal(new NotifyAndWaitTasksForShutdown(),
+            WispCarrier.current().runTaskInternal(
+                    wispControlGroup == null ? new ShutdownEngine() : new ShutdownControlGroup(wispControlGroup),
                     WispTask.SHUTDOWN_TASK_NAME, null, null);
         }
     }
 
-    class NotifyAndWaitTasksForShutdown implements Runnable {
+    abstract class AbstractShutdownTask implements StealAwareRunnable {
         @Override
         public void run() {
-            try {
-                // wait until current 'shutdown wispTask' is the only
-                // running wispTask on this carrier
-                while (runningTaskCount != 1) {
-                    List<WispTask> runningTasks = getRunningTasks();
-                    for (WispTask task : runningTasks) {
-                        if (task.carrier.engine == WispEngine.this
-                                && task.isAlive()
-                                && !WispTask.SHUTDOWN_TASK_NAME.equals(task.getName())) {
-                            task.interrupt();
-                        }
+            List<WispTask> tasks;
+            do {
+                tasks = getTasksForShutdown();
+                for (WispTask task : tasks) {
+                    if (task.isAlive()) {
+                        task.jdkUnpark();
+                        task.unpark();
                     }
-                    WispCarrier.current().yield();
                 }
-                assert WispTask.SHUTDOWN_TASK_NAME.equals(WispCarrier.current().current.getName());
-                detached = true;
-                //notify all worker to exit
-                for (WispCarrier carrier : carrierEngines) {
-                    carrier.worker.signal();
-                }
-                shutdownFuture.countDown();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+                // wait tasks to exit on fixed frequency instead of polling
+                WispTask.jdkPark(TimeUnit.MILLISECONDS.toNanos(1));
+            } while (!tasks.isEmpty());
+            finishShutdown();
         }
 
-        /**
-         * 1. In Wisp2, each WispCarrier's runningTask is modified when WispTask is stolen, we can't guarantee
-         * the accuracy of the task set.
-         * 2. this function is only called in shutdown, so it's not performance sensitive
-         * 3. this function should only be called by current WispTask
-         */
-        private List<WispTask> getRunningTasks() {
+        abstract List<WispTask> getTasksForShutdown();
+
+        abstract void finishShutdown();
+    }
+
+    class ShutdownEngine extends AbstractShutdownTask {
+        @Override
+        List<WispTask> getTasksForShutdown() {
+            return getRunningTasks(null);
+        }
+
+        @Override
+        void finishShutdown() {
             assert WispTask.SHUTDOWN_TASK_NAME.equals(WispCarrier.current().current.getName());
-            WispCarrier carrier = WispCarrier.current();
-            ArrayList<WispTask> runningTasks = new ArrayList<>();
-            boolean isInCritical0 = carrier.isInCritical;
-            carrier.isInCritical = true;
-            try {
-                for (WispTask task : WispTask.id2Task.values()) {
-                    if (task.isAlive()
-                            && task.carrier.engine == WispEngine.this
-                            && !task.isThreadTask()) {
-                        runningTasks.add(task);
-                    }
-                }
-                return runningTasks;
-            } finally {
-                carrier.isInCritical = isInCritical0;
+            terminated = true;
+            //notify all worker to exit
+            for (WispCarrier carrier : carrierEngines) {
+                carrier.worker.signal();
             }
+            shutdownFuture.countDown();
+        }
+
+    }
+
+    class ShutdownControlGroup extends AbstractShutdownTask {
+        private final WispControlGroup wispControlGroup;
+
+        ShutdownControlGroup(WispControlGroup wispControlGroup) {
+            this.wispControlGroup = wispControlGroup;
+        }
+        @Override
+        List<WispTask> getTasksForShutdown() {
+            return getRunningTasks(wispControlGroup);
+        }
+
+        @Override
+        void finishShutdown() {
+            wispControlGroup.destroyLatch.countDown();
+        }
+    }
+
+
+
+    /**
+     * 1. In Wisp2, each WispCarrier's runningTask is modified when WispTask is stolen, we can't guarantee
+     * the accuracy of the task set.
+     * 2. this function is only called in shutdown, so it's not performance sensitive
+     * 3. this function should only be called by current WispTask
+     */
+    private List<WispTask> getRunningTasks(WispControlGroup group) {
+        assert WispTask.SHUTDOWN_TASK_NAME.equals(WispCarrier.current().current.getName());
+        WispCarrier carrier = WispCarrier.current();
+        ArrayList<WispTask> runningTasks = new ArrayList<>();
+        boolean isInCritical0 = carrier.isInCritical;
+        carrier.isInCritical = true;
+        try {
+            for (WispTask task : WispTask.id2Task.values()) {
+                if (task.isAlive()
+                        && task.carrier.engine == WispEngine.this
+                        && !task.isThreadTask()
+                        && !task.getName().equals(WispTask.SHUTDOWN_TASK_NAME)
+                        && (group == null || task.inDestoryedGroup())) {
+                    runningTasks.add(task);
+                }
+            }
+            return runningTasks;
+        } finally {
+            carrier.isInCritical = isInCritical0;
         }
     }
 
@@ -516,7 +565,7 @@ public class WispEngine extends AbstractExecutorService {
 
     @Override
     public boolean isTerminated() {
-        return detached;
+        return terminated;
     }
 
     @Override
@@ -562,13 +611,6 @@ public class WispEngine extends AbstractExecutorService {
     void startAsThread(Runnable target, String name, Thread thread) {
         scheduler.execute(new TaskDispatcher(WispCarrier.current().current.ctxClassLoader,
                 target, name, thread));
-    }
-
-    abstract class StealDisabledRunnable implements StealAwareRunnable {
-        @Override
-        public final boolean isStealEnable() {
-            return false;
-        }
     }
 
     private static native void registerNatives();
