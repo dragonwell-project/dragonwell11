@@ -359,6 +359,7 @@ private:
   static Method* parkMethod;
   static Method* unparkMethod;
   static Method* runOutsideWispMethod;
+  static Method* yieldMethod;
   static GrowableArray<int>* _proxy_unpark;
 
   Coroutine*  _coroutine;

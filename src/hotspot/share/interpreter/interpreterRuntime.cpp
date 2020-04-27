@@ -1233,6 +1233,9 @@ IRT_ENTRY(void, InterpreterRuntime::at_safepoint(JavaThread* thread))
     LastFrameAccessor last_frame(thread);
     JvmtiExport::at_single_stepping_point(thread, last_frame.method(), last_frame.bcp());
   }
+  if (EnableCoroutine) {
+    Coroutine::after_safepoint(thread);
+  }
 IRT_END
 
 IRT_ENTRY(void, InterpreterRuntime::post_field_access(JavaThread *thread, oopDesc* obj,
