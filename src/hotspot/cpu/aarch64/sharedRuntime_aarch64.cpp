@@ -2060,7 +2060,11 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ ldr(r19, Address(rthread, in_bytes(Thread::pending_exception_offset())));
     __ str(zr, Address(rthread, in_bytes(Thread::pending_exception_offset())));
 
-    rt_call(masm, CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C));
+    if (UseWispMonitor) {
+      rt_call(masm, CAST_FROM_FN_PTR(address, SharedRuntime::complete_wisp_monitor_unlocking_C), 3, 0, 1);
+    } else {
+      rt_call(masm, CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C), 3, 0, 1);
+    }
 
 #ifdef ASSERT
     {

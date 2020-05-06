@@ -3308,7 +3308,7 @@ FastLockNode* GraphKit::shared_lock(Node* obj) {
 
 //------------------------------shared_unlock----------------------------------
 // Emit unlocking code.
-void GraphKit::shared_unlock(Node* box, Node* obj) {
+void GraphKit::shared_unlock(Node* box, Node* obj, bool at_method_return) {
   // bci is either a monitorenter bc or InvocationEntryBci
   // %%% SynchronizationEntryBCI is redundant; use InvocationEntryBci in interfaces
   assert(SynchronizationEntryBCI == InvocationEntryBci, "");
@@ -3324,7 +3324,7 @@ void GraphKit::shared_unlock(Node* box, Node* obj) {
   insert_mem_bar(Op_MemBarReleaseLock);
 
   const TypeFunc *tf = OptoRuntime::complete_monitor_exit_Type();
-  UnlockNode *unlock = new UnlockNode(C, tf);
+  UnlockNode *unlock = new UnlockNode(C, tf, at_method_return);
 #ifdef ASSERT
   unlock->set_dbg_jvms(sync_jvms());
 #endif
@@ -3339,7 +3339,13 @@ void GraphKit::shared_unlock(Node* box, Node* obj) {
   unlock->init_req(TypeFunc::Parms + 1, box);
   unlock = _gvn.transform(unlock)->as_Unlock();
 
-  if (UseWispMonitor && jvms()->has_method()) {
+  bool has_popped = false;
+  if (UseWispMonitor && jvms()->has_method() && !at_method_return) {
+    has_popped = true;
+    // we need to pop it first, or the monitor will be added to PcDesc and
+    // ScopeDesc, then we will have the has-been-unlocked lock here. When a de-opt happens,
+    // the has-been-unlocked lock will be put on to the interpreter stack.
+    map()->pop_monitor( );
     add_safepoint_edges(unlock, false, true);
   }
   Node* mem = reset_memory();
@@ -3348,7 +3354,9 @@ void GraphKit::shared_unlock(Node* box, Node* obj) {
   set_predefined_output_for_runtime_call(unlock, mem, TypeRawPtr::BOTTOM);
 
   // Kill monitor from debug info
-  map()->pop_monitor( );
+  if (!has_popped) {
+    map()->pop_monitor( );
+  }
 }
 
 //-------------------------------get_layout_helper-----------------------------

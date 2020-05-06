@@ -175,6 +175,7 @@ public:
   static void complete_monitor_locking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread);
   static void complete_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread);
   static void complete_wisp_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread);
+  static void complete_wisp_proxy_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread);
 
   static void monitor_notify_C(oopDesc* obj, JavaThread* thread);
   static void monitor_notifyAll_C(oopDesc* obj, JavaThread* thread);
@@ -258,6 +259,7 @@ private:
   static const TypeFunc* multianewarrayN_Type(); // multianewarray
   static const TypeFunc* complete_monitor_enter_Type();
   static const TypeFunc* complete_monitor_exit_Type();
+  static const TypeFunc* complete_wisp_monitor_exit_Type();
   static const TypeFunc* monitor_notify_Type();
   static const TypeFunc* uncommon_trap_Type();
   static const TypeFunc* athrow_Type();

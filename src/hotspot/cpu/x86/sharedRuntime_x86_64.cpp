@@ -2804,7 +2804,11 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     __ movptr(Address(r15_thread, in_bytes(Thread::pending_exception_offset())), (int32_t)NULL_WORD);
 
     // args are (oop obj, BasicLock* lock, JavaThread* thread)
-    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C)));
+    if (UseWispMonitor) {
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_wisp_monitor_unlocking_C)));
+    } else {
+      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::complete_monitor_unlocking_C)));
+    }
     __ mov(rsp, r12); // restore sp
     __ reinit_heapbase();
 #ifdef ASSERT
