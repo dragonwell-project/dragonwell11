@@ -548,7 +548,8 @@ public class WispEngine extends AbstractExecutorService {
                         && task.carrier.engine == WispEngine.this
                         && !task.isThreadTask()
                         && !task.getName().equals(WispTask.SHUTDOWN_TASK_NAME)
-                        && (group == null || task.inDestoryedGroup())) {
+                        && (group == null
+                        || task.inDestoryedGroup() && task.inheritedFromNonRootContainer())) {
                     runningTasks.add(task);
                 }
             }

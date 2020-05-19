@@ -493,6 +493,10 @@ public class WispTask implements Comparable<WispTask> {
         return controlGroup != null && controlGroup.destroyed;
     }
 
+    boolean inheritedFromNonRootContainer() {
+        return WispEngine.JLA.getInheritedResourceContainer(threadWrapper) != ResourceContainer.root();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

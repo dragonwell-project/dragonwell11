@@ -105,6 +105,10 @@ public abstract class AbstractResourceContainer implements ResourceContainer {
         this.threadInherited = predicate;
     }
 
+    protected void killThreads() {
+        throw new UnsupportedOperationException("should not reach here");
+    }
+
 
     private static class RootContainer extends AbstractResourceContainer {
         @Override

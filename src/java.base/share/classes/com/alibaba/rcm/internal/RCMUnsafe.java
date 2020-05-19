@@ -3,6 +3,7 @@ package com.alibaba.rcm.internal;
 
 import com.alibaba.rcm.ResourceContainer;
 
+import java.util.Objects;
 import java.util.function.Predicate;
 
 /**
@@ -29,5 +30,15 @@ public final class RCMUnsafe {
      */
     public static void setResourceContainerInheritancePredicate(ResourceContainer container, Predicate<Thread> predicate) {
         ((AbstractResourceContainer) container).setUnsafeThreadInheritancePredicate(predicate);
+    }
+
+    /**
+     * Stop all threads that inherited from {@parm resourceContainer}.
+     * @param resourceContainer specified container
+     */
+    public static void killThreads(ResourceContainer resourceContainer) {
+        assert resourceContainer instanceof AbstractResourceContainer;
+        Objects.requireNonNull(resourceContainer);
+        ((AbstractResourceContainer) resourceContainer).killThreads();
     }
 }

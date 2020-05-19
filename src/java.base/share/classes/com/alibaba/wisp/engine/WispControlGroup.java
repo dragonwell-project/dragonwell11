@@ -7,6 +7,7 @@ import com.alibaba.rcm.internal.AbstractResourceContainer;
 
 import java.util.List;
 import java.util.Collections;
+import java.util.Objects;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -242,6 +243,7 @@ class WispControlGroup extends AbstractExecutorService {
 
             @Override
             public void updateConstraint(Constraint constraint) {
+                Objects.requireNonNull(constraint);
                 /* check resource type contained in constraint must be CPU_PERCENT */
                 if (constraint.getResourceType() != ResourceType.CPU_PERCENT) {
                     throw new IllegalArgumentException("Resource type is not CPU_PERCENT");
@@ -262,14 +264,6 @@ class WispControlGroup extends AbstractExecutorService {
 
             @Override
             public void destroy() {
-                shutdown();
-                while (!isTerminated()) {
-                    try {
-                        awaitTermination(1, TimeUnit.SECONDS);
-                    } catch (InterruptedException e) {
-                        throw new InternalError(e);
-                    }
-                }
             }
 
             @Override
@@ -282,6 +276,18 @@ class WispControlGroup extends AbstractExecutorService {
             protected void detach() {
                 WispControlGroup.this.detach();
                 super.detach();
+            }
+
+            @Override
+            protected void killThreads() {
+                shutdown();
+                while (!isTerminated()) {
+                    try {
+                        awaitTermination(1, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        throw new InternalError(e);
+                    }
+                }
             }
         };
     }
