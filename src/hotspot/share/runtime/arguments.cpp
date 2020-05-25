@@ -3756,11 +3756,6 @@ void Arguments::handle_extra_cms_flags(const char* msg) {
 void Arguments::check_arguments_for_aarch64() {
   UNSUPPORTED_AARCH64_OPTS(UseVectorAPI);
   UNSUPPORTED_AARCH64_OPTS(UseAppAOT || !PromoteAOTtoFullProfile);
-  UNSUPPORTED_AARCH64_OPTS(MultiTenant);
-  UNSUPPORTED_AARCH64_OPTS(TenantDataIsolation);
-  UNSUPPORTED_AARCH64_OPTS(TenantThreadStop);
-  UNSUPPORTED_AARCH64_OPTS(TenantCpuThrottling);
-  UNSUPPORTED_AARCH64_OPTS(PrintThreadCoroutineInfo);
   UNSUPPORTED_AARCH64_OPTS(EagerAppCDS);
 }
 #endif // AARCH64
