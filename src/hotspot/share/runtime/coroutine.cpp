@@ -991,16 +991,16 @@ void Coroutine::after_safepoint(JavaThread* thread) {
   assert(thread->thread_state() == origin_thread_state, "illegal thread state");
   coroutine->_is_yielding = false;
 
-  if (thread->has_pending_exception() 
-    && (thread->pending_exception()->klass() == SystemDictionary::OutOfMemoryError_klass()
-      || thread->pending_exception()->klass() == SystemDictionary::StackOverflowError_klass())) {
-      // throw expected vm error
-      return;
-  }
-
-  if (thread->has_pending_exception() || thread->has_async_condition()) {
+  if (thread->has_pending_exception()) {
+    guarantee(thread->pending_exception()->klass() == SystemDictionary::OutOfMemoryError_klass() ||
+      thread->pending_exception()->klass() == SystemDictionary::StackOverflowError_klass() ||
+      thread->pending_exception()->klass() == SystemDictionary::ThreadDeath_klass(),
+      "Only SOF/OOM/ThreadDeath happens here");
+    // If it's a SOF / OOM / ThreadDeath exception, we'd clear it
+    // because polling page stub shouldn't have a pending exception.
     thread->clear_pending_exception();
   }
+
 }
 
 EnableStealMark::EnableStealMark(Thread* thread) {

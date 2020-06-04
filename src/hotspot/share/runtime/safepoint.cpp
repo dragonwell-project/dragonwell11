@@ -1230,6 +1230,13 @@ void ThreadSafepointState::handle_polling_page_exception() {
     SafepointMechanism::block_if_requested(thread());
     set_at_poll_safepoint(false);
 
+    if (EnableCoroutine) {
+      // we should move this logic forward, to make sure
+      // the sanity check of pending/pending async ex
+      // check is effective for this java call.
+      Coroutine::after_safepoint(thread());
+    }
+
     // If we have a pending async exception deoptimize the frame
     // as otherwise we may never deliver it.
     if (thread()->has_async_condition()) {
@@ -1253,9 +1260,6 @@ void ThreadSafepointState::handle_polling_page_exception() {
 
         fatal("Exception installed and deoptimization is pending");
       }
-    }
-    if (EnableCoroutine) {
-      Coroutine::after_safepoint(thread());
     }
   }
 }

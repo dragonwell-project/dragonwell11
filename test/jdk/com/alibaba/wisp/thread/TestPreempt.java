@@ -17,14 +17,20 @@ import static jdk.testlibrary.Asserts.assertTrue;
 
 public class TestPreempt {
     public static void main(String[] args) throws Exception {
-        doTest(TestPreempt::simpleLoop);
+        doTest(TestPreempt::simpleLoop, true);
+        for (int i = 0; i < 15; i++) {
+            doTest(() -> stackTrace(0), false);  // only test sanity: don't crash
+        }
     }
 
-    private static void doTest(Runnable r) throws Exception {
+    private static void doTest(Runnable r, boolean checkAssert) throws Exception {
         WispEngine.dispatch(r);
         CountDownLatch latch = new CountDownLatch(1);
         WispEngine.dispatch(latch::countDown);
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        boolean success = latch.await(5, TimeUnit.SECONDS);
+        if (checkAssert) {
+            assertTrue(success);
+        }
     }
 
     private static void complexLoop() {
@@ -46,6 +52,17 @@ public class TestPreempt {
         do {
             x = n;
         } while (x == n);
+    }
+
+    private static void stackTrace(int i) {
+        if (i == 10000) {
+            int x;
+            do {
+                x = n;
+            } while (x == n);
+        } else {
+            stackTrace(i + 1);
+        }
     }
 
     // TODO: handle safepoint consumed by state switch
