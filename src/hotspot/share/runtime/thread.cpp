@@ -3288,6 +3288,10 @@ void JavaThread::prepare(jobject jni_thread, ThreadPriority prio) {
   Threads::add(this);
 }
 
+ThreadStatistics* JavaThread::get_thread_stat() const {
+  return UseWispMonitor ? WispThread::current(const_cast<JavaThread*>(this))->_thread_stat : _thread_stat;
+}
+
 oop JavaThread::current_park_blocker() {
   // Support for JSR-166 locks
   oop thread_oop = threadObj();

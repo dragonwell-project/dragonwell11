@@ -2027,7 +2027,7 @@ class JavaThread: public Thread {
   ThreadStatistics *_thread_stat;
 
  public:
-  ThreadStatistics* get_thread_stat() const    { return _thread_stat; }
+  ThreadStatistics* get_thread_stat() const;
 
   // Return a blocker object for which this thread is blocked parking.
   oop current_park_blocker();

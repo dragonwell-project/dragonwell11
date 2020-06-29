@@ -3,7 +3,7 @@
  * @library /lib/testlibrary
  * @summary Test WispEngine's DatagramSocket, InitialDirContext use dup socket to query dns.
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestDatagramSocket
+ * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestDatagramSocket
 */
 
 
