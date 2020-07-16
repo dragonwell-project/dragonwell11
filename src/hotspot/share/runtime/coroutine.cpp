@@ -941,8 +941,11 @@ void Coroutine::after_safepoint(JavaThread* thread) {
   if (thread->safepoint_state()->is_at_safepoint()) {
       return;
   }
-  assert(thread->safepoint_state()->is_at_call_back() ||
-    thread->safepoint_state()->is_running(), "illegal safepoint state");
+  // In InterpreterRuntime::at_safepoint: thread state is _thread_in_vm now.
+  // So VM Thread could make the safepoint state of current thread `running -> call_back`
+  // We should assert at first _running and then _call_back here.
+  assert(thread->safepoint_state()->is_running() ||
+         thread->safepoint_state()->is_at_call_back(), "illegal safepoint state");
 
   Coroutine* coroutine = thread->current_coroutine();
   if (coroutine->_is_yielding || !thread->wisp_preempted()) {
