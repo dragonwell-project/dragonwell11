@@ -219,6 +219,7 @@ else
 endif
 
 LIBJLI_CFLAGS += $(LIBZ_CFLAGS)
+LIBJLI_CFLAGS += -DLIBC=\"musl\"
 
 ifneq ($(USE_EXTERNAL_LIBZ), true)
   LIBJLI_EXTRA_FILES += \
