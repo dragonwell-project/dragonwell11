@@ -19,12 +19,13 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  */
+#include "precompiled.hpp"
 #include "runtime/vmThread.hpp"
 #include "jfr/objectprofiler/objectProfiler.hpp"
 #include "jfr/utilities/jfrTryLock.hpp"
 #include "jfr/jfrEvents.hpp"
 
-volatile jint ObjectProfiler::_enabled = JNI_FALSE;
+volatile int ObjectProfiler::_enabled = JNI_FALSE;
 bool ObjectProfiler::_sample_instance_obj_alloc  = false;
 bool ObjectProfiler::_sample_array_obj_alloc  = false;
 #ifndef PRODUCT
@@ -50,7 +51,7 @@ void ObjectProfiler::start(jlong event_id) {
   if (enabled() == JNI_TRUE) {
     return;
   }
-  OrderAccess::release_store((volatile jint*)&_enabled, JNI_TRUE);
+  OrderAccess::release_store(&_enabled, JNI_TRUE);
 }
 
 void ObjectProfiler::stop(jlong event_id) {
@@ -80,8 +81,8 @@ void ObjectProfiler::stop(jlong event_id) {
   OrderAccess::release_store(&_enabled, JNI_FALSE);
 }
 
-jint ObjectProfiler::enabled() {
-  return OrderAccess::load_acquire((volatile jint*)&_enabled);
+int ObjectProfiler::enabled() {
+  return OrderAccess::load_acquire(&_enabled);
 }
 
 void* ObjectProfiler::enabled_flag_address() {
