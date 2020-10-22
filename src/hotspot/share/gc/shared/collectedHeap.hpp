@@ -36,6 +36,7 @@
 #include "utilities/events.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/growableArray.hpp"
+#include "utilities/macros.hpp"
 
 // A "CollectedHeap" is an implementation of a java heap for HotSpot.  This
 // is an abstract class: there may be many different kinds of heaps.  This
@@ -90,6 +91,7 @@ class GCHeapLog : public EventLogBase<GCMessage> {
 //     CMSHeap
 //   G1CollectedHeap
 //   ParallelScavengeHeap
+//   ShenandoahHeap
 //   ZCollectedHeap
 //
 class CollectedHeap : public CHeapObj<mtInternal> {
@@ -180,6 +182,9 @@ class CollectedHeap : public CHeapObj<mtInternal> {
     G1,
     Epsilon,
     Z
+#if INCLUDE_SHENANDOAHGC
+    ,Shenandoah
+#endif
   };
 
   // Implicit Jfr inline methods.
