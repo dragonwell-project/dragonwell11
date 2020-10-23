@@ -446,7 +446,7 @@ AC_DEFUN_ONCE([JDKOPT_SETUP_ADDRESS_SANITIZER],
       gcc | clang)
         AC_MSG_CHECKING([if asan is enabled])
         AC_MSG_RESULT([yes])
-        ASAN_CFLAGS="-fsanitize=address -fno-omit-frame-pointer"
+        ASAN_CFLAGS="-fsanitize=address -fno-omit-frame-pointer -Wno-stringop-truncation"
         ASAN_LDFLAGS="-fsanitize=address"
         JVM_CFLAGS="$JVM_CFLAGS $ASAN_CFLAGS"
         JVM_LDFLAGS="$JVM_LDFLAGS $ASAN_LDFLAGS"

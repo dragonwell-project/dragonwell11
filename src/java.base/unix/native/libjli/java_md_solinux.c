@@ -728,6 +728,7 @@ void SplashFreeLibrary() {
     }
 }
 
+
 /*
  * Block current thread and continue execution in a new thread
  */
@@ -744,8 +745,7 @@ ContinueInNewThread0(int (JNICALL *continuation)(void *), jlong stack_size, void
       pthread_attr_setstacksize(&attr, stack_size);
     }
     pthread_attr_setguardsize(&attr, 0); // no pthread guard page on java threads
-
-    if (pthread_create(&tid, &attr, (void *(*)(void*))continuation, (void*)args) == 0) {
+    if (pthread_create(&tid, &attr, (void *(*)(void*))(intptr_t)continuation, (void*)args) == 0) {
       void * tmp;
       pthread_join(tid, &tmp);
       rslt = (int)(intptr_t)tmp;

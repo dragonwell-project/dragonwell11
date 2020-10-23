@@ -559,7 +559,7 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_HELPER],
 
   fi
   if test "x$TOOLCHAIN_TYPE" = xgcc; then
-    WARNING_CFLAGS_JDK="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wformat=2"
+    WARNING_CFLAGS_JDK="-Wall -Wextra -Wno-unused -Wno-unused-parameter -Wno-stringop-overflow -Wno-stringop-truncation -Wformat=2"
     WARNING_CFLAGS_JVM="$WARNING_CFLAGS_JVM -Wunused-value -Woverloaded-virtual"
 
     if ! HOTSPOT_CHECK_JVM_VARIANT(zero); then
