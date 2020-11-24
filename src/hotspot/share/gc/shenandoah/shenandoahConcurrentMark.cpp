@@ -929,7 +929,7 @@ void ShenandoahConcurrentMark::mark_loop_work(T* cl, ShenandoahLiveData* live_da
     uint work = 0;
     for (uint i = 0; i < stride; i++) {
       if (q->pop(t) ||
-          queues->steal(worker_id, &seed, t)) {
+          queues->steal(worker_id, t)) {
         do_task<T>(q, cl, live_data, &t);
         work++;
       } else {

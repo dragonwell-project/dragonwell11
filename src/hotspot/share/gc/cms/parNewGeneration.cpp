@@ -74,7 +74,7 @@ ParScanThreadState::ParScanThreadState(Space* to_space_,
                                        Stack<oop, mtGC>* overflow_stacks_,
                                        PreservedMarks* preserved_marks_,
                                        size_t desired_plab_sz_,
-                                       ParallelTaskTerminator& term_) :
+                                       TaskTerminator& term_) :
   _to_space(to_space_),
   _old_gen(old_gen_),
   _young_gen(young_gen_),
@@ -92,7 +92,7 @@ ParScanThreadState::ParScanThreadState(Space* to_space_,
   _older_gen_closure(young_gen_, this),
   _evacuate_followers(this, &_to_space_closure, &_old_gen_closure,
                       &_to_space_root_closure, young_gen_, &_old_gen_root_closure,
-                      work_queue_set_, &term_),
+                      work_queue_set_, term_.terminator()),
   _is_alive_closure(young_gen_),
   _scan_weak_ref_closure(young_gen_, this),
   _keep_alive_closure(&_scan_weak_ref_closure),
@@ -304,7 +304,7 @@ public:
                         Stack<oop, mtGC>*       overflow_stacks_,
                         PreservedMarksSet&      preserved_marks_set,
                         size_t                  desired_plab_sz,
-                        ParallelTaskTerminator& term);
+                        TaskTerminator& term);
 
   ~ParScanThreadStateSet() { TASKQUEUE_STATS_ONLY(reset_stats()); }
 
@@ -325,14 +325,14 @@ public:
   #endif // TASKQUEUE_STATS
 
 private:
-  ParallelTaskTerminator& _term;
+  TaskTerminator&         _term;
   ParNewGeneration&       _young_gen;
   Generation&             _old_gen;
   ParScanThreadState*     _per_thread_states;
   const int               _num_threads;
  public:
   bool is_valid(int id) const { return id < _num_threads; }
-  ParallelTaskTerminator* terminator() { return &_term; }
+  ParallelTaskTerminator* terminator() { return _term.terminator(); }
 };
 
 ParScanThreadStateSet::ParScanThreadStateSet(int num_threads,
@@ -343,7 +343,7 @@ ParScanThreadStateSet::ParScanThreadStateSet(int num_threads,
                                              Stack<oop, mtGC>* overflow_stacks,
                                              PreservedMarksSet& preserved_marks_set,
                                              size_t desired_plab_sz,
-                                             ParallelTaskTerminator& term)
+                                             TaskTerminator& term)
   : _young_gen(young_gen),
     _old_gen(old_gen),
     _term(term),
@@ -377,7 +377,7 @@ void ParScanThreadStateSet::trace_promotion_failed(const YoungGCTracer* gc_trace
 }
 
 void ParScanThreadStateSet::reset(uint active_threads, bool promotion_failed) {
-  _term.reset_for_reuse(active_threads);
+  _term.terminator()->reset_for_reuse(active_threads);
   if (promotion_failed) {
     for (int i = 0; i < _num_threads; ++i) {
       thread_state(i).print_promotion_failure_size();
@@ -907,7 +907,7 @@ void ParNewGeneration::collect(bool   full,
 
   // Always set the terminator for the active number of workers
   // because only those workers go through the termination protocol.
-  ParallelTaskTerminator _term(active_workers, task_queues());
+  TaskTerminator _term(active_workers, task_queues());
   ParScanThreadStateSet thread_state_set(active_workers,
                                          *to(), *this, *_old_gen, *task_queues(),
                                          _overflow_stacks, _preserved_marks_set,

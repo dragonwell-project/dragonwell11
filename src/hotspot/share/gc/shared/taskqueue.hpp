@@ -375,9 +375,7 @@ class TaskQueueSetSuper {
 public:
   // Returns "true" if some TaskQueue in the set contains a task.
   virtual bool peek() = 0;
-#if INCLUDE_SHENANDOAHGC
   virtual size_t tasks() = 0;
-#endif
 };
 
 template <MEMFLAGS F> class TaskQueueSetSuperImpl: public CHeapObj<F>, public TaskQueueSetSuper {
@@ -407,9 +405,7 @@ public:
   bool steal(uint queue_num, E& t);
 
   bool peek();
-#if INCLUDE_SHENANDOAHGC
   size_t tasks();
-#endif
 
   uint size() const { return _n; }
 };
@@ -435,7 +431,6 @@ bool GenericTaskQueueSet<T, F>::peek() {
   return false;
 }
 
-#if INCLUDE_SHENANDOAHGC
 template<class T, MEMFLAGS F>
 size_t GenericTaskQueueSet<T, F>::tasks() {
   size_t n = 0;
@@ -444,7 +439,6 @@ size_t GenericTaskQueueSet<T, F>::tasks() {
   }
   return n;
 }
-#endif
 
 // When to terminate from the termination protocol.
 class TerminatorTerminator: public CHeapObj<mtInternal> {
@@ -457,11 +451,8 @@ public:
 
 #undef TRACESPINNING
 
-class ParallelTaskTerminator: public StackObj {
-private:
-#if INCLUDE_SHENANDOAHGC
+class ParallelTaskTerminator: public CHeapObj<mtGC> {
 protected:
-#endif
   uint _n_threads;
   TaskQueueSetSuper* _queue_set;
 
@@ -497,7 +488,7 @@ public:
   // As above, but it also terminates if the should_exit_termination()
   // method of the terminator parameter returns true. If terminator is
   // NULL, then it is ignored.
-  SHENANDOAHGC_ONLY(virtual) bool offer_termination(TerminatorTerminator* terminator);
+  virtual bool offer_termination(TerminatorTerminator* terminator);
 
   // Reset the terminator, so that it may be reused again.
   // The caller is responsible for ensuring that this is done
@@ -515,6 +506,38 @@ public:
   static void print_termination_counts();
 #endif
 };
+
+#ifdef _MSC_VER
+#pragma warning(push)
+// warning C4521: multiple copy constructors specified
+#pragma warning(disable:4521)
+// warning C4522: multiple assignment operators specified
+#pragma warning(disable:4522)
+#endif
+
+class TaskTerminator : public StackObj {
+private:
+  ParallelTaskTerminator*  _terminator;
+
+  // Disable following copy constructors and assignment operator
+  TaskTerminator(TaskTerminator& o) { }
+  TaskTerminator(const TaskTerminator& o) { }
+  TaskTerminator& operator=(TaskTerminator& o) { return *this; }
+public:
+  TaskTerminator(uint n_threads, TaskQueueSetSuper* queue_set);
+  ~TaskTerminator();
+
+  // Move assignment
+  TaskTerminator& operator=(const TaskTerminator& o);
+
+  ParallelTaskTerminator* terminator() const {
+    return _terminator;
+  }
+};
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
 
 typedef GenericTaskQueue<oop, mtGC>             OopTaskQueue;
 typedef GenericTaskQueueSet<OopTaskQueue, mtGC> OopTaskQueueSet;
