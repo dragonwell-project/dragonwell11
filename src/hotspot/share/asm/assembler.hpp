@@ -73,7 +73,7 @@ class Label;
  */
 class Label {
  private:
-  enum { PatchCacheSize = 4 };
+  enum { PatchCacheSize = 4 debug_only( +4 ) };
 
   // _loc encodes both the binding state (via its sign)
   // and the binding locator (via its value) of a label.
@@ -98,6 +98,11 @@ class Label {
   // The label will be bound to a location near its users.
   bool _is_near;
 
+#ifdef ASSERT
+  // Sourcre file and line location of jump instruction
+  int _lines[PatchCacheSize];
+  const char* _files[PatchCacheSize];
+#endif
  public:
 
   /**

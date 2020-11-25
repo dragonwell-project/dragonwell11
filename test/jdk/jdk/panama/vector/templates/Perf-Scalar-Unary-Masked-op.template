@@ -1,0 +1,15 @@
+
+    @Benchmark
+    public Object [[TEST]][[TEST_TYPE]][[OP_NAME]]() {
+        $type$[] as = fa.apply(size);
+        $type$[] rs = fr.apply(size);
+        boolean[] ms = fm.apply(size);
+
+        for (int i = 0; i < as.length; i++) {
+            $type$ a = as[i];
+            boolean m = ms[i % ms.length];
+            rs[i] = (m ? ($type$)([[TEST_OP]]) : a);
+        }
+
+        return rs;
+    }

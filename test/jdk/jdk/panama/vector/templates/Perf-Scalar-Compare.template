@@ -1,0 +1,14 @@
+
+    @Benchmark
+    public boolean [[TEST]][[TEST_TYPE]][[OP_NAME]]() {
+        $type$[] as = fa.apply(size);
+        $type$[] bs = fb.apply(size);
+
+        boolean r = false;
+        for (int i = 0; i < as.length; i++) {
+            boolean m = (as[i] [[TEST_OP]] bs[i]);
+            r |= m; // accumulate so JIT can't eliminate the computation
+        }
+
+        return r;
+    }

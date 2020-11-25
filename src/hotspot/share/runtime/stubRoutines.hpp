@@ -227,6 +227,153 @@ class StubRoutines: AllStatic {
   static address _safefetchN_fault_pc;
   static address _safefetchN_continuation_pc;
 
+  // Vector Math Routines
+  static address _vector_float64_exp;
+  static address _vector_float128_exp;
+  static address _vector_float256_exp;
+  static address _vector_float512_exp;
+  static address _vector_double64_exp;
+  static address _vector_double128_exp;
+  static address _vector_double256_exp;
+  static address _vector_double512_exp;
+  static address _vector_float64_expm1;
+  static address _vector_float128_expm1;
+  static address _vector_float256_expm1;
+  static address _vector_float512_expm1;
+  static address _vector_double64_expm1;
+  static address _vector_double128_expm1;
+  static address _vector_double256_expm1;
+  static address _vector_double512_expm1;
+  static address _vector_float64_log1p;
+  static address _vector_float128_log1p;
+  static address _vector_float256_log1p;
+  static address _vector_float512_log1p;
+  static address _vector_double64_log1p;
+  static address _vector_double128_log1p;
+  static address _vector_double256_log1p;
+  static address _vector_double512_log1p;
+  static address _vector_float64_log;
+  static address _vector_float128_log;
+  static address _vector_float256_log;
+  static address _vector_float512_log;
+  static address _vector_double64_log;
+  static address _vector_double128_log;
+  static address _vector_double256_log;
+  static address _vector_double512_log;
+  static address _vector_float64_log10;
+  static address _vector_float128_log10;
+  static address _vector_float256_log10;
+  static address _vector_float512_log10;
+  static address _vector_double64_log10;
+  static address _vector_double128_log10;
+  static address _vector_double256_log10;
+  static address _vector_double512_log10;
+  static address _vector_float64_sin;
+  static address _vector_float128_sin;
+  static address _vector_float256_sin;
+  static address _vector_float512_sin;
+  static address _vector_double64_sin;
+  static address _vector_double128_sin;
+  static address _vector_double256_sin;
+  static address _vector_double512_sin;
+  static address _vector_float64_cos;
+  static address _vector_float128_cos;
+  static address _vector_float256_cos;
+  static address _vector_float512_cos;
+  static address _vector_double64_cos;
+  static address _vector_double128_cos;
+  static address _vector_double256_cos;
+  static address _vector_double512_cos;
+  static address _vector_float64_tan;
+  static address _vector_float128_tan;
+  static address _vector_float256_tan;
+  static address _vector_float512_tan;
+  static address _vector_double64_tan;
+  static address _vector_double128_tan;
+  static address _vector_double256_tan;
+  static address _vector_double512_tan; 
+  static address _vector_float64_sinh;
+  static address _vector_float128_sinh;
+  static address _vector_float256_sinh;
+  static address _vector_float512_sinh;
+  static address _vector_double64_sinh;
+  static address _vector_double128_sinh;
+  static address _vector_double256_sinh;
+  static address _vector_double512_sinh;
+  static address _vector_float64_cosh;
+  static address _vector_float128_cosh;
+  static address _vector_float256_cosh;
+  static address _vector_float512_cosh;
+  static address _vector_double64_cosh;
+  static address _vector_double128_cosh;
+  static address _vector_double256_cosh;
+  static address _vector_double512_cosh;
+  static address _vector_float64_tanh;
+  static address _vector_float128_tanh;
+  static address _vector_float256_tanh;
+  static address _vector_float512_tanh;
+  static address _vector_double64_tanh;
+  static address _vector_double128_tanh;
+  static address _vector_double256_tanh;
+  static address _vector_double512_tanh; 
+  static address _vector_float64_acos;
+  static address _vector_float128_acos;
+  static address _vector_float256_acos;
+  static address _vector_float512_acos;
+  static address _vector_double64_acos;
+  static address _vector_double128_acos;
+  static address _vector_double256_acos;
+  static address _vector_double512_acos;
+  static address _vector_float64_asin;
+  static address _vector_float128_asin;
+  static address _vector_float256_asin;
+  static address _vector_float512_asin;
+  static address _vector_double64_asin;
+  static address _vector_double128_asin;
+  static address _vector_double256_asin;
+  static address _vector_double512_asin;
+  static address _vector_float64_atan;
+  static address _vector_float128_atan;
+  static address _vector_float256_atan;
+  static address _vector_float512_atan;
+  static address _vector_double64_atan;
+  static address _vector_double128_atan;
+  static address _vector_double256_atan;
+  static address _vector_double512_atan;
+  static address _vector_float64_pow;
+  static address _vector_float128_pow;
+  static address _vector_float256_pow;
+  static address _vector_float512_pow;
+  static address _vector_double64_pow;
+  static address _vector_double128_pow;
+  static address _vector_double256_pow;
+  static address _vector_double512_pow; 
+  static address _vector_float64_hypot;
+  static address _vector_float128_hypot;
+  static address _vector_float256_hypot;
+  static address _vector_float512_hypot;
+  static address _vector_double64_hypot;
+  static address _vector_double128_hypot;
+  static address _vector_double256_hypot;
+  static address _vector_double512_hypot; 
+  static address _vector_float64_cbrt;
+  static address _vector_float128_cbrt;
+  static address _vector_float256_cbrt;
+  static address _vector_float512_cbrt;
+  static address _vector_double64_cbrt;
+  static address _vector_double128_cbrt;
+  static address _vector_double256_cbrt;
+  static address _vector_double512_cbrt;  
+  static address _vector_float64_atan2;
+  static address _vector_float128_atan2;
+  static address _vector_float256_atan2;
+  static address _vector_float512_atan2;
+  static address _vector_double64_atan2;
+  static address _vector_double128_atan2;
+  static address _vector_double256_atan2;
+  static address _vector_double512_atan2;
+  
+
  public:
   // Initialization/Testing
   static void    initialize1();                            // must happen before universe::genesis
@@ -385,6 +532,152 @@ class StubRoutines: AllStatic {
   static address select_fill_function(BasicType t, bool aligned, const char* &name);
 
   static address zero_aligned_words()  { return _zero_aligned_words; }
+  
+  static address vector_float64_exp()  { return _vector_float64_exp; } 
+  static address vector_float128_exp()  { return _vector_float128_exp; }
+  static address vector_float256_exp()  { return _vector_float256_exp; }
+  static address vector_float512_exp()  { return _vector_float512_exp; }
+  static address vector_double64_exp()  { return _vector_double64_exp; }
+  static address vector_double128_exp()  { return _vector_double128_exp; }
+  static address vector_double256_exp()  { return _vector_double256_exp; }
+  static address vector_double512_exp()  { return _vector_double512_exp; } 
+  static address vector_float64_expm1()  { return _vector_float64_expm1; }
+  static address vector_float128_expm1()  { return _vector_float128_expm1; }
+  static address vector_float256_expm1()  { return _vector_float256_expm1; }
+  static address vector_float512_expm1()  { return _vector_float512_expm1; }
+  static address vector_double64_expm1()  { return _vector_double64_expm1; }
+  static address vector_double128_expm1()  { return _vector_double128_expm1; }
+  static address vector_double256_expm1()  { return _vector_double256_expm1; }
+  static address vector_double512_expm1()  { return _vector_double512_expm1; }
+  static address vector_float64_log1p()  { return _vector_float64_log1p; }
+  static address vector_float128_log1p()  { return _vector_float128_log1p; }
+  static address vector_float256_log1p()  { return _vector_float256_log1p; }
+  static address vector_float512_log1p()  { return _vector_float512_log1p; }
+  static address vector_double64_log1p()  { return _vector_double64_log1p; }
+  static address vector_double128_log1p()  { return _vector_double128_log1p; }
+  static address vector_double256_log1p()  { return _vector_double256_log1p; }
+  static address vector_double512_log1p()  { return _vector_double512_log1p; }
+  static address vector_float64_log()  { return _vector_float64_log; }
+  static address vector_float128_log()  { return _vector_float128_log; }
+  static address vector_float256_log()  { return _vector_float256_log; }
+  static address vector_float512_log()  { return _vector_float512_log; }
+  static address vector_double64_log()  { return _vector_double64_log; }
+  static address vector_double128_log()  { return _vector_double128_log; }
+  static address vector_double256_log()  { return _vector_double256_log; }
+  static address vector_double512_log()  { return _vector_double512_log; }
+  static address vector_float64_log10()  { return _vector_float64_log10; }
+  static address vector_float128_log10()  { return _vector_float128_log10; }
+  static address vector_float256_log10()  { return _vector_float256_log10; }
+  static address vector_float512_log10()  { return _vector_float512_log10; }
+  static address vector_double64_log10()  { return _vector_double64_log10; }
+  static address vector_double128_log10()  { return _vector_double128_log10; }
+  static address vector_double256_log10()  { return _vector_double256_log10; }
+  static address vector_double512_log10()  { return _vector_double512_log10; }
+  static address vector_float64_sin()  { return _vector_float64_sin; }
+  static address vector_float128_sin()  { return _vector_float128_sin; }
+  static address vector_float256_sin()  { return _vector_float256_sin; }
+  static address vector_float512_sin()  { return _vector_float512_sin; }
+  static address vector_double64_sin()  { return _vector_double64_sin; }
+  static address vector_double128_sin()  { return _vector_double128_sin; }
+  static address vector_double256_sin()  { return _vector_double256_sin; }
+  static address vector_double512_sin()  { return _vector_double512_sin; }
+  static address vector_float64_cos()  { return _vector_float64_cos; }
+  static address vector_float128_cos()  { return _vector_float128_cos; }
+  static address vector_float256_cos()  { return _vector_float256_cos; }
+  static address vector_float512_cos()  { return _vector_float512_cos; }
+  static address vector_double64_cos()  { return _vector_double64_cos; }
+  static address vector_double128_cos()  { return _vector_double128_cos; }
+  static address vector_double256_cos()  { return _vector_double256_cos; }
+  static address vector_double512_cos()  { return _vector_double512_cos; }
+  static address vector_float64_tan()  { return _vector_float64_tan; }
+  static address vector_float128_tan()  { return _vector_float128_tan; }
+  static address vector_float256_tan()  { return _vector_float256_tan; }
+  static address vector_float512_tan()  { return _vector_float512_tan; }
+  static address vector_double64_tan()  { return _vector_double64_tan; }
+  static address vector_double128_tan()  { return _vector_double128_tan; }
+  static address vector_double256_tan()  { return _vector_double256_tan; }
+  static address vector_double512_tan()  { return _vector_double512_tan; } 
+  static address vector_float64_sinh()  { return _vector_float64_sinh; }
+  static address vector_float128_sinh()  { return _vector_float128_sinh; }
+  static address vector_float256_sinh()  { return _vector_float256_sinh; }
+  static address vector_float512_sinh()  { return _vector_float512_sinh; }
+  static address vector_double64_sinh()  { return _vector_double64_sinh; }
+  static address vector_double128_sinh()  { return _vector_double128_sinh; }
+  static address vector_double256_sinh()  { return _vector_double256_sinh; }
+  static address vector_double512_sinh()  { return _vector_double512_sinh; }
+  static address vector_float64_cosh()  { return _vector_float64_cosh; }
+  static address vector_float128_cosh()  { return _vector_float128_cosh; }
+  static address vector_float256_cosh()  { return _vector_float256_cosh; }
+  static address vector_float512_cosh()  { return _vector_float512_cosh; }
+  static address vector_double64_cosh()  { return _vector_double64_cosh; }
+  static address vector_double128_cosh()  { return _vector_double128_cosh; }
+  static address vector_double256_cosh()  { return _vector_double256_cosh; }
+  static address vector_double512_cosh()  { return _vector_double512_cosh; }
+  static address vector_float64_tanh()  { return _vector_float64_tanh; }
+  static address vector_float128_tanh()  { return _vector_float128_tanh; }
+  static address vector_float256_tanh()  { return _vector_float256_tanh; }
+  static address vector_float512_tanh()  { return _vector_float512_tanh; }
+  static address vector_double64_tanh()  { return _vector_double64_tanh; }
+  static address vector_double128_tanh()  { return _vector_double128_tanh; }
+  static address vector_double256_tanh()  { return _vector_double256_tanh; }
+  static address vector_double512_tanh()  { return _vector_double512_tanh; }
+  static address vector_float64_acos()  { return _vector_float64_acos; }
+  static address vector_float128_acos()  { return _vector_float128_acos; }
+  static address vector_float256_acos()  { return _vector_float256_acos; }
+  static address vector_float512_acos()  { return _vector_float512_acos; }
+  static address vector_double64_acos()  { return _vector_double64_acos; }
+  static address vector_double128_acos()  { return _vector_double128_acos; }
+  static address vector_double256_acos()  { return _vector_double256_acos; }
+  static address vector_double512_acos()  { return _vector_double512_acos; }
+  static address vector_float64_asin()  { return _vector_float64_asin; }
+  static address vector_float128_asin()  { return _vector_float128_asin; }
+  static address vector_float256_asin()  { return _vector_float256_asin; }
+  static address vector_float512_asin()  { return _vector_float512_asin; }
+  static address vector_double64_asin()  { return _vector_double64_asin; }
+  static address vector_double128_asin()  { return _vector_double128_asin; }
+  static address vector_double256_asin()  { return _vector_double256_asin; }
+  static address vector_double512_asin()  { return _vector_double512_asin; }
+  static address vector_float64_atan()  { return _vector_float64_atan; }
+  static address vector_float128_atan()  { return _vector_float128_atan; }
+  static address vector_float256_atan()  { return _vector_float256_atan; }
+  static address vector_float512_atan()  { return _vector_float512_atan; }
+  static address vector_double64_atan()  { return _vector_double64_atan; }
+  static address vector_double128_atan()  { return _vector_double128_atan; }
+  static address vector_double256_atan()  { return _vector_double256_atan; }
+  static address vector_double512_atan()  { return _vector_double512_atan; }
+  static address vector_float64_pow()  { return _vector_float64_pow; }
+  static address vector_float128_pow()  { return _vector_float128_pow; }
+  static address vector_float256_pow()  { return _vector_float256_pow; }
+  static address vector_float512_pow()  { return _vector_float512_pow; }
+  static address vector_double64_pow()  { return _vector_double64_pow; }
+  static address vector_double128_pow()  { return _vector_double128_pow; }
+  static address vector_double256_pow()  { return _vector_double256_pow; }
+  static address vector_double512_pow()  { return _vector_double512_pow; } 
+  static address vector_float64_hypot()  { return _vector_float64_hypot; }
+  static address vector_float128_hypot()  { return _vector_float128_hypot; }
+  static address vector_float256_hypot()  { return _vector_float256_hypot; }
+  static address vector_float512_hypot()  { return _vector_float512_hypot; }
+  static address vector_double64_hypot()  { return _vector_double64_hypot; }
+  static address vector_double128_hypot()  { return _vector_double128_hypot; }
+  static address vector_double256_hypot()  { return _vector_double256_hypot; }
+  static address vector_double512_hypot()  { return _vector_double512_hypot; } 
+  static address vector_float64_cbrt()  { return _vector_float64_cbrt; }
+  static address vector_float128_cbrt()  { return _vector_float128_cbrt; }
+  static address vector_float256_cbrt()  { return _vector_float256_cbrt; }
+  static address vector_float512_cbrt()  { return _vector_float512_cbrt; }
+  static address vector_double64_cbrt()  { return _vector_double64_cbrt; }
+  static address vector_double128_cbrt()  { return _vector_double128_cbrt; }
+  static address vector_double256_cbrt()  { return _vector_double256_cbrt; }
+  static address vector_double512_cbrt()  { return _vector_double512_cbrt; } 
+  static address vector_float64_atan2()  { return _vector_float64_atan2; }
+  static address vector_float128_atan2()  { return _vector_float128_atan2; }
+  static address vector_float256_atan2()  { return _vector_float256_atan2; }
+  static address vector_float512_atan2()  { return _vector_float512_atan2; }
+  static address vector_double64_atan2()  { return _vector_double64_atan2; }
+  static address vector_double128_atan2()  { return _vector_double128_atan2; }
+  static address vector_double256_atan2()  { return _vector_double256_atan2; }
+  static address vector_double512_atan2()  { return _vector_double512_atan2; }
+  
 
   static double  intrinsic_log10(double d) {
     assert(_intrinsic_log10 != NULL, "must be defined");

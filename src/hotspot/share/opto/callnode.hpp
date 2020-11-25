@@ -48,6 +48,7 @@ class       CallDynamicJavaNode;
 class     CallRuntimeNode;
 class       CallLeafNode;
 class         CallLeafNoFPNode;
+class         CallLeafVectorNode;
 class     AllocateNode;
 class       AllocateArrayNode;
 class     BoxLockNode;
@@ -313,6 +314,7 @@ public:
   void      dump() const {
     dump_on(tty);
   }
+  void      print_on(outputStream* st) const;
 #endif
 };
 
@@ -767,6 +769,7 @@ public:
 //------------------------------CallRuntimeNode--------------------------------
 // Make a direct subroutine call node into compiled C++ code.
 class CallRuntimeNode : public CallNode {
+protected:
   virtual uint cmp( const Node &n ) const;
   virtual uint size_of() const; // Size is bigger
 public:
@@ -815,6 +818,24 @@ public:
   {
   }
   virtual int   Opcode() const;
+};
+
+//------------------------------CallLeafVectorNode-------------------------------
+// CallLeafNode but calling with vector calling convention instead.
+class CallLeafVectorNode : public CallLeafNode {
+private:
+  uint _num_bits;
+protected:
+  virtual uint cmp( const Node &n ) const;
+  virtual uint size_of() const; // Size is bigger
+public:
+  CallLeafVectorNode(const TypeFunc* tf, address addr, const char* name,
+                   const TypePtr* adr_type, uint num_bits)
+    : CallLeafNode(tf, addr, name, adr_type), _num_bits(num_bits)
+  {
+  }
+  virtual int   Opcode() const;
+  virtual void  calling_convention( BasicType* sig_bt, VMRegPair *parm_regs, uint argcnt ) const;
 };
 
 

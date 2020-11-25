@@ -391,6 +391,28 @@ public:
   NegNode( Node *in1 ) : Node(0,in1) {}
 };
 
+//------------------------------NegINode---------------------------------------
+// Negate value an int.  For int values, negation is the same as subtraction 
+// from zero
+class NegINode : public NegNode {
+public:
+  NegINode(Node *in1) : NegNode(in1) {}
+  virtual int Opcode() const;
+  const Type *bottom_type() const { return TypeInt::INT; }
+  virtual uint ideal_reg() const { return Op_RegI; }
+};
+
+//------------------------------NegLNode---------------------------------------
+// Negate value an int.  For int values, negation is the same as subtraction 
+// from zero
+class NegLNode : public NegNode {
+public:
+  NegLNode(Node *in1) : NegNode(in1) {}
+  virtual int Opcode() const;
+  const Type *bottom_type() const { return TypeLong::LONG; }
+  virtual uint ideal_reg() const { return Op_RegL; }
+};
+
 //------------------------------NegFNode---------------------------------------
 // Negate value a float.  Negating 0.0 returns -0.0, but subtracting from
 // zero returns +0.0 (per JVM spec on 'fneg' bytecode).  As subtraction
@@ -459,6 +481,14 @@ public:
   const Type *bottom_type() const { return Type::FLOAT; }
   virtual uint ideal_reg() const { return Op_RegF; }
   virtual const Type* Value(PhaseGVN* phase) const;
+};
+
+//--------------------------------NotNode-----------------------------------------
+// not for byte, short, int and long
+class NotNode : public Node {
+public:
+  NotNode(Compile* C, Node *c, Node *in1) : Node(c, in1) {}
+  virtual int Opcode() const;
 };
 
 //-------------------------------ReverseBytesINode--------------------------------

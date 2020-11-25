@@ -131,6 +131,10 @@ public class Spp {
                     }
                 }
             }
+            if (repl == null) {
+                System.err.println("Error: undefined variable in line " + ln);
+                System.exit(-1);
+            }
             vardef.appendReplacement(buf, repl);
         }
         vardef.appendTail(buf);

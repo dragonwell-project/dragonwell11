@@ -1,0 +1,11 @@
+
+    @Test(dataProvider = "$type$UnaryOpShuffleProvider")
+    static void Rearrange$vectorteststype$(IntFunction<$type$[]> fa,
+                                           BiFunction<Integer,Integer,int[]> fs) {
+[[KERNEL]]
+        assertRearrangeArraysEquals(a, r, order, SPECIES.length());
+    }
+
+
+
+

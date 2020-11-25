@@ -624,7 +624,8 @@ Node* MemNode::find_previous_store(PhaseTransform* phase) {
       }
 
       if (st_offset != offset && st_offset != Type::OffsetBot) {
-        const int MAX_STORE = BytesPerLong;
+        const int MAX_STORE = UseVectorAPI ? MAX2(BytesPerLong, (int)MaxVectorSize) : BytesPerLong;
+        assert(!UseVectorAPI || (mem->as_Store()->memory_size() <= MAX_STORE), "");
         if (st_offset >= offset + size_in_bytes ||
             st_offset <= offset - MAX_STORE ||
             st_offset <= offset - mem->as_Store()->memory_size()) {
@@ -1091,7 +1092,16 @@ Node* MemNode::can_see_stored_value(Node* st, PhaseTransform* phase) const {
       // (This is one of the few places where a generic PhaseTransform
       // can create new nodes.  Think of it as lazily manifesting
       // virtually pre-existing constants.)
-      return phase->zerocon(memory_type());
+      if (UseVectorAPI) {
+        if (memory_type() != T_VOID) {
+          return phase->zerocon(memory_type());
+        } else {
+          // TODO: materialize all-zero vector constant
+          assert(!isa_Load() || as_Load()->type()->isa_vect(), "");
+        }
+      } else {
+        return phase->zerocon(memory_type());
+      }
     }
 
     // A load from an initialization barrier can match a captured store.
@@ -2508,6 +2518,8 @@ Node *StoreNode::Ideal(PhaseGVN *phase, bool can_reshape) {
       assert(Opcode() == st->Opcode() ||
              st->Opcode() == Op_StoreVector ||
              Opcode() == Op_StoreVector ||
+             st->Opcode() == Op_StoreVectorScatter ||
+             Opcode() == Op_StoreVectorScatter ||
              phase->C->get_alias_index(adr_type()) == Compile::AliasIdxRaw ||
              (Opcode() == Op_StoreL && st->Opcode() == Op_StoreI) || // expanded ClearArrayNode
              (Opcode() == Op_StoreI && st->Opcode() == Op_StoreL) || // initialization by arraycopy
@@ -3686,7 +3698,8 @@ intptr_t InitializeNode::can_capture_store(StoreNode* st, PhaseTransform* phase,
 int InitializeNode::captured_store_insertion_point(intptr_t start,
                                                    int size_in_bytes,
                                                    PhaseTransform* phase) {
-  const int FAIL = 0, MAX_STORE = BytesPerLong;
+  const int FAIL = 0;
+  const int MAX_STORE = UseVectorAPI ? MAX2(BytesPerLong, (int)MaxVectorSize) : BytesPerLong;
 
   if (is_complete())
     return FAIL;                // arraycopy got here first; punt
@@ -3716,6 +3729,7 @@ int InitializeNode::captured_store_insertion_point(intptr_t start,
       }
       return -(int)i;           // not found; here is where to put it
     } else if (st_off < start) {
+      assert(!UseVectorAPI || (st->as_Store()->memory_size() <= MAX_STORE), "");
       if (size_in_bytes != 0 &&
           start < st_off + MAX_STORE &&
           start < st_off + st->as_Store()->memory_size()) {

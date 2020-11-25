@@ -24,6 +24,7 @@
 #include "precompiled.hpp"
 #include "memory/allocation.inline.hpp"
 #include "opto/connode.hpp"
+#include "opto/cfgnode.hpp"
 #include "opto/vectornode.hpp"
 
 //------------------------------VectorNode--------------------------------------
@@ -71,7 +72,7 @@ int VectorNode::opcode(int sopc, BasicType bt) {
   case Op_MulI:
     switch (bt) {
     case T_BOOLEAN:
-    case T_BYTE:   return 0;   // Unimplemented
+    case T_BYTE:   return UseVectorAPI ? Op_MulVB : 0;
     case T_CHAR:
     case T_SHORT:  return Op_MulVS;
     case T_INT:    return Op_MulVI;
@@ -104,12 +105,61 @@ int VectorNode::opcode(int sopc, BasicType bt) {
   case Op_DivD:
     assert(bt == T_DOUBLE, "must be");
     return Op_DivVD;
+  case Op_MinI:
+    switch (bt) {
+    case T_BOOLEAN:
+    case T_CHAR:   return 0;
+    case T_BYTE:
+    case T_SHORT:
+    case T_INT:    return Op_MinV;
+    default:       ShouldNotReachHere(); return 0;
+    }
+  case Op_MinL:
+    assert(bt == T_LONG, "must be");
+    return Op_MinV;
+  case Op_MinF:
+    assert(bt == T_FLOAT, "must be");
+    return Op_MinV;
+  case Op_MinD:
+    assert(bt == T_DOUBLE, "must be");
+    return Op_MinV;
+  case Op_MaxI:
+    switch (bt) {
+    case T_BOOLEAN:
+    case T_CHAR:   return 0;
+    case T_BYTE:
+    case T_SHORT:
+    case T_INT:    return Op_MaxV;
+    default:       ShouldNotReachHere(); return 0;
+    }
+  case Op_MaxL:
+    assert(bt == T_LONG, "must be");
+    return Op_MaxV;
+  case Op_MaxF:
+    assert(bt == T_FLOAT, "must be");
+    return Op_MaxV;
+  case Op_MaxD:
+    assert(bt == T_DOUBLE, "must be");
+    return Op_MaxV;
+  case Op_AbsI:
+    switch (bt) {
+    case T_BOOLEAN:
+    case T_CHAR:  return 0; // abs does not make sense for unsigned
+    case T_BYTE:
+    case T_SHORT:
+    case T_INT:
+    case T_LONG:  return Op_AbsV;
+    default: ShouldNotReachHere(); return 0;
+    }
   case Op_AbsF:
     assert(bt == T_FLOAT, "must be");
     return Op_AbsVF;
   case Op_AbsD:
     assert(bt == T_DOUBLE, "must be");
     return Op_AbsVD;
+  case Op_NegI:
+    assert(bt == T_INT, "must be");
+    return Op_NegVI;
   case Op_NegF:
     assert(bt == T_FLOAT, "must be");
     return Op_NegVF;
@@ -129,6 +179,8 @@ int VectorNode::opcode(int sopc, BasicType bt) {
     // Unimplemented for subword types since bit count changes
     // depending on size of lane (and sign bit).
     return 0;
+  case Op_Not:
+    return Op_NotV;
   case Op_LShiftI:
     switch (bt) {
     case T_BOOLEAN:
@@ -202,6 +254,29 @@ int VectorNode::opcode(int sopc, BasicType bt) {
   }
 }
 
+int VectorNode::replicate_opcode(BasicType bt) {
+  switch(bt) {
+    case T_BOOLEAN:
+    case T_BYTE:
+      return Op_ReplicateB;
+    case T_SHORT:
+    case T_CHAR:
+      return Op_ReplicateS;
+    case T_INT:
+      return Op_ReplicateI;
+    case T_LONG:
+      return Op_ReplicateL;
+    case T_FLOAT:
+      return Op_ReplicateF;
+    case T_DOUBLE:
+      return Op_ReplicateD;
+    default:
+      break;
+  }
+
+  return 0;
+}
+
 // Also used to check if the code generator
 // supports the vector operation.
 bool VectorNode::implemented(int opc, uint vlen, BasicType bt) {
@@ -209,11 +284,14 @@ bool VectorNode::implemented(int opc, uint vlen, BasicType bt) {
       (vlen > 1) && is_power_of_2(vlen) &&
       Matcher::vector_size_supported(bt, vlen)) {
     int vopc = VectorNode::opcode(opc, bt);
-    return vopc > 0 && Matcher::match_rule_supported_vector(vopc, vlen);
+    if (UseVectorAPI) {
+      return vopc > 0 && Matcher::match_rule_supported_vector(vopc, vlen, bt);
+    } else {
+      return vopc > 0 && Matcher::match_rule_supported_vector(vopc, vlen);
+    }
   }
   return false;
 }
-
 bool VectorNode::is_shift(Node* n) {
   switch (n->Opcode()) {
   case Op_LShiftI:
@@ -316,6 +394,7 @@ VectorNode* VectorNode::make(int opc, Node* n1, Node* n2, uint vlen, BasicType b
   case Op_SubVF: return new SubVFNode(n1, n2, vt);
   case Op_SubVD: return new SubVDNode(n1, n2, vt);
 
+  case Op_MulVB: return new MulVBNode(n1, n2, vt);
   case Op_MulVS: return new MulVSNode(n1, n2, vt);
   case Op_MulVI: return new MulVINode(n1, n2, vt);
   case Op_MulVL: return new MulVLNode(n1, n2, vt);
@@ -325,9 +404,14 @@ VectorNode* VectorNode::make(int opc, Node* n1, Node* n2, uint vlen, BasicType b
   case Op_DivVF: return new DivVFNode(n1, n2, vt);
   case Op_DivVD: return new DivVDNode(n1, n2, vt);
 
+  case Op_MinV: return new MinVNode(n1, n2, vt);
+  case Op_MaxV: return new MaxVNode(n1, n2, vt);
+
+  case Op_AbsV: return new AbsVNode(n1, vt);
   case Op_AbsVF: return new AbsVFNode(n1, vt);
   case Op_AbsVD: return new AbsVDNode(n1, vt);
 
+  case Op_NegVI: return new NegVINode(n1, vt);
   case Op_NegVF: return new NegVFNode(n1, vt);
   case Op_NegVD: return new NegVDNode(n1, vt);
 
@@ -335,6 +419,7 @@ VectorNode* VectorNode::make(int opc, Node* n1, Node* n2, uint vlen, BasicType b
   case Op_SqrtVD: return new SqrtVDNode(n1, vt);
 
   case Op_PopCountVI: return new PopCountVINode(n1, vt);
+  case Op_NotV: return new NotVNode(n1, vt);
 
   case Op_LShiftVB: return new LShiftVBNode(n1, n2, vt);
   case Op_LShiftVS: return new LShiftVSNode(n1, n2, vt);
@@ -354,6 +439,7 @@ VectorNode* VectorNode::make(int opc, Node* n1, Node* n2, uint vlen, BasicType b
   case Op_AndV: return new AndVNode(n1, n2, vt);
   case Op_OrV:  return new OrVNode (n1, n2, vt);
   case Op_XorV: return new XorVNode(n1, n2, vt);
+
   default:
     fatal("Missed vector creation for '%s'", NodeClassNames[vopc]);
     return NULL;
@@ -401,7 +487,7 @@ VectorNode* VectorNode::scalar2vector(Node* s, uint vlen, const Type* opd_t) {
 }
 
 VectorNode* VectorNode::shift_count(Node* shift, Node* cnt, uint vlen, BasicType bt) {
-  assert(VectorNode::is_shift(shift) && !cnt->is_Con(), "only variable shift count");
+  assert((VectorNode::is_shift(shift) || UseVectorAPI) && !cnt->is_Con(), "only variable shift count");
   // Match shift count type with shift vector type.
   const TypeVect* vt = TypeVect::make(bt, vlen);
   switch (shift->Opcode()) {
@@ -415,6 +501,26 @@ VectorNode* VectorNode::shift_count(Node* shift, Node* cnt, uint vlen, BasicType
     return new RShiftCntVNode(cnt, vt);
   default:
     fatal("Missed vector creation for '%s'", NodeClassNames[shift->Opcode()]);
+    return NULL;
+  }
+}
+
+VectorNode* VectorNode::shift_count(int opc, Node* cnt, uint vlen, BasicType bt) {
+  assert(UseVectorAPI, "sanity check");
+  assert(!cnt->is_Con(), "only variable shift count");
+  // Match shift count type with shift vector type.
+  const TypeVect* vt = TypeVect::make(bt, vlen);
+  switch (opc) {
+  case Op_LShiftI:
+  case Op_LShiftL:
+    return new LShiftCntVNode(cnt, vt);
+  case Op_RShiftI:
+  case Op_RShiftL:
+  case Op_URShiftI:
+  case Op_URShiftL:
+    return new RShiftCntVNode(cnt, vt);
+  default:
+    fatal("Missed vector creation for '%s'", NodeClassNames[opc]);
     return NULL;
   }
 }
@@ -496,6 +602,30 @@ StoreVectorNode* StoreVectorNode::make(int opc, Node* ctl, Node* mem,
   return new StoreVectorNode(ctl, mem, adr, atyp, val);
 }
 
+int ExtractNode::opcode(BasicType bt) {
+  switch (bt) {
+    case T_BOOLEAN:
+      return Op_ExtractUB;
+    case T_BYTE:
+      return Op_ExtractB;
+    case T_CHAR:
+      return Op_ExtractC;
+    case T_SHORT:
+      return Op_ExtractS;
+    case T_INT:
+      return Op_ExtractI;
+    case T_LONG:
+      return Op_ExtractL;
+    case T_FLOAT:
+      return Op_ExtractF;
+    case T_DOUBLE:
+      return Op_ExtractD;
+    default:
+      fatal("Type '%s' is not supported for vectors", type2name(bt));
+      return 0;
+  }
+}
+
 // Extract a scalar element of vector.
 Node* ExtractNode::make(Node* v, uint position, BasicType bt) {
   assert((int)position < Matcher::max_vector_size(bt), "pos in range");
@@ -527,8 +657,16 @@ int ReductionNode::opcode(int opc, BasicType bt) {
   int vopc = opc;
   switch (opc) {
     case Op_AddI:
-      assert(bt == T_INT, "must be");
-      vopc = Op_AddReductionVI;
+      switch (bt) {
+        case T_BOOLEAN:
+        case T_CHAR: return 0;
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:
+          vopc = Op_AddReductionVI;
+          break;
+        default:          ShouldNotReachHere(); return 0;
+      }
       break;
     case Op_AddL:
       assert(bt == T_LONG, "must be");
@@ -543,8 +681,16 @@ int ReductionNode::opcode(int opc, BasicType bt) {
       vopc = Op_AddReductionVD;
       break;
     case Op_MulI:
-      assert(bt == T_INT, "must be");
-      vopc = Op_MulReductionVI;
+      switch (bt) {
+        case T_BOOLEAN:
+        case T_CHAR: return 0;
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:
+          vopc = Op_MulReductionVI;
+          break;
+        default:          ShouldNotReachHere(); return 0;
+      }
       break;
     case Op_MulL:
       assert(bt == T_LONG, "must be");
@@ -558,13 +704,130 @@ int ReductionNode::opcode(int opc, BasicType bt) {
       assert(bt == T_DOUBLE, "must be");
       vopc = Op_MulReductionVD;
       break;
+    case Op_MinI:
+      switch (bt) {
+        case T_BOOLEAN:
+        case T_CHAR: return 0;
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:
+          vopc = Op_MinReductionV;
+          break;
+        default:          ShouldNotReachHere(); return 0;
+      }
+      break;
+    case Op_MinL:
+      assert(bt == T_LONG, "must be");
+      vopc = Op_MinReductionV;
+      break;
+    case Op_MinF:
+      assert(bt == T_FLOAT, "must be");
+      vopc = Op_MinReductionV;
+      break;
+    case Op_MinD:
+      assert(bt == T_DOUBLE, "must be");
+      vopc = Op_MinReductionV;
+      break;
+    case Op_MaxI:
+      switch (bt) {
+        case T_BOOLEAN:
+        case T_CHAR: return 0;
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:
+          vopc = Op_MaxReductionV;
+          break;
+        default:          ShouldNotReachHere(); return 0;
+      }
+      break;
+    case Op_MaxL:
+      assert(bt == T_LONG, "must be");
+      vopc = Op_MaxReductionV;
+      break;
+    case Op_MaxF:
+      assert(bt == T_FLOAT, "must be");
+      vopc = Op_MaxReductionV;
+      break;
+    case Op_MaxD:
+      assert(bt == T_DOUBLE, "must be");
+      vopc = Op_MaxReductionV;
+      break;
+    case Op_AndI:
+      switch (bt) {
+      case T_BOOLEAN:
+      case T_CHAR: return 0;
+      case T_BYTE:
+      case T_SHORT:
+      case T_INT:
+        vopc = Op_AndReductionV;
+        break;
+      default:          ShouldNotReachHere(); return 0;
+      }
+      break;
+    case Op_AndL:
+      assert(bt == T_LONG, "must be");
+      vopc = Op_AndReductionV;
+      break;
+    case Op_OrI:
+      switch(bt) {
+      case T_BOOLEAN:
+      case T_CHAR: return 0;
+      case T_BYTE:
+      case T_SHORT:
+      case T_INT:
+        vopc = Op_OrReductionV;
+        break;
+      default:  ShouldNotReachHere(); return 0;
+      }
+      break;
+    case Op_OrL:
+      assert(bt == T_LONG, "must be");
+      vopc = Op_OrReductionV;
+      break;
+    case Op_XorI:
+      switch(bt) {
+      case T_BOOLEAN:
+      case T_CHAR: return 0;
+      case T_BYTE:
+      case T_SHORT:
+      case T_INT:
+        vopc = Op_XorReductionV;
+        break;
+      default:  ShouldNotReachHere(); return 0;
+      }
+      break;
+    case Op_XorL:
+      assert(bt == T_LONG, "must be");
+      vopc = Op_XorReductionV;
+      break;
+    case Op_SubI:
+      switch(bt) {
+      case T_BYTE:
+      case T_SHORT:
+      case T_INT:
+        vopc = Op_SubReductionV;
+        break;
+      default:  ShouldNotReachHere(); return 0;
+      }
+      break;
+    case Op_SubL:
+      assert(bt == T_LONG, "must be");
+      vopc = Op_SubReductionV;
+      break;
+    case Op_SubF:
+      assert(bt == T_FLOAT, "must be");
+      vopc = Op_SubReductionVFP;
+      break;
+    case Op_SubD:
+      assert(bt == T_DOUBLE, "must be");
+      vopc = Op_SubReductionVFP;
+      break;
     // TODO: add MulL for targets that support it
     default:
       break;
   }
   return vopc;
 }
-
 // Return the appropriate reduction node.
 ReductionNode* ReductionNode::make(int opc, Node *ctrl, Node* n1, Node* n2, BasicType bt) {
 
@@ -582,9 +845,114 @@ ReductionNode* ReductionNode::make(int opc, Node *ctrl, Node* n1, Node* n2, Basi
   case Op_MulReductionVL: return new MulReductionVLNode(ctrl, n1, n2);
   case Op_MulReductionVF: return new MulReductionVFNode(ctrl, n1, n2);
   case Op_MulReductionVD: return new MulReductionVDNode(ctrl, n1, n2);
+  case Op_MinReductionV: return new MinReductionVNode(ctrl, n1, n2);
+  case Op_MaxReductionV: return new MaxReductionVNode(ctrl, n1, n2);
+  case Op_AndReductionV: return new AndReductionVNode(ctrl, n1, n2);
+  case Op_OrReductionV: return new OrReductionVNode(ctrl, n1, n2);
+  case Op_XorReductionV: return new XorReductionVNode(ctrl, n1, n2);
+  case Op_SubReductionV: return new SubReductionVNode(ctrl, n1, n2);
+  case Op_SubReductionVFP: return new SubReductionVFPNode(ctrl, n1, n2);
   default:
     fatal("Missed vector creation for '%s'", NodeClassNames[vopc]);
     return NULL;
+  }
+}
+
+VectorCastNode* VectorCastNode::make(int vopc, Node* n1, BasicType bt, uint vlen) {
+  const TypeVect* vt = TypeVect::make(bt, vlen);
+  switch (vopc) {
+    case Op_VectorCastB2X: return new VectorCastB2XNode(n1, vt);
+    case Op_VectorCastS2X: return new VectorCastS2XNode(n1, vt);
+    case Op_VectorCastI2X: return new VectorCastI2XNode(n1, vt);
+    case Op_VectorCastL2X: return new VectorCastL2XNode(n1, vt);
+    case Op_VectorCastF2X: return new VectorCastF2XNode(n1, vt);
+    case Op_VectorCastD2X: return new VectorCastD2XNode(n1, vt);
+    default: fatal("unknown node: %s", NodeClassNames[vopc]);
+  }
+  return NULL;
+}
+
+int VectorCastNode::opcode(BasicType bt) {
+  switch (bt) {
+    case T_BYTE:   return Op_VectorCastB2X;
+    case T_SHORT:  return Op_VectorCastS2X;
+    case T_INT:    return Op_VectorCastI2X;
+    case T_LONG:   return Op_VectorCastL2X;
+    case T_FLOAT:  return Op_VectorCastF2X;
+    case T_DOUBLE: return Op_VectorCastD2X;
+    default: Unimplemented();
+  }
+  return 0;
+}
+
+Node* ReductionNode::make_reduction_input(PhaseGVN& gvn, int opc, BasicType bt) {
+  int vopc = opcode(opc, bt);
+  guarantee(vopc != opc, "Vector reduction for '%s' is not implemented", NodeClassNames[opc]);
+
+  switch (vopc) {
+    case Op_AndReductionV:
+      switch (bt) {
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:
+          return gvn.makecon(TypeInt::MINUS_1);
+        case T_LONG:
+          return gvn.makecon(TypeLong::MINUS_1);
+        default:
+          fatal("Missed vector creation for '%s' as the basic type is not correct.", NodeClassNames[vopc]);
+          return NULL;
+      }
+      break;
+    case Op_AddReductionVI: // fallthrough
+    case Op_AddReductionVL: // fallthrough
+    case Op_AddReductionVF: // fallthrough
+    case Op_AddReductionVD:
+    case Op_OrReductionV:
+    case Op_XorReductionV:
+    case Op_SubReductionV:
+    case Op_SubReductionVFP:
+      return gvn.zerocon(bt);
+    case Op_MulReductionVI:
+      return gvn.makecon(TypeInt::ONE);
+    case Op_MulReductionVL:
+      return gvn.makecon(TypeLong::ONE);
+    case Op_MulReductionVF:
+      return gvn.makecon(TypeF::ONE);
+    case Op_MulReductionVD:
+      return gvn.makecon(TypeD::ONE);
+    case Op_MinReductionV:
+      switch (bt) {
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:
+          return gvn.makecon(TypeInt::MAX);
+        case T_LONG:
+          return gvn.makecon(TypeLong::MAX);
+        case T_FLOAT:
+          return gvn.makecon(TypeF::MAX);
+        case T_DOUBLE:
+          return gvn.makecon(TypeD::MAX);
+          default: Unimplemented(); return NULL;
+      }
+      break;
+    case Op_MaxReductionV:
+      switch (bt) {
+        case T_BYTE:
+        case T_SHORT:
+        case T_INT:
+          return gvn.makecon(TypeInt::MIN);
+        case T_LONG:
+          return gvn.makecon(TypeLong::MIN);
+        case T_FLOAT:
+          return gvn.makecon(TypeF::MIN);
+        case T_DOUBLE:
+          return gvn.makecon(TypeD::MIN);
+          default: Unimplemented(); return NULL;
+      }
+      break;
+    default:
+      fatal("Missed vector creation for '%s'", NodeClassNames[vopc]);
+      return NULL;
   }
 }
 
@@ -596,4 +964,65 @@ bool ReductionNode::implemented(int opc, uint vlen, BasicType bt) {
     return vopc != opc && Matcher::match_rule_supported(vopc);
   }
   return false;
+}
+
+#ifndef PRODUCT
+void VectorBoxAllocateNode::dump_spec(outputStream *st) const {
+  CallStaticJavaNode::dump_spec(st);
+}
+
+void VectorMaskCmpNode::dump_spec(outputStream *st) const {
+  st->print(" %d #", _predicate); _type->dump_on(st);
+}
+#endif // PRODUCT
+
+Node* VectorUnboxNode::Identity(PhaseGVN *phase) {
+  Node* n = obj()->uncast();
+  if (n->Opcode() == Op_VectorBox) {
+    return n->in(VectorBoxNode::Value);
+  }
+  return this;
+}
+
+Node* VectorReinterpretNode::Identity(PhaseGVN *phase) {
+  Node* n = in(1);
+  if (n->Opcode() == Op_VectorReinterpret) {
+    if (Type::cmp(bottom_type(), n->in(1)->bottom_type()) == 0) {
+      return n->in(1);
+    }
+  }
+  return this;
+}
+
+const TypeFunc* VectorBoxNode::vec_box_type(const TypeInstPtr* box_type) {
+  const Type** fields = TypeTuple::fields(0);
+  const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms, fields);
+
+  fields = TypeTuple::fields(1);
+  fields[TypeFunc::Parms+0] = box_type;
+  const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
+
+  return TypeFunc::make(domain, range);
+}
+
+Node* SubReductionVNode::Ideal(PhaseGVN* phase, bool can_reshape) {
+  Node* ctrl = in(0);
+  Node* in1 = in(1);
+  Node* in2 = in(2);
+
+  if (phase->type(in1)->isa_int()) {
+		assert(phase->type(in2)->is_vect()->element_type()->is_int(), "must be consistent");
+    return new NegINode(phase->transform(new AddReductionVINode(ctrl,in1,in2)));
+  } else if (phase->type(in1)->isa_long()) {
+    return new NegLNode(phase->transform(new AddReductionVLNode(ctrl,in1,in2)));
+  } else {
+    Unimplemented();
+    return NULL;
+  }
+}
+
+Node* VectorInsertNode::make(Node* vec, Node* new_val, int position) {
+  assert(position < (int)vec->bottom_type()->is_vect()->length(), "pos in range");
+  ConINode* pos = ConINode::make(position);
+  return new VectorInsertNode(vec, new_val, pos, vec->bottom_type()->is_vect());
 }

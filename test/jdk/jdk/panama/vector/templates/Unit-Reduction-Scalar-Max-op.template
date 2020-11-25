@@ -1,0 +1,8 @@
+    static $type$ [[TEST]]($type$[] a, int idx) {
+        $type$ res = [[TEST_INIT]];
+        for (int i = idx; i < (idx + SPECIES.length()); i++) {
+          res = (res > a[i])?res:a[i];
+        }
+
+        return res;
+    }

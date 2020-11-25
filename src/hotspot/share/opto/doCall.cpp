@@ -134,6 +134,9 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
       if (cg->does_virtual_dispatch()) {
         cg_intrinsic = cg;
         cg = NULL;
+      } else if (UseVectorAPI && should_delay_vector_inlining(callee, jvms)) {
+        assert(!delayed_forbidden, "delay should be allowed");
+        return CallGenerator::for_late_inline(callee, cg);
       } else {
         return cg;
       }
@@ -186,6 +189,9 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
           } else if (should_delay_boxing_inlining(callee, jvms)) {
             assert(!delayed_forbidden, "strange");
             return CallGenerator::for_boxing_late_inline(callee, cg);
+          } else if (UseVectorAPI && should_delay_vector_reboxing_inlining(callee, jvms)) {
+            assert(!delayed_forbidden, "strange");
+            return CallGenerator::for_vector_reboxing_late_inline(callee, cg);
           } else if ((should_delay || AlwaysIncrementalInline) && !delayed_forbidden) {
             return CallGenerator::for_late_inline(callee, cg);
           }
@@ -373,6 +379,14 @@ bool Compile::should_delay_boxing_inlining(ciMethod* call_method, JVMState* jvms
     return aggressive_unboxing();
   }
   return false;
+}
+
+bool Compile::should_delay_vector_inlining(ciMethod* call_method, JVMState* jvms) {
+  return UseVectorApiIntrinsics && call_method->is_vector_method();
+}
+
+bool Compile::should_delay_vector_reboxing_inlining(ciMethod* call_method, JVMState* jvms) {
+  return UseVectorApiIntrinsics && (call_method->intrinsic_id() == vmIntrinsics::_VectorRebox);
 }
 
 // uncommon-trap call-sites where callee is unloaded, uninitialized or will not link
@@ -607,6 +621,16 @@ void Parse::do_call() {
       guarantee(failing(), "call failed to generate:  calls should work");
       return;
     }
+  }
+
+  if (UseVectorAPI && DebugVectorApiMissingIntrinsics &&
+      !cg->is_intrinsic() &&
+      !cg->is_mh_late_inline() &&
+      cg->method()->is_vector_api_class() &&
+      !cg->method()->is_compiled_lambda_form() &&
+      !cg->method()->is_initializer() ) {
+    cg->method()->print();
+    tty->print_cr("");
   }
 
   if (cg->is_inline()) {

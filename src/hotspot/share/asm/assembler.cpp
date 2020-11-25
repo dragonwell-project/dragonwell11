@@ -174,10 +174,16 @@ void Label::patch_instructions(MacroAssembler* masm) {
   while (_patch_index > 0) {
     --_patch_index;
     int branch_loc;
+    int line = 0;
+    const char* file = NULL;
     if (_patch_index >= PatchCacheSize) {
       branch_loc = _patch_overflow->pop();
     } else {
       branch_loc = _patches[_patch_index];
+#ifdef ASSERT
+      line = _lines[_patch_index];
+      file = _files[_patch_index];
+#endif
     }
     int branch_sect = CodeBuffer::locator_sect(branch_loc);
     address branch = cb->locator_address(branch_loc);

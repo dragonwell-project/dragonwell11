@@ -33,7 +33,7 @@ static bool returns_to_call_stub(address return_pc) { return return_pc == _call_
 
 enum platform_dependent_constants {
   code_size1 = 20000 LP64_ONLY(+10000),         // simply increase if too small (assembler will crash if too small)
-  code_size2 = 35300 LP64_ONLY(+10000)          // simply increase if too small (assembler will crash if too small)
+  code_size2 = 35800 LP64_ONLY(+10000)          // simply increase if too small (assembler will crash if too small)
 };
 
 class x86 {
@@ -54,6 +54,24 @@ class x86 {
   static address _float_sign_flip;
   static address _double_sign_mask;
   static address _double_sign_flip;
+  static address _vector_float_sign_mask;
+  static address _vector_float_sign_flip;
+  static address _vector_double_sign_mask;
+  static address _vector_double_sign_flip;
+  static address _vector_all_bits_set;
+  static address _vector_byte_bitset;
+  static address _vector_long_perm_mask;
+  static address _vector_short_to_byte_mask;
+  static address _vector_int_to_byte_mask;
+  static address _vector_int_to_short_mask;
+  static address _vector_32_bit_mask;
+  static address _vector_64_bit_mask;
+  static address _vector_int_shuffle_mask;
+  static address _vector_int_size_mask; 
+  static address _vector_short_shuffle_mask;
+  static address _vector_short_size_mask;
+  static address _vector_long_shuffle_mask;
+  static address _vector_long_size_mask;
 
  public:
 
@@ -95,6 +113,76 @@ class x86 {
 
   static address double_sign_flip() {
     return _double_sign_flip;
+  }
+
+  static address vector_float_sign_mask() {
+    return _vector_float_sign_mask;
+  }
+
+  static address vector_float_sign_flip() {
+    return _vector_float_sign_flip;
+  }
+
+  static address vector_double_sign_mask() {
+    return _vector_double_sign_mask;
+  }
+
+  static address vector_double_sign_flip() {
+    return _vector_double_sign_flip;
+  }
+
+  static address vector_all_bits_set() {
+    return _vector_all_bits_set;
+  }
+
+  static address vector_byte_bitset() {
+    return _vector_byte_bitset;
+  }
+
+  static address vector_long_perm_mask() {
+    return _vector_long_perm_mask;
+  }
+
+  static address vector_short_to_byte_mask() {
+    return _vector_short_to_byte_mask;
+  }
+
+  static address vector_int_to_byte_mask() {
+    return _vector_int_to_byte_mask;
+  }
+
+  static address vector_int_to_short_mask() {
+    return _vector_int_to_short_mask;
+  }
+
+  static address vector_32_bit_mask() {
+    return _vector_32_bit_mask;
+  }
+
+  static address vector_64_bit_mask() {
+    return _vector_64_bit_mask;
+  }
+
+  static address vector_all_ones_mask() {
+    return _vector_double_sign_flip;
+  }
+  static address vector_int_shuffle_mask() {
+    return _vector_int_shuffle_mask;
+  }
+  static address vector_int_size_mask() {
+    return _vector_int_size_mask;
+  }
+  static address vector_short_shuffle_mask() {
+    return _vector_short_shuffle_mask;
+  }
+  static address vector_short_size_mask() {
+    return _vector_short_size_mask;
+  }
+  static address vector_long_shuffle_mask() {
+    return _vector_long_shuffle_mask;
+  }
+  static address vector_long_size_mask() {
+    return _vector_long_size_mask;
   }
 #else // !LP64
 

@@ -745,8 +745,19 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETECT_TOOLCHAIN_CORE],
     if test "x$AS" = x; then
       AC_MSG_ERROR([Solaris assembler (as) is required. Please install via "pkg install pkg:/developer/assembler".])
     fi
+  elif test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
+    if test "x$OPENJDK_TARGET_CPU_BITS" = x32; then
+      BASIC_PATH_PROGS(AS, ml)
+    else
+      BASIC_PATH_PROGS(AS, ml64)
+    fi
+    BASIC_FIXUP_EXECUTABLE(AS)
+    if test "x$AS" = x; then
+      AC_MSG_ERROR([Microsoft MASM assembler is required.])
+    fi
+    # Tell assembler to assemble without linking and without printing version info
+    AS="$AS /c /nologo"
   else
-    # FIXME: is this correct for microsoft?
     AS="$CC -c"
   fi
   AC_SUBST(AS)

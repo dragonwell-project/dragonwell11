@@ -180,6 +180,9 @@ public final class Unsafe {
      */
     @HotSpotIntrinsicCandidate
     public native Object getObject(Object o, long offset);
+    public Object getReference(Object o, long offset) {
+        return getObject(o, offset);
+    }
 
     /**
      * Stores a reference value into a given Java variable.
@@ -193,6 +196,9 @@ public final class Unsafe {
      */
     @HotSpotIntrinsicCandidate
     public native void putObject(Object o, long offset, Object x);
+    public void putReference(Object o, long offset, Object x) {
+        putObject(o, offset, x);
+    }
 
     /** @see #getInt(Object, long) */
     @HotSpotIntrinsicCandidate
@@ -3702,7 +3708,18 @@ public final class Unsafe {
     private static int convEndian(boolean big, int n)     { return big == BE ? n : Integer.reverseBytes(n)  ; }
     private static long convEndian(boolean big, long n)   { return big == BE ? n : Long.reverseBytes(n)     ; }
 
-
+    /**
+     * Returns the maximum supported vector length for a primitive
+     * type of an element.  This corresponds to the maximum number of elements
+     * that can be packed into the largest supported hardware vector register.
+     *
+     * @param element the primitive type of an element
+     * @return the maximum vector length, otherwise -1 if element is not a
+     *         primitive type or is not supported
+     */
+    // @@@ Rename from Size to Length to be consistent with Vector API
+    // terminology?
+    public native int getMaxVectorSize(Class<?> element); // FIXME: move to a different place
 
     private native long allocateMemory0(long bytes);
     private native long reallocateMemory0(long address, long bytes);

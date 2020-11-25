@@ -431,15 +431,22 @@ define SetupCompileNativeFileBody
           # Keep as much as possible on one execution line for best performance
           # on Windows. No need to save exit code from compilation since
           # pipefail is always active on Windows.
-	  $$(call ExecuteWithLog, $$@, $$(call MakeCommandRelative, \
-	      $$($1_COMPILER) -showIncludes $$($1_COMPILE_OPTIONS))) \
-	      | $(TR) -d '\r' | $(GREP) -v -e "^Note: including file:" \
-	          -e "^$$($1_FILENAME)$$$$" || test "$$$$?" = "1" ; \
-	  $(ECHO) $$@: \\ > $$($1_DEPS_FILE) ; \
-	  $(SED) $(WINDOWS_SHOWINCLUDE_SED_PATTERN) $$($1_OBJ).log \
-	      | $(SORT) -u >> $$($1_DEPS_FILE) ; \
-	  $(ECHO) >> $$($1_DEPS_FILE) ; \
-	  $(SED) $(DEPENDENCY_TARGET_SED_PATTERN) $$($1_DEPS_FILE) > $$($1_DEPS_TARGETS_FILE)
+          ifeq ($$(filter %.s, $$($1_FILENAME)), )
+	        $$(call ExecuteWithLog, $$@, \
+	          $$($1_COMPILER) $$($1_FLAGS) -showIncludes \
+	            $(CC_OUT_OPTION)$$($1_OBJ) $$($1_SRC_FILE)) \
+	          | $(TR) -d '\r' | $(GREP) -v -e "^Note: including file:" \
+	            -e "^$$($1_FILENAME)$$$$" || test "$$$$?" = "1" ; \
+	        $(ECHO) $$@: \\ > $$($1_DEP) ; \
+	        $(SED) $(WINDOWS_SHOWINCLUDE_SED_PATTERN) $$($1_OBJ).log \
+	          | $(SORT) -u >> $$($1_DEP) ; \
+	        $(SED) $(DEPENDENCY_TARGET_SED_PATTERN) $$($1_DEP) > $$($1_DEP_TARGETS)
+          else
+	        # For assembler calls, no need to build dependency list.
+	        $$(call ExecuteWithLog, $$@, \
+	          $$($1_COMPILER) $$($1_FLAGS) \
+	            $(CC_OUT_OPTION)$$($1_OBJ) /Ta $$($1_SRC_FILE))
+         endif
         endif
   endif
 endef

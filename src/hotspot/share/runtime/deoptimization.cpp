@@ -974,7 +974,7 @@ static int reassign_fields_by_klass(InstanceKlass* klass, frame* fr, RegisterMap
   for (int i = 0; i < fields->length(); i++) {
     intptr_t val;
     ScopeValue* scope_field = sv->field_at(svIndex);
-    StackValue* value = StackValue::create_stack_value(fr, reg_map, scope_field);
+    StackValue* value = StackValue::create_stack_value(fr, reg_map, scope_field, (UseVectorAPI ? klass : NULL));
     int offset = fields->at(i)._offset;
     BasicType type = fields->at(i)._type;
     switch (type) {

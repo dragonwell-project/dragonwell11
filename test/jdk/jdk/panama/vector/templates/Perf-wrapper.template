@@ -1,0 +1,6 @@
+
+    @Benchmark
+    public Object [[TEST]][[TEST_TYPE]][[OP_NAME]]() {
+[[KERNEL]]
+        return r;
+    }
