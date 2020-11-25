@@ -9,19 +9,19 @@ fi
 DRAGONWELL_VERSION=3
 LC_ALL=C
 BUILD_MODE=$1
-
+arch=$(uname -m)
 case "${BUILD_MODE}" in
     release)
         DEBUG_LEVEL="release"
-        JDK_IMAGES_DIR=`pwd`/build/linux-x86_64-normal-server-release/images
+        JDK_IMAGES_DIR=`pwd`/build/linux-${arch}-normal-server-release/images
     ;;
     debug)
         DEBUG_LEVEL="slowdebug"
-        JDK_IMAGES_DIR=`pwd`/build/linux-x86_64-normal-server-slowdebug/images
+        JDK_IMAGES_DIR=`pwd`/build/linux-${arch}-normal-server-slowdebug/images
     ;;
     fastdebug)
         DEBUG_LEVEL="fastdebug"
-        JDK_IMAGES_DIR=`pwd`/build/linux-x86_64-normal-server-fastdebug/images
+        JDK_IMAGES_DIR=`pwd`/build/linux-${arch}-normal-server-fastdebug/images
     ;;
     *)
         echo "Argument must be release or debug or fastdebug!"
