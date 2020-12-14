@@ -25,32 +25,44 @@ package gc.z;
 
 /*
  * @test TestSmallHeap
- * @requires vm.gc.Z & !vm.graal.enabled & vm.compMode != "Xcomp"
+ * @requires vm.gc.Z & !vm.graal.enabled
  * @summary Test ZGC with small heaps
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -Xlog:gc,gc+init,gc+heap -Xmx8M gc.z.TestSmallHeap
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -Xlog:gc,gc+init,gc+heap -Xmx16M gc.z.TestSmallHeap
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -Xlog:gc,gc+init,gc+heap -Xmx32M gc.z.TestSmallHeap
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -Xlog:gc,gc+init,gc+heap -Xmx64M gc.z.TestSmallHeap
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -Xlog:gc,gc+init,gc+heap -Xmx128M gc.z.TestSmallHeap
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -Xlog:gc,gc+init,gc+heap -Xmx256M gc.z.TestSmallHeap
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -Xlog:gc,gc+init,gc+heap -Xmx512M gc.z.TestSmallHeap
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -Xlog:gc,gc+init,gc+heap -Xmx1024M gc.z.TestSmallHeap
+ * @library /test/lib
+ * @run main/othervm gc.z.TestSmallHeap 8M 16M 32M 64M 128M 256M 512M 1024M
  */
 
+import jdk.test.lib.process.ProcessTools;
 import java.lang.ref.Reference;
 
 public class TestSmallHeap {
-    public static void main(String[] args) throws Exception {
-        final long maxCapacity = Runtime.getRuntime().maxMemory();
-        System.out.println("Max Capacity " + maxCapacity + " bytes");
+    public static class Test {
+        public static void main(String[] args) throws Exception {
+            final long maxCapacity = Runtime.getRuntime().maxMemory();
+            System.out.println("Max Capacity " + maxCapacity + " bytes");
 
-        // Allocate byte arrays of increasing length, so that
-        // all allocaion paths (small/medium/large) are tested.
-        for (int length = 16; length <= maxCapacity / 16; length *= 2) {
-            System.out.println("Allocating " + length + " bytes");
-            Reference.reachabilityFence(new byte[length]);
+            // Allocate byte arrays of increasing length, so that
+            // all allocation paths (small/medium/large) are tested.
+            for (int length = 16; length <= maxCapacity / 16; length *= 2) {
+                System.out.println("Allocating " + length + " bytes");
+                Reference.reachabilityFence(new byte[length]);
+            }
+
+            System.out.println("Success");
         }
+    }
 
-        System.out.println("Success");
+    public static void main(String[] args) throws Exception {
+        for (var maxCapacity: args) {
+            ProcessTools.executeProcess(ProcessTools.createJavaProcessBuilder(new String[] {
+                                        "-XX:+UnlockExperimentalVMOptions",
+                                        "-XX:+UseZGC",
+                                        "-Xlog:gc,gc+init,gc+reloc,gc+heap",
+                                        "-Xmx" + maxCapacity,
+                                        Test.class.getName() }))
+                .outputTo(System.out)
+                .errorTo(System.out)
+                .shouldContain("Success")
+                .shouldHaveExitValue(0);
+        }
     }
 }
