@@ -99,7 +99,7 @@ ZPageAllocator::ZPageAllocator(ZWorkers* workers,
                                size_t max_reserve) :
     _lock(),
     _virtual(),
-    _physical(),
+    _physical(max_capacity),
     _cache(),
     _min_capacity(min_capacity),
     _max_capacity(max_capacity),

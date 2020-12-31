@@ -109,9 +109,8 @@ static const char* z_preferred_hugetlbfs_mountpoints[] = {
 static int z_fallocate_hugetlbfs_attempts = 3;
 static bool z_fallocate_supported = true;
 
-ZPhysicalMemoryBacking::ZPhysicalMemoryBacking() :
+ZPhysicalMemoryBacking::ZPhysicalMemoryBacking(size_t max_capacity) :
     _fd(-1),
-    _size(0),
     _filesystem(0),
     _block_size(0),
     _available(0),
@@ -121,6 +120,15 @@ ZPhysicalMemoryBacking::ZPhysicalMemoryBacking() :
   _fd = create_fd(ZFILENAME_HEAP);
   if (_fd == -1) {
     return;
+  }
+
+  // Truncate backing file
+  while (ftruncate(_fd, max_capacity) == -1) {
+    if (errno != EINTR) {
+      ZErrno err;
+      log_error(gc)("Failed to truncate backing file (%s)", err.to_string());
+      return;
+    }
   }
 
   // Get filesystem statistics
@@ -350,10 +358,6 @@ void ZPhysicalMemoryBacking::warn_commit_limits(size_t max) const {
   warn_max_map_count(max);
 }
 
-size_t ZPhysicalMemoryBacking::size() const {
-  return _size;
-}
-
 bool ZPhysicalMemoryBacking::is_tmpfs() const {
   return _filesystem == TMPFS_MAGIC;
 }
@@ -366,18 +370,6 @@ bool ZPhysicalMemoryBacking::tmpfs_supports_transparent_huge_pages() const {
   // If the shmem_enabled file exists and is readable then we
   // know the kernel supports transparent huge pages for tmpfs.
   return access(ZFILENAME_SHMEM_ENABLED, R_OK) == 0;
-}
-
-ZErrno ZPhysicalMemoryBacking::fallocate_compat_ftruncate(size_t size) const {
-  while (ftruncate(_fd, size) == -1) {
-    if (errno != EINTR) {
-      // Failed
-      return errno;
-    }
-  }
-
-  // Success
-  return 0;
 }
 
 ZErrno ZPhysicalMemoryBacking::fallocate_compat_mmap(size_t offset, size_t length, bool touch) const {
@@ -430,36 +422,11 @@ ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_compat(size_t offset, size_t 
   // since Linux 4.3. When fallocate(2) is not supported we emulate it using
   // ftruncate/pwrite (for tmpfs) or ftruncate/mmap/munmap (for hugetlbfs).
 
-  const size_t end = offset + length;
-  if (end > _size) {
-    // Increase file size
-    const ZErrno err = fallocate_compat_ftruncate(end);
-    if (err) {
-      // Failed
-      return err;
-    }
-  }
-
   // Allocate backing memory
   const ZErrno err = is_hugetlbfs() ? fallocate_compat_mmap(offset, length, false /* touch */)
                                     : fallocate_compat_pwrite(offset, length);
-  if (err) {
-    if (end > _size) {
-      // Restore file size
-      fallocate_compat_ftruncate(_size);
-    }
 
-    // Failed
-    return err;
-  }
-
-  if (end > _size) {
-    // Record new file size
-    _size = end;
-  }
-
-  // Success
-  return 0;
+  return err;
 }
 
 ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_syscall(size_t offset, size_t length) {
@@ -468,12 +435,6 @@ ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_syscall(size_t offset, size_t
   if (res == -1) {
     // Failed
     return errno;
-  }
-
-  const size_t end = offset + length;
-  if (end > _size) {
-    // Record new file size
-    _size = end;
   }
 
   // Success
