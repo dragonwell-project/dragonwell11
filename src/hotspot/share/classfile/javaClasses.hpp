@@ -84,6 +84,12 @@
   f(java_util_concurrent_locks_AbstractOwnableSynchronizer) \
   //end
 
+#define BASIC_JAVA_CLASSES_DO_PART_COROUTINE(f) \
+  f(java_dyn_CoroutineBase) \
+  f(com_alibaba_wisp_engine_WispCarrier) \
+  f(com_alibaba_wisp_engine_WispTask) \
+  //end
+
 #define BASIC_JAVA_CLASSES_DO(f) \
         BASIC_JAVA_CLASSES_DO_PART1(f) \
         BASIC_JAVA_CLASSES_DO_PART2(f)
@@ -1594,7 +1600,7 @@ public:
 
   static int get_data_offset()    { return _data_offset; }
 
-  static void serialize(SerializeClosure* f) NOT_CDS_RETURN;
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
 
   // Debugging
   friend class JavaClasses;
@@ -1607,7 +1613,7 @@ public:
   static bool in_critical(oop obj);
 
   static void compute_offsets();
-  static void serialize(SerializeClosure* f) NOT_CDS_RETURN;
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
 };
 
 class com_alibaba_wisp_engine_WispTask: AllStatic {
@@ -1636,7 +1642,7 @@ public:
   static void set_preemptCount(oop obj, jint count);
 
   static void compute_offsets();
-  static void serialize(SerializeClosure* f) NOT_CDS_RETURN;
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
 };
 
 // Interface to hard-coded offset checking

@@ -433,9 +433,9 @@ void MetaspaceShared::serialize(SerializeClosure* soc) {
 
 void MetaspaceShared::serialize_well_known_classes(SerializeClosure* soc) {
   if (EnableCoroutine) {
-    java_dyn_CoroutineBase::serialize(soc);
-    com_alibaba_wisp_engine_WispCarrier::serialize(soc);
-    com_alibaba_wisp_engine_WispTask::serialize(soc);
+    java_dyn_CoroutineBase::serialize_offsets(soc);
+    com_alibaba_wisp_engine_WispCarrier::serialize_offsets(soc);
+    com_alibaba_wisp_engine_WispTask::serialize_offsets(soc);
   }
 }
 
