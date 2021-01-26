@@ -46,6 +46,9 @@ void ZHeuristics::set_medium_page_size() {
     ZPageSizeMedium             = size;
     ZPageSizeMediumShift        = log2_intptr(ZPageSizeMedium);
     ZObjectSizeLimitMedium      = ZPageSizeMedium / 8;
+    if (!FLAG_IS_DEFAULT(ZMediumObjectUpperBound)) {
+      ZObjectSizeLimitMedium    = ZMediumObjectUpperBound;
+    }
     ZObjectAlignmentMediumShift = (int)ZPageSizeMediumShift - 13;
     ZObjectAlignmentMedium      = 1 << ZObjectAlignmentMediumShift;
   }

@@ -78,6 +78,11 @@
           "Percentage of total heap size reserved for relocation.")         \
           range(0,100)                                                      \
                                                                             \
+  experimental(uintx, ZMediumObjectUpperBound, 4*M,                         \
+          "Upper bound of the object size in ZGC medium page"               \
+          "(can be any even integer between 4M and 32M)")                   \
+          range(4*M, 32*M)                                                  \
+                                                                            \
   diagnostic(uint, ZStatisticsInterval, 10,                                 \
           "Time between statistics print outs (in seconds)")                \
           range(1, (uint)-1)                                                \
