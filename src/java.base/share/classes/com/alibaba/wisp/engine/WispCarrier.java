@@ -229,7 +229,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
     }
 
     private void checkAndDispatchShutdown() {
-        assert WispCarrier.current() == this;
+        WispTask current = WispCarrier.current().getCurrentTask();
         if ((engine.hasBeenShutdown
                 || (current.inDestoryedGroup() && current.inheritedFromNonRootContainer()))
                 && !WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
