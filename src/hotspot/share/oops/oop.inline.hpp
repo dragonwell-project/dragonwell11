@@ -370,26 +370,17 @@ bool oopDesc::cas_forward_to(oop p, markOop compare, atomic_memory_order order) 
   return cas_set_mark_raw(m, compare, order) == compare;
 }
 
-oop oopDesc::forward_to_atomic(oop p, atomic_memory_order order) {
-  markOop oldMark = mark_raw();
+oop oopDesc::forward_to_atomic(oop p, markOop compare, atomic_memory_order order) {
   markOop forwardPtrMark = markOopDesc::encode_pointer_as_mark(p);
-  markOop curMark;
-
   assert(forwardPtrMark->decode_pointer() == p, "encoding must be reversable");
   assert(sizeof(markOop) == sizeof(intptr_t), "CAS below requires this.");
 
-  while (!oldMark->is_marked()) {
-    curMark = cas_set_mark_raw(forwardPtrMark, oldMark, order);
-    assert(is_forwarded(), "object should have been forwarded");
-    if (curMark == oldMark) {
-      return NULL;
-    }
-    // If the CAS was unsuccessful then curMark->is_marked()
-    // should return true as another thread has CAS'd in another
-    // forwarding pointer.
-    oldMark = curMark;
+  markOop old_mark = cas_set_mark_raw(forwardPtrMark, compare, order);
+  if (old_mark == compare) {
+    return NULL;
+  } else {
+    return (oop)old_mark->decode_pointer();
   }
-  return forwardee();
 }
 
 // Note that the forwardee is not the same thing as the displaced_mark.
