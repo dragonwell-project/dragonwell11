@@ -545,4 +545,7 @@ public class WhiteBox {
 
   // Number of loaded AOT libraries
   public native int aotLibrariesCount();
+
+  // libc name
+  public native String getLibcName();
 }
