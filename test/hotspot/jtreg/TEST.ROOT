@@ -68,6 +68,7 @@ requires.properties= \
     vm.graal.enabled \
     vm.compiler1.enabled \
     vm.compiler2.enabled \
+    vm.musl \
     docker.support
 
 # Minimum jtreg version
