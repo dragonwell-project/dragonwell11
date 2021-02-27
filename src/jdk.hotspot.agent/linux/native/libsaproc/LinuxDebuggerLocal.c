@@ -24,6 +24,7 @@
 
 #include <jni.h>
 #include "libproc.h"
+#include "proc_service.h"
 
 #include <elf.h>
 #include <sys/types.h>
