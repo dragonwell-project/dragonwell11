@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,6 +28,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <elf.h>
+#include <dirent.h>
 #include <ctype.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -281,8 +282,17 @@ static attach_state_t ptrace_attach(pid_t pid, char* err_buf, size_t err_buf_len
         return ATTACH_THREAD_DEAD;
       }
     }
+
+    // strerror_r() API function is not compatible in different implementations:
+    // GNU-specific:  char *strerror_r(int errnum, char *buf, size_t buflen);
+    // XSI-compliant: int   strerror_r(int errnum, char *buf, size_t buflen);
     char buf[200];
+#if defined(__GLIBC__) && defined(_GNU_SOURCE)
     char* msg = strerror_r(errno, buf, sizeof(buf));
+#else
+    int rc = strerror_r(errno, buf, sizeof(buf));
+    char* msg = (rc == 0) ? (char*)buf : "Unknown";
+#endif
     snprintf(err_buf, err_buf_len, "ptrace(PTRACE_ATTACH, ..) failed for %d: %s", pid, msg);
     print_error("%s\n", err_buf);
     return ATTACH_FAIL;
@@ -336,11 +346,6 @@ static char * fgets_no_cr(char * buf, int n, FILE *fp)
        if (*--p=='\n') *p='\0';
    }
    return rslt;
-}
-
-// callback for read_thread_info
-static bool add_new_thread(struct ps_prochandle* ph, pthread_t pthread_id, lwpid_t lwp_id) {
-  return add_thread_info(ph, pthread_id, lwp_id) != NULL;
 }
 
 static bool read_lib_info(struct ps_prochandle* ph) {
@@ -463,6 +468,7 @@ Pgrab(pid_t pid, char* err_buf, size_t err_buf_len) {
 
   // initialize ps_prochandle
   ph->pid = pid;
+  add_thread_info(ph, ph->pid);
 
   // initialize vtable
   ph->ops = &process_ops;
@@ -472,8 +478,30 @@ Pgrab(pid_t pid, char* err_buf, size_t err_buf_len) {
   // the list of threads within the same process.
   read_lib_info(ph);
 
-  // read thread info
-  read_thread_info(ph, add_new_thread);
+  /*
+   * Read thread info.
+   * SA scans all tasks in /proc/<PID>/task to read all threads info.
+   */
+  char taskpath[PATH_MAX];
+  DIR *dirp;
+  struct dirent *entry;
+
+  snprintf(taskpath, PATH_MAX, "/proc/%d/task", ph->pid);
+  dirp = opendir(taskpath);
+  int lwp_id;
+  while ((entry = readdir(dirp)) != NULL) {
+    if (*entry->d_name == '.') {
+      continue;
+    }
+    lwp_id = atoi(entry->d_name);
+    if (lwp_id == ph->pid) {
+      continue;
+    }
+    if (!process_doesnt_exist(lwp_id)) {
+      add_thread_info(ph, lwp_id);
+    }
+  }
+  closedir(dirp);
 
   // attach to the threads
   thr = ph->threads;
