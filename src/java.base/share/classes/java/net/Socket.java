@@ -958,7 +958,7 @@ class Socket implements java.io.Closeable {
      * @spec JSR-51
      */
     public SocketChannel getChannel() {
-        return WispEngine.transparentWispSwitch() ? asyncImpl.getChannel() : null;
+        return null;
     }
 
     /**

@@ -15,9 +15,9 @@ import java.util.concurrent.TimeUnit;
 
 public class WispServerSocketImpl
 {
-    private static WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
+    private static final WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
 
-    private WispSocketLockSupport wispSocketLockSupport = new WispSocketLockSupport();
+    private final WispSocketLockSupport wispSocketLockSupport = new WispSocketLockSupport();
     // The channel being adapted
     private ServerSocketChannelImpl ssc = null;
 
@@ -98,10 +98,6 @@ public class WispServerSocketImpl
             ssc.close();
             wispSocketLockSupport.unparkBlockedWispTask();
         }
-    }
-
-    public ServerSocketChannel getChannel() {
-        return ssc;
     }
 
     public boolean isBound() {

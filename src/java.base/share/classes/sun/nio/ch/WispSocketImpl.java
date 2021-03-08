@@ -19,13 +19,13 @@ import java.util.concurrent.TimeUnit;
 
 public class WispSocketImpl
 {
-    private static WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
+    private static final WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
 
-    WispSocketLockSupport wispSocketLockSupport = new WispSocketLockSupport();
+    private final WispSocketLockSupport wispSocketLockSupport = new WispSocketLockSupport();
     // The channel being adapted
     private SocketChannelImpl sc = null;
     // 1 verse 1 related socket
-    private Socket so;
+    private final Socket so;
     // Timeout "option" value for reads
     protected int timeout = 0;
     private InputStream socketInputStream = null;
@@ -37,10 +37,6 @@ public class WispSocketImpl
     public WispSocketImpl(SocketChannel sc, Socket so) {
         this.so = so;
         this.sc = (SocketChannelImpl) sc;
-    }
-
-    public SocketChannel getChannel() {
-        return sc;
     }
 
     // Override this method just to protect against changes in the superclass

@@ -13,30 +13,28 @@ import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.WispEngineAccess;
 import sun.nio.ch.SelChImpl;
+import sun.nio.ch.WispSocketImpl;
 
 import java.lang.reflect.Field;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.security.PrivilegedAction;
 import java.util.Properties;
 
 import static jdk.testlibrary.Asserts.assertTrue;
 import static jdk.testlibrary.Asserts.assertNotNull;
 
 public class TestGlobalPoller {
-    private static WispEngineAccess access = SharedSecrets.getWispEngineAccess();
+    private static final WispEngineAccess access = SharedSecrets.getWispEngineAccess();
 
     static Properties p;
     static String socketAddr;
     static {
         p = java.security.AccessController.doPrivileged(
-                new java.security.PrivilegedAction<Properties>() {
-                    public Properties run() {
-                        return System.getProperties();
-                    }
-                }
+                (PrivilegedAction<Properties>) System::getProperties
         );
-        socketAddr = (String)p.get("test.wisp.socketAddress");
+        socketAddr = (String) p.get("test.wisp.socketAddress");
         if (socketAddr == null) {
             socketAddr = "www.example.com";
         }
@@ -50,7 +48,7 @@ public class TestGlobalPoller {
         // now server returns the data..
         // so is readable
         // current task is interested in read event.
-        SocketChannel ch = so.getChannel();
+        SocketChannel ch = getCh(so);
         access.registerEvent(ch, SelectionKey.OP_READ);
 
         Class<?> clazz = Class.forName("com.alibaba.wisp.engine.WispEventPump$Pool");
@@ -74,5 +72,14 @@ public class TestGlobalPoller {
         assertTrue(fd2TaskLow[fd] == null);
 
         so.close();
+    }
+
+    private static SocketChannel getCh(Socket so) throws Exception {
+        Field f = Socket.class.getDeclaredField("asyncImpl");
+        f.setAccessible(true);
+        WispSocketImpl wispSocket = (WispSocketImpl) f.get(so);
+        f = wispSocket.getClass().getDeclaredField("sc");
+        f.setAccessible(true);
+        return (SocketChannel) f.get(wispSocket);
     }
 }
