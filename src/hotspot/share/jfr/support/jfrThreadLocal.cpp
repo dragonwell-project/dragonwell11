@@ -59,7 +59,11 @@ JfrThreadLocal::JfrThreadLocal() :
   _cached_top_frame_bci(max_jint),
   _alloc_count(0),
   _alloc_count_until_sample(1),
-  _cached_event_id(MaxJfrEventId) {}
+  _cached_event_id(MaxJfrEventId) {
+
+  Thread* thread = Thread::current_or_null();
+  _parent_trace_id = thread != NULL ? thread->jfr_thread_local()->trace_id() : (traceid)0;
+}
 
 u8 JfrThreadLocal::add_data_lost(u8 value) {
   _data_lost += value;
@@ -82,6 +86,7 @@ const JfrBlobHandle& JfrThreadLocal::thread_blob() const {
 static void send_java_thread_start_event(JavaThread* jt) {
   EventThreadStart event;
   event.set_thread(jt->jfr_thread_local()->thread_id());
+  event.set_parentThread(jt->jfr_thread_local()->parent_thread_id());
   event.commit();
 }
 
@@ -92,6 +97,9 @@ void JfrThreadLocal::on_start(Thread* t) {
     if (t->is_Java_thread()) {
       send_java_thread_start_event((JavaThread*)t);
     }
+  }
+  if (t->jfr_thread_local()->has_cached_stack_trace()) {
+    t->jfr_thread_local()->clear_cached_stack_trace();
   }
 }
 
