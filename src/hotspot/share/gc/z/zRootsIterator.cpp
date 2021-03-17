@@ -256,12 +256,10 @@ ZWeakRootsIterator::ZWeakRootsIterator() :
   assert(SafepointSynchronize::is_at_safepoint(), "Should be at safepoint");
   ZStatTimer timer(ZSubPhasePauseWeakRootsSetup);
   SymbolTable::clear_parallel_claimed_index();
-  StringTable::reset_dead_counter();
 }
 
 ZWeakRootsIterator::~ZWeakRootsIterator() {
   ZStatTimer timer(ZSubPhasePauseWeakRootsTeardown);
-  StringTable::finish_dead_counter();
 }
 
 void ZWeakRootsIterator::do_jvmti_weak_export(BoolObjectClosure* is_alive, OopClosure* cl) {
