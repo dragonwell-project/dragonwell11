@@ -70,12 +70,9 @@ static const ZStatSubPhase ZSubPhasePauseRootsStringTable("Pause Roots StringTab
 static const ZStatSubPhase ZSubPhasePauseWeakRootsSetup("Pause Weak Roots Setup");
 static const ZStatSubPhase ZSubPhasePauseWeakRoots("Pause Weak Roots");
 static const ZStatSubPhase ZSubPhasePauseWeakRootsTeardown("Pause Weak Roots Teardown");
-static const ZStatSubPhase ZSubPhasePauseWeakRootsVMWeakHandles("Pause Weak Roots VMWeakHandles");
-static const ZStatSubPhase ZSubPhasePauseWeakRootsJNIWeakHandles("Pause Weak Roots JNIWeakHandles");
 static const ZStatSubPhase ZSubPhasePauseWeakRootsJVMTIWeakExport("Pause Weak Roots JVMTIWeakExport");
 static const ZStatSubPhase ZSubPhasePauseWeakRootsJFRWeak("Pause Weak Roots JFRWeak");
 static const ZStatSubPhase ZSubPhasePauseWeakRootsSymbolTable("Pause Weak Roots SymbolTable");
-static const ZStatSubPhase ZSubPhasePauseWeakRootsStringTable("Pause Weak Roots StringTable");
 
 static const ZStatSubPhase ZSubPhaseConcurrentWeakRoots("Concurrent Weak Roots");
 static const ZStatSubPhase ZSubPhaseConcurrentWeakRootsVMWeakHandles("Concurrent Weak Roots VMWeakHandles");
@@ -295,15 +292,9 @@ void ZRootsIterator::oops_do(OopClosure* cl, bool visit_jvmti_weak_export) {
 }
 
 ZWeakRootsIterator::ZWeakRootsIterator() :
-    _vm_weak_handles_iter(SystemDictionary::vm_weak_oop_storage()),
-    _jni_weak_handles_iter(JNIHandles::weak_global_handles()),
-    _string_table_iter(StringTable::weak_storage()),
     _jvmti_weak_export(this),
-    _jfr_weak(this),
-    _vm_weak_handles(this),
-    _jni_weak_handles(this),
     _symbol_table(this),
-    _string_table(this) {
+    _jfr_weak(this) {
   assert(SafepointSynchronize::is_at_safepoint(), "Should be at safepoint");
   ZStatTimer timer(ZSubPhasePauseWeakRootsSetup);
   SymbolTable::clear_parallel_claimed_index();
@@ -313,16 +304,6 @@ ZWeakRootsIterator::ZWeakRootsIterator() :
 ZWeakRootsIterator::~ZWeakRootsIterator() {
   ZStatTimer timer(ZSubPhasePauseWeakRootsTeardown);
   StringTable::finish_dead_counter();
-}
-
-void ZWeakRootsIterator::do_vm_weak_handles(BoolObjectClosure* is_alive, OopClosure* cl) {
-  ZStatTimer timer(ZSubPhasePauseWeakRootsVMWeakHandles);
-  _vm_weak_handles_iter.weak_oops_do(is_alive, cl);
-}
-
-void ZWeakRootsIterator::do_jni_weak_handles(BoolObjectClosure* is_alive, OopClosure* cl) {
-  ZStatTimer timer(ZSubPhasePauseWeakRootsJNIWeakHandles);
-  _jni_weak_handles_iter.weak_oops_do(is_alive, cl);
 }
 
 void ZWeakRootsIterator::do_jvmti_weak_export(BoolObjectClosure* is_alive, OopClosure* cl) {
@@ -343,36 +324,6 @@ void ZWeakRootsIterator::do_symbol_table(BoolObjectClosure* is_alive, OopClosure
   SymbolTable::possibly_parallel_unlink(&dummy, &dummy);
 }
 
-class ZStringTableDeadCounterBoolObjectClosure : public BoolObjectClosure  {
-private:
-  BoolObjectClosure* const _cl;
-  size_t                   _ndead;
-
-public:
-  ZStringTableDeadCounterBoolObjectClosure(BoolObjectClosure* cl) :
-      _cl(cl),
-      _ndead(0) {}
-
-  ~ZStringTableDeadCounterBoolObjectClosure() {
-    StringTable::inc_dead_counter(_ndead);
-  }
-
-  virtual bool do_object_b(oop obj) {
-    if (_cl->do_object_b(obj)) {
-      return true;
-    }
-
-    _ndead++;
-    return false;
-  }
-};
-
-void ZWeakRootsIterator::do_string_table(BoolObjectClosure* is_alive, OopClosure* cl) {
-  ZStatTimer timer(ZSubPhasePauseWeakRootsStringTable);
-  ZStringTableDeadCounterBoolObjectClosure counter_is_alive(is_alive);
-  _string_table_iter.weak_oops_do(&counter_is_alive, cl);
-}
-
 void ZWeakRootsIterator::weak_oops_do(BoolObjectClosure* is_alive, OopClosure* cl) {
   ZStatTimer timer(ZSubPhasePauseWeakRoots);
   if (ZSymbolTableUnloading) {
@@ -381,15 +332,6 @@ void ZWeakRootsIterator::weak_oops_do(BoolObjectClosure* is_alive, OopClosure* c
   if (ZWeakRoots) {
     _jvmti_weak_export.weak_oops_do(is_alive, cl);
     _jfr_weak.weak_oops_do(is_alive, cl);
-    if (!ZConcurrentVMWeakHandles) {
-      _vm_weak_handles.weak_oops_do(is_alive, cl);
-    }
-    if (!ZConcurrentJNIWeakGlobalHandles) {
-      _jni_weak_handles.weak_oops_do(is_alive, cl);
-    }
-    if (!ZConcurrentStringTable) {
-      _string_table.weak_oops_do(is_alive, cl);
-    }
   }
 }
 
@@ -457,15 +399,9 @@ void ZConcurrentWeakRootsIterator::do_string_table(OopClosure* cl) {
 void ZConcurrentWeakRootsIterator::oops_do(OopClosure* cl) {
   ZStatTimer timer(ZSubPhaseConcurrentWeakRoots);
   if (ZWeakRoots) {
-    if (ZConcurrentVMWeakHandles) {
-      _vm_weak_handles.oops_do(cl);
-    }
-    if (ZConcurrentJNIWeakGlobalHandles) {
-      _jni_weak_handles.oops_do(cl);
-    }
-    if (ZConcurrentStringTable) {
-      _string_table.oops_do(cl);
-    }
+    _vm_weak_handles.oops_do(cl);
+    _jni_weak_handles.oops_do(cl);
+    _string_table.oops_do(cl);
   }
 }
 
