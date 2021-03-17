@@ -28,6 +28,7 @@
 #include "gc/shared/allocTracer.hpp"
 #include "jfr/jfrEvents.hpp"
 
+#if INCLUDE_JFR
 typedef uintptr_t TraceAddress;
 
 inline void AllocTracer::opto_slow_allocation_enter(bool is_array, Thread* thread) {
@@ -112,5 +113,6 @@ inline void AllocTracer::send_opto_fast_allocation_event(Klass* klass, oop obj, 
   jlong interval = JfrOptionSet::object_allocations_sampling_interval();
   thread->jfr_thread_local()->incr_alloc_count_until_sample(interval);
 }
+#endif
 
 #endif /* SHARE_VM_GC_INTERFACE_ALLOCTRACER_INLINE_HPP */
