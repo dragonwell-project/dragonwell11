@@ -31,16 +31,16 @@
 
 class AllocTracer : AllStatic {
   private:
-    static void send_opto_array_allocation_event(Klass* klass, oop obj,size_t alloc_size, Thread* thread);
-    static void send_opto_instance_allocation_event(Klass* klass, oop obj, Thread* thread);
+    static void send_opto_array_allocation_event(Klass* klass, oop obj,size_t alloc_size, Thread* thread) NOT_JFR_RETURN();
+    static void send_opto_instance_allocation_event(Klass* klass, oop obj, Thread* thread) NOT_JFR_RETURN();
   public:
     static void send_allocation_outside_tlab(Klass* klass, HeapWord* obj, size_t alloc_size, Thread* thread);
     static void send_allocation_in_new_tlab(Klass* klass, HeapWord* obj, size_t tlab_size, size_t alloc_size, Thread* thread);
     static void send_allocation_requiring_gc_event(size_t size, uint gcId);
-    static void opto_slow_allocation_enter(bool is_array, Thread* thread);
-    static void opto_slow_allocation_leave(bool is_array, Thread* thread);
-    static void send_slow_allocation_event(Klass* klass, oop obj,size_t alloc_size, Thread* thread);
-    static void send_opto_fast_allocation_event(Klass* klass, oop obj, size_t alloc_size, Thread* thread);
+    static void opto_slow_allocation_enter(bool is_array, Thread* thread) NOT_JFR_RETURN();
+    static void opto_slow_allocation_leave(bool is_array, Thread* thread) NOT_JFR_RETURN();
+    static void send_slow_allocation_event(Klass* klass, oop obj,size_t alloc_size, Thread* thread) NOT_JFR_RETURN();
+    static void send_opto_fast_allocation_event(Klass* klass, oop obj, size_t alloc_size, Thread* thread) NOT_JFR_RETURN();
 };
 
 #endif // SHARE_VM_GC_SHARED_ALLOCTRACER_HPP
