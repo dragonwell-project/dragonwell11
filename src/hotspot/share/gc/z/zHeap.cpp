@@ -366,11 +366,6 @@ bool ZHeap::mark_end() {
   // Process weak roots
   _weak_roots_processor.process_weak_roots();
 
-  // Verification
-  if (VerifyBeforeGC || VerifyDuringGC || VerifyAfterGC) {
-    Universe::verify();
-  }
-
   return true;
 }
 
@@ -573,7 +568,7 @@ public:
       _weak_roots() {}
 
   virtual void work() {
-    ZVerifyRootOopClosure cl;
+    ZVerifyOopClosure cl;
     _strong_roots.oops_do(&cl);
     _weak_roots.oops_do(&cl);
   }
