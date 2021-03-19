@@ -48,8 +48,8 @@ public class ZPageTable extends VMObject {
         super(addr);
     }
 
-    private ZAddressRangeMapForPageTable map() {
-        return (ZAddressRangeMapForPageTable)VMObjectFactory.newObject(ZAddressRangeMapForPageTable.class, addr.addOffsetTo(mapFieldOffset));
+    private ZGranuleMapForPageTable map() {
+        return (ZGranuleMapForPageTable)VMObjectFactory.newObject(ZGranuleMapForPageTable.class, addr.addOffsetTo(mapFieldOffset));
     }
 
     private ZPageTableEntry getEntry(Address o) {
