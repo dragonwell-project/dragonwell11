@@ -973,6 +973,7 @@ class java_lang_ref_Reference: AllStatic {
   static inline oop queue(oop ref);
   static inline void set_queue(oop ref, oop value);
   static bool is_referent_field(oop obj, ptrdiff_t offset);
+  ZGC_ONLY( static inline bool is_final(oop ref); )
   static inline bool is_phantom(oop ref);
 };
 
