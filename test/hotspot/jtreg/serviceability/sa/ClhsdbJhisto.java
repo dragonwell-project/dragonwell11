@@ -35,6 +35,7 @@ import jdk.test.lib.Utils;
  * @summary Test clhsdb jhisto command
  * @requires vm.hasSA
  * @requires vm.gc != "Shenandoah"
+ * @requires vm.gc != "Z"
  * @library /test/lib
  * @run main/othervm ClhsdbJhisto
  */
