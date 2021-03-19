@@ -50,7 +50,7 @@ public:
   const int* _ZObjectAlignmentSmall;
 };
 
-typedef ZAddressRangeMap<ZPageTableEntry, ZPageSizeMinShift> ZAddressRangeMapForPageTable;
+typedef ZAddressRangeMap<ZPageTableEntry, ZGranuleSizeShift> ZAddressRangeMapForPageTable;
 
 #define VM_STRUCTS_ZGC(nonstatic_field, volatile_nonstatic_field, static_field)                      \
   static_field(ZGlobalsForVMStructs,            _instance_p,          ZGlobalsForVMStructs*)         \
@@ -95,9 +95,9 @@ typedef ZAddressRangeMap<ZPageTableEntry, ZPageSizeMinShift> ZAddressRangeMapFor
   declare_constant(ZObjectAlignmentLargeShift)
 
 #define VM_LONG_CONSTANTS_ZGC(declare_constant)                                                      \
+  declare_constant(ZGranuleSizeShift)                                                                \
   declare_constant(ZPageSizeSmallShift)                                                              \
   declare_constant(ZPageSizeMediumShift)                                                             \
-  declare_constant(ZPageSizeMinShift)                                                                \
   declare_constant(ZAddressOffsetShift)                                                              \
   declare_constant(ZAddressOffsetBits)                                                               \
   declare_constant(ZAddressOffsetMask)                                                               \
