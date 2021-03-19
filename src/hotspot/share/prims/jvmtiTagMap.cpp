@@ -2577,7 +2577,7 @@ class SimpleRootsClosure : public OopClosure {
       return;
     }
 
-    oop o = *obj_p;
+    oop o = ZGC_ONLY(UseZGC ? NativeAccess<AS_NO_KEEPALIVE>::oop_load(obj_p) :) (*obj_p);
     // ignore null
     if (o == NULL) {
       return;
