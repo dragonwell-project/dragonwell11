@@ -25,6 +25,7 @@
 #define SHARE_VM_GC_Z_VMSTRUCTS_Z_HPP
 
 #include "gc/z/zCollectedHeap.hpp"
+#include "gc/z/zForwarding.hpp"
 #include "gc/z/zGranuleMap.hpp"
 #include "gc/z/zHeap.hpp"
 #include "gc/z/zPageAllocator.hpp"
@@ -68,7 +69,6 @@ typedef ZGranuleMap<ZPageTableEntry> ZGranuleMapForPageTable;
                                                                                                      \
   nonstatic_field(ZPage,                        _type,                const uint8_t)                 \
   nonstatic_field(ZPage,                        _virtual,             const ZVirtualMemory)          \
-  nonstatic_field(ZPage,                        _forwarding,          ZForwardingTable)              \
                                                                                                      \
   nonstatic_field(ZPageAllocator,               _physical,            ZPhysicalMemoryManager)        \
   nonstatic_field(ZPageAllocator,               _used,                size_t)                        \
@@ -80,8 +80,7 @@ typedef ZGranuleMap<ZPageTableEntry> ZGranuleMapForPageTable;
   nonstatic_field(ZVirtualMemory,               _start,               uintptr_t)                     \
   nonstatic_field(ZVirtualMemory,               _end,                 uintptr_t)                     \
                                                                                                      \
-  nonstatic_field(ZForwardingTable,             _table,               ZForwardingTableEntry*)        \
-  nonstatic_field(ZForwardingTable,             _size,                size_t)                        \
+  nonstatic_field(ZForwarding,                  _nentries,            const uint32_t)                \
                                                                                                      \
   nonstatic_field(ZPhysicalMemoryManager,       _max_capacity,        const size_t)                  \
   nonstatic_field(ZPhysicalMemoryManager,       _capacity,            size_t)
@@ -114,7 +113,8 @@ typedef ZGranuleMap<ZPageTableEntry> ZGranuleMapForPageTable;
   declare_toplevel_type(ZGranuleMapForPageTable)                                                     \
   declare_toplevel_type(ZVirtualMemory)                                                              \
   declare_toplevel_type(ZForwardingTable)                                                            \
-  declare_toplevel_type(ZForwardingTableEntry)                                                       \
+  declare_toplevel_type(ZForwarding)                                                                 \
+  declare_toplevel_type(ZForwardingEntry)                                                            \
   declare_toplevel_type(ZPhysicalMemoryManager)
 
 #endif // SHARE_VM_GC_Z_VMSTRUCTS_Z_HPP
