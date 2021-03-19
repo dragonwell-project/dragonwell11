@@ -153,7 +153,7 @@ class AbstractWorkGang : public CHeapObj<mtInternal> {
   virtual uint active_workers() const {
     assert(_active_workers <= _total_workers,
            "_active_workers: %u > _total_workers: %u", _active_workers, _total_workers);
-    assert(UseDynamicNumberOfGCThreads || _active_workers == _total_workers,
+    assert(ZGC_ONLY(UseZGC ||) UseDynamicNumberOfGCThreads || _active_workers == _total_workers,
            "Unless dynamic should use total workers");
     return _active_workers;
   }
