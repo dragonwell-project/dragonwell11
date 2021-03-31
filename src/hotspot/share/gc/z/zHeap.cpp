@@ -404,6 +404,9 @@ void ZHeap::process_non_strong_references() {
 }
 
 void ZHeap::select_relocation_set() {
+  // Do not allow pages to be deleted
+  _page_allocator.enable_deferred_delete();
+
   // Register relocatable pages with selector
   ZRelocationSetSelector selector;
   ZPageTableIterator pt_iter(&_page_table);
@@ -424,6 +427,9 @@ void ZHeap::select_relocation_set() {
       free_page(page, true /* reclaimed */);
     }
   }
+
+  // Allow pages to be deleted
+  _page_allocator.disable_deferred_delete();
 
   // Select pages to relocate
   selector.select(&_relocation_set);
@@ -450,10 +456,6 @@ void ZHeap::reset_relocation_set() {
 
   // Reset relocation set
   _relocation_set.reset();
-}
-
-void ZHeap::destroy_detached_pages() {
-  _page_allocator.destroy_detached_pages();
 }
 
 void ZHeap::relocate_start() {
@@ -524,10 +526,17 @@ void ZHeap::print_extended_on(outputStream* st) const {
   print_on(st);
   st->cr();
 
+  // Do not allow pages to be deleted
+  _page_allocator.enable_deferred_delete();
+
+  // Print all pages
   ZPageTableIterator iter(&_page_table);
   for (ZPage* page; iter.next(&page);) {
     page->print_on(st);
   }
+
+  // Allow pages to be deleted
+  _page_allocator.enable_deferred_delete();
 
   st->cr();
 }
