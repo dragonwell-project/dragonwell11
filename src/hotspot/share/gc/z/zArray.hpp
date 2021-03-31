@@ -50,6 +50,7 @@ public:
   T at(size_t index) const;
 
   void add(T value);
+  void transfer(ZArray<T>* from);
   void clear();
 };
 
