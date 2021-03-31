@@ -46,7 +46,6 @@ static const ZStatPhaseConcurrent ZPhaseConcurrentProcessNonStrongReferences("Co
 static const ZStatPhaseConcurrent ZPhaseConcurrentResetRelocationSet("Concurrent Reset Relocation Set");
 static const ZStatPhaseConcurrent ZPhaseConcurrentDestroyDetachedPages("Concurrent Destroy Detached Pages");
 static const ZStatPhaseConcurrent ZPhaseConcurrentSelectRelocationSet("Concurrent Select Relocation Set");
-static const ZStatPhaseConcurrent ZPhaseConcurrentPrepareRelocationSet("Concurrent Prepare Relocation Set");
 static const ZStatPhasePause      ZPhasePauseRelocateStart("Pause Relocate Start");
 static const ZStatPhaseConcurrent ZPhaseConcurrentRelocated("Concurrent Relocate");
 static const ZStatCriticalPhase   ZCriticalPhaseGCLockerStall("GC Locker Stall", false /* verbose */);
@@ -318,11 +317,6 @@ void ZDriver::concurrent_select_relocation_set() {
   ZHeap::heap()->select_relocation_set();
 }
 
-void ZDriver::concurrent_prepare_relocation_set() {
-  ZStatTimer timer(ZPhaseConcurrentPrepareRelocationSet);
-  ZHeap::heap()->prepare_relocation_set();
-}
-
 void ZDriver::pause_relocate_start() {
   pause<VM_ZRelocateStart>();
 }
@@ -394,13 +388,10 @@ void ZDriver::gc(GCCause::Cause cause) {
   // Phase 8: Concurrent Select Relocation Set
   concurrent_select_relocation_set();
 
-  // Phase 9: Concurrent Prepare Relocation Set
-  concurrent_prepare_relocation_set();
-
-  // Phase 10: Pause Relocate Start
+  // Phase 9: Pause Relocate Start
   pause_relocate_start();
 
-  // Phase 11: Concurrent Relocate
+  // Phase 10: Concurrent Relocate
   concurrent_relocate();
 }
 
