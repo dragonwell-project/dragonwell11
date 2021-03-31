@@ -79,11 +79,6 @@ void ZRelocate::start() {
   _workers->run_parallel(&task);
 }
 
-ZForwarding* ZRelocate::forwarding_for_page(ZPage* page) const {
-  const uintptr_t addr = ZAddress::good(page->start());
-  return ZHeap::heap()->forwarding(addr);
-}
-
 uintptr_t ZRelocate::relocate_object_inner(ZForwarding* forwarding, uintptr_t from_index, uintptr_t from_offset) const {
   ZForwardingCursor cursor;
 
@@ -174,14 +169,13 @@ bool ZRelocate::work(ZRelocationSetParallelIterator* iter) {
   bool success = true;
 
   // Relocate pages in the relocation set
-  for (ZPage* page; iter->next(&page);) {
+  for (ZForwarding* forwarding; iter->next(&forwarding);) {
     // Relocate objects in page
-    ZForwarding* const forwarding = forwarding_for_page(page);
     ZRelocateObjectClosure cl(this, forwarding);
-    page->object_iterate(&cl);
+    forwarding->page()->object_iterate(&cl);
 
     if (ZVerifyForwarding) {
-      forwarding->verify(page->object_max_count(), page->live_objects());
+      forwarding->verify();
     }
 
     if (forwarding->is_pinned()) {
@@ -189,9 +183,7 @@ bool ZRelocate::work(ZRelocationSetParallelIterator* iter) {
       success = false;
     } else {
       // Relocation succeeded, release page
-      if (forwarding->dec_refcount()) {
-        ZHeap::heap()->free_page(page, true /* reclaimed */);
-      }
+      forwarding->release_page();
     }
   }
 
