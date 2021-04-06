@@ -28,6 +28,7 @@
 #include "gc/z/zHeapIterator.hpp"
 #include "gc/z/zOop.inline.hpp"
 #include "gc/z/zRootsIterator.hpp"
+#include "gc/z/zStat.hpp"
 #include "memory/iterator.inline.hpp"
 #include "utilities/bitMap.inline.hpp"
 #include "utilities/stack.inline.hpp"
@@ -165,6 +166,7 @@ void ZHeapIterator::push(oop obj) {
 
 void ZHeapIterator::objects_do(ObjectClosure* cl) {
   // Push roots onto stack
+  ZStatTimerDisable disable;
   {
     // Note that we also visit the JVMTI weak tag map as if they were
     // strong roots to make sure we visit all tagged objects, even
