@@ -290,6 +290,8 @@ class CollectedHeap : public CHeapObj<mtInternal> {
     return p == NULL || is_in_closed_subset(p);
   }
 
+  ZGC_ONLY( virtual uint32_t hash_oop(oop obj) const; )
+
   void set_gc_cause(GCCause::Cause v) {
      if (UsePerfData) {
        _gc_lastcause = _gc_cause;
