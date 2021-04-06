@@ -598,3 +598,10 @@ void CollectedHeap::unpin_object(JavaThread* thread, oop obj) {
 void CollectedHeap::deduplicate_string(oop str) {
   // Do nothing, unless overridden in subclass.
 }
+
+#if INCLUDE_ZGC
+uint32_t CollectedHeap::hash_oop(oop obj) const {
+  const uintptr_t addr = cast_from_oop<uintptr_t>(obj);
+  return static_cast<uint32_t>(addr >> LogMinObjAlignment);
+}
+#endif

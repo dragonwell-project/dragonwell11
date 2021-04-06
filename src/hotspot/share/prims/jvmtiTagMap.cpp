@@ -186,8 +186,13 @@ class JvmtiTagHashmap : public CHeapObj<mtInternal> {
 
   // hash a given key (oop) with the specified size
   static unsigned int hash(oop key, int size) {
-    ZGC_ONLY(assert(ZAddressMetadataShift >= sizeof(unsigned int) * BitsPerByte, "cast removes the metadata bits");)
-
+#if INCLUDE_ZGC
+    if (UseZGC) {
+      const oop obj = Access<>::resolve(key);
+      const unsigned int hash = Universe::heap()->hash_oop(obj);
+      return hash % size;
+    }
+#endif
     // shift right to get better distribution (as these bits will be zero
     // with aligned addresses)
     unsigned int addr = (unsigned int)(cast_from_oop<intptr_t>(key));
