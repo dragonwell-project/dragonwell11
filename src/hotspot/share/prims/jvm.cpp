@@ -485,6 +485,11 @@ JVM_ENTRY_NO_ENV(jlong, JVM_FreeMemory(void))
   JVMWrapper("JVM_FreeMemory");
   CollectedHeap* ch = Universe::heap();
   size_t n;
+#if INCLUDE_ZGC
+  if (UseZGC) {
+    n = ch->unused();
+  } else
+#endif
   {
      MutexLocker x(Heap_lock);
      n = ch->capacity() - ch->used();

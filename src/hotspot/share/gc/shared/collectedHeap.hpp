@@ -229,6 +229,11 @@ class CollectedHeap : public CHeapObj<mtInternal> {
   virtual size_t capacity() const = 0;
   virtual size_t used() const = 0;
 
+#if INCLUDE_ZGC
+  // Returns unused capacity.
+  virtual size_t unused() const;
+#endif
+
   // Return "true" if the part of the heap that allocates Java
   // objects has reached the maximal committed limit that it can
   // reach, without a garbage collection.
