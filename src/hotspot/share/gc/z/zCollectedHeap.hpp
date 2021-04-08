@@ -73,6 +73,7 @@ public:
   virtual size_t max_capacity() const;
   virtual size_t capacity() const;
   virtual size_t used() const;
+  virtual size_t unused() const;
 
   virtual bool is_maximal_no_gc() const;
   virtual bool is_scavengable(oop obj);
