@@ -30,10 +30,11 @@
 #include "gc/z/zCollectorPolicy.hpp"
 #include "gc/z/zDirector.hpp"
 #include "gc/z/zDriver.hpp"
-#include "gc/z/zInitialize.hpp"
 #include "gc/z/zHeap.hpp"
+#include "gc/z/zInitialize.hpp"
 #include "gc/z/zRuntimeWorkers.hpp"
 #include "gc/z/zStat.hpp"
+#include "gc/z/zUncommitter.hpp"
 
 class ZCollectedHeap : public CollectedHeap {
   friend class VMStructs;
@@ -46,6 +47,7 @@ private:
   ZHeap             _heap;
   ZDirector*        _director;
   ZDriver*          _driver;
+  ZUncommitter*     _uncommitter;
   ZStat*            _stat;
   ZRuntimeWorkers   _runtime_workers;
 
