@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2017, Red Hat, Inc. and/or its affiliates.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -53,4 +53,10 @@ void GCArguments::initialize() {
     // If class unloading is disabled, also disable concurrent class unloading.
     FLAG_SET_CMDLINE(bool, ClassUnloadingWithConcurrentMark, false);
   }
+
+#if INCLUDE_ZGC
+  if (UseZGC && FLAG_IS_DEFAULT(SoftMaxHeapSize)) {
+    FLAG_SET_ERGO(size_t, SoftMaxHeapSize, MaxHeapSize);
+  }
+#endif
 }

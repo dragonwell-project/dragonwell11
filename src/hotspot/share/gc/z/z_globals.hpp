@@ -39,6 +39,10 @@
                    constraint,                                              \
                    writeable)                                               \
                                                                             \
+  manageable(size_t, SoftMaxHeapSize, 0,                                    \
+          "Soft limit for maximum heap size (in bytes)")                    \
+          constraint(SoftMaxHeapSizeConstraintFunc,AfterMemoryInit)         \
+                                                                            \
   experimental(ccstr, ZPath, NULL,                                          \
           "Filesystem path for Java heap backing storage "                  \
           "(must be a tmpfs or a hugetlbfs filesystem)")                    \

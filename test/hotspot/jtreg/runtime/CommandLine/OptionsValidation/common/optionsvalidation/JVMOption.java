@@ -146,7 +146,7 @@ public abstract class JVMOption {
      *
      * @return name of the option
      */
-    final String getName() {
+    public final String getName() {
         return name;
     }
 
