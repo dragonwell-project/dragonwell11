@@ -47,6 +47,7 @@ ZCollectedHeap::ZCollectedHeap(ZCollectorPolicy* policy) :
     _heap(),
     _director(new ZDirector()),
     _driver(new ZDriver()),
+    _uncommitter(new ZUncommitter()),
     _stat(new ZStat()),
     _runtime_workers() {}
 
@@ -76,6 +77,7 @@ void ZCollectedHeap::initialize_serviceability() {
 void ZCollectedHeap::stop() {
   _director->stop();
   _driver->stop();
+  _uncommitter->stop();
   _stat->stop();
 }
 
@@ -286,6 +288,7 @@ jlong ZCollectedHeap::millis_since_last_gc() {
 void ZCollectedHeap::gc_threads_do(ThreadClosure* tc) const {
   tc->do_thread(_director);
   tc->do_thread(_driver);
+  tc->do_thread(_uncommitter);
   tc->do_thread(_stat);
   _heap.worker_threads_do(tc);
   _runtime_workers.threads_do(tc);
@@ -336,6 +339,8 @@ void ZCollectedHeap::print_gc_threads_on(outputStream* st) const {
   _director->print_on(st);
   st->cr();
   _driver->print_on(st);
+  st->cr();
+  _uncommitter->print_on(st);
   st->cr();
   _stat->print_on(st);
   st->cr();
