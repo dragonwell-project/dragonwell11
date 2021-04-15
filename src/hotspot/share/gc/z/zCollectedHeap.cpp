@@ -116,7 +116,7 @@ bool ZCollectedHeap::is_scavengable(oop obj) {
 }
 
 bool ZCollectedHeap::is_in(const void* p) const {
-  return is_in_reserved(p) && _heap.is_in((uintptr_t)p);
+  return _heap.is_in((uintptr_t)p);
 }
 
 bool ZCollectedHeap::is_in_closed_subset(const void* p) const {
