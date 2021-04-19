@@ -44,8 +44,7 @@ static const ZStatCounter ZCounterUndoObjectAllocationFailed("Memory", "Undo Obj
 static const ZStatSubPhase ZSubPhasePauseRetireTLABS("Pause Retire TLABS");
 static const ZStatSubPhase ZSubPhasePauseRemapTLABS("Pause Remap TLABS");
 
-ZObjectAllocator::ZObjectAllocator(uint nworkers) :
-    _nworkers(nworkers),
+ZObjectAllocator::ZObjectAllocator() :
     _used(0),
     _undone(0),
     _shared_medium_page(NULL),
