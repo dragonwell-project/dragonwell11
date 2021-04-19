@@ -28,6 +28,9 @@
 #include "opto/addnode.hpp"
 #include "opto/node.hpp"
 #include "utilities/growableArray.hpp"
+#if INCLUDE_ZGC
+#include "gc/z/c2/zBarrierSetC2.hpp"
+#endif
 
 //
 // Adaptation for C2 of the escape analysis algorithm described in:
@@ -319,6 +322,9 @@ public:
 
 class ConnectionGraph: public ResourceObj {
   friend class PointsToNode;
+#if INCLUDE_ZGC
+  friend class ZBarrierSetC2;
+#endif
 private:
   GrowableArray<PointsToNode*>  _nodes; // Map from ideal nodes to
                                         // ConnectionGraph nodes.

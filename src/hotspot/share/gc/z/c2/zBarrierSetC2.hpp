@@ -210,6 +210,9 @@ public:
 #ifdef ASSERT
   virtual void verify_gc_barriers(bool post_parse) const;
 #endif
+
+  static bool escape_add_to_con_graph(ConnectionGraph* conn_graph, PhaseGVN* gvn, Unique_Node_List* delayed_worklist, Node* n, uint opcode);
+  static bool escape_add_final_edges(ConnectionGraph* conn_graph, PhaseGVN* gvn, Node* n, uint opcode);
 };
 
 #endif // SHARE_GC_Z_C2_ZBARRIERSETC2_HPP
