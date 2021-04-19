@@ -391,6 +391,11 @@ void ConnectionGraph::add_node_to_connection_graph(Node *n, Unique_Node_List *de
     return; // Skip predefined nodes.
 
   int opcode = n->Opcode();
+#if INCLUDE_ZGC
+  if (UseZGC && ZBarrierSetC2::escape_add_to_con_graph(this, igvn, delayed_worklist, n, opcode)) {
+    return;
+  }
+#endif
   switch (opcode) {
     case Op_AddP: {
       Node* base = get_addp_base(n);
@@ -456,10 +461,6 @@ void ConnectionGraph::add_node_to_connection_graph(Node *n, Unique_Node_List *de
       break;
     }
     case Op_LoadP:
-#if INCLUDE_ZGC
-    case Op_LoadBarrierSlowReg:
-    case Op_LoadBarrierWeakSlowReg:
-#endif
     case Op_LoadN:
     case Op_LoadPLocked: {
       add_objload_to_connection_graph(n, delayed_worklist);
@@ -494,13 +495,6 @@ void ConnectionGraph::add_node_to_connection_graph(Node *n, Unique_Node_List *de
         add_local_var_and_edge(n, PointsToNode::NoEscape,
                                n->in(0), delayed_worklist);
       }
-#if INCLUDE_ZGC
-      else if (UseZGC) {
-        if (n->as_Proj()->_con == LoadBarrierNode::Oop && n->in(0)->is_LoadBarrier()) {
-          add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(0)->in(LoadBarrierNode::Oop), delayed_worklist);
-        }
-      }
-#endif
       break;
     }
     case Op_Rethrow: // Exception object escapes
@@ -663,6 +657,11 @@ void ConnectionGraph::add_final_edges(Node *n) {
          (n_ptn != NULL) && (n_ptn->ideal_node() != NULL),
          "node should be registered already");
   int opcode = n->Opcode();
+#if INCLUDE_ZGC
+  if (UseZGC && ZBarrierSetC2::escape_add_final_edges(this, _igvn, n, opcode)) {
+    return;
+  }
+#endif
   switch (opcode) {
     case Op_AddP: {
       Node* base = get_addp_base(n);
@@ -696,10 +695,6 @@ void ConnectionGraph::add_final_edges(Node *n) {
       break;
     }
     case Op_LoadP:
-#if INCLUDE_ZGC
-    case Op_LoadBarrierSlowReg:
-    case Op_LoadBarrierWeakSlowReg:
-#endif
     case Op_LoadN:
     case Op_LoadPLocked: {
       // Using isa_ptr() instead of isa_oopptr() for LoadP and Phi because
@@ -739,14 +734,6 @@ void ConnectionGraph::add_final_edges(Node *n) {
         add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(0), NULL);
         break;
       }
-#if INCLUDE_ZGC
-      else if (UseZGC) {
-        if (n->as_Proj()->_con == LoadBarrierNode::Oop && n->in(0)->is_LoadBarrier()) {
-          add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(0)->in(LoadBarrierNode::Oop), NULL);
-          break;
-        }
-      }
-#endif
       ELSE_FAIL("Op_Proj");
     }
     case Op_Rethrow: // Exception object escapes
