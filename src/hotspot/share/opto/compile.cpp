@@ -2833,6 +2833,9 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   }
 #endif
   // Count FPU ops and common calls, implements item (3)
+#if INCLUDE_ZGC
+  if (!(UseZGC && ZBarrierSetC2::final_graph_reshaping(this, n, nop))) {
+#endif
   switch( nop ) {
   // Count all float operations that may use FPU
   case Op_AddF:
@@ -2990,10 +2993,6 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   case Op_LoadL_unaligned:
   case Op_LoadPLocked:
   case Op_LoadP:
-#if INCLUDE_ZGC
-  case Op_LoadBarrierSlowReg:
-  case Op_LoadBarrierWeakSlowReg:
-#endif
   case Op_LoadN:
   case Op_LoadRange:
   case Op_LoadS: {
@@ -3546,6 +3545,7 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
     assert( nop != Op_ProfileBoolean, "should be eliminated during IGVN");
     break;
   }
+ZGC_ONLY(})
 
   // Collect CFG split points
   if (n->is_MultiBranch() && !n->is_RangeCheck()) {
