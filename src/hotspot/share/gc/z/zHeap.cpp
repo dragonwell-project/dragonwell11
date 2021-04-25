@@ -170,7 +170,7 @@ size_t ZHeap::unsafe_max_tlab_alloc() const {
 
 bool ZHeap::is_in(uintptr_t addr) const {
   // An address is considered to be "in the heap" if it points into
-  // the allocated part of a pages, regardless of which heap view is
+  // the allocated part of a page, regardless of which heap view is
   // used. Note that an address with the finalizable metadata bit set
   // is not pointing into a heap view, and therefore not considered
   // to be "in the heap".
