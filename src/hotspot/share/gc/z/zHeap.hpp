@@ -96,7 +96,7 @@ public:
   size_t unsafe_max_tlab_alloc() const;
 
   bool is_in(uintptr_t addr) const;
-  uint32_t hash_oop(oop obj) const;
+  uint32_t hash_oop(uintptr_t addr) const;
 
   // Block
   uintptr_t block_start(uintptr_t addr) const;
@@ -166,7 +166,7 @@ public:
   void print_extended_on(outputStream* st) const;
 
   // Verification
-  bool is_oop(oop object) const;
+  bool is_oop(uintptr_t addr) const;
   void verify();
 };
 
