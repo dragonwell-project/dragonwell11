@@ -209,6 +209,9 @@ public:
 
   static bool final_graph_reshaping(Compile* compile, Node* n, uint opcode);
 
+  static bool matcher_find_shared_visit(Matcher* matcher, Matcher::MStack& mstack, Node* n, uint opcode, bool& mem_op, int& mem_addr_idx);
+  static bool matcher_find_shared_post_visit(Matcher* matcher, Node* n, uint opcode) { return false; }
+
 #ifdef ASSERT
   virtual void verify_gc_barriers(bool post_parse) const;
 #endif
