@@ -43,6 +43,7 @@
 #include "utilities/align.hpp"
 #if INCLUDE_ZGC
 #include "gc/z/zBarrierSetRuntime.hpp"
+#include "gc/z/c2/zBarrierSetC2.hpp"
 #endif // INCLUDE_ZGC
 
 OptoReg::Name OptoReg::c_frame_pointer;
@@ -2084,6 +2085,10 @@ void Matcher::find_shared( Node *n ) {
       bool mem_op = false;
       int mem_addr_idx = MemNode::Address;
 
+#if INCLUDE_ZGC
+      bool gc_handled = UseZGC && ZBarrierSetC2::matcher_find_shared_visit(this, mstack, n, nop, mem_op, mem_addr_idx);
+      if (!gc_handled) {
+#endif
       switch( nop ) {  // Handle some opcodes special
       case Op_Phi:             // Treat Phis as shared roots
       case Op_Parm:
@@ -2171,17 +2176,6 @@ void Matcher::find_shared( Node *n ) {
       case Op_SafePoint:
         mem_op = true;
         break;
-#if INCLUDE_ZGC
-      case Op_CallLeaf:
-        if (UseZGC) {
-          if (n->as_Call()->entry_point() == ZBarrierSetRuntime::load_barrier_on_oop_field_preloaded_addr() ||
-              n->as_Call()->entry_point() == ZBarrierSetRuntime::load_barrier_on_weak_oop_field_preloaded_addr()) {
-            mem_op = true;
-            mem_addr_idx = TypeFunc::Parms+1;
-          }
-          break;
-        }
-#endif
       default:
         if( n->is_Store() ) {
           // Do match stores, despite no ideal reg
@@ -2198,6 +2192,9 @@ void Matcher::find_shared( Node *n ) {
         if( !n->ideal_reg() )
           set_dontcare(n);  // Unmatchable Nodes
       } // end_switch
+#if INCLUDE_ZGC
+      } // end of "if (!gc_handled)"
+#endif
 
       for(int i = n->req() - 1; i >= 0; --i) { // For my children
         Node *m = n->in(i); // Get ith input
@@ -2256,6 +2253,10 @@ void Matcher::find_shared( Node *n ) {
     else if (nstate == Post_Visit) {
       mstack.pop(); // Remove node from stack
 
+#if INCLUDE_ZGC
+      bool gc_handled = UseZGC && ZBarrierSetC2::matcher_find_shared_post_visit(this, n, n->Opcode());
+      if (!gc_handled) {
+#endif
       // Now hack a few special opcodes
       switch( n->Opcode() ) {       // Handle some opcodes special
       case Op_StorePConditional:
@@ -2361,6 +2362,9 @@ void Matcher::find_shared( Node *n ) {
       default:
         break;
       }
+#if INCLUDE_ZGC
+      } // end of "if (!gc_handled)"
+#endif
     }
     else {
       ShouldNotReachHere();
