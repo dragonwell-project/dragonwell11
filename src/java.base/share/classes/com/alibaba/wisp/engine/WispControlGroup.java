@@ -5,6 +5,7 @@ import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceType;
 import com.alibaba.rcm.internal.AbstractResourceContainer;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 import java.util.Objects;
@@ -31,6 +32,9 @@ class WispControlGroup extends AbstractExecutorService {
     private static final int MAX_PERIOD = 100_000;
     // limit min period duration 10ms.
     private static final int MIN_PERIOD = 10_000;
+
+    private long totalConsume = 0;
+    long cpuLimitationReached = 0;
     /**
      * ESTIMATED_PERIOD is an estimated cpu_cfs period according to wisp preemptive
      * schedule period, make sure there are at least SCHEDULE_TIMES wisp schedule
@@ -143,6 +147,7 @@ class WispControlGroup extends AbstractExecutorService {
         long usage = System.nanoTime() - task.enterTs;
         remainQuota.addAndGet(-usage);
         task.enterTs = 0;
+        totalConsume += usage;
     }
 
     private void attach() {
@@ -288,6 +293,33 @@ class WispControlGroup extends AbstractExecutorService {
                         throw new InternalError(e);
                     }
                 }
+            }
+
+            @Override
+            public List<Long> getActiveContainerThreadIds() {
+                List<Long> threadIdList = new ArrayList<>();
+                for (WispTask task : WispTask.id2Task.values()) {
+                    if (task.isAlive()
+                            && task.getThreadWrapper() != null
+                            && task.controlGroup == WispControlGroup.this) {
+                        threadIdList.add(task.getThreadWrapper().getId());
+                    }
+                }
+                return threadIdList;
+            }
+
+            @Override
+            public Long getConsumedAmount(ResourceType resourceType) {
+                if (resourceType != ResourceType.CPU_PERCENT)
+                    return 0L;
+                return totalConsume;
+            }
+
+            @Override
+            public Long getResourceLimitReachedCount(ResourceType resourceType) {
+                if (resourceType != ResourceType.CPU_PERCENT)
+                    return 0L;
+                return cpuLimitationReached;
             }
         };
     }

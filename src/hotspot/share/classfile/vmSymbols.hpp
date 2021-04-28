@@ -661,6 +661,7 @@
   template(com_alibaba_wisp_engine_WispEventPump,      "com/alibaba/wisp/engine/WispEventPump")                   \
   template(isInCritical_name,                          "isInCritical")                                            \
   template(jdkParkStatus_name,                         "jdkParkStatus")                                           \
+  template(shutdownPending_name,                       "shutdownPending")                                         \
   template(jvmParkStatus_name,                         "jvmParkStatus")                                           \
   template(id_name,                                    "id")                                                      \
   template(threadWrapper_name,                         "threadWrapper")                                           \

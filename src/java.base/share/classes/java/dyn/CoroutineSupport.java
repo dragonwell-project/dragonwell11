@@ -230,18 +230,24 @@ public class CoroutineSupport {
 
     /**
      * terminate current coroutine and yield forward
+     * @param  target target
      */
-    void terminateCoroutine() {
+    public void terminateCoroutine(Coroutine target) {
         assert currentCoroutine != threadCoroutine : "cannot exit thread coroutine";
-        assert currentCoroutine != getNextCoroutine(currentCoroutine.nativeCoroutine) : "last coroutine shouldn't call coroutineexit";
 
         lock();
         Coroutine old = currentCoroutine;
-        Coroutine forward = getNextCoroutine(old.nativeCoroutine);
+        Coroutine forward = target;
+        if (forward == null) {
+            forward = getNextCoroutine(old.nativeCoroutine);
+        }
+        assert forward == threadCoroutine : "switch to target must be thread coroutine";
         currentCoroutine = forward;
-
         unlockLater(forward);
         switchToAndTerminate(old, forward);
+
+        // should never run here.
+        assert false;
     }
 
     /**

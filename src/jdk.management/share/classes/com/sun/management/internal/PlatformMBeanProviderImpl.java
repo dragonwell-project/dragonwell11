@@ -24,7 +24,9 @@
  */
 package com.sun.management.internal;
 
+import com.alibaba.management.ResourceContainerMXBean;
 import com.alibaba.management.WispCounterMXBean;
+import com.alibaba.management.internal.ResourceContainerMXBeanImpl;
 import com.alibaba.management.internal.WispCounterMXBeanImpl;
 import com.sun.management.DiagnosticCommandMBean;
 import com.sun.management.HotSpotDiagnosticMXBean;
@@ -54,6 +56,7 @@ public final class PlatformMBeanProviderImpl extends PlatformMBeanProvider {
     private static HotSpotDiagnostic hsDiagMBean = null;
     private static OperatingSystemMXBean osMBean = null;
     private static WispCounterMXBean wispCounterMBean = null;
+    private static ResourceContainerMXBean resourceContainerMXBean = null;
 
     static {
        AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
@@ -268,6 +271,34 @@ public final class PlatformMBeanProviderImpl extends PlatformMBeanProvider {
             });
         }
 
+        initMBeanList.add(new PlatformComponent<com.alibaba.management.ResourceContainerMXBean>() {
+            private final Set<String> ResourceContainerMXBeanInterfaceNames =
+                    Collections.unmodifiableSet(Collections.<String>singleton(
+                            "com.alibaba.management.ResourceContainerMXBean"));
+
+            @Override
+            public Set<Class<? extends com.alibaba.management.ResourceContainerMXBean>> mbeanInterfaces() {
+                return Collections.singleton(com.alibaba.management.ResourceContainerMXBean.class);
+            }
+
+            @Override
+            public Set<String> mbeanInterfaceNames() {
+                return ResourceContainerMXBeanInterfaceNames;
+            }
+
+            @Override
+            public String getObjectNamePattern() {
+                return "com.alibaba.management:type=ResourceContainer";
+            }
+
+            @Override
+            public Map<String, com.alibaba.management.ResourceContainerMXBean> nameToMBeanMap() {
+                return Collections.<String, com.alibaba.management.ResourceContainerMXBean>singletonMap(
+                        "com.alibaba.management:type=ResourceContainer",
+                        getResourceContainerMXBean());
+            }
+        });
+
         /**
          * Wisp-Counter support.
          */
@@ -316,6 +347,13 @@ public final class PlatformMBeanProviderImpl extends PlatformMBeanProvider {
             osMBean = new OperatingSystemImpl(ManagementFactoryHelper.getVMManagement());
         }
         return osMBean;
+    }
+
+    private static synchronized ResourceContainerMXBean getResourceContainerMXBean() {
+        if (resourceContainerMXBean == null) {
+            resourceContainerMXBean = new ResourceContainerMXBeanImpl();
+        }
+        return resourceContainerMXBean;
     }
 
     private static synchronized WispCounterMXBean getWispCounterMXBean() {

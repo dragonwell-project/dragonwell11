@@ -36,9 +36,11 @@ class WispConfiguration {
     static final boolean WISP_HIGH_PRECISION_TIMER;
     static final boolean WISP_USE_STEAL_LOCK;
     static final int WISP_ENGINE_TASK_CACHE_SIZE;
+    static final int WISP_ENGINE_TASK_GLOBAL_CACHE_SIZE;
     static final int WISP_SCHEDULE_STEAL_RETRY;
     static final int WISP_SCHEDULE_PUSH_RETRY;
     static final int WISP_SCHEDULE_HELP_STEAL_RETRY;
+    static final int WISP_SHUTDOWN_SLEEP_TIME;
     static final WispScheduler.SchedulingPolicy SCHEDULING_POLICY;
     static final boolean USE_DIRECT_SELECTOR_WAKEUP;
     static final boolean CARRIER_AS_POLLER;
@@ -47,6 +49,9 @@ class WispConfiguration {
 
     // io
     static final boolean WISP_ENABLE_SOCKET_LOCK;
+    static final boolean WISP_ENABLE_ASYNC_FILE_IO;
+    static final int WISP_FILE_IO_WORKER_CORE;
+    static final int WISP_FILE_IO_WORKER_MAX;
 
     // wisp control group
     static final int WISP_CONTROL_GROUP_CFS_PERIOD;
@@ -73,6 +78,8 @@ class WispConfiguration {
         PARK_ONE_MS_AT_LEAST = parseBooleanParameter(p, "com.alibaba.wisp.parkOneMs", true);
         WORKER_COUNT = parsePositiveIntegerParameter(p, "com.alibaba.wisp.carrierEngines",
                 Runtime.getRuntime().availableProcessors());
+        WISP_SHUTDOWN_SLEEP_TIME = parsePositiveIntegerParameter(p, "com.alibaba.wisp.shutdownSleepTime",
+                100);
         POLLER_SHARDING_SIZE = parsePositiveIntegerParameter(p, "com.alibaba.pollerShardingSize", 8);
         ENABLE_HANDOFF = parseBooleanParameter(p, "com.alibaba.wisp.enableHandOff",
                 TRANSPARENT_WISP_SWITCH);
@@ -98,6 +105,7 @@ class WispConfiguration {
         WISP_HIGH_PRECISION_TIMER = parseBooleanParameter(p, "com.alibaba.wisp.highPrecisionTimer", false);
         WISP_USE_STEAL_LOCK = parseBooleanParameter(p, "com.alibaba.wisp.useStealLock", true);
         WISP_ENGINE_TASK_CACHE_SIZE = parsePositiveIntegerParameter(p, "com.alibaba.wisp.engineTaskCache", 20);
+        WISP_ENGINE_TASK_GLOBAL_CACHE_SIZE = parsePositiveIntegerParameter(p, "com.alibaba.wisp.engineTaskGlobalCache", WORKER_COUNT * 10);
         WISP_SCHEDULE_STEAL_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.stealRetry", Math.max(1, WORKER_COUNT / 2));
         WISP_SCHEDULE_PUSH_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.pushRetry", WORKER_COUNT);
         WISP_SCHEDULE_HELP_STEAL_RETRY = parsePositiveIntegerParameter(p, "com.alibaba.wisp.schedule.helpStealRetry", Math.max(1, WORKER_COUNT / 4));
@@ -110,6 +118,9 @@ class WispConfiguration {
         // WISP_CONTROL_GROUP_CFS_PERIOD default value is 0(Us), WispControlGroup will estimate a cfs period according to SYSMON_TICK_US.
         // If WISP_CONTROL_GROUP_CFS_PERIOD was configed by user, WispControlGroup will adopt it directly and won't estimate.
         WISP_CONTROL_GROUP_CFS_PERIOD = parsePositiveIntegerParameter(p, "com.alibaba.wisp.controlGroup.cfsPeriod", 0);
+        WISP_ENABLE_ASYNC_FILE_IO = parseBooleanParameter(p, "com.alibaba.wisp.enableAsyncFileIO", false);
+        WISP_FILE_IO_WORKER_CORE = parsePositiveIntegerParameter(p, "com.alibaba.wisp.fileIOCoreWorkerCnt", WORKER_COUNT);
+        WISP_FILE_IO_WORKER_MAX = parsePositiveIntegerParameter(p, "com.alibaba.wisp.fileIOMaxWorkerCnt", WORKER_COUNT);
         checkCompatibility();
     }
 

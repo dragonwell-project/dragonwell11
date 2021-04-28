@@ -473,7 +473,12 @@ IRT_END
 IRT_ENTRY(address, InterpreterRuntime::exception_handler_for_exception(JavaThread* thread, oopDesc* exception))
 
   LastFrameAccessor last_frame(thread);
-  Handle             h_exception(thread, exception);
+// Wisp relys on threadDeath as a special uncatchable exception to shutdown
+// all running coroutines. However, exceptions throw in finally block
+// will overwrite current threadDeath exception, thus we need to replace
+// all exception with threadDeath after coroutine shutdown.
+  Handle             h_exception(thread, WispThread::is_current_death_pending(thread)?
+    (oopDesc*) Universe::wisp_thread_death_exception() : exception);
   methodHandle       h_method   (thread, last_frame.method());
   constantPoolHandle h_constants(thread, h_method->constants());
   bool               should_repeat;

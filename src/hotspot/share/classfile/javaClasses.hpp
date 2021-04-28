@@ -1627,6 +1627,7 @@ private:
   static int _stealCount_offset;
   static int _stealFailureCount_offset;
   static int _preemptCount_offset;
+  static int _shutdownPending_offset;
 public:
   static void set_jvmParkStatus(oop obj, jint status);
   static int  get_jvmParkStatus(oop obj);
@@ -1640,6 +1641,7 @@ public:
   static int  get_stealFailureCount(oop obj);
   static int  get_preemptCount(oop obj);
   static void set_preemptCount(oop obj, jint count);
+  static bool get_shutdownPending(oop obj);
 
   static void compute_offsets();
   static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;

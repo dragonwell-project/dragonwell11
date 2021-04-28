@@ -27,9 +27,9 @@ package sun.nio.ch;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
+import jdk.internal.misc.SharedSecrets;
 
 import jdk.internal.misc.JavaIOFileDescriptorAccess;
-import jdk.internal.misc.SharedSecrets;
 
 class FileDispatcherImpl extends FileDispatcher {
 
@@ -45,33 +45,57 @@ class FileDispatcherImpl extends FileDispatcher {
     }
 
     int read(FileDescriptor fd, long address, int len) throws IOException {
-        return read0(fd, address, len);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> read0(fd, address, len));
+        } else {
+            return read0(fd, address, len);
+        }
     }
 
     int pread(FileDescriptor fd, long address, int len, long position)
-        throws IOException
+            throws IOException
     {
-        return pread0(fd, address, len, position);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> pread0(fd, address, len, position));
+        } else {
+            return pread0(fd, address, len, position);
+        }
     }
 
     long readv(FileDescriptor fd, long address, int len) throws IOException {
-        return readv0(fd, address, len);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> readv0(fd, address, len));
+        } else {
+            return readv0(fd, address, len);
+        }
     }
 
     int write(FileDescriptor fd, long address, int len) throws IOException {
-        return write0(fd, address, len);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> write0(fd, address, len));
+        } else {
+            return write0(fd, address, len);
+        }
     }
 
     int pwrite(FileDescriptor fd, long address, int len, long position)
         throws IOException
     {
-        return pwrite0(fd, address, len, position);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> pwrite0(fd, address, len, position));
+        } else {
+            return pwrite0(fd, address, len, position);
+        }
     }
 
     long writev(FileDescriptor fd, long address, int len)
         throws IOException
     {
-        return writev0(fd, address, len);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> writev0(fd, address, len));
+        } else {
+            return writev0(fd, address, len);
+        }
     }
 
     long seek(FileDescriptor fd, long offset) throws IOException {
@@ -79,11 +103,19 @@ class FileDispatcherImpl extends FileDispatcher {
     }
 
     int force(FileDescriptor fd, boolean metaData) throws IOException {
-        return force0(fd, metaData);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> force0(fd, metaData));
+        } else {
+            return force0(fd, metaData);
+        }
     }
 
     int truncate(FileDescriptor fd, long size) throws IOException {
-        return truncate0(fd, size);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> truncate0(fd, size));
+        } else {
+            return truncate0(fd, size);
+        }
     }
 
     long size(FileDescriptor fd) throws IOException {

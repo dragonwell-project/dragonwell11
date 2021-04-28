@@ -87,7 +87,8 @@ public class WispTask implements Comparable<WispTask> {
 
     enum Status {
         ALIVE,      // ALIVE
-        ZOMBIE      // exited
+        CACHED,     // exited
+        DEAD        // quited and never be used
     }
 
     private Runnable runnable; // runnable for created task
@@ -138,6 +139,8 @@ public class WispTask implements Comparable<WispTask> {
 
     WispControlGroup controlGroup;
     long enterTs;
+
+    boolean shutdownPending;
 
     WispTask(WispCarrier carrier, Coroutine ctx, boolean isRealTask, boolean isThreadTask) {
         this.isThreadTask = isThreadTask;
@@ -234,7 +237,7 @@ public class WispTask implements Comparable<WispTask> {
                         carrier.taskExit();
                     }
                 } else {
-                    carrier.schedule();
+                    carrier.schedule(false);
                 }
             }
         }
@@ -269,7 +272,7 @@ public class WispTask implements Comparable<WispTask> {
      * <p>
      * {@link #stealLock} is used in {@link WispCarrier#steal(WispTask)} .
      */
-    static void switchTo(WispTask current, WispTask next) {
+    static void switchTo(WispTask current, WispTask next, boolean terminal) {
         assert next.ctx != null;
         assert WispCarrier.current() == current.carrier;
         assert current.carrier == next.carrier;
@@ -280,7 +283,13 @@ public class WispTask implements Comparable<WispTask> {
             STEAL_LOCK_UPDATER.lazySet(next, 1);
             // store load barrier is not necessary
         }
-        current.carrier.thread.getCoroutineSupport().unsafeSymmetricYieldTo(next.ctx);
+        if (terminal == true) {
+            current.carrier.thread.getCoroutineSupport().terminateCoroutine(next.ctx);
+            // should never run here.
+            assert false: "should not reach here";
+        } else {
+            current.carrier.thread.getCoroutineSupport().unsafeSymmetricYieldTo(next.ctx);
+        }
         if (WispConfiguration.WISP_USE_STEAL_LOCK) {
             assert current.stealLock != 0;
             STEAL_LOCK_UPDATER.lazySet(current.from, 0);
@@ -334,12 +343,8 @@ public class WispTask implements Comparable<WispTask> {
     static final String SHUTDOWN_TASK_NAME = "SHUTDOWN_TASK";
 
 
-    boolean isRunnable() {
-        return status == Status.ALIVE;
-    }
-
     boolean isAlive() {
-        return status != Status.ZOMBIE;
+        return status == Status.ALIVE;
     }
 
     /**
@@ -377,7 +382,7 @@ public class WispTask implements Comparable<WispTask> {
                     try {
                         if (WispEngine.runningAsCoroutine(threadWrapper)) {
                             setParkTime();
-                            carrier.schedule();
+                            carrier.schedule(false);
                         } else {
                             UA.park0(false, timeoutNano < 0 ? 0 : timeoutNano);
                         }

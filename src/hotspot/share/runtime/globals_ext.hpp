@@ -53,6 +53,8 @@
                                                                             \
   product(bool, UseWisp2, false,                                            \
           "Enable Wisp2")                                                   \
+  product(bool, Wisp2ThreadStop, false,                                     \
+          "ThreadDeath cannot be catched")                                  \
                                                                             \
   manageable(bool, PrintThreadCoroutineInfo, false,                         \
           "print the park/unpark information for thread coroutine")         \

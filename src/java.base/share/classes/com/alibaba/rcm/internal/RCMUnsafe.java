@@ -2,6 +2,7 @@ package com.alibaba.rcm.internal;
 
 
 import com.alibaba.rcm.ResourceContainer;
+import com.alibaba.rcm.ResourceContainerMonitor;
 
 import java.util.Objects;
 import java.util.function.Predicate;
@@ -40,5 +41,14 @@ public final class RCMUnsafe {
         assert resourceContainer instanceof AbstractResourceContainer;
         Objects.requireNonNull(resourceContainer);
         ((AbstractResourceContainer) resourceContainer).killThreads();
+        ResourceContainerMonitor.deregister(resourceContainer.getId());
+    }
+
+
+    public static void attach(ResourceContainer container) {
+        if (container != ResourceContainer.root())
+            ((AbstractResourceContainer) container).attach();
+        else
+            ((AbstractResourceContainer)ResourceContainer.current()).detach();
     }
 }

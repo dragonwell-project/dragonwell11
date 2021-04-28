@@ -8,9 +8,13 @@
  * @run main/othervm -XX:+UseWisp2 -XX:ActiveProcessorCount=4 TestRcmCpu
  */
 
+import com.alibaba.management.ResourceContainerMXBean;
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceType;
 
+import javax.management.MBeanServer;
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.security.MessageDigest;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -21,10 +25,12 @@ import static jdk.testlibrary.Asserts.assertLT;
 
 public class TestRcmCpu {
 
+    static ResourceContainerMXBean resourceContainerMXBean;
+
     private static Callable<Long> taskFactory(int load) {
         return new Callable<Long>() {
             @Override
-            public Long call() throws Exception {
+            public Long call() interpreterRuntime.cppthrows Exception {
                 long start = System.currentTimeMillis();
                 MessageDigest md5 = MessageDigest.getInstance("MD5");
                 int count = load;
@@ -40,6 +46,14 @@ public class TestRcmCpu {
     }
 
     public static void main(String[] args) throws Exception {
+        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+        try {
+            resourceContainerMXBean = ManagementFactory.newPlatformMXBeanProxy(mbs,
+                    "com.alibaba.management:type=ResourceContainer", ResourceContainerMXBean.class);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         ResourceContainer rc0 = RcmUtils.createContainer(
                 ResourceType.CPU_PERCENT.newConstraint(40));
         ResourceContainer rc1 = RcmUtils.createContainer(
@@ -67,5 +81,10 @@ public class TestRcmCpu {
 
         double ratio = (double) duration1 / duration0;
         assertLT(Math.abs(ratio - 0.5), 0.10, "deviation is out of reasonable scope");
+
+        for (long id : resourceContainerMXBean.getAllContainerIds()) {
+            System.out.println(resourceContainerMXBean.getConstraintsById(id));
+            System.out.println(resourceContainerMXBean.getContainerConsumedAmount(id, ResourceType.CPU_PERCENT));
+        }
     }
 }

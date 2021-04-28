@@ -125,7 +125,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
         } finally {
             isInCritical = isInCritical0;
         }
-        yieldTo(wispTask);
+        yieldTo(wispTask, false);
         runWispTaskEpilog();
 
         return wispTask;
@@ -136,14 +136,20 @@ final class WispCarrier implements Comparable<WispCarrier> {
      * WispTask must call {@code taskExit()} to exit safely.
      */
     void taskExit() { // and exit
-        current.status = WispTask.Status.ZOMBIE;
         TASK_COUNT_UPDATER.decrementAndGet(engine);
 
         current.countExecutionTime(switchTimestamp);
         switchTimestamp = 0;
+        current.setEpollArray(0);
 
-        unregisterEvent();
-        returnTaskToCache(current);
+        boolean cached = !current.shutdownPending && returnTaskToCache(current);
+        TASK_COUNT_UPDATER.decrementAndGet(engine);
+        if (cached) {
+            current.status = WispTask.Status.CACHED;
+        } else {
+            current.status = WispTask.Status.DEAD;
+            WispTask.cleanExitedTask(current);
+        }
 
         // reset threadWrapper after call returnTaskToCache,
         // since the threadWrapper will be used in Thread.currentThread()
@@ -153,7 +159,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
         // In Tenant killing process, we have an pending exception,
         // WispTask.Coroutine's loop will be breaked
         // invoke an explicit reschedule instead of return
-        schedule();
+        schedule(!cached);
     }
 
     /**
@@ -182,16 +188,22 @@ final class WispCarrier implements Comparable<WispCarrier> {
     }
 
     /**
-     * return task back to global cache
+     * cache task back to global or local cache and return true, if beyond the capacity of
+     * cache will return false.
      */
-    private void returnTaskToCache(WispTask task) {
+    private boolean returnTaskToCache(WispTask task) {
         // reuse exited wispTasks from shutdown wispEngine is very tricky, so we'd better not return
         // these tasks to global cache
         if (taskCache.size() > WispConfiguration.WISP_ENGINE_TASK_CACHE_SIZE && !engine.hasBeenShutdown) {
-            engine.groupTaskCache.add(task);
+            if (engine.groupTaskCache.size() > WispConfiguration.WISP_ENGINE_TASK_GLOBAL_CACHE_SIZE) {
+                return false;
+            } else {
+                engine.groupTaskCache.add(task);
+            }
         } else {
             taskCache.add(task);
         }
+        return true;
     }
 
     /**
@@ -214,7 +226,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
      * Block current coroutine and do scheduling.
      * Typically called when resource is not ready.
      */
-    final void schedule() {
+    final void schedule(boolean terminal) {
         assert WispCarrier.current() == this;
         WispTask current = this.current;
         current.countExecutionTime(switchTimestamp);
@@ -224,19 +236,25 @@ final class WispCarrier implements Comparable<WispCarrier> {
             current.controlGroup.calcCpuTicks(current);
         }
         current.resumeEntry.setStealEnable(true);
-        yieldTo(threadTask); // letting the scheduler choose runnable task
+        yieldTo(threadTask, terminal); // letting the scheduler choose runnable task
         current.carrier.checkAndDispatchShutdown();
     }
 
-    private void checkAndDispatchShutdown() {
+    void checkAndDispatchShutdown() {
+        assert WispCarrier.current() == this;
         WispTask current = WispCarrier.current().getCurrentTask();
-        if ((engine.hasBeenShutdown
-                || (current.inDestoryedGroup() && current.inheritedFromNonRootContainer()))
-                && !WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
-                && current.isAlive()
+        if (shutdownPending(current)
                 && CoroutineSupport.checkAndThrowException(current.ctx)) {
+            current.shutdownPending = true;
             throw new ThreadDeath();
         }
+    }
+
+    boolean shutdownPending(WispTask current) {
+        return (engine.hasBeenShutdown
+                || (current.inDestoryedGroup() && current.inheritedFromNonRootContainer()))
+                && !WispTask.SHUTDOWN_TASK_NAME.equals(current.getName())
+                && current.isAlive();
     }
 
     /**
@@ -291,11 +309,12 @@ final class WispCarrier implements Comparable<WispCarrier> {
                 if (task.controlGroup != null) {
                     long res = task.controlGroup.checkCpuLimit(task, false);
                     if (res != 0) {
+                        task.controlGroup.cpuLimitationReached++;
                         current.resumeLater(System.nanoTime() + res, task);
                         return;
                     }
                 }
-                current.yieldTo(task);
+                current.yieldTo(task, false);
                 current.runWispTaskEpilog();
             }
 
@@ -350,7 +369,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
      *
      * @param task coroutine to run
      */
-    private boolean yieldTo(WispTask task) {
+    private boolean yieldTo(WispTask task, boolean terminal) {
         assert task != null;
         assert WispCarrier.current() == this;
         assert task.carrier == this;
@@ -358,7 +377,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
 
         schedTick++;
 
-        if (task.status == WispTask.Status.ZOMBIE) {
+        if (task.status != WispTask.Status.ALIVE) {
             unregisterEvent(task);
             return false;
         }
@@ -368,7 +387,7 @@ final class WispCarrier implements Comparable<WispCarrier> {
         counter.incrementSwitchCount();
         switchTimestamp = WispEngine.getNanoTime();
         assert !isInCritical;
-        WispTask.switchTo(from, task);
+        WispTask.switchTo(from, task, terminal);
         // Since carrier is changed with stealing, we shouldn't directly access carrier's member any more.
         assert WispCarrier.current().current == from;
         assert !from.carrier.isInCritical;
@@ -397,9 +416,9 @@ final class WispCarrier implements Comparable<WispCarrier> {
                 assert yieldingTask == null;
                 yieldingTask = current;
                 // delay it, make sure wakeupTask is called after yield out
-                schedule();
+                schedule(false);
             }
-            current.carrier.checkAndDispatchShutdown();
+            WispCarrier.current().checkAndDispatchShutdown();
         } else {
             WispEngine.JLA.yield0();
         }

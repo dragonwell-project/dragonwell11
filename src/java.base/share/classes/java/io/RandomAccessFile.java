@@ -26,7 +26,10 @@
 package java.io;
 
 import java.nio.channels.FileChannel;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+
 import jdk.internal.misc.JavaIORandomAccessFileAccess;
 import jdk.internal.misc.SharedSecrets;
 import sun.nio.ch.FileChannelImpl;
@@ -363,7 +366,11 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
      *                          end-of-file has been reached.
      */
     public int read() throws IOException {
-        return read0();
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> read0());
+        } else {
+            return read0();
+        }
     }
 
     private native int read0() throws IOException;
@@ -375,7 +382,15 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
      * @param len the number of bytes to read.
      * @exception IOException If an I/O error has occurred.
      */
-    private native int readBytes(byte b[], int off, int len) throws IOException;
+    private native int readBytes0(byte b[], int off, int len) throws IOException;
+
+    private int readBytes(byte b[], int off, int len) throws IOException {
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> readBytes0(b, off ,len));
+        } else {
+            return readBytes0(b, off, len);
+        }
+    }
 
     /**
      * Reads up to {@code len} bytes of data from this file into an
@@ -533,8 +548,18 @@ public class RandomAccessFile implements DataOutput, DataInput, Closeable {
      * @param len the number of bytes that are written
      * @exception IOException If an I/O error has occurred.
      */
-    private native void writeBytes(byte b[], int off, int len) throws IOException;
+    private native void writeBytes0(byte b[], int off, int len) throws IOException;
 
+    private void writeBytes(byte b[], int off, int len) throws IOException {
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> {
+                writeBytes0(b, off, len);
+                return 0;
+            });
+        } else {
+            writeBytes0(b, off, len);
+        }
+    }
     /**
      * Writes {@code b.length} bytes from the specified byte array
      * to this file, starting at the current file pointer.

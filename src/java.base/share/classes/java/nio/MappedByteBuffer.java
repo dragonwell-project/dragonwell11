@@ -26,8 +26,13 @@
 package java.nio;
 
 import java.io.FileDescriptor;
+import java.io.IOException;
 import java.lang.ref.Reference;
+
+
 import jdk.internal.misc.Unsafe;
+import jdk.internal.misc.SharedSecrets;
+
 
 
 /**
@@ -207,9 +212,24 @@ public abstract class MappedByteBuffer
         }
         if ((address != 0) && (capacity() != 0)) {
             long offset = mappingOffset();
-            force0(fd, mappingAddress(offset), mappingLength(offset));
+            if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+                asynchronousForce(this, fd, mappingAddress(offset), mappingLength(offset));
+            } else {
+                force0(fd, mappingAddress(offset), mappingLength(offset));
+            }
         }
         return this;
+    }
+
+    private static void asynchronousForce(MappedByteBuffer mapBuf, FileDescriptor fd, long address, long length) {
+        try {
+            SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> {
+                mapBuf.force0(fd, address, length);
+                return 0;
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private native boolean isLoaded0(long address, long length, int pageCount);

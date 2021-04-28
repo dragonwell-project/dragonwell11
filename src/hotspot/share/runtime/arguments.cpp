@@ -3972,6 +3972,10 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     }
   }
 
+  if (Wisp2ThreadStop && !UseWisp2) {
+    vm_exit_during_initialization("Wisp2ThreadStop only works with UseWisp2");
+  }
+
   // Set object alignment values.
   set_object_alignment();
 

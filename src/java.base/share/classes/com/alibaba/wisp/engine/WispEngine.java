@@ -112,6 +112,9 @@ public class WispEngine extends AbstractExecutorService {
             initializeClasses();
             JLA.wispBooted();
         }
+        if (WispConfiguration.WISP_ENABLE_ASYNC_FILE_IO) {
+            WispFileIO.initializeWispFileIOClass();
+        }
     }
 
     private static void initializeClasses() {
@@ -179,6 +182,9 @@ public class WispEngine extends AbstractExecutorService {
             }
             if (WispConfiguration.WISP_PROFILE_LOG_ENABLED) {
                 WispPerfCounterMonitor.INSTANCE.startDaemon();
+            }
+            if (WispConfiguration.WISP_ENABLE_ASYNC_FILE_IO) {
+                WispFileIO.startWispFileIODaemon();
             }
         }
     }
@@ -482,7 +488,7 @@ public class WispEngine extends AbstractExecutorService {
                     }
                 }
                 // wait tasks to exit on fixed frequency instead of polling
-                WispTask.jdkPark(TimeUnit.MILLISECONDS.toNanos(1));
+                WispTask.jdkPark(TimeUnit.MILLISECONDS.toNanos(WispConfiguration.WISP_SHUTDOWN_SLEEP_TIME));
             } while (!tasks.isEmpty());
             finishShutdown();
         }
@@ -548,15 +554,16 @@ public class WispEngine extends AbstractExecutorService {
                         && task.carrier.engine == WispEngine.this
                         && !task.isThreadTask()
                         && !task.getName().equals(WispTask.SHUTDOWN_TASK_NAME)
-                        && (group == null
-                        || task.inDestoryedGroup() && task.inheritedFromNonRootContainer())) {
+                        && (group == null || (task.inDestoryedGroup() && task.controlGroup == group))) {
                     runningTasks.add(task);
                 }
             }
-            return runningTasks;
+        } catch (Exception e) {
+          e.printStackTrace();
         } finally {
             carrier.isInCritical = isInCritical0;
         }
+        return runningTasks;
     }
 
     @Override

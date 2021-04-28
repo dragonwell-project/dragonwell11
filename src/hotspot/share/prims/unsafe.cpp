@@ -1124,7 +1124,7 @@ JVM_ENTRY(jboolean, CoroutineSupport_stealCoroutine(JNIEnv* env, jclass klass, j
   // The lock will also block coroutine switch operation,
   // so we must finish the steal operation as soon as possible.
   Coroutine* coro = (Coroutine*) coroPtr;
-  if (coro == NULL || coro->enable_steal_count() != coro->java_call_counter()) {
+  if (coro == NULL || coro->enable_steal_count() != coro->java_call_counter()|| coro->is_yielding()) {
       return false;       // an Exception throws and the coroutine being stealed is exited
   }
   assert(coro->thread() != thread, "steal from self");
@@ -1150,7 +1150,7 @@ JVM_ENTRY (jboolean, CoroutineSupport_shouldThrowException0(JNIEnv* env, jclass 
   assert(EnableCoroutine, "pre-condition");
   Coroutine* coro = (Coroutine*)coroPtr;
   assert(coro == thread->current_coroutine(), "invariant");
-  return !coro->is_yielding() && coro->clinit_call_count() == 0;
+  return coro->clinit_call_count() == 0;
 JVM_END
 
 JVM_ENTRY (jobjectArray, CoroutineSupport_getCoroutineStack(JNIEnv* env, jclass klass, jlong coroPtr))

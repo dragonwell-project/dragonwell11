@@ -41,6 +41,17 @@ public class TestRCMInheritanceCallBack {
             t.start();
         });
 
+        container.run(() -> {
+            Thread t = new Thread(() -> {
+                assertInRoot(true);
+                latch.countDown();
+            }, "TenantWorker");
+
+            RCMUnsafe.attach(ResourceContainer.root());
+            t.start();
+            RCMUnsafe.attach(container);
+        });
+
         assertTrue(latch.await(2, TimeUnit.SECONDS));
     }
 

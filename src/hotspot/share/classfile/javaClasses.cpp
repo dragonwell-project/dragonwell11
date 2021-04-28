@@ -4488,6 +4488,8 @@ int com_alibaba_wisp_engine_WispTask::_activeCount_offset = 0;
 int com_alibaba_wisp_engine_WispTask::_stealCount_offset = 0;
 int com_alibaba_wisp_engine_WispTask::_stealFailureCount_offset = 0;
 int com_alibaba_wisp_engine_WispTask::_preemptCount_offset = 0;
+int com_alibaba_wisp_engine_WispTask::_shutdownPending_offset = 0;
+
 
 #define WISPTASK_FIELDS_DO(macro) \
   macro(_jvmParkStatus_offset,      k, vmSymbols::jvmParkStatus_name(),     int_signature,  false); \
@@ -4558,6 +4560,10 @@ int com_alibaba_wisp_engine_WispTask::get_stealCount(oop obj) {
 
 int com_alibaba_wisp_engine_WispTask::get_stealFailureCount(oop obj) {
   return obj->int_field(_stealFailureCount_offset);
+}
+
+bool com_alibaba_wisp_engine_WispTask::get_shutdownPending(oop obj) {
+  return obj->bool_field(_shutdownPending_offset);
 }
 
 #if INCLUDE_CDS

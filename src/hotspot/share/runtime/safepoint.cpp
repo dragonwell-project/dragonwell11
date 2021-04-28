@@ -941,6 +941,10 @@ void SafepointSynchronize::block(JavaThread *thread) {
     thread->handle_special_runtime_exit_condition(
       !thread->is_at_poll_safepoint() && (state != _thread_in_native_trans));
   }
+
+  if (EnableCoroutine) {
+    Coroutine::after_safepoint(thread);
+  }
 }
 
 // ------------------------------------------------------------------------------------------------------

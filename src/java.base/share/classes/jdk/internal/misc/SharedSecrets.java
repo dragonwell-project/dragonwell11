@@ -82,6 +82,7 @@ public class SharedSecrets {
     private static WispEngineAccess wispEngineAccess;
     private static EpollAccess epollAccess;
     private static RCMAccesss rcmAccesss;
+    private static WispFileSyncIOAccess wispFileSyncIOAccess;
 
     public static JavaUtilJarAccess javaUtilJarAccess() {
         if (javaUtilJarAccess == null) {
@@ -398,4 +399,14 @@ public class SharedSecrets {
     public static void setRCMAccesss(RCMAccesss rcmAccesss) {
         SharedSecrets.rcmAccesss = rcmAccesss;
     }
+
+
+    public static WispFileSyncIOAccess getWispFileSyncIOAccess() {
+        return wispFileSyncIOAccess;
+    }
+
+    public static void setWispFileSyncIOAccess(WispFileSyncIOAccess wispAsyncIOAccess) {
+        SharedSecrets.wispFileSyncIOAccess = wispAsyncIOAccess;
+    }
+
 }

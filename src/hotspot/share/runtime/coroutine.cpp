@@ -737,7 +737,10 @@ void WispThread::park(long millis, const ObjectWaiter* ow) {
     // the runtime can not handle the exception on monitorenter bci
     // we need clear it to prevent jvm crash
     if (jt->has_pending_exception()) {
-      jt->clear_pending_exception();
+       if (EnableCoroutine && Wisp2ThreadStop && jt->pending_exception()->klass() == SystemDictionary::ThreadDeath_klass()) {
+         jt->set_pending_async_exception(jt->pending_exception());
+       }
+       jt->clear_pending_exception();
     }
 
     ThreadStateTransition::transition(jt, _thread_in_vm, _thread_blocked);
@@ -783,6 +786,10 @@ void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, Pa
 
     // due to the fact that we modify the priority of Wisp_lock from `non-leaf` to `special`,
     // so we'd use `MutexLockerEx` and `_no_safepoint_check_flag` to make our program run
+    // We don't want to yield a safepoint here, so we use the `special` rank to prevent it:
+    // In UnlockNode, we will call java in Wisp. We can't yield a safepoint that may cause
+    // deoptimization, which is very fatal for monitors.
+    NoSafepointVerifier nsv;
     MutexLockerEx mu(Wisp_lock, Mutex::_no_safepoint_check_flag);
     wisp_thread->_unpark_status = WispThread::_proxy_unpark_begin;
     _proxy_unpark->append(task_id);
@@ -836,9 +843,18 @@ void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, Pa
 }
 
 int WispThread::get_proxy_unpark(jintArray res) {
+  // We need to hoist code of safepoint state out of MutexLocker to prevent safepoint deadlock problem
+  // See the same usage: SR_lock in `JavaThread::exit()`
+  ThreadBlockInVM tbivm(JavaThread::current());
+  // When wait()ing, GC may occur. So we shouldn't verify GC.
+  NoSafepointVerifier nsv(true, false);
   MutexLockerEx mu(Wisp_lock, Mutex::_no_safepoint_check_flag);
   while (_proxy_unpark == NULL || _proxy_unpark->is_empty()) {
-    Wisp_lock->wait();
+    // we need to use _no_safepoint_check_flag, which won't yield a safepoint.
+    // origin wait(false): first hold lock then do a safepoint.
+    //                     Other thread will stuck when grabbing the lock.
+    // current wait(true): first safepoint then hold lock to deal with the problem.
+    Wisp_lock->wait(Mutex::_no_safepoint_check_flag);
   }
   typeArrayOop a = typeArrayOop(JNIHandles::resolve_non_null(res));
   if (a == NULL) {
@@ -1001,6 +1017,9 @@ void Coroutine::after_safepoint(JavaThread* thread) {
       "Only SOF/OOM/ThreadDeath happens here");
     // If it's a SOF / OOM / ThreadDeath exception, we'd clear it
     // because polling page stub shouldn't have a pending exception.
+    if (UseWisp2 && Wisp2ThreadStop && thread->pending_exception()->klass() == SystemDictionary::ThreadDeath_klass()) {
+      thread->set_pending_async_exception(thread->pending_exception());
+    }
     thread->clear_pending_exception();
   }
 
@@ -1156,10 +1175,9 @@ WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *& th1, 
   WispPostStealHandle h2(&tiva);
 }
 
-WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(HandleMarkCleaner & hmc)
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *thread, HandleMarkCleaner & hmc)
 {
-  assert(hmc.thread_ref()->is_Java_thread(), "sanity");
-  initialize((JavaThread*)hmc.thread_ref());
+  initialize(thread);
 
   if (!_success)  return;
   WispPostStealHandle h(&hmc);
