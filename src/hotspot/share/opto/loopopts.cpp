@@ -1456,11 +1456,6 @@ void PhaseIdealLoop::split_if_with_blocks_post(Node *n, bool last_round) {
     _igvn.replace_node( n, n->in(1) );
   }
 
-#if INCLUDE_ZGC
-  if (UseZGC) {
-    ZBarrierSetC2::loop_optimize_gc_barrier(this, n, last_round);
-  }
-#endif
 }
 
 //------------------------------split_if_with_blocks---------------------------

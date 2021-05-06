@@ -391,11 +391,6 @@ void ConnectionGraph::add_node_to_connection_graph(Node *n, Unique_Node_List *de
     return; // Skip predefined nodes.
 
   int opcode = n->Opcode();
-#if INCLUDE_ZGC
-  if (UseZGC && ZBarrierSetC2::escape_add_to_con_graph(this, igvn, delayed_worklist, n, opcode)) {
-    return;
-  }
-#endif
   switch (opcode) {
     case Op_AddP: {
       Node* base = get_addp_base(n);
@@ -657,11 +652,6 @@ void ConnectionGraph::add_final_edges(Node *n) {
          (n_ptn != NULL) && (n_ptn->ideal_node() != NULL),
          "node should be registered already");
   int opcode = n->Opcode();
-#if INCLUDE_ZGC
-  if (UseZGC && ZBarrierSetC2::escape_add_final_edges(this, _igvn, n, opcode)) {
-    return;
-  }
-#endif
   switch (opcode) {
     case Op_AddP: {
       Node* base = get_addp_base(n);
