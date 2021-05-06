@@ -949,7 +949,13 @@ PhaseIterGVN::PhaseIterGVN( PhaseGVN *gvn ) : PhaseGVN(gvn),
   }
 
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+#if INCLUDE_ZGC
+  if (!UseZGC) {
+#endif
   bs->add_users_to_worklist(&_worklist);
+#if INCLUDE_ZGC
+  }
+#endif
 }
 
 /**

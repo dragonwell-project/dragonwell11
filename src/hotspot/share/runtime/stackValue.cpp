@@ -132,13 +132,7 @@ StackValue* StackValue::create_stack_value(const frame* fr, const RegisterMap* r
          val = (oop)NULL;
       }
 #endif
-#if INCLUDE_ZGC
       // Deoptimization must make sure all oop have passed load barrier
-      if (UseZGC) {
-        val = ZBarrier::load_barrier_on_oop_field_preloaded((oop*)value_addr, val);
-      }
-#endif
-
 #if INCLUDE_SHENANDOAHGC
       if (UseShenandoahGC) {
         val = ShenandoahBarrierSet::barrier_set()->load_reference_barrier(val);

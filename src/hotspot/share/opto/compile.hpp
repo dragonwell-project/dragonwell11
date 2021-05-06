@@ -96,6 +96,9 @@ enum LoopOptsMode {
   LoopOptsSkipSplitIf,
   LoopOptsVerify,
   LoopOptsLastRound
+#if INCLUDE_ZGC
+  ,LoopOptsZBarrierInsertion
+#endif
 #if INCLUDE_SHENANDOAHGC
   ,LoopOptsShenandoahExpand,
    LoopOptsShenandoahPostExpand

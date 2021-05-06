@@ -89,9 +89,6 @@
   diagnostic(bool, ZSymbolTableUnloading, false,                            \
           "Unload unused VM symbols")                                       \
                                                                             \
-  diagnostic(bool, ZOptimizeLoadBarriers, true,                             \
-          "Apply load barrier optimizations")                               \
-                                                                            \
   develop(bool, ZVerifyLoadBarriers, false,                                 \
           "Verify that reference loads are followed by barriers")
 

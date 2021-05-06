@@ -546,6 +546,11 @@ Node *Node::clone() const {
   if (n->is_SafePoint()) {
     n->as_SafePoint()->clone_replaced_nodes();
   }
+#if INCLUDE_ZGC
+  if (UseZGC && n->is_Load()) {
+    n->as_Load()->copy_barrier_info(this);
+  }
+#endif
   return n;                     // Return the clone
 }
 
@@ -1467,8 +1472,16 @@ bool Node::rematerialize() const {
 bool Node::needs_anti_dependence_check() const {
   if( req() < 2 || (_flags & Flag_needs_anti_dependence_check) == 0 )
     return false;
-  else
+  else {
+#if INCLUDE_ZGC
+    if (UseZGC) {
+      if (ZBarrierSetC2::needs_anti_dependence_check(this)) {
+        return false;
+      }
+    }
+#endif
     return in(1)->bottom_type()->has_memory();
+  }
 }
 
 
