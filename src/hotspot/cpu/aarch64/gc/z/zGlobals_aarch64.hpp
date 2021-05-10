@@ -36,7 +36,7 @@
 //  ------------------------------------------------------------------
 //
 const size_t ZPlatformGranuleSizeShift      = 21; // 2MB
-const size_t ZPlatformMaxHeapSizeShift      = 46; // 16TB
+const size_t ZPlatformMaxHeapSizeShift      = 44; // 16TB
 const size_t ZPlatformCacheLineSize         = 64;
 
 uintptr_t    ZPlatformAddressSpaceStart();
