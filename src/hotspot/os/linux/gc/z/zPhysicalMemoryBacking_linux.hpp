@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,10 +21,10 @@
  * questions.
  */
 
-#ifndef OS_CPU_LINUX_AARCH64_GC_Z_ZPHYSICALMEMORYBACKING_LINUX_AARCH64_HPP
-#define OS_CPU_LINUX_AARCH64_GC_Z_ZPHYSICALMEMORYBACKING_LINUX_AARCH64_HPP
+#ifndef OS_LINUX_GC_Z_ZPHYSICALMEMORYBACKING_LINUX_HPP
+#define OS_LINUX_GC_Z_ZPHYSICALMEMORYBACKING_LINUX_HPP
 
-#include "gc/z/zBackingFile_linux_aarch64.hpp"
+#include "gc/z/zBackingFile_linux.hpp"
 #include "gc/z/zMemory.hpp"
 
 class ZErrno;
@@ -67,4 +67,4 @@ public:
   void debug_unmap(const ZPhysicalMemory& pmem, uintptr_t offset) const;
 };
 
-#endif // OS_CPU_LINUX_AARCH64_GC_Z_ZPHYSICALMEMORYBACKING_LINUX_AARCH64_HPP
+#endif // OS_LINUX_GC_Z_ZPHYSICALMEMORYBACKING_LINUX_HPP
