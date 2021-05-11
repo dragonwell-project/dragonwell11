@@ -46,6 +46,10 @@
 #include "opto/type.hpp"
 #include "runtime/handles.inline.hpp"
 #include "utilities/xmlstream.hpp"
+#if INCLUDE_ZGC
+#include "gc/shared/barrierSet.hpp"
+#include "gc/shared/c2/barrierSetC2.hpp"
+#endif
 
 #ifndef PRODUCT
 #define DEBUG_ARG(x) , x
@@ -133,6 +137,13 @@ void Compile::Output() {
   if (failing()) {
     return;
   }
+
+#if INCLUDE_ZGC
+  // Late barrier analysis must be done after schedule and bundle
+  // Otherwise liveness based spilling will fail
+  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+  bs->late_barrier_analysis();
+#endif
 
   // Complete sizing of codebuffer
   CodeBuffer* cb = init_buffer(buf_sizes);
@@ -1025,6 +1036,11 @@ CodeBuffer* Compile::init_buffer(BufferSizingData& buf_sizes) {
 
   int pad_req   = NativeCall::instruction_size;
 
+#if INCLUDE_ZGC
+  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+  stub_req += bs->estimate_stub_size();
+#endif
+
   // nmethod and CodeBuffer count stubs & constants as part of method's code.
   // class HandlerImpl is platform-specific and defined in the *.ad files.
   int exception_handler_req = HandlerImpl::size_exception_handler() + MAX_stubs_size; // add marginal slop for handler
@@ -1514,6 +1530,10 @@ void Compile::fill_buffer(CodeBuffer* cb, uint* blk_starts) {
   }
 #endif
 
+#if INCLUDE_ZGC
+  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+  bs->emit_stubs(*cb);
+#endif
   if (failing())  return;
 
 #ifndef PRODUCT

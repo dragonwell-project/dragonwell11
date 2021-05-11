@@ -1005,20 +1005,6 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
       }
     }
 
-#if INCLUDE_ZGC
-    if (UseZGC && !inner_out->in(0)->is_CountedLoopEnd()) {
-      // In some very special cases there can be a load that has no other uses than the
-      // counted loop safepoint. Then its loadbarrier will be placed between the inner
-      // loop exit and the safepoint. This is very rare
-
-      Node* ifnode = inner_out->in(1)->in(0);
-      // Region->IfTrue->If == Region->Iffalse->If
-      if (ifnode == inner_out->in(2)->in(0)) {
-        inner_out = ifnode->in(0);
-      }
-    }
-#endif
-
     CountedLoopEndNode* cle = inner_out->in(0)->as_CountedLoopEnd();
     assert(cle == inner->loopexit_or_null(), "mismatch");
     bool has_skeleton = outer_le->in(1)->bottom_type()->singleton() && outer_le->in(1)->bottom_type()->is_int()->get_con() == 0;
@@ -4270,7 +4256,6 @@ void PhaseIdealLoop::build_loop_late_post( Node *n ) {
     case Op_LoadL:
     case Op_LoadS:
     case Op_LoadP:
-    case Op_LoadBarrierSlowReg:
     case Op_LoadN:
     case Op_LoadRange:
     case Op_LoadD_unaligned:

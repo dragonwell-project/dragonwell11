@@ -54,7 +54,6 @@ class CloneMap;
 class ConnectionGraph;
 class InlineTree;
 class Int_Array;
-class LoadBarrierNode;
 class Matcher;
 class MachConstantNode;
 class MachConstantBaseNode;
@@ -96,9 +95,6 @@ enum LoopOptsMode {
   LoopOptsSkipSplitIf,
   LoopOptsVerify,
   LoopOptsLastRound
-#if INCLUDE_ZGC
-  ,LoopOptsZBarrierInsertion
-#endif
 #if INCLUDE_SHENANDOAHGC
   ,LoopOptsShenandoahExpand,
    LoopOptsShenandoahPostExpand

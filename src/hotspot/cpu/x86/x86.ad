@@ -1775,7 +1775,7 @@ static int vec_mov_helper(CodeBuffer *cbuf, bool do_size, int src_lo, int dst_lo
   return (UseAVX > 2) ? 6 : 4;
 }
 
-static int vec_spill_helper(CodeBuffer *cbuf, bool do_size, bool is_load,
+int vec_spill_helper(CodeBuffer *cbuf, bool do_size, bool is_load,
                             int stack_offset, int reg, uint ireg, outputStream* st) {
   // In 64-bit VM size calculation is very complex. Emitting instructions
   // into scratch buffer is used to get size in 64-bit VM.

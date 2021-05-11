@@ -230,6 +230,13 @@ public:
     return *this;
   }
 
+#if INCLUDE_ZGC
+  RegSet &operator-=(const RegSet aSet) {
+    *this = *this - aSet;
+    return *this;
+  }
+#endif
+
   static RegSet of(Register r1) {
     return RegSet(r1);
   }
