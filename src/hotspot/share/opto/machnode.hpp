@@ -198,6 +198,7 @@ public:
 class MachNode : public Node {
 public:
   MachNode() : Node((uint)0), _num_opnds(0), _opnds(NULL) {
+    ZGC_ONLY( _barrier = 0; )
     init_class_id(Class_Mach);
   }
   // Required boilerplate
@@ -210,6 +211,11 @@ public:
   // Position of constant base node in node's inputs. -1 if
   // no constant base node input.
   virtual uint mach_constant_base_node_input() const { return (uint)-1; }
+
+#if INCLUDE_ZGC
+  uint8_t barrier_data() const { return _barrier; }
+  void set_barrier_data(uint data) { _barrier = data; }
+#endif
 
   // Copy inputs and operands to new node of instruction.
   // Called from cisc_version() and short_branch_version().
@@ -254,6 +260,11 @@ public:
   // both an input and an output).  It is nessecary when the input and
   // output have choices - but they must use the same choice.
   virtual uint two_adr( ) const { return 0; }
+
+#if INCLUDE_ZGC
+  // The GC might require some barrier metadata for machine code emission.
+  uint8_t _barrier;
+#endif
 
   // Array of complex operand pointers.  Each corresponds to zero or
   // more leafs.  Must be set by MachNode constructor to point to an

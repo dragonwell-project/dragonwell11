@@ -1076,7 +1076,7 @@ static enum RC rc_class(OptoReg::Name reg)
 static int vec_mov_helper(CodeBuffer *cbuf, bool do_size, int src_lo, int dst_lo,
                           int src_hi, int dst_hi, uint ireg, outputStream* st);
 
-static int vec_spill_helper(CodeBuffer *cbuf, bool do_size, bool is_load,
+int vec_spill_helper(CodeBuffer *cbuf, bool do_size, bool is_load,
                             int stack_offset, int reg, uint ireg, outputStream* st);
 
 static void vec_stack_to_stack_helper(CodeBuffer *cbuf, int src_offset,
@@ -5294,6 +5294,7 @@ instruct loadRange(rRegI dst, memory mem)
 instruct loadP(rRegP dst, memory mem)
 %{
   match(Set dst (LoadP mem));
+  predicate(true ZGC_ONLY( && n->as_Load()->barrier_data() == 0 ));
 
   ins_cost(125); // XXX
   format %{ "movq    $dst, $mem\t# ptr" %}
@@ -7503,6 +7504,7 @@ instruct storePConditional(memory heap_top_ptr,
                            rax_RegP oldval, rRegP newval,
                            rFlagsReg cr)
 %{
+  predicate(true ZGC_ONLY( && n->as_LoadStore()->barrier_data() == 0 ));
   match(Set cr (StorePConditional heap_top_ptr (Binary oldval newval)));
 
   format %{ "cmpxchgq $heap_top_ptr, $newval\t# (ptr) "
@@ -7554,7 +7556,7 @@ instruct compareAndSwapP(rRegI res,
                          rax_RegP oldval, rRegP newval,
                          rFlagsReg cr)
 %{
-  predicate(VM_Version::supports_cx8());
+  predicate(VM_Version::supports_cx8() ZGC_ONLY( && n->as_LoadStore()->barrier_data() == 0 ));
   match(Set res (CompareAndSwapP mem_ptr (Binary oldval newval)));
   match(Set res (WeakCompareAndSwapP mem_ptr (Binary oldval newval)));
   effect(KILL cr, KILL oldval);
@@ -7796,7 +7798,7 @@ instruct compareAndExchangeP(
                          rax_RegP oldval, rRegP newval,
                          rFlagsReg cr)
 %{
-  predicate(VM_Version::supports_cx8());
+  predicate(VM_Version::supports_cx8() ZGC_ONLY( && n->as_LoadStore()->barrier_data() == 0 ));
   match(Set oldval (CompareAndExchangeP mem_ptr (Binary oldval newval)));
   effect(KILL cr);
 
@@ -7941,6 +7943,7 @@ instruct xchgL( memory mem, rRegL newval) %{
 
 instruct xchgP( memory mem, rRegP newval) %{
   match(Set newval (GetAndSetP mem newval));
+  predicate(true ZGC_ONLY( && n->as_LoadStore()->barrier_data() == 0 ));
   format %{ "XCHGQ  $newval,[$mem]" %}
   ins_encode %{
     __ xchgq($newval$$Register, $mem$$Address);
@@ -11637,6 +11640,7 @@ instruct compP_rReg(rFlagsRegU cr, rRegP op1, rRegP op2)
 instruct compP_rReg_mem(rFlagsRegU cr, rRegP op1, memory op2)
 %{
   match(Set cr (CmpP op1 (LoadP op2)));
+  predicate(true ZGC_ONLY( && n->in(2)->as_Load()->barrier_data() == 0 ));
 
   ins_cost(500); // XXX
   format %{ "cmpq    $op1, $op2\t# ptr" %}
@@ -11662,7 +11666,8 @@ instruct compP_rReg_mem(rFlagsRegU cr, rRegP op1, memory op2)
 // and raw pointers have no anti-dependencies.
 instruct compP_mem_rReg(rFlagsRegU cr, rRegP op1, memory op2)
 %{
-  predicate(n->in(2)->in(2)->bottom_type()->reloc() == relocInfo::none);
+  predicate(n->in(2)->in(2)->bottom_type()->reloc() == relocInfo::none
+            ZGC_ONLY( && n->in(2)->as_Load()->barrier_data() == 0 ));
   match(Set cr (CmpP op1 (LoadP op2)));
 
   format %{ "cmpq    $op1, $op2\t# raw ptr" %}
@@ -11687,7 +11692,8 @@ instruct testP_reg(rFlagsReg cr, rRegP src, immP0 zero)
 // any compare to a zero should be eq/neq.
 instruct testP_mem(rFlagsReg cr, memory op, immP0 zero)
 %{
-  predicate(!UseCompressedOops || (Universe::narrow_oop_base() != NULL));
+  predicate((!UseCompressedOops || (Universe::narrow_oop_base() != NULL))
+            ZGC_ONLY(&& n->in(1)->as_Load()->barrier_data() == 0));
   match(Set cr (CmpP (LoadP op) zero));
 
   ins_cost(500); // XXX
@@ -11700,7 +11706,8 @@ instruct testP_mem(rFlagsReg cr, memory op, immP0 zero)
 
 instruct testP_mem_reg0(rFlagsReg cr, memory mem, immP0 zero)
 %{
-  predicate(UseCompressedOops && (Universe::narrow_oop_base() == NULL) && (Universe::narrow_klass_base() == NULL));
+  predicate(UseCompressedOops && (Universe::narrow_oop_base() == NULL) && (Universe::narrow_klass_base() == NULL)
+            ZGC_ONLY( && n->in(1)->as_Load()->barrier_data() == 0 ));
   match(Set cr (CmpP (LoadP mem) zero));
 
   format %{ "cmpq    R12, $mem\t# ptr (R12_heapbase==0)" %}

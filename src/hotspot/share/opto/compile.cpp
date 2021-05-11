@@ -79,9 +79,6 @@
 #if INCLUDE_G1GC
 #include "gc/g1/g1ThreadLocalData.hpp"
 #endif // INCLUDE_G1GC
-#if INCLUDE_ZGC
-#include "gc/z/c2/zBarrierSetC2.hpp"
-#endif
 #if INCLUDE_SHENANDOAHGC
 #include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
 #endif
@@ -994,6 +991,7 @@ Compile::Compile( ciEnv* ci_env,
     _printer(NULL),
 #endif
     _comp_arena(mtCompiler),
+    _barrier_set_state(BarrierSet::barrier_set()->barrier_set_c2()->create_barrier_state(comp_arena())),
     _node_arena(mtCompiler),
     _old_arena(mtCompiler),
     _Compile_types(mtCompiler),
@@ -2419,13 +2417,6 @@ void Compile::Optimize() {
   bs->verify_gc_barriers(false);
 #endif
 
-#if INCLUDE_ZGC
-  if (UseZGC) {
-    ZBarrierSetC2::barrier_insertion_phase(C, igvn);
-    if (failing())  return;
-  }
-#endif
-
   {
     TracePhase tp("macroExpand", &timers[_t_macroExpand]);
     PhaseMacroExpand  mex(igvn);
@@ -2839,9 +2830,6 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   }
 #endif
   // Count FPU ops and common calls, implements item (3)
-#if INCLUDE_ZGC
-  if (!(UseZGC && ZBarrierSetC2::final_graph_reshaping(this, n, nop))) {
-#endif
   switch( nop ) {
   // Count all float operations that may use FPU
   case Op_AddF:
@@ -3551,7 +3539,6 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
     assert( nop != Op_ProfileBoolean, "should be eliminated during IGVN");
     break;
   }
-ZGC_ONLY(})
 
   // Collect CFG split points
   if (n->is_MultiBranch() && !n->is_RangeCheck()) {

@@ -217,6 +217,12 @@ public:
   // expanded later, then now is the time to do so.
   virtual bool expand_macro_nodes(PhaseMacroExpand* macro) const { return false; }
   virtual void verify_gc_barriers(bool post_parse) const {}
+
+#if INCLUDE_ZGC
+  virtual void late_barrier_analysis() const { }
+  virtual int estimate_stub_size() const { return 0; }
+  virtual void emit_stubs(CodeBuffer& cb) const { }
+#endif
 };
 
 #endif // SHARE_GC_SHARED_C2_BARRIERSETC2_HPP

@@ -49,9 +49,6 @@
 #include "utilities/copy.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/vmError.hpp"
-#if INCLUDE_ZGC
-#include "gc/z/c2/zBarrierSetC2.hpp"
-#endif
 #if INCLUDE_SHENANDOAHGC
 #include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
 #endif
@@ -2852,9 +2849,8 @@ const Type* SCMemProjNode::Value(PhaseGVN* phase) const
 LoadStoreNode::LoadStoreNode( Node *c, Node *mem, Node *adr, Node *val, const TypePtr* at, const Type* rt, uint required )
   : Node(required),
     _type(rt),
-    _adr_type(at),
-    _has_barrier(false)
-{
+    _adr_type(at) {
+  ZGC_ONLY( _barrier = 0; )
   init_req(MemNode::Control, c  );
   init_req(MemNode::Memory , mem);
   init_req(MemNode::Address, adr);

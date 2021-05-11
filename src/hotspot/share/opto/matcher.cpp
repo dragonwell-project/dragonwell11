@@ -41,10 +41,6 @@
 #include "runtime/os.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "utilities/align.hpp"
-#if INCLUDE_ZGC
-#include "gc/z/zBarrierSetRuntime.hpp"
-#include "gc/z/c2/zBarrierSetC2.hpp"
-#endif // INCLUDE_ZGC
 
 OptoReg::Name OptoReg::c_frame_pointer;
 
@@ -1753,6 +1749,17 @@ MachNode *Matcher::ReduceInst( State *s, int rule, Node *&mem ) {
     _shared_nodes.map(leaf->_idx, ex);
   }
 
+#if INCLUDE_ZGC
+  if (UseZGC) {
+    // Have mach nodes inherit GC barrier data
+    if (leaf->is_LoadStore()) {
+      mach->set_barrier_data(leaf->as_LoadStore()->barrier_data());
+    } else if (leaf->is_Mem()) {
+      mach->set_barrier_data(leaf->as_Mem()->barrier_data());
+    }
+  }
+#endif
+
   return ex;
 }
 
@@ -2085,10 +2092,6 @@ void Matcher::find_shared( Node *n ) {
       bool mem_op = false;
       int mem_addr_idx = MemNode::Address;
 
-#if INCLUDE_ZGC
-      bool gc_handled = UseZGC && ZBarrierSetC2::matcher_find_shared_visit(this, mstack, n, nop, mem_op, mem_addr_idx);
-      if (!gc_handled) {
-#endif
       switch( nop ) {  // Handle some opcodes special
       case Op_Phi:             // Treat Phis as shared roots
       case Op_Parm:
@@ -2192,9 +2195,6 @@ void Matcher::find_shared( Node *n ) {
         if( !n->ideal_reg() )
           set_dontcare(n);  // Unmatchable Nodes
       } // end_switch
-#if INCLUDE_ZGC
-      } // end of "if (!gc_handled)"
-#endif
 
       for(int i = n->req() - 1; i >= 0; --i) { // For my children
         Node *m = n->in(i); // Get ith input
@@ -2253,10 +2253,6 @@ void Matcher::find_shared( Node *n ) {
     else if (nstate == Post_Visit) {
       mstack.pop(); // Remove node from stack
 
-#if INCLUDE_ZGC
-      bool gc_handled = UseZGC && ZBarrierSetC2::matcher_find_shared_post_visit(this, n, n->Opcode());
-      if (!gc_handled) {
-#endif
       // Now hack a few special opcodes
       switch( n->Opcode() ) {       // Handle some opcodes special
       case Op_StorePConditional:
@@ -2362,9 +2358,6 @@ void Matcher::find_shared( Node *n ) {
       default:
         break;
       }
-#if INCLUDE_ZGC
-      } // end of "if (!gc_handled)"
-#endif
     }
     else {
       ShouldNotReachHere();
