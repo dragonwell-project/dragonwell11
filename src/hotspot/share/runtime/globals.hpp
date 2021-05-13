@@ -1222,6 +1222,9 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   develop(bool, UseCHA, true,                                               \
           "Enable CHA")                                                     \
                                                                             \
+  diagnostic(bool, UseVtableBasedCHA, true,                                 \
+          "Use vtable information during CHA")                              \
+                                                                            \
   product(bool, UseTypeProfile, true,                                       \
           "Check interpreter profile for historically monomorphic calls")   \
                                                                             \
