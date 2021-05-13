@@ -1297,14 +1297,18 @@ void CodeCache::flush_dependents_on(InstanceKlass* dependee) {
 
   if (number_of_nmethods_with_dependencies() == 0) return;
 
-  // CodeCache can only be updated by a thread_in_VM and they will all be
-  // stopped during the safepoint so CodeCache will be safe to update without
-  // holding the CodeCache_lock.
+  int marked = 0;
+  if (dependee->is_linked()) {
+    // Class initialization state change.
+    KlassInitDepChange changes(dependee);
+    marked = mark_for_deoptimization(changes);
+  } else {
+    // New class is loaded.
+    NewKlassDepChange changes(dependee);
+    marked = mark_for_deoptimization(changes);
+  }
 
-  KlassDepChange changes(dependee);
-
-  // Compute the dependent nmethods
-  if (mark_for_deoptimization(changes) > 0) {
+  if (marked > 0) {
     // At least one nmethod has been marked for deoptimization
     VM_Deoptimize op;
     VMThread::execute(&op);

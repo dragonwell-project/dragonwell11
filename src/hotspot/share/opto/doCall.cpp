@@ -333,9 +333,13 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
           CallGenerator* miss_cg = CallGenerator::for_uncommon_trap(callee,
               Deoptimization::Reason_class_check, Deoptimization::Action_none);
 
-          CallGenerator* cg = CallGenerator::for_guarded_call(holder, miss_cg, hit_cg);
+          // Keep consistent with upstream JDK-8268494
+          ciKlass* constraint = (holder->is_subclass_of(singleton) ? holder : singleton); // avoid upcasts
+          CallGenerator* cg = CallGenerator::for_guarded_call(constraint, miss_cg, hit_cg);
           if (hit_cg != NULL && cg != NULL) {
-            dependencies()->assert_unique_concrete_method(declared_interface, cha_monomorphic_target);
+            // Keep consistent with upstream JDK-8268494
+            dependencies()->assert_unique_implementor(declared_interface, singleton);
+            dependencies()->assert_unique_concrete_method(declared_interface, cha_monomorphic_target, declared_interface, callee);
             return cg;
           }
         }
@@ -1082,7 +1086,7 @@ ciMethod* Compile::optimize_virtual_call(ciMethod* caller, int bci, ciInstanceKl
   vtable_index       = Method::invalid_vtable_index;
 
   // Choose call strategy.
-  ciMethod* optimized_virtual_method = optimize_inlining(caller, bci, klass, callee,
+  ciMethod* optimized_virtual_method = optimize_inlining(caller, klass, holder, callee,
                                                          receiver_type, check_access);
 
   // Have the call been sufficiently improved such that it is no longer a virtual?
@@ -1097,7 +1101,7 @@ ciMethod* Compile::optimize_virtual_call(ciMethod* caller, int bci, ciInstanceKl
 }
 
 // Identify possible target method and inlining style
-ciMethod* Compile::optimize_inlining(ciMethod* caller, int bci, ciInstanceKlass* klass,
+ciMethod* Compile::optimize_inlining(ciMethod* caller, ciInstanceKlass* klass, ciKlass* holder,
                                      ciMethod* callee, const TypeOopPtr* receiver_type,
                                      bool check_access) {
   // only use for virtual or interface calls
@@ -1176,7 +1180,7 @@ ciMethod* Compile::optimize_inlining(ciMethod* caller, int bci, ciInstanceKlass*
       // by dynamic class loading.  Be sure to test the "static" receiver
       // dest_method here, as opposed to the actual receiver, which may
       // falsely lead us to believe that the receiver is final or private.
-      dependencies()->assert_unique_concrete_method(actual_receiver, cha_monomorphic_target);
+      dependencies()->assert_unique_concrete_method(actual_receiver, cha_monomorphic_target, holder, callee);
     }
     return cha_monomorphic_target;
   }
@@ -1188,11 +1192,6 @@ ciMethod* Compile::optimize_inlining(ciMethod* caller, int bci, ciInstanceKlass*
     // such method can be changed when its class is redefined.
     ciMethod* exact_method = callee->resolve_invoke(calling_klass, actual_receiver);
     if (exact_method != NULL) {
-      if (PrintOpto) {
-        tty->print("  Calling method via exact type @%d --- ", bci);
-        exact_method->print_name();
-        tty->cr();
-      }
       return exact_method;
     }
   }
