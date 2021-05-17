@@ -2497,16 +2497,12 @@ void Compile::reshape_address(AddPNode* addp) {
   }
 
 typedef void (MacroAssembler::* mem_insn)(Register Rt, const Address &adr);
+typedef void (MacroAssembler::* mem_insn2)(Register Rt, Register adr);
 typedef void (MacroAssembler::* mem_float_insn)(FloatRegister Rt, const Address &adr);
 typedef void (MacroAssembler::* mem_vector_insn)(FloatRegister Rt,
                                   MacroAssembler::SIMD_RegVariant T, const Address &adr);
 
-  // Used for all non-volatile memory accesses.  The use of
-  // $mem->opcode() to discover whether this pattern uses sign-extended
-  // offsets is something of a kludge.
-  static void loadStore(MacroAssembler masm, mem_insn insn,
-                         Register reg, int opcode,
-                         Register base, int index, int size, int disp)
+static Address mem2address(int opcode, Register base, int index, int size, int disp)
   {
     Address::extend scale;
 
@@ -2525,11 +2521,22 @@ typedef void (MacroAssembler::* mem_vector_insn)(FloatRegister Rt,
     }
 
     if (index == -1) {
-      (masm.*insn)(reg, Address(base, disp));
+      return Address(base, disp);
     } else {
       assert(disp == 0, "unsupported address mode: disp = %d", disp);
-      (masm.*insn)(reg, Address(base, as_Register(index), scale));
+      return Address(base, as_Register(index), scale);
     }
+  }
+
+  // Used for all non-volatile memory accesses.  The use of
+  // $mem->opcode() to discover whether this pattern uses sign-extended
+  // offsets is something of a kludge.
+  static void loadStore(MacroAssembler masm, mem_insn insn,
+                         Register reg, int opcode,
+                         Register base, int index, int size, int disp)
+  {
+    Address addr = mem2address(opcode, base, index, size, disp);
+    (masm.*insn)(reg, addr);
   }
 
   static void loadStore(MacroAssembler masm, mem_float_insn insn,
