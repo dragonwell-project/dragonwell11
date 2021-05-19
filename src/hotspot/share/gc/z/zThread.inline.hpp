@@ -21,43 +21,46 @@
  * questions.
  */
 
-#ifndef SHARE_GC_Z_ZTHREAD_HPP
-#define SHARE_GC_Z_ZTHREAD_HPP
+#ifndef SHARE_GC_Z_ZTHREAD_INLINE_HPP
+#define SHARE_GC_Z_ZTHREAD_INLINE_HPP
 
-#include "memory/allocation.hpp"
+#include "gc/z/zThread.hpp"
+#include "utilities/debug.hpp"
 
-class ZThread : public AllStatic {
-  friend class ZTask;
-  friend class ZWorkersInitializeTask;
-  friend class ZRuntimeWorkersInitializeTask;
+inline void ZThread::ensure_initialized() {
+  if (!_initialized) {
+    initialize();
+  }
+}
 
-private:
-  static __thread bool      _initialized;
-  static __thread uintptr_t _id;
-  static __thread bool      _is_vm;
-  static __thread bool      _is_java;
-  static __thread bool      _is_worker;
-  static __thread bool      _is_runtime_worker;
-  static __thread uint      _worker_id;
+inline uintptr_t ZThread::id() {
+  ensure_initialized();
+  return _id;
+}
 
-  static void initialize();
-  static void ensure_initialized();
+inline bool ZThread::is_vm() {
+  ensure_initialized();
+  return _is_vm;
+}
 
-  static void set_worker();
-  static void set_runtime_worker();
+inline bool ZThread::is_java() {
+  ensure_initialized();
+  return _is_java;
+}
 
-  static bool has_worker_id();
-  static void set_worker_id(uint worker_id);
-  static void clear_worker_id();
+inline bool ZThread::is_worker() {
+  ensure_initialized();
+  return _is_worker;
+}
 
-public:
-  static const char* name();
-  static uintptr_t id();
-  static bool is_vm();
-  static bool is_java();
-  static bool is_worker();
-  static bool is_runtime_worker();
-  static uint worker_id();
-};
+inline bool ZThread::is_runtime_worker() {
+  ensure_initialized();
+  return _is_runtime_worker;
+}
 
-#endif // SHARE_GC_Z_ZTHREAD_HPP
+inline uint ZThread::worker_id() {
+  assert(has_worker_id(), "Worker id not initialized");
+  return _worker_id;
+}
+
+#endif // SHARE_GC_Z_ZTHREAD_INLINE_HPP
