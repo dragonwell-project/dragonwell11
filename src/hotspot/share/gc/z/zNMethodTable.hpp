@@ -34,7 +34,7 @@ private:
   static size_t              _size;
   static size_t              _nregistered;
   static size_t              _nunregistered;
-  static volatile size_t     _claimed ATTRIBUTE_ALIGNED(ZCacheLineSize);
+  ZCACHE_ALIGNED static volatile size_t     _claimed;
 
   static ZNMethodTableEntry create_entry(nmethod* nm);
   static void destroy_entry(ZNMethodTableEntry entry);
