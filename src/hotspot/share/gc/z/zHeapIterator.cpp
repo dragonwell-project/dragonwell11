@@ -115,7 +115,7 @@ public:
 
 ZHeapIterator::ZHeapIterator(bool visit_referents) :
     _visit_stack(),
-    _visit_map(),
+    _visit_map(ZAddressOffsetMax),
     _visit_referents(visit_referents) {}
 
 ZHeapIterator::~ZHeapIterator() {
