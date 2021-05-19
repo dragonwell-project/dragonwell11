@@ -55,24 +55,24 @@ const uint8_t     ZPageTypeLarge                = 2;
 
 // Page size shifts
 const size_t      ZPageSizeSmallShift           = ZGranuleSizeShift;
-const size_t      ZPageSizeMediumShift          = ZPageSizeSmallShift + 4;
+extern size_t     ZPageSizeMediumShift;
 
 // Page sizes
 const size_t      ZPageSizeSmall                = (size_t)1 << ZPageSizeSmallShift;
-const size_t      ZPageSizeMedium               = (size_t)1 << ZPageSizeMediumShift;
+extern size_t     ZPageSizeMedium;
 
 // Object size limits
-const size_t      ZObjectSizeLimitSmall         = (ZPageSizeSmall / 8);  // Allow 12.5% waste
-const size_t      ZObjectSizeLimitMedium        = (ZPageSizeMedium / 8); // Allow 12.5% waste
+const size_t      ZObjectSizeLimitSmall         = ZPageSizeSmall / 8; // 12.5% max waste
+extern size_t     ZObjectSizeLimitMedium;
 
 // Object alignment shifts
 extern const int& ZObjectAlignmentSmallShift;
-const int         ZObjectAlignmentMediumShift   = ZPageSizeMediumShift - 13; // 8192 objects per page
-const int         ZObjectAlignmentLargeShift    = ZPageSizeSmallShift;
+extern int        ZObjectAlignmentMediumShift;
+const int         ZObjectAlignmentLargeShift    = ZGranuleSizeShift;
 
 // Object alignments
 extern const int& ZObjectAlignmentSmall;
-const int         ZObjectAlignmentMedium        = 1 << ZObjectAlignmentMediumShift;
+extern int        ZObjectAlignmentMedium;
 const int         ZObjectAlignmentLarge         = 1 << ZObjectAlignmentLargeShift;
 
 //
