@@ -33,7 +33,7 @@
 #include "gc/z/zRootsIterator.hpp"
 #include "gc/z/zStat.hpp"
 #include "gc/z/zTask.hpp"
-#include "gc/z/zThread.hpp"
+#include "gc/z/zThread.inline.hpp"
 #include "gc/z/zUtils.inline.hpp"
 #include "gc/z/zWorkers.inline.hpp"
 #include "logging/log.hpp"
