@@ -77,7 +77,7 @@
   diagnostic(bool, ZVerifyViews, false,                                     \
           "Verify heap view accesses")                                      \
                                                                             \
-  diagnostic(bool, ZVerifyMarking, false,                                   \
+  diagnostic(bool, ZVerifyMarking, trueInDebug,                             \
           "Verify marking stacks")                                          \
                                                                             \
   diagnostic(bool, ZVerifyForwarding, false,                                \
