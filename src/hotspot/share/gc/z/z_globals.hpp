@@ -87,9 +87,6 @@
           "Verify forwarding tables")                                       \
                                                                             \
   diagnostic(bool, ZSymbolTableUnloading, false,                            \
-          "Unload unused VM symbols")                                       \
-                                                                            \
-  develop(bool, ZVerifyLoadBarriers, false,                                 \
-          "Verify that reference loads are followed by barriers")
+          "Unload unused VM symbols")
 
 #endif // SHARE_GC_Z_Z_GLOBALS_HPP
