@@ -23,6 +23,10 @@
  */
 
 #include "precompiled.hpp"
+#if INCLUDE_ZGC
+#include "gc/shared/barrierSet.hpp"
+#include "gc/shared/barrierSetNMethod.hpp"
+#endif
 #include "gc/shared/barrierSetAssembler.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "interpreter/interp_masm.hpp"
@@ -322,3 +326,24 @@ void BarrierSetAssembler::incr_allocated_bytes(MacroAssembler* masm, Register th
   __ adcl(Address(thread, in_bytes(JavaThread::allocated_bytes_offset())+4), 0);
 #endif
 }
+
+#if INCLUDE_ZGC
+void BarrierSetAssembler::nmethod_entry_barrier(MacroAssembler* masm) {
+  BarrierSetNMethod* bs_nm = BarrierSet::barrier_set()->barrier_set_nmethod();
+  if (bs_nm == NULL) {
+    return;
+  }
+#ifndef _LP64
+  ShouldNotReachHere();
+#else
+  Label continuation;
+  Register thread = LP64_ONLY(r15_thread);
+  Address disarmed_addr(thread, in_bytes(bs_nm->thread_disarmed_offset()));
+  __ align(8);
+  __ cmpl(disarmed_addr, 0);
+  __ jcc(Assembler::equal, continuation);
+  __ call(RuntimeAddress(StubRoutines::x86::method_entry_barrier()));
+  __ bind(continuation);
+#endif
+}
+#endif

@@ -1635,7 +1635,7 @@ public:
 #endif
 
   // C2 compiled method's prolog code.
-  void verified_entry(int framesize, int stack_bang_size, bool fp_mode_24b);
+  void verified_entry(int framesize, int stack_bang_size, bool fp_mode_24b ZGC_ONLY(COMMA bool is_stub));
 
   // clear memory of size 'cnt' qwords, starting at 'base';
   // if 'is_large' is set, do not try to produce short loop
