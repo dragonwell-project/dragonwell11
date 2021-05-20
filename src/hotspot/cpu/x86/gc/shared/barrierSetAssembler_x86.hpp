@@ -79,6 +79,10 @@ public:
                              Label& slow_case);
 
   virtual void barrier_stubs_init() {}
+
+#if INCLUDE_ZGC
+  virtual void nmethod_entry_barrier(MacroAssembler* masm);
+#endif
 };
 
 #endif // CPU_X86_GC_SHARED_BARRIERSETASSEMBLER_X86_HPP

@@ -36,6 +36,9 @@
 class BarrierSetAssembler;
 class BarrierSetC1;
 class BarrierSetC2;
+#if INCLUDE_ZGC
+class BarrierSetNMethod;
+#endif
 class JavaThread;
 
 // This class provides the interface between a barrier implementation and
@@ -72,6 +75,9 @@ private:
   BarrierSetAssembler* _barrier_set_assembler;
   BarrierSetC1* _barrier_set_c1;
   BarrierSetC2* _barrier_set_c2;
+#if INCLUDE_ZGC
+  BarrierSetNMethod* _barrier_set_nmethod;
+#endif
 
 public:
   // Metafunction mapping a class derived from BarrierSet to the
@@ -95,11 +101,13 @@ protected:
   BarrierSet(BarrierSetAssembler* barrier_set_assembler,
              BarrierSetC1* barrier_set_c1,
              BarrierSetC2* barrier_set_c2,
+             ZGC_ONLY_ARG(BarrierSetNMethod* barrier_set_nmethod)
              const FakeRtti& fake_rtti) :
     _fake_rtti(fake_rtti),
     _barrier_set_assembler(barrier_set_assembler),
     _barrier_set_c1(barrier_set_c1),
-    _barrier_set_c2(barrier_set_c2) {}
+    _barrier_set_c2(barrier_set_c2)
+    ZGC_ONLY(COMMA _barrier_set_nmethod(barrier_set_nmethod)) {}
   ~BarrierSet() { }
 
   template <class BarrierSetAssemblerT>
@@ -151,6 +159,12 @@ public:
     assert(_barrier_set_c2 != NULL, "should be set");
     return _barrier_set_c2;
   }
+
+#if INCLUDE_ZGC
+  BarrierSetNMethod* barrier_set_nmethod() {
+    return _barrier_set_nmethod;
+  }
+#endif
 
   // The AccessBarrier of a BarrierSet subclass is called by the Access API
   // (cf. oops/access.hpp) to perform decorated accesses. GC implementations

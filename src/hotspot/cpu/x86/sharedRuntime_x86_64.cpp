@@ -33,6 +33,10 @@
 #include "code/nativeInst.hpp"
 #include "code/vtableStubs.hpp"
 #include "gc/shared/gcLocker.hpp"
+#if INCLUDE_ZGC
+#include "gc/shared/barrierSet.hpp"
+#include "gc/shared/barrierSetAssembler.hpp"
+#endif
 #include "interpreter/interpreter.hpp"
 #include "logging/log.hpp"
 #include "memory/resourceArea.hpp"
@@ -2106,6 +2110,11 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   __ enter();
   // -2 because return address is already present and so is saved rbp
   __ subptr(rsp, stack_size - 2*wordSize);
+
+#if INCLUDE_ZGC
+  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
+  bs->nmethod_entry_barrier(masm);
+#endif
 
   // Frame is now completed as far as size and linkage.
   int frame_complete = ((intptr_t)__ pc()) - start;
