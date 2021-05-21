@@ -3951,6 +3951,15 @@ void java_lang_invoke_CallSite::serialize_offsets(SerializeClosure* f) {
 }
 #endif
 
+#if INCLUDE_ZGC
+oop java_lang_invoke_CallSite::context_no_keepalive(oop call_site) {
+  assert(java_lang_invoke_CallSite::is_instance(call_site), "");
+
+  oop dep_oop = call_site->obj_field_access<AS_NO_KEEPALIVE>(_context_offset);
+  return dep_oop;
+}
+#endif
+
 oop java_lang_invoke_CallSite::context(oop call_site) {
   assert(java_lang_invoke_CallSite::is_instance(call_site), "");
 

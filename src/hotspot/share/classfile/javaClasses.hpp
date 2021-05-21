@@ -1247,6 +1247,9 @@ public:
   static void         set_target(          oop site, oop target);
   static void         set_target_volatile( oop site, oop target);
 
+#if INCLUDE_ZGC
+  static oop context_no_keepalive(oop site);
+#endif
   static oop              context(oop site);
 
   // Testers

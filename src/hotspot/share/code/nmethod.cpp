@@ -42,6 +42,9 @@
 #include "logging/logStream.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
+#if INCLUDE_ZGC
+#include "oops/access.inline.hpp"
+#endif
 #include "oops/method.inline.hpp"
 #include "oops/methodData.hpp"
 #include "oops/oop.inline.hpp"
@@ -1330,6 +1333,17 @@ void nmethod::flush() {
 
   CodeBlob::flush();
   CodeCache::free(this);
+}
+
+oop nmethod::oop_at(int index) const {
+  if (index == 0) {
+    return NULL;
+  }
+#if INCLUDE_ZGC
+  return NativeAccess<AS_NO_KEEPALIVE>::oop_load(oop_addr_at(index));
+#else
+  return *oop_addr_at(index);
+#endif
 }
 
 //
