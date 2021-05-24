@@ -40,8 +40,6 @@ void ZAddress::initialize() {
   ZAddressReservedEnd = ZPlatformAddressReservedEnd();
   ZAddressReservedSize = ZAddressReservedEnd - ZAddressReservedStart;
 
-  ZAddressBase = ZPlatformAddressBase();
-
   ZAddressOffsetBits = ZPlatformAddressOffsetBits();
   ZAddressOffsetMask = (((uintptr_t)1 << ZAddressOffsetBits) - 1) << ZAddressOffsetShift;
   ZAddressOffsetMax = (uintptr_t)1 << ZAddressOffsetBits;

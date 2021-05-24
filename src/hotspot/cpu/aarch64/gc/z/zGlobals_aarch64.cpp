@@ -155,10 +155,6 @@ uintptr_t ZPlatformAddressReservedEnd() {
   return ZPlatformAddressSpaceEnd();
 }
 
-uintptr_t ZPlatformAddressBase() {
-  return 0;
-}
-
 size_t ZPlatformAddressOffsetBits() {
   const size_t min_address_offset_bits = 42; // 4TB
   const size_t max_address_offset_bits = 44; // 16TB
