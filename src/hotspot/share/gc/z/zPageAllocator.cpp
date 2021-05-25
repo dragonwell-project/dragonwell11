@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,6 +34,7 @@
 #include "gc/z/zSafeDelete.inline.hpp"
 #include "gc/z/zStat.hpp"
 #include "gc/z/zTracer.inline.hpp"
+#include "jfr/jfrEvents.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/init.hpp"
 #include "runtime/java.hpp"
@@ -381,6 +382,8 @@ ZPage* ZPageAllocator::alloc_page_common_inner(uint8_t type, size_t size, bool n
 }
 
 ZPage* ZPageAllocator::alloc_page_common(uint8_t type, size_t size, ZAllocationFlags flags) {
+  EventZPageAllocation event;
+
   ZPage* const page = alloc_page_common_inner(type, size, flags.no_reserve());
   if (page == NULL) {
     // Out of memory
@@ -391,7 +394,8 @@ ZPage* ZPageAllocator::alloc_page_common(uint8_t type, size_t size, ZAllocationF
   increase_used(size, flags.relocation());
 
   // Send trace event
-  ZTracer::tracer()->report_page_alloc(size, _used, max_available(flags.no_reserve()), _cache.available(), flags);
+  event.commit(type, size, _used, max_available(flags.no_reserve()),
+               _cache.available(), flags.non_blocking(), flags.no_reserve());
 
   return page;
 }
@@ -420,6 +424,7 @@ ZPage* ZPageAllocator::alloc_page_blocking(uint8_t type, size_t size, ZAllocatio
   if (page == NULL) {
     // Allocation failed
     ZStatTimer timer(ZCriticalPhaseAllocationStall);
+    EventZAllocationStall event;
 
     // We can only block if VM is fully initialized
     check_out_of_memory_during_initialization();
@@ -442,6 +447,8 @@ ZPage* ZPageAllocator::alloc_page_blocking(uint8_t type, size_t size, ZAllocatio
       // posting thread. https://sourceware.org/bugzilla/show_bug.cgi?id=12674
       ZLocker<ZLock> locker(&_lock);
     }
+
+    event.commit(type, size);
   }
 
   return page;
@@ -520,7 +527,9 @@ void ZPageAllocator::free_page(ZPage* page, bool reclaimed) {
   satisfy_alloc_queue();
 }
 
-size_t ZPageAllocator::flush_cache(ZPageCacheFlushClosure* cl) {
+size_t ZPageAllocator::flush_cache(ZPageCacheFlushClosure* cl, bool for_allocation) {
+  EventZPageCacheFlush event;
+
   ZList<ZPage> list;
 
   // Flush pages
@@ -539,6 +548,9 @@ size_t ZPageAllocator::flush_cache(ZPageCacheFlushClosure* cl) {
     flushed += page->size();
     destroy_page(page);
   }
+
+  // Send event
+  event.commit(flushed, for_allocation);
 
   return flushed;
 }
@@ -565,7 +577,7 @@ void ZPageAllocator::flush_cache_for_allocation(size_t requested) {
 
   // Flush pages
   ZPageCacheFlushForAllocationClosure cl(requested);
-  const size_t flushed = flush_cache(&cl);
+  const size_t flushed = flush_cache(&cl, true /* for_allocation */);
 
   assert(requested == flushed, "Failed to flush");
 
@@ -627,6 +639,7 @@ uint64_t ZPageAllocator::uncommit(uint64_t delay) {
     return timeout;
   }
 
+  EventZUncommit event;
   size_t capacity_before;
   size_t capacity_after;
   size_t uncommitted;
@@ -647,7 +660,7 @@ uint64_t ZPageAllocator::uncommit(uint64_t delay) {
     if (flush > 0) {
       // Flush pages to uncommit
       ZPageCacheFlushForUncommitClosure cl(flush, delay);
-      uncommit += flush_cache(&cl);
+      uncommit += flush_cache(&cl, false /* for_allocation */);
       timeout = cl.timeout();
     }
 
@@ -665,6 +678,9 @@ uint64_t ZPageAllocator::uncommit(uint64_t delay) {
                        capacity_before / M, percent_of(capacity_before, max_capacity()),
                        capacity_after / M, percent_of(capacity_after, max_capacity()),
                        uncommitted / M);
+
+    // Send event
+    event.commit(capacity_before, capacity_after, uncommitted);
 
     // Update statistics
     ZStatInc(ZCounterUncommit, uncommitted);
