@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,22 +21,13 @@
  * questions.
  */
 
-#include "precompiled.hpp"
+#ifndef SHARE_GC_Z_ZNUMA_INLINE_HPP
+#define SHARE_GC_Z_ZNUMA_INLINE_HPP
+
 #include "gc/z/zNUMA.hpp"
-#include "logging/log.hpp"
-#include "runtime/os.hpp"
 
-bool ZNUMA::_enabled;
-
-void ZNUMA::initialize() {
-  initialize_platform();
-
-  log_info(gc, init)("NUMA Support: %s", to_string());
-  if (_enabled) {
-    log_info(gc, init)("NUMA Nodes: %u", count());
-  }
+inline bool ZNUMA::is_enabled() {
+  return _enabled;
 }
 
-const char* ZNUMA::to_string() {
-  return _enabled ? "Enabled" : "Disabled";
-}
+#endif // SHARE_GC_Z_ZNUMA_INLINE_HPP
