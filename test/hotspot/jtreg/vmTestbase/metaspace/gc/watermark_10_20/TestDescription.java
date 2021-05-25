@@ -29,6 +29,7 @@
  * @summary converted from VM Testbase metaspace/gc/watermark_10_20.
  * VM Testbase keywords: [nonconcurrent, no_cds]
  *
+ * @requires vm.gc != "Z"
  * @library /vmTestbase /test/lib
  * @run driver jdk.test.lib.FileInstaller . .
  * @run main/othervm
