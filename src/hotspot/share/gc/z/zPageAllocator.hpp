@@ -34,6 +34,7 @@
 #include "memory/allocation.hpp"
 
 class ZPageAllocRequest;
+class ZWorkers;
 
 class ZPageAllocator {
   friend class VMStructs;
@@ -60,7 +61,7 @@ private:
 
   static ZPage* const      gc_marker;
 
-  void prime_cache(size_t size);
+  void prime_cache(ZWorkers* workers, size_t size);
 
   void increase_used(size_t size, bool relocation);
   void decrease_used(size_t size, bool reclaimed);
@@ -85,7 +86,8 @@ private:
   void satisfy_alloc_queue();
 
 public:
-  ZPageAllocator(size_t min_capacity,
+  ZPageAllocator(ZWorkers* workers,
+                 size_t min_capacity,
                  size_t initial_capacity,
                  size_t max_capacity,
                  size_t max_reserve);
