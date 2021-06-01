@@ -695,6 +695,11 @@
       <setting name="threshold">0 ms</setting>
     </event>
 
+    <event name="jdk.ZUnmap">
+      <setting name="enabled">true</setting>
+      <setting name="threshold">0 ms</setting>
+    </event>
+
     <event name="jdk.OptoInstanceObjectAllocation">
       <setting name="enabled">false</setting>
       <setting name="stackTrace">true</setting>
