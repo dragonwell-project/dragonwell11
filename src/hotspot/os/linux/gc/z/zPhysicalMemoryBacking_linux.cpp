@@ -290,7 +290,7 @@ bool ZPhysicalMemoryBacking::is_initialized() const {
   return _initialized;
 }
 
-void ZPhysicalMemoryBacking::warn_available_space(size_t max) const {
+void ZPhysicalMemoryBacking::warn_available_space(size_t max_capacity) const {
   // Note that the available space on a tmpfs or a hugetlbfs filesystem
   // will be zero if no size limit was specified when it was mounted.
   if (_available == 0) {
@@ -304,18 +304,18 @@ void ZPhysicalMemoryBacking::warn_available_space(size_t max) const {
   // Warn if the filesystem doesn't currently have enough space available to hold
   // the max heap size. The max heap size will be capped if we later hit this limit
   // when trying to expand the heap.
-  if (_available < max) {
+  if (_available < max_capacity) {
     log_warning(gc)("***** WARNING! INCORRECT SYSTEM CONFIGURATION DETECTED! *****");
     log_warning(gc)("Not enough space available on the backing filesystem to hold the current max Java heap");
     log_warning(gc)("size (" SIZE_FORMAT "M). Please adjust the size of the backing filesystem accordingly "
-                    "(available", max / M);
+                    "(available", max_capacity / M);
     log_warning(gc)("space is currently " SIZE_FORMAT "M). Continuing execution with the current filesystem "
                     "size could", _available / M);
-    log_warning(gc)("lead to a premature OutOfMemoryError being thrown, due to failure to map memory.");
+    log_warning(gc)("lead to a premature OutOfMemoryError being thrown, due to failure to commit memory.");
   }
 }
 
-void ZPhysicalMemoryBacking::warn_max_map_count(size_t max) const {
+void ZPhysicalMemoryBacking::warn_max_map_count(size_t max_capacity) const {
   const char* const filename = ZFILENAME_PROC_MAX_MAP_COUNT;
   FILE* const file = fopen(filename, "r");
   if (file == NULL) {
@@ -338,24 +338,24 @@ void ZPhysicalMemoryBacking::warn_max_map_count(size_t max) const {
   // However, ZGC tends to create the most mappings and dominate the total count.
   // In the worst cases, ZGC will map each granule three times, i.e. once per heap view.
   // We speculate that we need another 20% to allow for non-ZGC subsystems to map memory.
-  const size_t required_max_map_count = (max / ZGranuleSize) * 3 * 1.2;
+  const size_t required_max_map_count = (max_capacity / ZGranuleSize) * 3 * 1.2;
   if (actual_max_map_count < required_max_map_count) {
     log_warning(gc)("***** WARNING! INCORRECT SYSTEM CONFIGURATION DETECTED! *****");
     log_warning(gc)("The system limit on number of memory mappings per process might be too low for the given");
     log_warning(gc)("max Java heap size (" SIZE_FORMAT "M). Please adjust %s to allow for at",
-                    max / M, filename);
+                    max_capacity / M, filename);
     log_warning(gc)("least " SIZE_FORMAT " mappings (current limit is " SIZE_FORMAT "). Continuing execution "
                     "with the current", required_max_map_count, actual_max_map_count);
-    log_warning(gc)("limit could lead to a fatal error, due to failure to map memory.");
+    log_warning(gc)("limit could lead to a premature OutOfMemoryError being thrown, due to failure to map memory.");
   }
 }
 
-void ZPhysicalMemoryBacking::warn_commit_limits(size_t max) const {
+void ZPhysicalMemoryBacking::warn_commit_limits(size_t max_capacity) const {
   // Warn if available space is too low
-  warn_available_space(max);
+  warn_available_space(max_capacity);
 
   // Warn if max map count is too low
-  warn_max_map_count(max);
+  warn_max_map_count(max_capacity);
 }
 
 bool ZPhysicalMemoryBacking::is_tmpfs() const {
@@ -417,7 +417,7 @@ ZErrno ZPhysicalMemoryBacking::fallocate_compat_pwrite(size_t offset, size_t len
   return 0;
 }
 
-ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_compat(size_t offset, size_t length) {
+ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_compat(size_t offset, size_t length) const {
   // fallocate(2) is only supported by tmpfs since Linux 3.5, and by hugetlbfs
   // since Linux 4.3. When fallocate(2) is not supported we emulate it using
   // ftruncate/pwrite (for tmpfs) or ftruncate/mmap/munmap (for hugetlbfs).
@@ -429,7 +429,7 @@ ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_compat(size_t offset, size_t 
   return err;
 }
 
-ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_syscall(size_t offset, size_t length) {
+ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_syscall(size_t offset, size_t length) const {
   const int mode = 0; // Allocate
   const int res = ZSyscall::fallocate(_fd, mode, offset, length);
   if (res == -1) {
@@ -441,7 +441,7 @@ ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole_syscall(size_t offset, size_t
   return 0;
 }
 
-ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole(size_t offset, size_t length) {
+ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole(size_t offset, size_t length) const {
   // Using compat mode is more efficient when allocating space on hugetlbfs.
   // Note that allocating huge pages this way will only reserve them, and not
   // associate them with segments of the file. We must guarantee that we at
@@ -466,7 +466,7 @@ ZErrno ZPhysicalMemoryBacking::fallocate_fill_hole(size_t offset, size_t length)
   return fallocate_fill_hole_compat(offset, length);
 }
 
-ZErrno ZPhysicalMemoryBacking::fallocate_punch_hole(size_t offset, size_t length) {
+ZErrno ZPhysicalMemoryBacking::fallocate_punch_hole(size_t offset, size_t length) const {
   if (is_hugetlbfs()) {
     // We can only punch hole in pages that have been touched. Non-touched
     // pages are only reserved, and not associated with any specific file
@@ -489,7 +489,7 @@ ZErrno ZPhysicalMemoryBacking::fallocate_punch_hole(size_t offset, size_t length
   return 0;
 }
 
-ZErrno ZPhysicalMemoryBacking::split_and_fallocate(bool punch_hole, size_t offset, size_t length) {
+ZErrno ZPhysicalMemoryBacking::split_and_fallocate(bool punch_hole, size_t offset, size_t length) const {
   // Try first half
   const size_t offset0 = offset;
   const size_t length0 = align_up(length / 2, _block_size);
@@ -510,7 +510,7 @@ ZErrno ZPhysicalMemoryBacking::split_and_fallocate(bool punch_hole, size_t offse
   return 0;
 }
 
-ZErrno ZPhysicalMemoryBacking::fallocate(bool punch_hole, size_t offset, size_t length) {
+ZErrno ZPhysicalMemoryBacking::fallocate(bool punch_hole, size_t offset, size_t length) const {
   assert(is_aligned(offset, _block_size), "Invalid offset");
   assert(is_aligned(length, _block_size), "Invalid length");
 
@@ -526,7 +526,7 @@ ZErrno ZPhysicalMemoryBacking::fallocate(bool punch_hole, size_t offset, size_t 
   return err;
 }
 
-bool ZPhysicalMemoryBacking::commit_inner(size_t offset, size_t length) {
+bool ZPhysicalMemoryBacking::commit_inner(size_t offset, size_t length) const {
   log_trace(gc, heap)("Committing memory: " SIZE_FORMAT "M-" SIZE_FORMAT "M (" SIZE_FORMAT "M)",
                       offset / M, (offset + length) / M, length / M);
 
@@ -557,7 +557,7 @@ retry:
   return true;
 }
 
-size_t ZPhysicalMemoryBacking::commit(size_t offset, size_t length) {
+size_t ZPhysicalMemoryBacking::commit(size_t offset, size_t length) const {
   // Try to commit the whole region
   if (commit_inner(offset, length)) {
     // Success
@@ -585,7 +585,7 @@ size_t ZPhysicalMemoryBacking::commit(size_t offset, size_t length) {
   }
 }
 
-size_t ZPhysicalMemoryBacking::uncommit(size_t offset, size_t length) {
+size_t ZPhysicalMemoryBacking::uncommit(size_t offset, size_t length) const {
   log_trace(gc, heap)("Uncommitting memory: " SIZE_FORMAT "M-" SIZE_FORMAT "M (" SIZE_FORMAT "M)",
                       offset / M, (offset + length) / M, length / M);
 
