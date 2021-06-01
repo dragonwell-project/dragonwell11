@@ -36,6 +36,7 @@
 #include "gc/z/zTask.hpp"
 #include "gc/z/zTracer.inline.hpp"
 #include "gc/z/zUncommitter.hpp"
+#include "gc/z/zUnmapper.hpp"
 #include "jfr/jfrEvents.hpp"
 #include "gc/z/zWorkers.hpp"
 #include "logging/log.hpp"
@@ -148,6 +149,7 @@ ZPageAllocator::ZPageAllocator(ZWorkers* workers,
     _reclaimed(0),
     _stalled(),
     _satisfied(),
+    _unmapper(new ZUnmapper(this)),
     _uncommitter(new ZUncommitter(this)),
     _safe_delete(),
     _initialized(false) {
@@ -380,12 +382,12 @@ void ZPageAllocator::uncommit_page(ZPage* page) {
 
 void ZPageAllocator::map_page(const ZPage* page) const {
   // Map physical memory
-  _physical.map(page->physical_memory(), page->start());
+  _physical.map(page->start(), page->physical_memory());
 }
 
 void ZPageAllocator::unmap_page(const ZPage* page) const {
   // Unmap physical memory
-  _physical.unmap(page->physical_memory(), page->start());
+  _physical.unmap(page->start(), page->size());
 }
 
 void ZPageAllocator::destroy_page(ZPage* page) {
@@ -549,6 +551,8 @@ ZPage* ZPageAllocator::alloc_page_create(ZPageAllocation* allocation) {
 
   // Allocate virtual memory. To make error handling a lot more straight
   // forward, we allocate virtual memory before destroying flushed pages.
+  // Flushed pages are also unmapped and destroyed asynchronously, so we
+  // can't immediately reuse that part of the address space anyway.
   const ZVirtualMemory vmem = _virtual.alloc(size, allocation->flags().low_address());
   if (vmem.is_null()) {
     log_error(gc)("Out of address space");
@@ -563,14 +567,13 @@ ZPage* ZPageAllocator::alloc_page_create(ZPageAllocation* allocation) {
   for (ZPage* page; iter.next(&page);) {
     flushed += page->size();
 
-    unmap_page(page);
-
     // Harvest flushed physical memory
     ZPhysicalMemory& fmem = page->physical_memory();
     pmem.add_segments(fmem);
     fmem.remove_segments();
 
-    destroy_page(page);
+    // Unmap and destroy page
+    _unmapper->unmap_and_destroy_page(page);
   }
 
   if (flushed > 0) {
@@ -810,21 +813,21 @@ void ZPageAllocator::disable_deferred_delete() const {
 
 void ZPageAllocator::debug_map_page(const ZPage* page) const {
   assert(SafepointSynchronize::is_at_safepoint(), "Should be at safepoint");
-  _physical.debug_map(page->physical_memory(), page->start());
+  _physical.debug_map(page->start(), page->physical_memory());
 }
 
 void ZPageAllocator::debug_unmap_page(const ZPage* page) const {
   assert(SafepointSynchronize::is_at_safepoint(), "Should be at safepoint");
-  _physical.debug_unmap(page->physical_memory(), page->start());
+  _physical.debug_unmap(page->start(), page->size());
 }
 
 void ZPageAllocator::pages_do(ZPageClosure* cl) const {
   assert(SafepointSynchronize::is_at_safepoint(), "Should be at safepoint");
 
-  ZListIterator<ZPageAllocation> iter(&_satisfied);
-  for (ZPageAllocation* allocation; iter.next(&allocation);) {
-    ZListIterator<ZPage> iter(allocation->pages());
-    for (ZPage* page; iter.next(&page);) {
+  ZListIterator<ZPageAllocation> iter_satisfied(&_satisfied);
+  for (ZPageAllocation* allocation; iter_satisfied.next(&allocation);) {
+    ZListIterator<ZPage> iter_pages(allocation->pages());
+    for (ZPage* page; iter_pages.next(&page);) {
       cl->do_page(page);
     }
   }
@@ -857,5 +860,6 @@ void ZPageAllocator::check_out_of_memory() {
 }
 
 void ZPageAllocator::threads_do(ThreadClosure* tc) const {
+  tc->do_thread(_unmapper);
   tc->do_thread(_uncommitter);
 }
