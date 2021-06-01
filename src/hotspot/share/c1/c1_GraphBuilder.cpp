@@ -1988,8 +1988,7 @@ void GraphBuilder::invoke(Bytecodes::Code code) {
       // no point in inlining.
       ciInstanceKlass* singleton = NULL;
       ciInstanceKlass* declared_interface = callee_holder;
-      if (declared_interface->nof_implementors() == 1 &&
-          (!target->is_default_method() || target->is_overpass()) /* CHA doesn't support default methods yet. */) {
+      if (declared_interface->nof_implementors() == 1) {
         singleton = declared_interface->implementor();
         assert(singleton != NULL && singleton != declared_interface, "");
         cha_monomorphic_target = target->find_monomorphic_target(calling_klass, declared_interface, singleton);

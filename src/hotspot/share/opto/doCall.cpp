@@ -315,8 +315,7 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
       ciInstanceKlass* declared_interface =
           caller->get_declared_method_holder_at_bci(bci)->as_instance_klass();
 
-      if (declared_interface->nof_implementors() == 1 &&
-          (!callee->is_default_method() || callee->is_overpass()) /* CHA doesn't support default methods yet */) {
+      if (declared_interface->nof_implementors() == 1) {
         ciInstanceKlass* singleton = declared_interface->implementor();
         ciMethod* cha_monomorphic_target =
             callee->find_monomorphic_target(caller->holder(), declared_interface, singleton);
