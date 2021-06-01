@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,15 +21,20 @@
  * questions.
  */
 
-#ifndef SHARE_GC_Z_ZPAGECACHE_INLINE_HPP
-#define SHARE_GC_Z_ZPAGECACHE_INLINE_HPP
+#ifndef SHARE_GC_Z_ZVERIFY_HPP
+#define SHARE_GC_Z_ZVERIFY_HPP
 
-#include "gc/z/zList.inline.hpp"
-#include "gc/z/zPageCache.hpp"
-#include "gc/z/zValue.inline.hpp"
+#include "memory/allocation.hpp"
 
-inline size_t ZPageCache::available() const {
-  return _available;
-}
+class ZPageAllocator;
 
-#endif // SHARE_GC_Z_ZPAGECACHE_INLINE_HPP
+class ZVerifyViewsFlip {
+private:
+  const ZPageAllocator* const _allocator;
+
+public:
+  ZVerifyViewsFlip(const ZPageAllocator* allocator);
+  ~ZVerifyViewsFlip();
+};
+
+#endif // SHARE_GC_Z_ZVERIFY_HPP

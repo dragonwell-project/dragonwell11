@@ -61,9 +61,6 @@ private:
   size_t heap_max_size() const;
   size_t heap_max_reserve_size() const;
 
-  void before_flip();
-  void after_flip();
-
   void flip_to_marked();
   void flip_to_remapped();
 
@@ -154,6 +151,7 @@ public:
 
   // Iteration
   void object_iterate(ObjectClosure* cl, bool visit_referents);
+  void pages_do(ZPageClosure* cl);
 
   // Serviceability
   void serviceability_initialize();
