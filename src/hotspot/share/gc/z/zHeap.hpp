@@ -56,11 +56,6 @@ private:
   ZRelocationSet      _relocation_set;
   ZServiceability     _serviceability;
 
-  size_t heap_min_size() const;
-  size_t heap_initial_size() const;
-  size_t heap_max_size() const;
-  size_t heap_max_reserve_size() const;
-
   void flip_to_marked();
   void flip_to_remapped();
 
@@ -100,11 +95,11 @@ public:
   size_t block_size(uintptr_t addr) const;
   bool block_is_obj(uintptr_t addr) const;
 
-  // Workers
+  // Threads
   uint nconcurrent_worker_threads() const;
   uint nconcurrent_no_boost_worker_threads() const;
   void set_boost_worker_threads(bool boost);
-  void worker_threads_do(ThreadClosure* tc) const;
+  void threads_do(ThreadClosure* tc) const;
   void print_worker_threads_on(outputStream* st) const;
 
   // Reference processing
@@ -118,9 +113,6 @@ public:
   ZPage* alloc_page(uint8_t type, size_t size, ZAllocationFlags flags);
   void undo_alloc_page(ZPage* page);
   void free_page(ZPage* page, bool reclaimed);
-
-  // Uncommit memory
-  uint64_t uncommit(uint64_t delay);
 
   // Object allocation
   uintptr_t alloc_tlab(size_t size);
