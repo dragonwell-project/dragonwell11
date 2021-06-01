@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,6 +28,7 @@
 #include "runtime/atomic.hpp"
 #include "runtime/thread.hpp"
 #include "utilities/debug.hpp"
+#include "runtime/os.inline.hpp"
 
 inline ZLock::ZLock() {
   pthread_mutex_init(&_lock, NULL);
@@ -82,6 +83,64 @@ inline bool ZReentrantLock::is_owned() const {
   Thread* const thread = Thread::current();
   Thread* const owner = Atomic::load(&_owner);
   return owner == thread;
+}
+
+inline ZConditionLock::ZConditionLock() {
+  pthread_cond_init(&_cond, NULL);
+  pthread_mutex_init(&_mutex, NULL);
+}
+
+inline ZConditionLock::~ZConditionLock() {
+  pthread_cond_destroy(&_cond);
+  pthread_mutex_destroy(&_mutex);
+}
+
+inline void ZConditionLock::lock() {
+  pthread_mutex_lock(&_mutex);
+}
+
+inline bool ZConditionLock::try_lock() {
+  return pthread_mutex_trylock(&_mutex) == 0;
+}
+
+inline void ZConditionLock::unlock() {
+  pthread_mutex_unlock(&_mutex);
+}
+
+inline bool ZConditionLock::wait(uint64_t millis) {
+  if (millis > 0) {
+    jlong timeout = millis * (NANOUNITS / MILLIUNITS);
+
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+
+    // Calculate a new absolute time that is "timeout" nanoseconds from "now".
+    struct timespec abstime;
+    jlong seconds = timeout / NANOUNITS;
+    abstime.tv_sec = now.tv_sec + seconds;
+
+    timeout %= NANOUNITS; // remaining nanos
+    long nanos = now.tv_nsec + timeout;
+    if (nanos >= NANOUNITS) { // overflow
+      abstime.tv_sec += 1;
+      nanos -= NANOUNITS;
+    }
+    abstime.tv_nsec = nanos;
+
+    int status = pthread_cond_timedwait(&_cond, &_mutex, &abstime);
+    return status == 0;
+  } else {
+    pthread_cond_wait(&_cond, &_mutex);
+    return true;
+  }
+}
+
+inline void ZConditionLock::notify() {
+  pthread_cond_signal(&_cond);
+}
+
+inline void ZConditionLock::notify_all() {
+  pthread_cond_broadcast(&_cond);
 }
 
 template <typename T>
