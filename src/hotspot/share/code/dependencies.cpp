@@ -2113,6 +2113,9 @@ Method* Dependencies::find_unique_concrete_method(Klass* ctxk, Method* m, Klass*
   if (m->is_old()) {
     return NULL;
   }
+  if (m->is_default_method()) {
+    return NULL; // not supported
+  }
   ClassHierarchyWalker wf(m);
   assert(wf.check_method_context(ctxk, m), "proper context");
   wf.record_witnesses(1);
