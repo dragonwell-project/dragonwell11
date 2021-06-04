@@ -503,6 +503,7 @@ oop Coroutine::print_stack_header_on(outputStream* st) {
   oop thread_obj = NULL;
   st->print("\n - Coroutine [%p]", this);
   if (_wisp_task != NULL) {
+    long cgId  = 0;
     thread_obj = com_alibaba_wisp_engine_WispTask::get_threadWrapper(_wisp_task);
     char buf[128] = "<cached>";
     if (thread_obj != NULL) {
@@ -510,15 +511,37 @@ oop Coroutine::print_stack_header_on(outputStream* st) {
       if (name != NULL) {
         java_lang_String::as_utf8_string(name, buf, sizeof(buf));
       }
+      oop container = java_lang_Thread::resourceContainer(thread_obj);
+      if (container != NULL) {
+        cgId = com_alibaba_rcm_internal_AbstractResourceContainer::get_id(container);
+      }
     }
-    st->print(" \"%s\" #%d active=%d steal=%d steal_fail=%d preempt=%d park=%d/%d", buf,
+    // calculate wisp container's cfs_period and cfs_quota
+    long cfsPeriod = 0;
+    long cfsQuota  = 0;
+    // step one: get WispControlGroup
+    oop wispControlGroup = com_alibaba_wisp_engine_WispTask::get_controlGroup(_wisp_task);
+    if (wispControlGroup != NULL) {
+      // step two: get CpuLimit
+      oop cpuLimit = com_alibaba_wisp_engine_WispControlGroup::get_cpuLimit(wispControlGroup);
+      guarantee(cpuLimit != NULL, "cpuLimit in WispControlGroup should not be null");
+      // step three: get cfsPeriod and cfsQuota
+      cfsPeriod = com_alibaba_wisp_engine_WispControlGroup_CpuLimit::get_cfsPeriod(cpuLimit);
+      cfsQuota  = com_alibaba_wisp_engine_WispControlGroup_CpuLimit::get_cfsQuota(cpuLimit);
+    }
+
+
+    st->print(" \"%s\" #%d active=%d steal=%d steal_fail=%d preempt=%d park=%d/%d containerId=%ld cg=%ld/%ld ttr=%ld", buf,
         com_alibaba_wisp_engine_WispTask::get_id(_wisp_task),
         com_alibaba_wisp_engine_WispTask::get_activeCount(_wisp_task),
         com_alibaba_wisp_engine_WispTask::get_stealCount(_wisp_task),
         com_alibaba_wisp_engine_WispTask::get_stealFailureCount(_wisp_task),
         com_alibaba_wisp_engine_WispTask::get_preemptCount(_wisp_task),
         com_alibaba_wisp_engine_WispTask::get_jvmParkStatus(_wisp_task),
-        com_alibaba_wisp_engine_WispTask::get_jdkParkStatus(_wisp_task));
+        com_alibaba_wisp_engine_WispTask::get_jdkParkStatus(_wisp_task),
+        cgId,
+        cfsQuota / 1000, cfsPeriod / 1000,
+        com_alibaba_wisp_engine_WispTask::get_ttr(_wisp_task));
   }
   if (_wisp_thread && PrintThreadCoroutineInfo) {
     st->print(" monitor_park_stage=%s", WispThread::print_blocking_status(_wisp_thread->_unpark_status));

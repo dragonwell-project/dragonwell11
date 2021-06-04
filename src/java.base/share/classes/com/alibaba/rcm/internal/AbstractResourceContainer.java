@@ -8,6 +8,7 @@ import jdk.internal.misc.RCMAccesss;
 import jdk.internal.misc.VM;
 import jdk.internal.misc.SharedSecrets;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Predicate;
@@ -35,7 +36,7 @@ public abstract class AbstractResourceContainer implements ResourceContainer {
     };
 
     private static void setRCMAccess() {
-        SharedSecrets.setRCMAccesss(new RCMAccesss(){
+        SharedSecrets.setRCMAccesss(new RCMAccesss() {
 
             @Override
             public Predicate<Thread> getResourceContainerInheritancePredicate(ResourceContainer container) {
@@ -179,8 +180,25 @@ public abstract class AbstractResourceContainer implements ResourceContainer {
 
         @Override
         public List<Long> getActiveContainerThreadIds() {
-            // root resource container is not monitored
-            return Collections.emptyList();
+            ThreadGroup group = Thread.currentThread().getThreadGroup();
+            while (group.getParent() != null) {
+                group = group.getParent();
+            }
+            int count = group.activeCount();
+            Thread[] threads;
+            do {
+                threads = new Thread[count + (count / 2) + 1]; //slightly grow the array size
+                count = group.enumerate(threads, true);
+                //return value of enumerate() must be strictly less than the array size according to javadoc
+            } while (count == threads.length);
+
+            final List<Long> result = new ArrayList<>(count);
+            for (int i = 0; i < count; ++i) {
+                if (SharedSecrets.getJavaLangAccess().getResourceContainer(threads[i]) == ROOT) {
+                    result.add(threads[i].getId());
+                }
+            }
+            return result;
         }
 
         @Override

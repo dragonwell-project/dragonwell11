@@ -642,4 +642,13 @@ private:
   JavaThread*   _thread;
 };
 
+class CoroutinePreemptClosure : public HandshakeClosure{
+public:
+  CoroutinePreemptClosure():HandshakeClosure("CoroutinePreempt") {}
+
+  void do_thread(Thread* thread) {
+  // do nothing
+  }
+};
+
 #endif // SHARE_VM_RUNTIME_COROUTINE_HPP

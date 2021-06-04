@@ -46,7 +46,17 @@ public class MyResourceContainer extends AbstractResourceContainer {
     }
 
     @Override
+    public List<Long> getActiveContainerThreadIds() {
+        return null;
+    }
+
+    @Override
     public Long getConsumedAmount(ResourceType resourceType) {
         return 0L;
+    }
+
+    @Override
+    public Long getResourceLimitReachedCount(ResourceType resourceType) {
+        return null;
     }
 }

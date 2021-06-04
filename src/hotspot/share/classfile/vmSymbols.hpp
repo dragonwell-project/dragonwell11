@@ -557,6 +557,9 @@
   template(int_String_signature,                      "(I)Ljava/lang/String;")                                    \
   template(boolean_boolean_int_signature,             "(ZZ)I")                                                    \
   template(codesource_permissioncollection_signature, "(Ljava/security/CodeSource;Ljava/security/PermissionCollection;)V") \
+  template(resourcecontainer_signature,               "Lcom/alibaba/rcm/internal/AbstractResourceContainer;")     \
+  template(controlGroup_signature,                    "Lcom/alibaba/wisp/engine/WispControlGroup;")     \
+  template(controlGroup_Limit_signature,              "Lcom/alibaba/wisp/engine/WispControlGroup$CpuLimit;")     \
   /* signature symbols needed by intrinsics */                                                                    \
   VM_INTRINSICS_DO(VM_INTRINSIC_IGNORE, VM_SYMBOL_IGNORE, VM_SYMBOL_IGNORE, template, VM_ALIAS_IGNORE)            \
                                                                                                                   \
@@ -657,6 +660,12 @@
   template(com_alibaba_wisp_engine_WispTask,           "com/alibaba/wisp/engine/WispTask")                        \
   template(com_alibaba_wisp_engine_WispTask_CacheableCoroutine,                                                   \
                                                        "com/alibaba/wisp/engine/WispTask$CacheableCoroutine")     \
+  template(com_alibaba_wisp_engine_WispControlGroup_signature,                                                    \
+                                                       "com/alibaba/wisp/engine/WispControlGroup")                \
+  template(com_alibaba_wisp_engine_WispControlGroup_CpuLimit_signature,                                           \
+                                                       "com/alibaba/wisp/engine/WispControlGroup$CpuLimit")       \
+  template(com_alibaba_rcm_internal_AbstractResourceContainer_signature,                                          \
+                                                       "com/alibaba/rcm/internal/AbstractResourceContainer")      \
   template(com_alibaba_wisp_engine_WispEngine,         "com/alibaba/wisp/engine/WispEngine")                      \
   template(com_alibaba_wisp_engine_WispCarrier,         "com/alibaba/wisp/engine/WispCarrier")                    \
   template(com_alibaba_wisp_engine_WispEventPump,      "com/alibaba/wisp/engine/WispEventPump")                   \
@@ -664,6 +673,11 @@
   template(jdkParkStatus_name,                         "jdkParkStatus")                                           \
   template(shutdownPending_name,                       "shutdownPending")                                         \
   template(jvmParkStatus_name,                         "jvmParkStatus")                                           \
+  template(ttr_name,                                   "ttr")                                                     \
+  template(controlGroup_name,                          "controlGroup")                                            \
+  template(cpuLimit_name,                              "cpuLimit")                                                \
+  template(cfsPeriod_name,                             "cfsPeriod")                                               \
+  template(cfsQuota_name,                              "cfsQuota")                                                \
   template(id_name,                                    "id")                                                      \
   template(threadWrapper_name,                         "threadWrapper")                                           \
   template(activeCount_name,                           "activeCount")                                             \

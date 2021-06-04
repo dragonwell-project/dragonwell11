@@ -83,7 +83,7 @@ enum WispSysmon {
             Iterator<WispCarrier> itr = longOccupationEngines.iterator();
             while (itr.hasNext()) {
                 WispCarrier carrier = itr.next();
-                WispConfiguration.HANDOFF_POLICY.handle(carrier, !itr.hasNext());
+                WispConfiguration.HANDOFF_POLICY.handle(carrier);
                 itr.remove();
             }
         }
@@ -93,7 +93,7 @@ enum WispSysmon {
     enum Policy {
         HAND_OFF { // handOff the worker
             @Override
-            void handle(WispCarrier carrier, boolean isLast) {
+            void handle(WispCarrier carrier) {
                 if (JLA.isInSameNative(carrier.thread)) {
                     carrier.handOff();
                     INSTANCE.carriers.remove(carrier);
@@ -102,23 +102,23 @@ enum WispSysmon {
         },
         PREEMPT { // insert a yield() after next safepoint
             @Override
-            void handle(WispCarrier carrier, boolean isLast) {
-                markPreempted(carrier.thread, isLast);
+            void handle(WispCarrier carrier) {
+                markPreempted(carrier.thread);
             }
         },
         ADAPTIVE { // depends on thread status
             @Override
-            void handle(WispCarrier carrier, boolean isLast) {
+            void handle(WispCarrier carrier) {
                 if (JLA.isInSameNative(carrier.thread)) {
                     carrier.handOff();
                     INSTANCE.carriers.remove(carrier);
                 } else {
-                    markPreempted(carrier.thread, isLast);
+                    markPreempted(carrier.thread);
                 }
             }
         };
 
-        abstract void handle(WispCarrier carrier, boolean isLast);
+        abstract void handle(WispCarrier carrier);
 
     }
 
@@ -132,7 +132,7 @@ enum WispSysmon {
      * @param thread the thread to mark
      * @param force  fire a force_safepoint immediately
      */
-    private static native void markPreempted(Thread thread, boolean force);
+    private static native void markPreempted(Thread thread);
 
     private static final UnsafeAccess UA = SharedSecrets.getUnsafeAccess();
     private static final JavaLangAccess JLA = SharedSecrets.getJavaLangAccess();

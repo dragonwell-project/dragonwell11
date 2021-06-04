@@ -43,6 +43,9 @@ public class ResourceContainerMXBeanImpl implements ResourceContainerMXBean {
 
     @Override
     public List<Long> getActiveContainerThreadIds(long id) {
+        if (id == 0) {
+            AbstractResourceContainer.root().getActiveContainerThreadIds();
+        }
         AbstractResourceContainer container = (AbstractResourceContainer) ResourceContainerMonitor.getContainerById(id);
         return container.getActiveContainerThreadIds();
     }

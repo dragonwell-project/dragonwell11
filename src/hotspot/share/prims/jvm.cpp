@@ -3854,7 +3854,7 @@ JVM_ENTRY(jint, JVM_GetProxyUnpark(JNIEnv* env, jclass klass, jintArray res))
   return WispThread::get_proxy_unpark(res);
 JVM_END
 
-JVM_ENTRY(void, JVM_MarkPreempted(JNIEnv* env, jclass klass, jobject threadObj, jboolean force))
+JVM_ENTRY(void, JVM_MarkPreempted(JNIEnv* env, jclass klass, jobject threadObj))
   JVMWrapper("JVM_MarkPreempted");
   assert(EnableCoroutine, "Coroutine is disabled");
   JavaThread* thr = NULL;
@@ -3869,11 +3869,9 @@ JVM_ENTRY(void, JVM_MarkPreempted(JNIEnv* env, jclass klass, jobject threadObj, 
     }
     thr->set_wisp_preempted(true);
   }
-  // fire an empty safepoint to let the thread go check flag
-  if (force) {
-    VM_ForceSafepoint force_safepoint_op;
-    VMThread::execute(&force_safepoint_op);
-  }
+  // fire an thread-local handshake to let the thread go check flag
+  CoroutinePreemptClosure cps;
+  Handshake::execute(&cps, thr);
 JVM_END
 
 // Returns an array of java.lang.String objects containing the input arguments to the VM.

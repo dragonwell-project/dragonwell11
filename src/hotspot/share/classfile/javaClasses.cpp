@@ -1606,8 +1606,8 @@ int java_lang_Thread::_stackSize_offset = 0;
 int java_lang_Thread::_tid_offset = 0;
 int java_lang_Thread::_thread_status_offset = 0;
 int java_lang_Thread::_park_blocker_offset = 0;
-int java_lang_Thread::_park_event_offset = 0;
-
+int java_lang_Thread::_park_event_offset = 0 ;
+int java_lang_Thread::_resourceContainer_offset = 0 ;
 
 #define THREAD_FIELDS_DO(macro) \
   macro(_name_offset,          k, vmSymbols::name_name(), string_signature, false); \
@@ -1622,7 +1622,8 @@ int java_lang_Thread::_park_event_offset = 0;
   macro(_tid_offset,           k, "tid", long_signature, false); \
   macro(_thread_status_offset, k, "threadStatus", int_signature, false); \
   macro(_park_blocker_offset,  k, "parkBlocker", object_signature, false); \
-  macro(_park_event_offset,  k, "nativeParkEventPointer", long_signature, false)
+  macro(_park_event_offset,    k, "nativeParkEventPointer", long_signature, false); \
+  macro(_resourceContainer_offset,    k, "resourceContainer", vmSymbols::resourcecontainer_signature, false); \
 
 void java_lang_Thread::compute_offsets() {
   assert(_group_offset == 0, "offsets should be initialized only once");
@@ -1651,6 +1652,10 @@ oop java_lang_Thread::name(oop java_thread) {
   return java_thread->obj_field(_name_offset);
 }
 
+
+oop java_lang_Thread::resourceContainer(oop java_thread) {
+  return java_thread->obj_field(_resourceContainer_offset);
+}
 
 void java_lang_Thread::set_name(oop java_thread, oop name) {
   java_thread->obj_field_put(_name_offset, name);
@@ -4479,6 +4484,31 @@ bool com_alibaba_wisp_engine_WispCarrier::in_critical(oop obj) {
   return obj->bool_field(_isInCritical_offset);
 }
 
+
+#define RCM_FIELDS_DO(macro) \
+  macro(_id_offset,      k,   "id",     long_signature,  false);
+
+int com_alibaba_rcm_internal_AbstractResourceContainer::_id_offset = 0;
+
+long com_alibaba_rcm_internal_AbstractResourceContainer::get_id(oop obj) {
+  return obj->long_field(_id_offset);
+}
+
+
+void com_alibaba_rcm_internal_AbstractResourceContainer::compute_offsets() {
+  InstanceKlass *k = SystemDictionary::com_alibaba_rcm_internal_AbstractResourceContainer_klass();
+  assert(k != NULL, "AbstractResourceContainer is null");
+  RCM_FIELDS_DO(FIELD_COMPUTE_OFFSET);
+}
+
+#if INCLUDE_CDS
+void com_alibaba_rcm_internal_AbstractResourceContainer::serialize_offsets(SerializeClosure* f) {
+  InstanceKlass *k = SystemDictionary::com_alibaba_rcm_internal_AbstractResourceContainer_klass();
+  assert(k != NULL, "AbstractResourceContainer is null");
+  RCM_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
+}
+#endif
+
 int com_alibaba_wisp_engine_WispTask::_jvmParkStatus_offset = 0;
 int com_alibaba_wisp_engine_WispTask::_jdkParkStatus_offset = 0;
 int com_alibaba_wisp_engine_WispTask::_id_offset = 0;
@@ -4489,7 +4519,8 @@ int com_alibaba_wisp_engine_WispTask::_stealCount_offset = 0;
 int com_alibaba_wisp_engine_WispTask::_stealFailureCount_offset = 0;
 int com_alibaba_wisp_engine_WispTask::_preemptCount_offset = 0;
 int com_alibaba_wisp_engine_WispTask::_shutdownPending_offset = 0;
-
+int com_alibaba_wisp_engine_WispTask::_controlGroup_offset = 0;
+int com_alibaba_wisp_engine_WispTask::_ttr_offset = 0;
 
 #define WISPTASK_FIELDS_DO(macro) \
   macro(_jvmParkStatus_offset,      k, vmSymbols::jvmParkStatus_name(),     int_signature,  false); \
@@ -4500,7 +4531,10 @@ int com_alibaba_wisp_engine_WispTask::_shutdownPending_offset = 0;
   macro(_activeCount_offset,        k, vmSymbols::activeCount_name(),       int_signature,  false); \
   macro(_stealCount_offset,         k, vmSymbols::stealCount_name(),        int_signature,  false); \
   macro(_stealFailureCount_offset,  k, vmSymbols::stealFailureCount_name(), int_signature,  false); \
-  macro(_preemptCount_offset,       k, vmSymbols::preemptCount_name(),      int_signature,  false)
+  macro(_preemptCount_offset,       k, vmSymbols::preemptCount_name(),      int_signature,  false); \
+  macro(_shutdownPending_offset,    k, vmSymbols::shutdownPending_name(),   bool_signature, false); \
+  macro(_controlGroup_offset,        k, vmSymbols::controlGroup_name(),   vmSymbols::controlGroup_signature, false); \
+  macro(_ttr_offset,                 k, vmSymbols::ttr_name(),   long_signature, false);
 
 void com_alibaba_wisp_engine_WispTask::compute_offsets() {
   InstanceKlass* k = SystemDictionary::com_alibaba_wisp_engine_WispTask_klass();
@@ -4513,6 +4547,66 @@ void com_alibaba_wisp_engine_WispTask::serialize_offsets(SerializeClosure* f) {
   WISPTASK_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
 }
 #endif
+
+oop com_alibaba_wisp_engine_WispTask::get_controlGroup(oop obj) {
+  return obj->obj_field(_controlGroup_offset);
+}
+
+long com_alibaba_wisp_engine_WispTask::get_ttr(oop obj) {
+  return obj->long_field(_ttr_offset);
+}
+
+#define WISPCG_FIELDS_DO(macro) \
+  macro(_cpuLimit_offset,      k, vmSymbols::cpuLimit_name(),     vmSymbols::controlGroup_Limit_signature,  false);
+
+int com_alibaba_wisp_engine_WispControlGroup::_cpuLimit_offset = 0;
+
+#if INCLUDE_CDS
+void com_alibaba_wisp_engine_WispControlGroup::serialize_offsets(SerializeClosure* f) {
+  InstanceKlass *k = SystemDictionary::com_alibaba_wisp_engine_WispControlGroup_klass();
+  assert(k != NULL, "WispControlGroup_klass is null");
+  WISPCG_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
+}
+#endif
+
+void com_alibaba_wisp_engine_WispControlGroup::compute_offsets() {
+  InstanceKlass *k = SystemDictionary::com_alibaba_wisp_engine_WispControlGroup_klass();
+  assert(k != NULL, "WispControlGroup_klass is null");
+  WISPCG_FIELDS_DO(FIELD_COMPUTE_OFFSET);
+}
+
+oop com_alibaba_wisp_engine_WispControlGroup::get_cpuLimit(oop obj) {
+  return obj->obj_field(_cpuLimit_offset);
+}
+
+#define WISPCG_CPULIMIT_FIELDS_DO(macro) \
+  macro(_cfsPeriod_offset,      k, vmSymbols::cfsPeriod_name(),     long_signature,  false); \
+  macro(_cfsQuota_offset,       k, vmSymbols::cfsQuota_name(),      long_signature,  false);
+
+int com_alibaba_wisp_engine_WispControlGroup_CpuLimit::_cfsPeriod_offset = 0;
+int com_alibaba_wisp_engine_WispControlGroup_CpuLimit::_cfsQuota_offset = 0;
+
+void com_alibaba_wisp_engine_WispControlGroup_CpuLimit::compute_offsets() {
+  InstanceKlass *k = SystemDictionary::com_alibaba_wisp_engine_WispControlGroup_CpuLimit_klass();
+  assert(k != NULL, "WispControlGroup$CpuLimit_klass is null");
+  WISPCG_CPULIMIT_FIELDS_DO(FIELD_COMPUTE_OFFSET);
+}
+
+#if INCLUDE_CDS
+void com_alibaba_wisp_engine_WispControlGroup_CpuLimit::serialize_offsets(SerializeClosure* f) {
+  InstanceKlass *k = SystemDictionary::com_alibaba_wisp_engine_WispControlGroup_CpuLimit_klass();
+  assert(k != NULL, "WispControlGroup$CpuLimit_klass is null");
+  WISPCG_CPULIMIT_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
+}
+#endif
+
+long com_alibaba_wisp_engine_WispControlGroup_CpuLimit::get_cfsPeriod(oop obj) {
+  return obj->long_field(_cfsPeriod_offset);
+}
+
+long com_alibaba_wisp_engine_WispControlGroup_CpuLimit::get_cfsQuota(oop obj) {
+  return obj->long_field(_cfsQuota_offset);
+}
 
 void com_alibaba_wisp_engine_WispTask::set_jvmParkStatus(oop obj, jint status) {
   obj->int_field_put(_jvmParkStatus_offset, status);
