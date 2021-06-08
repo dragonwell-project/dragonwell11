@@ -20,7 +20,6 @@
 #
 
 #
-# @test
 # @summary Test jmap options related to mini heap dump
 # @run shell/timeout=300 TestMiniHeapDumpOpts.sh
 #
