@@ -193,7 +193,7 @@ bool ZDirector::rule_high_usage() const {
   log_debug(gc, director)("Rule: High Usage, Free: " SIZE_FORMAT "MB(%.1f%%)",
                           free / M, free_percent);
 
-  return free_percent <= 5.0;
+  return free_percent <= 100.0 - ZHighUsagePercent;
 }
 
 GCCause::Cause ZDirector::make_gc_decision() const {

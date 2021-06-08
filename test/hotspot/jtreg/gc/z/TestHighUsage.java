@@ -28,7 +28,7 @@ package gc.z;
  * @requires vm.gc.Z & !vm.graal.enabled
  * @summary Test ZGC "High Usage" rule
  * @library /test/lib
- * @run main/othervm gc.z.TestHighUsage
+ * @run main/othervm/timeout=600 gc.z.TestHighUsage
  */
 
 import java.util.LinkedList;
@@ -40,11 +40,14 @@ public class TestHighUsage {
         private static final int M = K * K;
         private static final long maxCapacity = Runtime.getRuntime().maxMemory();
         private static final long slowAllocationThreshold = 16 * M;
-        private static final long highUsageThreshold = maxCapacity / 20; // 5%
+        private static long highUsageThreshold = maxCapacity / 20; // 5%
         private static volatile LinkedList<byte[]> keepAlive;
         private static volatile Object dummy;
 
         public static void main(String[] args) throws Exception {
+            if (args.length > 0) {
+                highUsageThreshold = (long)(maxCapacity * (1.0 - Double.valueOf(args[0]) / 100.0));
+            }
             System.out.println("Max capacity: " + (maxCapacity / M) + "M");
             System.out.println("High usage threshold: " + (highUsageThreshold / M) + "M");
             System.out.println("Allocating live-set");
@@ -94,6 +97,21 @@ public class TestHighUsage {
                                                   "-XX:ConcGCThreads=1",
                                                   "-Xlog:gc,gc+start",
                                                   Test.class.getName() })
+                    .shouldNotContain("Allocation Stall")
+                    .shouldContain("High Usage")
+                    .shouldHaveExitValue(0);
+
+        ProcessTools.executeTestJvm(new String[]{ "-XX:+UnlockExperimentalVMOptions",
+                                                  "-XX:+UseZGC",
+                                                  "-XX:-ZProactive",
+                                                  "-Xms128M",
+                                                  "-Xmx128M",
+                                                  "-XX:ParallelGCThreads=1",
+                                                  "-XX:ConcGCThreads=1",
+                                                  "-XX:ZHighUsagePercent=88.0",
+                                                  "-Xlog:gc,gc+start",
+                                                  Test.class.getName(),
+                                                  "88.0" })
                     .shouldNotContain("Allocation Stall")
                     .shouldContain("High Usage")
                     .shouldHaveExitValue(0);
