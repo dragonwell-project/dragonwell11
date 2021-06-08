@@ -70,6 +70,10 @@
           "Uncommit memory if it has been unused for the specified "        \
           "amount of time (in seconds)")                                    \
                                                                             \
+  experimental(double, ZHighUsagePercent, 95.0,                             \
+          "Percentage of heap usage for ZGC high usage rule")               \
+          range(0.0, 100.0)                                                 \
+                                                                            \
   diagnostic(uint, ZStatisticsInterval, 10,                                 \
           "Time between statistics print outs (in seconds)")                \
           range(1, (uint)-1)                                                \
