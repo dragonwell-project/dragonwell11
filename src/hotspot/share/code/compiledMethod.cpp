@@ -637,3 +637,82 @@ bool CompiledMethod::nmethod_access_is_safe(nmethod* nm) {
          os::is_readable_pointer(method->constants()) &&
          os::is_readable_pointer(method->signature());
 }
+
+#if INCLUDE_ZGC
+void CompiledMethod::unload_nmethod_caches_ZGC(bool unloading_occurred) {
+  ResourceMark rm;
+
+  // Exception cache only needs to be called if unloading occurred
+  if (unloading_occurred) {
+    clean_exception_cache();
+  }
+
+  cleanup_inline_caches_impl_ZGC(unloading_occurred, false);
+
+  // All static stubs need to be cleaned.
+  clean_ic_stubs();
+
+  // Check that the metadata embedded in the nmethod is alive
+  DEBUG_ONLY(metadata_do(check_class));
+}
+
+// Clean references to unloaded nmethods at addr from this one, which is not unloaded.
+template <class CompiledICorStaticCall>
+static void clean_if_nmethod_is_unloaded_ZGC(CompiledICorStaticCall *ic, address addr, CompiledMethod* from,
+                                         bool clean_all) {
+  // Ok, to lookup references to zombies here
+  CodeBlob *cb = CodeCache::find_blob_unsafe(addr);
+  CompiledMethod* nm = (cb != NULL) ? cb->as_compiled_method_or_null() : NULL;
+  if (nm != NULL) {
+    // Clean inline caches pointing to both zombie and not_entrant methods
+    if (clean_all || !nm->is_in_use() || (nm->method()->code() != nm)) {
+      ic->set_to_clean(from->is_alive());
+      assert(ic->is_clean(), "nmethod " PTR_FORMAT "not clean %s", p2i(from), from->method()->name_and_sig_as_C_string());
+    }
+  }
+}
+
+static void clean_if_nmethod_is_unloaded_ZGC(CompiledIC *ic, CompiledMethod* from,
+                                         bool clean_all) {
+  clean_if_nmethod_is_unloaded_ZGC(ic, ic->ic_destination(), from, clean_all);
+}
+
+static void clean_if_nmethod_is_unloaded_ZGC(CompiledStaticCall *csc, CompiledMethod* from,
+                                         bool clean_all) {
+  clean_if_nmethod_is_unloaded_ZGC(csc, csc->destination(), from, clean_all);
+}
+
+void CompiledMethod::cleanup_inline_caches_impl_ZGC(bool unloading_occurred, bool clean_all) {
+  ResourceMark rm;
+
+  // Find all calls in an nmethod and clear the ones that point to non-entrant,
+  // zombie and unloaded nmethods.
+  RelocIterator iter(this, oops_reloc_begin());
+  while(iter.next()) {
+
+    switch (iter.type()) {
+
+    case relocInfo::virtual_call_type:
+      if (unloading_occurred) {
+        // If class unloading occurred we first clear ICs where the cached metadata
+        // is referring to an unloaded klass or method.
+        clean_ic_if_metadata_is_dead(CompiledIC_at(&iter));
+      }
+
+      clean_if_nmethod_is_unloaded_ZGC(CompiledIC_at(&iter), this, clean_all);
+      break;
+
+    case relocInfo::opt_virtual_call_type:
+      clean_if_nmethod_is_unloaded_ZGC(CompiledIC_at(&iter), this, clean_all);
+      break;
+
+    case relocInfo::static_call_type:
+      clean_if_nmethod_is_unloaded_ZGC(compiledStaticCall_at(iter.reloc()), this, clean_all);
+      break;
+
+    default:
+      break;
+    }
+  }
+}
+#endif

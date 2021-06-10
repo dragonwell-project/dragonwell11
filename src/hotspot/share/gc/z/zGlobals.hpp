@@ -119,6 +119,9 @@ extern uintptr_t  ZAddressReservedStart;
 extern uintptr_t  ZAddressReservedEnd;
 extern size_t     ZAddressReservedSize;
 
+// NMethod entry barrier
+const size_t      ZNMethodDisarmedOffset        = ZPlatformNMethodDisarmedOffset;
+
 // Cache line size
 const size_t      ZCacheLineSize                = ZPlatformCacheLineSize;
 #define           ZCACHE_ALIGNED                ATTRIBUTE_ALIGNED(ZCacheLineSize)

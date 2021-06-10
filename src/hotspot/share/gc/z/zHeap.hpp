@@ -36,6 +36,7 @@
 #include "gc/z/zRelocationSet.hpp"
 #include "gc/z/zWeakRootsProcessor.hpp"
 #include "gc/z/zServiceability.hpp"
+#include "gc/z/zUnload.hpp"
 #include "gc/z/zWorkers.hpp"
 
 class ZHeap {
@@ -54,6 +55,7 @@ private:
   ZWeakRootsProcessor _weak_roots_processor;
   ZRelocate           _relocate;
   ZRelocationSet      _relocation_set;
+  ZUnload             _unload;
   ZServiceability     _serviceability;
 
   void flip_to_marked();
@@ -108,6 +110,7 @@ public:
 
   // Non-strong reference processing
   void process_non_strong_references();
+  void finish_non_strong_references();
 
   // Page allocation
   ZPage* alloc_page(uint8_t type, size_t size, ZAllocationFlags flags);
@@ -130,6 +133,9 @@ public:
   void mark();
   void mark_flush_and_free(Thread* thread);
   bool mark_end();
+
+  // Class unloading
+  void unload_class();
 
   // Relocation set
   void select_relocation_set();

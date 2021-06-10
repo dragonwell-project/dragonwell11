@@ -67,6 +67,7 @@ ZHeap::ZHeap() :
     _weak_roots_processor(&_workers),
     _relocate(&_workers),
     _relocation_set(),
+    _unload(&_workers),
     _serviceability(min_capacity(), max_capacity()) {
   // Install global heap instance
   assert(_heap == NULL, "Already initialized");
@@ -310,6 +311,9 @@ bool ZHeap::mark_end() {
   // Process weak roots
   _weak_roots_processor.process_weak_roots();
 
+  // Prepare to unload unused classes and code
+  _unload.prepare();
+
   return true;
 }
 
@@ -324,6 +328,10 @@ void ZHeap::process_non_strong_references() {
   // Process concurrent weak roots
   _weak_roots_processor.process_concurrent_weak_roots();
 
+  if (ClassUnloading) {
+    return;
+  }
+
   // Unblock resurrection of weak/phantom references
   ZResurrection::unblock();
 
@@ -334,6 +342,25 @@ void ZHeap::process_non_strong_references() {
   // during the resurrection block window, since such referents
   // are only Finalizable marked.
   _reference_processor.enqueue_references();
+}
+
+void ZHeap::finish_non_strong_references() {
+  guarantee(ClassUnloading, "sanity");
+  // Unblock resurrection of weak/phantom references
+  ZResurrection::unblock();
+
+  // Enqueue Soft/Weak/Final/PhantomReferences. Note that this
+  // must be done after unblocking resurrection. Otherwise the
+  // Finalizer thread could call Reference.get() on the Finalizers
+  // that were just enqueued, which would incorrectly return null
+  // during the resurrection block window, since such referents
+  // are only Finalizable marked.
+  _reference_processor.enqueue_references();
+}
+
+void ZHeap::unload_class() {
+  // Unload unused classes and code
+  _unload.unload();
 }
 
 void ZHeap::select_relocation_set() {

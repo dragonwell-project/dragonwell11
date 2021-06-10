@@ -96,6 +96,7 @@ class CodeCache : AllStatic {
   static int _number_of_nmethods_with_dependencies;     // Total number of nmethods with dependencies
   static bool _needs_cache_clean;                       // True if inline caches of the nmethods needs to be flushed
   static nmethod* _scavenge_root_nmethods;              // linked via nm->scavenge_root_link()
+  static uint8_t _unloading_cycle;                      // Global state for recognizing old nmethods that need to be unloaded
 
   static void mark_scavenge_root_nmethods() PRODUCT_RETURN;
   static void verify_perm_nmethods(CodeBlobClosure* f_or_null) PRODUCT_RETURN;
@@ -177,6 +178,8 @@ class CodeCache : AllStatic {
   // to "true" iff some code got unloaded.
   // "unloading_occurred" controls whether metadata should be cleaned because of class unloading.
   static void do_unloading(BoolObjectClosure* is_alive, bool unloading_occurred);
+  static uint16_t unloading_cycle() { return _unloading_cycle; }
+  static void increment_unloading_cycle();
   static void asserted_non_scavengable_nmethods_do(CodeBlobClosure* f = NULL) PRODUCT_RETURN;
 
   // Apply f to every live code blob in scavengable nmethods. Prune nmethods

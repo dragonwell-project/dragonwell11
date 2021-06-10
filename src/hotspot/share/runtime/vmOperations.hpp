@@ -77,6 +77,7 @@
   template(G1CollectFull)                         \
   template(ZMarkStart)                            \
   template(ZMarkEnd)                              \
+  template(ZUnloadClass)                          \
   template(ZRelocateStart)                        \
   template(HandshakeOneThread)                    \
   template(HandshakeAllThreads)                   \

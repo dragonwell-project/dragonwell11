@@ -42,6 +42,7 @@ private:
   bool pause_mark_end();
   void concurrent_mark_continue();
   void concurrent_process_non_strong_references();
+  void unload_class();
   void concurrent_reset_relocation_set();
   void pause_verify();
   void concurrent_select_relocation_set();

@@ -912,6 +912,15 @@ void CodeCache::gc_epilogue() {
   prune_scavenge_root_nmethods();
 }
 
+uint8_t CodeCache::_unloading_cycle = 1;
+
+void CodeCache::increment_unloading_cycle() {
+  if (_unloading_cycle == 1) {
+    _unloading_cycle = 2;
+  } else {
+    _unloading_cycle = 1;
+  }
+}
 
 void CodeCache::do_unloading_nmethod_caches(bool class_unloading_occurred) {
   assert_locked_or_safepoint(CodeCache_lock);
