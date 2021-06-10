@@ -176,6 +176,10 @@ private:
   virtual bool is_alive() const { return _is_alive(); }
   virtual bool is_in_use() const { return state() == in_use; }
 
+#if INCLUDE_ZGC
+  virtual bool is_unloading() { return false; }
+#endif
+
   address exception_begin() const { return (address) _code + _meta->exception_handler_offset(); }
 
   virtual const char* name() const { return _name; }

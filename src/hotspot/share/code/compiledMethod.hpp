@@ -344,6 +344,11 @@ public:
 
   static address get_deopt_original_pc(const frame* fr);
 
+#if INCLUDE_ZGC
+  virtual bool is_unloading() = 0;
+  void unload_nmethod_caches_ZGC(bool class_unloading_occurred);
+#endif
+
   // GC unloading support
   // Cleans unloaded klasses and unloaded nmethods in inline caches
   bool unload_nmethod_caches(bool parallel, bool class_unloading_occurred);
@@ -351,6 +356,9 @@ public:
   // Inline cache support for class unloading and nmethod unloading
  private:
   bool cleanup_inline_caches_impl(bool parallel, bool unloading_occurred, bool clean_all);
+#if INCLUDE_ZGC
+  void cleanup_inline_caches_impl_ZGC(bool unloading_occurred, bool clean_all);
+#endif
  public:
   bool cleanup_inline_caches(bool clean_all = false) {
     // Serial version used by sweeper and whitebox test

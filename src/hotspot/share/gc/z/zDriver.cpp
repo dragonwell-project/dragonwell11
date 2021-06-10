@@ -43,6 +43,7 @@ static const ZStatPhaseConcurrent ZPhaseConcurrentMark("Concurrent Mark");
 static const ZStatPhaseConcurrent ZPhaseConcurrentMarkContinue("Concurrent Mark Continue");
 static const ZStatPhasePause      ZPhasePauseMarkEnd("Pause Mark End");
 static const ZStatPhaseConcurrent ZPhaseConcurrentProcessNonStrongReferences("Concurrent Process Non-Strong References");
+static const ZStatPhasePause      ZPhasePauseUnloadClass("Pause Class Unloading");
 static const ZStatPhaseConcurrent ZPhaseConcurrentResetRelocationSet("Concurrent Reset Relocation Set");
 static const ZStatPhaseConcurrent ZPhaseConcurrentSelectRelocationSet("Concurrent Select Relocation Set");
 static const ZStatPhasePause      ZPhasePauseRelocateStart("Pause Relocate Start");
@@ -190,6 +191,19 @@ public:
   }
 };
 
+class VM_ZUnloadClass : public VM_ZOperation {
+public:
+  virtual VMOp_Type type() const {
+    return VMOp_ZUnloadClass;
+  }
+
+  virtual bool do_operation() {
+    ZStatTimer timer(ZPhasePauseUnloadClass);
+    ZHeap::heap()->unload_class();
+    return true;
+  }
+};
+
 class VM_ZRelocateStart : public VM_ZOperation {
 public:
   virtual VMOp_Type type() const {
@@ -295,6 +309,14 @@ void ZDriver::concurrent_process_non_strong_references() {
   ZHeap::heap()->process_non_strong_references();
 }
 
+void ZDriver::unload_class() {
+  if (!ClassUnloading) {
+    return;
+  }
+  pause<VM_ZUnloadClass>();
+  ZHeap::heap()->finish_non_strong_references();
+}
+
 void ZDriver::concurrent_reset_relocation_set() {
   ZStatTimer timer(ZPhaseConcurrentResetRelocationSet);
   ZHeap::heap()->reset_relocation_set();
@@ -372,6 +394,9 @@ void ZDriver::gc(GCCause::Cause cause) {
 
   // Phase 4: Concurrent Process Non-Strong References
   concurrent_process_non_strong_references();
+
+  // Phase 4.5: Class Unloading
+  unload_class();
 
   // Phase 5: Concurrent Reset Relocation Set
   concurrent_reset_relocation_set();

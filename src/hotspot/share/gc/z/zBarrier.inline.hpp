@@ -188,6 +188,11 @@ inline oop ZBarrier::load_barrier_on_phantom_oop_field_preloaded(volatile oop* p
   return load_barrier_on_oop_field_preloaded(p, o);
 }
 
+inline void ZBarrier::load_barrier_on_root_oop_field(oop* p) {
+  const oop o = *p;
+  root_barrier<is_good_or_null_fast_path, load_barrier_on_oop_slow_path>(p, o);
+}
+
 //
 // Weak load barrier
 //
@@ -267,6 +272,13 @@ inline void ZBarrier::keep_alive_barrier_on_phantom_oop_field(volatile oop* p) {
   assert(ZResurrection::is_blocked(), "Invalid phase");
   const oop o = *p;
   barrier<is_good_or_null_fast_path, keep_alive_barrier_on_phantom_oop_slow_path>(p, o);
+}
+
+inline void ZBarrier::keep_alive_barrier_on_phantom_root_oop_field(oop* p) {
+  // This operation is only valid when resurrection is blocked.
+  assert(ZResurrection::is_blocked(), "Invalid phase");
+  const oop o = *p;
+  root_barrier<is_good_or_null_fast_path, keep_alive_barrier_on_phantom_oop_slow_path>(p, o);
 }
 
 //
