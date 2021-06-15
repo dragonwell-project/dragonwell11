@@ -57,14 +57,9 @@ public:
 
 class ZConditionLock {
 private:
-  // See JDK-8210832
-  pthread_mutex_t _mutex; // Native mutex for locking
-  pthread_cond_t  _cond;  // Native condition variable for blocking
+  os::PlatformMonitor _lock;
 
 public:
-  ZConditionLock();
-  ~ZConditionLock();
-
   void lock();
   bool try_lock();
   void unlock();
