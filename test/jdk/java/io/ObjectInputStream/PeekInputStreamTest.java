@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021 Alibaba Group Holding Limited. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,6 +34,9 @@ import java.lang.reflect.Method;
  * @modules java.base/java.io:open
  * @summary verifies java.io.ObjectInputStream.PeekInputStream.skip works
  *          as intended
+ *
+ * @run main PeekInputStreamTest
+ * @run main/othervm -Dcom.alibaba.enableFastSerialization=true PeekInputStreamTest
  */
 public class PeekInputStreamTest {
 

@@ -233,6 +233,16 @@ import sun.security.action.GetIntegerAction;
 public class ObjectInputStream
     extends InputStream implements ObjectInput, ObjectStreamConstants
 {
+    /**
+     * enable fast serialization:
+     * 1. Create a {@link ClassResolveCache} to reduce calls to {@link Class#forName(String)}
+     * 2. Cache {@link #latestUserDefinedLoader()}: The loader can be safely cached inside the
+     *    ObjectInputStream class, once custom {@link #readObject()} methods are invoked, the cache
+     *    will be invalid.
+     */
+    private static final boolean FAST_SERIALIZATION =
+            Caches.privilegedGetProperty("com.alibaba.enableFastSerialization");
+
     /** handle value representing null */
     private static final int NULL_HANDLE = -1;
 
@@ -343,6 +353,11 @@ public class ObjectInputStream
      * may be null.
      */
     private ObjectInputFilter serialFilter;
+
+    /**
+     * {@link #latestUserDefinedLoader()} cache used by FAST_SERIALIZATION feature.
+     */
+    private ClassLoader latestUserDefinedLoaderCache;
 
     /**
      * Creates an ObjectInputStream that reads from the specified InputStream.
@@ -752,6 +767,19 @@ public class ObjectInputStream
         throws IOException, ClassNotFoundException
     {
         String name = desc.getName();
+        if (FAST_SERIALIZATION) {
+            if (latestUserDefinedLoaderCache == null) {
+                latestUserDefinedLoaderCache = latestUserDefinedLoader();
+            }
+            return ClassResolveCache.forName(name, latestUserDefinedLoaderCache,
+                    (className, loader) -> {
+                        try {
+                            return Class.forName(className, false, loader);
+                        } catch (ClassNotFoundException ex) {
+                            return primClasses.get(className);
+                        }
+                    });
+        }
         try {
             return Class.forName(name, false, latestUserDefinedLoader());
         } catch (ClassNotFoundException ex) {
@@ -2322,7 +2350,19 @@ public class ObjectInputStream
                         curContext = new SerialCallbackContext(obj, slotDesc);
 
                         bin.setBlockDataMode(true);
+                        ClassLoader currentLatestUserDefinedLoaderCache = null;
+                        if (FAST_SERIALIZATION) {
+                            ClassLoader classLoader = obj.getClass().getClassLoader();
+                            if (classLoader != null &&
+                                    classLoader != ClassLoader.getPlatformClassLoader()) {
+                                currentLatestUserDefinedLoaderCache = latestUserDefinedLoaderCache;
+                                latestUserDefinedLoaderCache = null;
+                            }
+                        }
                         slotDesc.invokeReadObject(obj, this);
+                        if (FAST_SERIALIZATION && currentLatestUserDefinedLoaderCache != null) {
+                            latestUserDefinedLoaderCache = currentLatestUserDefinedLoaderCache;
+                        }
                     } catch (ClassNotFoundException ex) {
                         /*
                          * In most cases, the handle table has already
