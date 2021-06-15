@@ -57,6 +57,10 @@ size_t ZHeuristics::max_reserve() {
   // memory during relocation.
   const uint nworkers = MAX2(ParallelGCThreads, ConcGCThreads);
   const size_t reserve = (nworkers * ZPageSizeSmall) + ZPageSizeMedium;
+  if (!FLAG_IS_DEFAULT(ZRelocationReservePercent)) {
+    const size_t reserve2 = MaxHeapSize * ZRelocationReservePercent / 100;
+    return MIN2(MaxHeapSize, MAX2(reserve, reserve2));
+  }
   return MIN2(MaxHeapSize, reserve);
 }
 
