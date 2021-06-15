@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021 Alibaba Group Holding Limited. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +25,8 @@
 /* @test
  * @bug 8135043
  * @summary ObjectStreamClass.getField(String) too restrictive
+ * @run main TestObjectStreamClass
+ * @run main/othervm -Dcom.alibaba.enableFastSerialization=true TestObjectStreamClass
  */
 
 import java.io.ByteArrayInputStream;
