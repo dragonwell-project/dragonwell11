@@ -249,20 +249,20 @@ public:
         ShenandoahMarkResolveRefsClosure resolve_mark_cl(q, rp);
         MarkingCodeBlobClosure blobsCl(&resolve_mark_cl, !CodeBlobToOopClosure::FixRelocations);
         ShenandoahSATBAndRemarkCodeRootsThreadsClosure tc(&cl,
-                                                          ShenandoahStoreValEnqueueBarrier ? &resolve_mark_cl : NULL,
+                                                          ShenandoahIUBarrier ? &resolve_mark_cl : NULL,
                                                           do_nmethods ? &blobsCl : NULL);
         Threads::threads_do(&tc);
-        if (ShenandoahStoreValEnqueueBarrier && _claimed_syncroots.try_set()) {
+        if (ShenandoahIUBarrier && _claimed_syncroots.try_set()) {
           ObjectSynchronizer::oops_do(&resolve_mark_cl);
         }
       } else {
         ShenandoahMarkRefsClosure mark_cl(q, rp);
         MarkingCodeBlobClosure blobsCl(&mark_cl, !CodeBlobToOopClosure::FixRelocations);
         ShenandoahSATBAndRemarkCodeRootsThreadsClosure tc(&cl,
-                                                          ShenandoahStoreValEnqueueBarrier ? &mark_cl : NULL,
+                                                          ShenandoahIUBarrier ? &mark_cl : NULL,
                                                           do_nmethods ? &blobsCl : NULL);
         Threads::threads_do(&tc);
-        if (ShenandoahStoreValEnqueueBarrier && _claimed_syncroots.try_set()) {
+        if (ShenandoahIUBarrier && _claimed_syncroots.try_set()) {
           ObjectSynchronizer::oops_do(&mark_cl);
         }
       }
@@ -315,21 +315,9 @@ void ShenandoahConcurrentMark::mark_roots(ShenandoahPhaseTimings::Phase root_pha
 
 void ShenandoahConcurrentMark::update_roots(ShenandoahPhaseTimings::Phase root_phase) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
-
-  bool update_code_cache = true; // initialize to safer value
-  switch (root_phase) {
-    case ShenandoahPhaseTimings::update_roots:
-    case ShenandoahPhaseTimings::final_update_refs_roots:
-      update_code_cache = false;
-      break;
-    case ShenandoahPhaseTimings::full_gc_update_roots:
-    case ShenandoahPhaseTimings::full_gc_adjust_roots:
-    case ShenandoahPhaseTimings::degen_gc_update_roots:
-      update_code_cache = true;
-      break;
-    default:
-      ShouldNotReachHere();
-  }
+  assert(root_phase == ShenandoahPhaseTimings::full_gc_update_roots ||
+         root_phase == ShenandoahPhaseTimings::degen_gc_update_roots,
+         "Only for these phases");
 
   ShenandoahGCPhase phase(root_phase);
 
@@ -339,7 +327,7 @@ void ShenandoahConcurrentMark::update_roots(ShenandoahPhaseTimings::Phase root_p
 
   uint nworkers = _heap->workers()->active_workers();
 
-  ShenandoahRootUpdater root_updater(nworkers, root_phase, update_code_cache);
+  ShenandoahRootUpdater root_updater(nworkers, root_phase);
   ShenandoahUpdateRootsTask update_roots(&root_updater);
   _heap->workers()->run_task(&update_roots);
 
@@ -424,6 +412,16 @@ void ShenandoahConcurrentMark::concurrent_scan_code_roots(uint worker_id, Refere
   }
 }
 
+class ShenandoahFlushSATBHandshakeClosure : public HandshakeClosure {
+public:
+  ShenandoahFlushSATBHandshakeClosure() :
+          HandshakeClosure("Shenandoah Flush SATB Handshake") {}
+
+  void do_thread(Thread* thread) {
+    ShenandoahThreadLocalData::satb_mark_queue(thread).flush();
+  }
+};
+
 void ShenandoahConcurrentMark::mark_from_roots() {
   WorkGang* workers = _heap->workers();
   uint nworkers = workers->active_workers();
@@ -443,10 +441,26 @@ void ShenandoahConcurrentMark::mark_from_roots() {
 
   task_queues()->reserve(nworkers);
 
-  {
+  ShenandoahSATBMarkQueueSet& qset = ShenandoahBarrierSet::satb_mark_queue_set();
+  ShenandoahFlushSATBHandshakeClosure flush_satb;
+  for (uint flushes = 0; flushes < ShenandoahMaxSATBBufferFlushes; flushes++) {
     ShenandoahTaskTerminator terminator(nworkers, task_queues());
     ShenandoahConcurrentMarkingTask task(this, &terminator);
     workers->run_task(&task);
+
+    if (_heap->cancelled_gc()) {
+      // GC is cancelled, break out.
+      break;
+    }
+
+    size_t before = qset.completed_buffers_num();
+    Handshake::execute(&flush_satb);
+    size_t after = qset.completed_buffers_num();
+
+    if (before == after) {
+      // No more retries needed, break out.
+      break;
+    }
   }
 
   assert(task_queues()->is_empty() || _heap->cancelled_gc(), "Should be empty when not cancelled");

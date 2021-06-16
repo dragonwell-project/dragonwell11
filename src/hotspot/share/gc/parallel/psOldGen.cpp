@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -393,7 +393,9 @@ void PSOldGen::post_resize() {
   start_array()->set_covered_region(new_memregion);
   ParallelScavengeHeap::heap()->card_table()->resize_covered_region(new_memregion);
 
-  // ALWAYS do this last!!
+  // The update of the space's end is done by this call.  As that
+  // makes the new space available for concurrent allocation, this
+  // must be the last step when expanding.
   object_space()->initialize(new_memregion,
                              SpaceDecorator::DontClear,
                              SpaceDecorator::DontMangle);
