@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -328,6 +328,7 @@ class LibraryCallKit : public GraphKit {
   bool inline_vectorizedMismatch();
   bool inline_fma(vmIntrinsics::ID id);
   bool inline_character_compare(vmIntrinsics::ID id);
+  bool inline_fp_min_max(vmIntrinsics::ID id);
 
   bool inline_profileBoolean();
   bool inline_isCompileConstant();
@@ -886,6 +887,12 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_isUpperCase:
   case vmIntrinsics::_isWhitespace:
     return inline_character_compare(intrinsic_id());
+
+  case vmIntrinsics::_maxF:
+  case vmIntrinsics::_minF:
+  case vmIntrinsics::_maxD:
+  case vmIntrinsics::_minD:
+    return inline_fp_min_max(intrinsic_id());
 
   default:
     // If you get here, it may be that someone has added a new intrinsic
@@ -3565,7 +3572,13 @@ bool LibraryCallKit::inline_unsafe_newArray(bool uninitialized) {
     // ensuing call will throw an exception, or else it
     // will cache the array klass for next time.
     PreserveJVMState pjvms(this);
-    CallJavaNode* slow_call = generate_method_call_static(vmIntrinsics::_newArray);
+    CallJavaNode* slow_call = NULL;
+    if (uninitialized) {
+      // Generate optimized virtual call (holder class 'Unsafe' is final)
+      slow_call = generate_method_call(vmIntrinsics::_allocateUninitializedArray, false, false);
+    } else {
+      slow_call = generate_method_call_static(vmIntrinsics::_newArray);
+    }
     Node* slow_result = set_results_for_java_call(slow_call);
     // this->control() comes from set_results_for_java_call
     result_reg->set_req(_slow_path, control());
@@ -6685,6 +6698,42 @@ bool LibraryCallKit::inline_character_compare(vmIntrinsics::ID id) {
       fatal_unexpected_iid(id);
   }
 
+  set_result(_gvn.transform(n));
+  return true;
+}
+
+//------------------------------inline_fp_min_max------------------------------
+bool LibraryCallKit::inline_fp_min_max(vmIntrinsics::ID id) {
+  Node *a = NULL;
+  Node *b = NULL;
+  Node *n = NULL;
+  switch (id) {
+  case vmIntrinsics::_maxF:
+  case vmIntrinsics::_minF:
+    assert(callee()->signature()->size() == 2, "minF/maxF has 2 parameters of size 1 each.");
+    a = argument(0);
+    b = argument(1);
+    break;
+  case vmIntrinsics::_maxD:
+  case vmIntrinsics::_minD:
+    assert(callee()->signature()->size() == 4, "minD/maxD has 2 parameters of size 2 each.");
+    a = round_double_node(argument(0));
+    b = round_double_node(argument(2));
+    break;
+  default:
+    fatal_unexpected_iid(id);
+    break;
+  }
+  if (a->is_Con() || b->is_Con()) {
+    return false;
+  }
+  switch (id) {
+  case vmIntrinsics::_maxF:  n = new MaxFNode(a, b);  break;
+  case vmIntrinsics::_minF:  n = new MinFNode(a, b);  break;
+  case vmIntrinsics::_maxD:  n = new MaxDNode(a, b);  break;
+  case vmIntrinsics::_minD:  n = new MinDNode(a, b);  break;
+  default:  fatal_unexpected_iid(id);  break;
+  }
   set_result(_gvn.transform(n));
   return true;
 }

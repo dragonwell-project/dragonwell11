@@ -610,7 +610,7 @@ void ConnectionGraph::add_node_to_connection_graph(Node *n, Unique_Node_List *de
       break;
     }
 #if INCLUDE_SHENANDOAHGC
-    case Op_ShenandoahEnqueueBarrier:
+    case Op_ShenandoahIUBarrier:
       add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(1), delayed_worklist);
       break;
     case Op_ShenandoahLoadReferenceBarrier:
@@ -831,7 +831,7 @@ void ConnectionGraph::add_final_edges(Node *n) {
       break;
     }
 #if INCLUDE_SHENANDOAHGC
-    case Op_ShenandoahEnqueueBarrier:
+    case Op_ShenandoahIUBarrier:
       add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(1), NULL);
       break;
     case Op_ShenandoahLoadReferenceBarrier:

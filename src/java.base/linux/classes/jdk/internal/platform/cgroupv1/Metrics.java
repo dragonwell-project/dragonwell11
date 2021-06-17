@@ -27,6 +27,7 @@
 package jdk.internal.platform.cgroupv1;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -85,6 +86,8 @@ public class Metrics implements jdk.internal.platform.Metrics {
 
         } catch (IOException e) {
             return null;
+        } catch (UncheckedIOException e) {
+            return null;
         }
 
         /**
@@ -119,6 +122,8 @@ public class Metrics implements jdk.internal.platform.Metrics {
 
         } catch (IOException e) {
             return null;
+        } catch (UncheckedIOException e) {
+            return null;
         }
 
         // Return Metrics object if we found any subsystems.
@@ -136,6 +141,8 @@ public class Metrics implements jdk.internal.platform.Metrics {
         } catch (PrivilegedActionException e) {
             unwrapIOExceptionAndRethrow(e);
             throw new InternalError(e.getCause());
+        } catch (UncheckedIOException e) {
+            throw e.getCause();
         }
     }
 
@@ -467,14 +474,14 @@ public class Metrics implements jdk.internal.platform.Metrics {
     }
 
     public long getMemoryAndSwapFailCount() {
-        if (!memory.isSwapEnabled()) {
+        if (memory != null && !memory.isSwapEnabled()) {
             return getMemoryFailCount();
         }
         return SubSystem.getLongValue(memory, "memory.memsw.failcnt");
     }
 
     public long getMemoryAndSwapLimit() {
-        if (!memory.isSwapEnabled()) {
+        if (memory != null && !memory.isSwapEnabled()) {
             return getMemoryLimit();
         }
         long retval = SubSystem.getLongValue(memory, "memory.memsw.limit_in_bytes");
@@ -493,14 +500,14 @@ public class Metrics implements jdk.internal.platform.Metrics {
     }
 
     public long getMemoryAndSwapMaxUsage() {
-        if (!memory.isSwapEnabled()) {
+        if (memory != null && !memory.isSwapEnabled()) {
             return getMemoryMaxUsage();
         }
         return SubSystem.getLongValue(memory, "memory.memsw.max_usage_in_bytes");
     }
 
     public long getMemoryAndSwapUsage() {
-        if (!memory.isSwapEnabled()) {
+        if (memory != null && !memory.isSwapEnabled()) {
             return getMemoryUsage();
         }
         return SubSystem.getLongValue(memory, "memory.memsw.usage_in_bytes");
