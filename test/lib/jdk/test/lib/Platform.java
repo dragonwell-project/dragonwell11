@@ -271,6 +271,9 @@ public class Platform {
      * on this platform.
      */
     public static boolean hasSA() {
+        if (isZero()) {
+            return false; // SA is not enabled.
+        }
         if (isAix()) {
             return false; // SA not implemented.
         } else if (isLinux()) {

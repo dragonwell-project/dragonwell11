@@ -316,6 +316,7 @@ IdealLoopTree* PhaseIdealLoop::create_outer_strip_mined_loop(BoolNode *test, Nod
   loop->_parent = outer_ilt;
   loop->_next = NULL;
   loop->_nest++;
+  assert(loop->_nest <= SHRT_MAX, "sanity");
 
   set_loop(iffalse, outer_ilt);
   register_control(outer_le, outer_ilt, iffalse);
@@ -1010,16 +1011,32 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
     bool has_skeleton = outer_le->in(1)->bottom_type()->singleton() && outer_le->in(1)->bottom_type()->is_int()->get_con() == 0;
     if (has_skeleton) {
       assert(expect_skeleton == 1 || expect_skeleton == -1, "unexpected skeleton node");
-      assert(outer->outcnt() == 2, "only phis");
+      assert(outer->outcnt() == 2, "only control nodes");
     } else {
       assert(expect_skeleton == 0 || expect_skeleton == -1, "no skeleton node?");
       uint phis = 0;
+      uint be_loads = 0;
+      Node* be = inner->in(LoopNode::LoopBackControl);
       for (DUIterator_Fast imax, i = inner->fast_outs(imax); i < imax; i++) {
         Node* u = inner->fast_out(i);
         if (u->is_Phi()) {
           phis++;
+          for (DUIterator_Fast jmax, j = be->fast_outs(jmax); j < jmax; j++) {
+            Node* n = be->fast_out(j);
+            if (n->is_Load()) {
+              assert(n->in(0) == be, "should be on the backedge");
+              do {
+                n = n->raw_out(0);
+              } while (!n->is_Phi());
+              if (n == u) {
+                be_loads++;
+                break;
+              }
+            }
+          }
         }
       }
+      assert(be_loads <= phis, "wrong number phis that depends on a pinned load");
       for (DUIterator_Fast imax, i = outer->fast_outs(imax); i < imax; i++) {
         Node* u = outer->fast_out(i);
         assert(u == outer || u == inner || u->is_Phi(), "nothing between inner and outer loop");
@@ -1031,7 +1048,9 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
           stores++;
         }
       }
-      assert(outer->outcnt() >= phis + 2 && outer->outcnt() <= phis + 2 + stores + 1, "only phis");
+      // Late optimization of loads on backedge can cause Phi of outer loop to be eliminated but Phi of inner loop is
+      // not guaranteed to be optimized out.
+      assert(outer->outcnt() >= phis + 2 - be_loads && outer->outcnt() <= phis + 2 + stores + 1, "only phis");
     }
     assert(sfpt->outcnt() == 1, "no data node");
     assert(outer_tail->outcnt() == 1 || !has_skeleton, "no data node");
@@ -1627,7 +1646,28 @@ const Type* OuterStripMinedLoopEndNode::Value(PhaseGVN* phase) const {
   if (phase->type(in(0)) == Type::TOP)
     return Type::TOP;
 
+  // Until expansion, the loop end condition is not set so this should not constant fold.
+  if (is_expanded(phase)) {
+    return IfNode::Value(phase);
+  }
+
   return TypeTuple::IFBOTH;
+}
+
+bool OuterStripMinedLoopEndNode::is_expanded(PhaseGVN *phase) const {
+  // The outer strip mined loop head only has Phi uses after expansion
+  if (phase->is_IterGVN()) {
+    Node* backedge = proj_out_or_null(true);
+    if (backedge != NULL) {
+      Node* head = backedge->unique_ctrl_out();
+      if (head != NULL && head->is_OuterStripMinedLoop()) {
+        if (head->find_out_with(Op_Phi) != NULL) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 Node *OuterStripMinedLoopEndNode::Ideal(PhaseGVN *phase, bool can_reshape) {
@@ -1753,6 +1793,7 @@ bool IdealLoopTree::is_member(const IdealLoopTree *l) const {
 //------------------------------set_nest---------------------------------------
 // Set loop tree nesting depth.  Accumulate _has_call bits.
 int IdealLoopTree::set_nest( uint depth ) {
+  assert(depth <= SHRT_MAX, "sanity");
   _nest = depth;
   int bits = _has_call;
   if( _child ) bits |= _child->set_nest(depth+1);

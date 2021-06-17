@@ -1327,6 +1327,13 @@ void ShenandoahHeap::safe_object_iterate(ObjectClosure* cl) {
   object_iterate(cl);
 }
 
+// Keep alive an object that was loaded with AS_NO_KEEPALIVE.
+void ShenandoahHeap::keep_alive(oop obj) {
+  if (is_concurrent_mark_in_progress() && (obj != NULL)) {
+    ShenandoahBarrierSet::barrier_set()->enqueue(obj);
+  }
+}
+
 void ShenandoahHeap::heap_region_iterate(ShenandoahHeapRegionClosure* blk) const {
   for (size_t i = 0; i < num_regions(); i++) {
     ShenandoahHeapRegion* current = get_region(i);
@@ -1822,20 +1829,6 @@ void ShenandoahHeap::op_degenerated_fail() {
 void ShenandoahHeap::op_degenerated_futile() {
   shenandoah_policy()->record_degenerated_upgrade_to_full();
   op_full(GCCause::_shenandoah_upgrade_to_full_gc);
-}
-
-void ShenandoahHeap::force_satb_flush_all_threads() {
-  if (!is_concurrent_mark_in_progress()) {
-    // No need to flush SATBs
-    return;
-  }
-
-  for (JavaThreadIteratorWithHandle jtiwh; JavaThread *t = jtiwh.next(); ) {
-    ShenandoahThreadLocalData::set_force_satb_flush(t, true);
-  }
-  // The threads are not "acquiring" their thread-local data, but it does not
-  // hurt to "release" the updates here anyway.
-  OrderAccess::fence();
 }
 
 void ShenandoahHeap::set_gc_state_all_threads(char state) {

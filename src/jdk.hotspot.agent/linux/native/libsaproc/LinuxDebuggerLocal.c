@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -66,6 +66,12 @@ static jmethodID createClosestSymbol_ID = 0;
 static jmethodID createLoadObject_ID = 0;
 static jmethodID getThreadForThreadId_ID = 0;
 static jmethodID listAdd_ID = 0;
+
+/*
+ * SA_ALTROOT environment variable.
+ * This memory holds env string for putenv(3).
+ */
+static char *saaltroot = NULL;
 
 #define CHECK_EXCEPTION_(value) if ((*env)->ExceptionOccurred(env)) { return value; }
 #define CHECK_EXCEPTION if ((*env)->ExceptionOccurred(env)) { return;}
@@ -212,6 +218,29 @@ void verifyBitness(JNIEnv *env, const char *binaryName) {
 
 /*
  * Class:     sun_jvm_hotspot_debugger_linux_LinuxDebuggerLocal
+ * Method:    setSAAltRoot0
+ * Signature: (Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_sun_jvm_hotspot_debugger_linux_LinuxDebuggerLocal_setSAAltRoot0
+  (JNIEnv *env, jobject this_obj, jstring altroot) {
+  if (saaltroot != NULL) {
+    free(saaltroot);
+  }
+  const char *path = (*env)->GetStringUTFChars(env, altroot, JNI_FALSE);
+  /*
+   * `saaltroot` is used for putenv().
+   * So we need to keep this memory.
+   */
+  static const char *PREFIX = "SA_ALTROOT=";
+  size_t len = strlen(PREFIX) + strlen(path) + 1;
+  saaltroot = (char *)malloc(len);
+  snprintf(saaltroot, len, "%s%s", PREFIX, path);
+  putenv(saaltroot);
+  (*env)->ReleaseStringUTFChars(env, altroot, path);
+}
+
+/*
+ * Class:     sun_jvm_hotspot_debugger_linux_LinuxDebuggerLocal
  * Method:    attach0
  * Signature: (I)V
  */
@@ -226,7 +255,7 @@ JNIEXPORT void JNICALL Java_sun_jvm_hotspot_debugger_linux_LinuxDebuggerLocal_at
 
   char err_buf[200];
   struct ps_prochandle* ph;
-  if ( (ph = Pgrab(jpid, err_buf, sizeof(err_buf))) == NULL) {
+  if ((ph = Pgrab(jpid, err_buf, sizeof(err_buf))) == NULL) {
     char msg[230];
     snprintf(msg, sizeof(msg), "Can't attach to the process: %s", err_buf);
     THROW_NEW_DEBUGGER_EXCEPTION(msg);
@@ -282,6 +311,10 @@ JNIEXPORT void JNICALL Java_sun_jvm_hotspot_debugger_linux_LinuxDebuggerLocal_de
   struct ps_prochandle* ph = get_proc_handle(env, this_obj);
   if (ph != NULL) {
      Prelease(ph);
+  }
+  if (saaltroot != NULL) {
+    free(saaltroot);
+    saaltroot = NULL;
   }
 }
 

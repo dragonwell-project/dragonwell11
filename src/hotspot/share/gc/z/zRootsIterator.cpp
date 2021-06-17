@@ -37,6 +37,7 @@
 #include "gc/z/zRootsIterator.hpp"
 #include "gc/z/zStat.hpp"
 #include "gc/z/zThreadLocalData.hpp"
+#include "memory/iterator.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
 #include "prims/jvmtiExport.hpp"

@@ -521,6 +521,9 @@ public:
   void object_iterate(ObjectClosure* cl);
   void safe_object_iterate(ObjectClosure* cl);
 
+  // Keep alive an object that was loaded with AS_NO_KEEPALIVE.
+  void keep_alive(oop obj);
+
   // Used by RMI
   jlong millis_since_last_gc();
 
@@ -621,7 +624,6 @@ public:
 
   // SATB barriers hooks
   inline bool requires_marking(const void* entry) const;
-  void force_satb_flush_all_threads();
 
   // Support for bitmap uncommits
   bool commit_bitmap_slice(ShenandoahHeapRegion *r);
