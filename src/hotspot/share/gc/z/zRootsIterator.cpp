@@ -153,7 +153,7 @@ public:
 
 void ZRootsIteratorClosure::do_thread(Thread* thread) {
   ZCodeBlobClosure code_cl(this);
-  thread->oops_do(this, ClassUnloading ? &code_cl : NULL);
+  thread->oops_do(this, ZHeap::heap()->should_unload_class() ? &code_cl : NULL);
 }
 
 ZRootsIterator::ZRootsIterator() :
@@ -173,7 +173,7 @@ ZRootsIterator::ZRootsIterator() :
   Threads::change_thread_claim_parity();
   ClassLoaderDataGraph::clear_claimed_marks();
   COMPILER2_PRESENT(DerivedPointerTable::clear());
-  if (ClassUnloading) {
+  if (ZHeap::heap()->should_unload_class()) {
     nmethod::oops_do_marking_prologue();
   } else {
     ZNMethodTable::nmethod_entries_do_begin();
@@ -183,7 +183,7 @@ ZRootsIterator::ZRootsIterator() :
 ZRootsIterator::~ZRootsIterator() {
   ZStatTimer timer(ZSubPhasePauseRootsTeardown);
   ResourceMark rm;
-  if (ClassUnloading) {
+  if (ZHeap::heap()->should_unload_class()) {
     nmethod::oops_do_marking_epilogue();
   } else {
     ZNMethodTable::nmethod_entries_do_end();
@@ -256,7 +256,7 @@ void ZRootsIterator::oops_do(ZRootsIteratorClosure* cl, bool visit_jvmti_weak_ex
   _jni_handles.oops_do(cl);
   _class_loader_data_graph.oops_do(cl);
   _threads.oops_do(cl);
-  if (!ClassUnloading) {
+  if (!ZHeap::heap()->should_unload_class()) {
     _code_cache.oops_do(cl);
   }
   if (visit_jvmti_weak_export) {

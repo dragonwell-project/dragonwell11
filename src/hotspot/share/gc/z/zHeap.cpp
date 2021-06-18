@@ -332,7 +332,7 @@ void ZHeap::process_non_strong_references() {
   // Process concurrent weak roots
   _weak_roots_processor.process_concurrent_weak_roots();
 
-  if (ClassUnloading) {
+  if (should_unload_class()) {
     return;
   }
 
@@ -349,7 +349,7 @@ void ZHeap::process_non_strong_references() {
 }
 
 void ZHeap::finish_non_strong_references() {
-  guarantee(ClassUnloading, "sanity");
+  guarantee(should_unload_class(), "sanity");
   // Unblock resurrection of weak/phantom references
   ZResurrection::unblock();
 
@@ -365,6 +365,10 @@ void ZHeap::finish_non_strong_references() {
 void ZHeap::unload_class() {
   // Unload unused classes and code
   _unload.unload();
+}
+
+bool ZHeap::should_unload_class() {
+  return ClassUnloading && (ZUnloadClassesFrequency != 0) && ((ZGlobalSeqNum-1) % ZUnloadClassesFrequency == 0);
 }
 
 void ZHeap::select_relocation_set() {

@@ -33,9 +33,8 @@
 #include "gc/z/zOopClosures.hpp"
 #include "gc/z/zStat.hpp"
 #include "gc/z/zUnload.hpp"
+#include "gc/z/zHeap.inline.hpp"
 #include "oops/access.inline.hpp"
-
-static const ZStatSubPhase ZSubPhaseConcurrentClassesUnload("Concurrent Classes Unload");
 
 class ZIsUnloadingOopClosure : public OopClosure {
 private:
@@ -81,7 +80,7 @@ public:
 ZUnload::ZUnload(ZWorkers* workers) :
     _workers(workers) {
 
-  if (!ClassUnloading) {
+  if (!ZHeap::heap()->should_unload_class()) {
     return;
   }
 
@@ -90,7 +89,7 @@ ZUnload::ZUnload(ZWorkers* workers) :
 }
 
 void ZUnload::prepare() {
-  if (!ClassUnloading) {
+  if (!ZHeap::heap()->should_unload_class()) {
     return;
   }
 
@@ -117,11 +116,9 @@ public:
 };
 
 void ZUnload::unload() {
-  if (!ClassUnloading) {
+  if (!ZHeap::heap()->should_unload_class()) {
     return;
   }
-
-  ZStatTimer timer(ZSubPhaseConcurrentClassesUnload);
 
   // Unlink stale metadata and nmethods
   // Purge stale metadata and nmethods that were unlinked

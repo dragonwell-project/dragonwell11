@@ -139,6 +139,7 @@ public:
 
   // Class unloading
   void unload_class();
+  bool should_unload_class();
 
   // Relocation set
   void select_relocation_set();

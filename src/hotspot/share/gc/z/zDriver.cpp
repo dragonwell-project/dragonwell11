@@ -310,7 +310,7 @@ void ZDriver::concurrent_process_non_strong_references() {
 }
 
 void ZDriver::unload_class() {
-  if (!ClassUnloading) {
+  if (!ZHeap::heap()->should_unload_class()) {
     return;
   }
   pause<VM_ZUnloadClass>();

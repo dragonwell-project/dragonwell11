@@ -83,6 +83,10 @@
           "(can be any even integer between 4M and 32M)")                   \
           range(4*M, 32*M)                                                  \
                                                                             \
+  experimental(uint, ZUnloadClassesFrequency, 100,                          \
+          "Unload the classes every Nth ZGC cycle."                         \
+          "Set to zero to disable class unloading.")                        \
+                                                                            \
   diagnostic(uint, ZStatisticsInterval, 10,                                 \
           "Time between statistics print outs (in seconds)")                \
           range(1, (uint)-1)                                                \
