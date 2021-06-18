@@ -235,7 +235,7 @@ public class ObjectInputStream
 {
     /**
      * enable fast serialization:
-     * 1. Create a {@link ClassResolveCache} to reduce calls to {@link Class#forName(String)}
+     * 1. Create a {@link ResolvedClassCache} to reduce calls to {@link Class#forName(String)}
      * 2. Cache {@link #latestUserDefinedLoader()}: The loader can be safely cached inside the
      *    ObjectInputStream class, once custom {@link #readObject()} methods are invoked, the cache
      *    will be invalid.
@@ -771,7 +771,7 @@ public class ObjectInputStream
             if (latestUserDefinedLoaderCache == null) {
                 latestUserDefinedLoaderCache = latestUserDefinedLoader();
             }
-            return ClassResolveCache.forName(name, latestUserDefinedLoaderCache,
+            return ResolvedClassCache.forName(name, latestUserDefinedLoaderCache,
                     (className, loader) -> {
                         try {
                             return Class.forName(className, false, loader);

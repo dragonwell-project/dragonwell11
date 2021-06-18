@@ -30,9 +30,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
 
 /**
- * This class holds the class resolve cache for FAST_SERIALIZATION feature.
+ * This class holds the resolved class cache for FAST_SERIALIZATION feature.
  */
-final class ClassResolveCache {
+final class ResolvedClassCache {
     private final static Map<String, List<Entry>> nameToClasses = new ConcurrentHashMap<>();
 
     /**
