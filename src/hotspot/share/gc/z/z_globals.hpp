@@ -43,47 +43,47 @@
           "Soft limit for maximum heap size (in bytes)")                    \
           constraint(SoftMaxHeapSizeConstraintFunc,AfterMemoryInit)         \
                                                                             \
-  experimental(ccstr, ZPath, NULL,                                          \
+  product(ccstr, ZPath, NULL,                                               \
           "Filesystem path for Java heap backing storage "                  \
           "(must be a tmpfs or a hugetlbfs filesystem)")                    \
                                                                             \
-  experimental(double, ZAllocationSpikeTolerance, 2.0,                      \
+  product(double, ZAllocationSpikeTolerance, 2.0,                           \
           "Allocation spike tolerance factor")                              \
                                                                             \
-  experimental(double, ZFragmentationLimit, 25.0,                           \
+  product(double, ZFragmentationLimit, 25.0,                                \
           "Maximum allowed heap fragmentation")                             \
                                                                             \
-  experimental(size_t, ZMarkStackSpaceLimit, 8*G,                           \
+  product(size_t, ZMarkStackSpaceLimit, 8*G,                                \
           "Maximum number of bytes allocated for mark stacks")              \
           range(32*M, 1024*G)                                               \
                                                                             \
-  experimental(uint, ZCollectionInterval, 0,                                \
+  product(uint, ZCollectionInterval, 0,                                     \
           "Force GC at a fixed time interval (in seconds)")                 \
                                                                             \
-  experimental(bool, ZProactive, true,                                      \
+  product(bool, ZProactive, true,                                           \
           "Enable proactive GC cycles")                                     \
                                                                             \
-  experimental(bool, ZUncommit, true,                                       \
+  product(bool, ZUncommit, true,                                            \
           "Uncommit unused memory")                                         \
                                                                             \
-  experimental(uintx, ZUncommitDelay, 5 * 60,                               \
+  product(uintx, ZUncommitDelay, 5 * 60,                                    \
           "Uncommit memory if it has been unused for the specified "        \
           "amount of time (in seconds)")                                    \
                                                                             \
-  experimental(double, ZHighUsagePercent, 95.0,                             \
+  product(double, ZHighUsagePercent, 95.0,                                  \
           "Percentage of heap usage for ZGC high usage rule")               \
           range(0.0, 100.0)                                                 \
                                                                             \
-  experimental(uintx, ZRelocationReservePercent, 0,                         \
+  product(uintx, ZRelocationReservePercent, 0,                              \
           "Percentage of total heap size reserved for relocation.")         \
           range(0,100)                                                      \
                                                                             \
-  experimental(uintx, ZMediumObjectUpperBound, 4*M,                         \
+  product(uintx, ZMediumObjectUpperBound, 4*M,                              \
           "Upper bound of the object size in ZGC medium page"               \
           "(can be any even integer between 4M and 32M)")                   \
           range(4*M, 32*M)                                                  \
                                                                             \
-  experimental(uint, ZUnloadClassesFrequency, 100,                          \
+  product(uint, ZUnloadClassesFrequency, 100,                               \
           "Unload the classes every Nth ZGC cycle."                         \
           "Set to zero to disable class unloading.")                        \
                                                                             \
