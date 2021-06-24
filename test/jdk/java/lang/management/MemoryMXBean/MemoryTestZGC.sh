@@ -45,6 +45,6 @@ runOne()
 
 # Test MemoryTest with ZGC. ZGC is a single generation GC, which means
 # it has one memory manager and one memory pool.
-runOne -XX:+UnlockExperimentalVMOptions -XX:+UseZGC MemoryTest 1 1
+runOne -XX:+UseZGC MemoryTest 1 1
 
 exit 0
