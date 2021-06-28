@@ -27,12 +27,12 @@ package gc.z;
  * @test TestSmallHeap
  * @requires vm.gc.Z & !vm.graal.enabled
  * @summary Test ZGC with small heaps
- * @library /test/lib
+ * @library / /test/lib
  * @run main/othervm gc.z.TestSmallHeap 8M 16M 32M 64M 128M 256M 512M 1024M
  */
 
 import jdk.test.lib.process.ProcessTools;
-import java.lang.ref.Reference;
+import static gc.testlibrary.Allocation.blackHole;
 
 public class TestSmallHeap {
     public static class Test {
@@ -44,7 +44,7 @@ public class TestSmallHeap {
             // all allocation paths (small/medium/large) are tested.
             for (int length = 16; length <= maxCapacity / 16; length *= 2) {
                 System.out.println("Allocating " + length + " bytes");
-                Reference.reachabilityFence(new byte[length]);
+                blackHole(new byte[length]);
             }
 
             System.out.println("Success");
