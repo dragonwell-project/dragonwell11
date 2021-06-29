@@ -24,6 +24,7 @@
 #include "precompiled.hpp"
 #include "gc/z/zAddress.inline.hpp"
 #include "gc/z/zGlobals.hpp"
+#include "gc/z/zCollectedHeap.hpp"
 #include "gc/z/zHeap.inline.hpp"
 #include "gc/z/zHeapIterator.hpp"
 #include "gc/z/zHeuristics.hpp"
@@ -368,7 +369,24 @@ void ZHeap::unload_class() {
 }
 
 bool ZHeap::should_unload_class() {
-  return ClassUnloading && (ZUnloadClassesFrequency != 0) && ((ZGlobalSeqNum-1) % ZUnloadClassesFrequency == 0);
+  if (!ClassUnloading) return false;
+
+  // ignore ZUnloadClassesFrequency if implied by the GC cause
+  const GCCause::Cause cause = ZCollectedHeap::heap()->gc_cause();
+  switch (cause) {
+    case GCCause::_wb_young_gc:
+    case GCCause::_wb_conc_mark:
+    case GCCause::_wb_full_gc:
+    case GCCause::_dcmd_gc_run:
+    case GCCause::_java_lang_system_gc:
+    case GCCause::_full_gc_alot:
+    case GCCause::_scavenge_alot:
+    case GCCause::_jvmti_force_gc:
+    case GCCause::_metadata_GC_clear_soft_refs:
+      return true;
+  }
+
+  return (ZUnloadClassesFrequency != 0) && ((ZGlobalSeqNum-1) % ZUnloadClassesFrequency == 0);
 }
 
 void ZHeap::select_relocation_set() {

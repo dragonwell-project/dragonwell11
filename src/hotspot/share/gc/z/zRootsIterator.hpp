@@ -84,6 +84,7 @@ public:
 
 class ZRootsIterator {
 private:
+  bool _marking;
   ZOopStorageIterator _jni_handles_iter;
 
   void do_universe(ZRootsIteratorClosure* cl);
@@ -109,7 +110,7 @@ private:
   ZParallelOopsDo<ZRootsIterator, &ZRootsIterator::do_code_cache>              _code_cache;
 
 public:
-  ZRootsIterator();
+  ZRootsIterator(bool marking = false);
   ~ZRootsIterator();
 
   void oops_do(ZRootsIteratorClosure* cl, bool visit_jvmti_weak_export = false);

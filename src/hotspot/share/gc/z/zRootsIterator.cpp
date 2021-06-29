@@ -156,7 +156,8 @@ void ZRootsIteratorClosure::do_thread(Thread* thread) {
   thread->oops_do(this, ZHeap::heap()->should_unload_class() ? &code_cl : NULL);
 }
 
-ZRootsIterator::ZRootsIterator() :
+ZRootsIterator::ZRootsIterator(bool marking) :
+    _marking(marking),
     _jni_handles_iter(JNIHandles::global_handles()),
     _universe(this),
     _object_synchronizer(this),
@@ -232,7 +233,11 @@ void ZRootsIterator::do_system_dictionary(ZRootsIteratorClosure* cl) {
 void ZRootsIterator::do_class_loader_data_graph(ZRootsIteratorClosure* cl) {
   ZStatTimer timer(ZSubPhasePauseRootsClassLoaderDataGraph);
   CLDToOopClosure cld_cl(cl);
-  ClassLoaderDataGraph::cld_do(&cld_cl);
+  if (_marking) {
+    ClassLoaderDataGraph::always_strong_cld_do(&cld_cl);
+  } else {
+    ClassLoaderDataGraph::cld_do(&cld_cl);
+  }
 }
 
 void ZRootsIterator::do_threads(ZRootsIteratorClosure* cl) {
