@@ -80,7 +80,7 @@ public:
 ZUnload::ZUnload(ZWorkers* workers) :
     _workers(workers) {
 
-  if (!ZHeap::heap()->should_unload_class()) {
+  if (!ClassUnloading) {
     return;
   }
 

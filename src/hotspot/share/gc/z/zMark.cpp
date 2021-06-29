@@ -144,7 +144,7 @@ public:
   ZMarkRootsTask(ZMark* mark) :
       ZTask("ZMarkRootsTask"),
       _mark(mark),
-      _roots() {}
+      _roots(true /* marking */) {}
 
   virtual void work() {
     ZMarkRootsIteratorClosure cl;

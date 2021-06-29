@@ -42,7 +42,7 @@ class ZBarrierSetC2;
 
 static BarrierSetNMethod* make_barrier_set_nmethod() {
   // NMethod barriers are only used when class unloading is enabled
-  if (!ClassUnloading || ZUnloadClassesFrequency == 0) {
+  if (!ClassUnloading) {
     return NULL;
   }
 
