@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -492,6 +492,16 @@ JVM_handle_bsd_signal(int sig,
       }
     }
   }
+
+  // Handle SafeFetch faults:
+  if (uc != NULL) {
+    address const pc = (address) os::Bsd::ucontext_get_pc(uc);
+    if (pc && StubRoutines::is_safefetch_fault(pc)) {
+      os::Bsd::ucontext_set_pc(uc, StubRoutines::continuation_for_safefetch_fault(pc));
+      return 1;
+    }
+  }
+
 /*
   NOTE: does not seem to work on bsd.
   if (info == NULL || info->si_code <= 0 || info->si_code == SI_NOINFO) {
@@ -509,11 +519,6 @@ JVM_handle_bsd_signal(int sig,
   //%note os_trap_1
   if (info != NULL && uc != NULL && thread != NULL) {
     pc = (address) os::Bsd::ucontext_get_pc(uc);
-
-    if (StubRoutines::is_safefetch_fault(pc)) {
-      os::Bsd::ucontext_set_pc(uc, StubRoutines::continuation_for_safefetch_fault(pc));
-      return 1;
-    }
 
     // Handle ALL stack overflow variations here
     if (sig == SIGSEGV || sig == SIGBUS) {
@@ -598,7 +603,13 @@ JVM_handle_bsd_signal(int sig,
 
 #ifdef AMD64
       if (sig == SIGFPE  &&
-          (info->si_code == FPE_INTDIV || info->si_code == FPE_FLTDIV)) {
+          (info->si_code == FPE_INTDIV || info->si_code == FPE_FLTDIV
+           // Workaround for macOS ARM incorrectly reporting FPE_FLTINV for "div by 0"
+           // instead of the expected FPE_FLTDIV when running x86_64 binary under Rosetta emulation
+#ifdef __APPLE__
+           || (VM_Version::is_cpu_emulated() && info->si_code == FPE_FLTINV)
+#endif
+          )) {
         stub =
           SharedRuntime::
           continuation_for_implicit_exception(thread,

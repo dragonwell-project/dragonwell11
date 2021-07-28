@@ -535,7 +535,30 @@ bool MemNode::detect_ptr_independence(Node* p1, AllocateNode* a1,
 Node* LoadNode::find_previous_arraycopy(PhaseTransform* phase, Node* ld_alloc, Node*& mem, bool can_see_stored_value) const {
   ArrayCopyNode* ac = find_array_copy_clone(phase, ld_alloc, mem);
   if (ac != NULL) {
-    return ac;
+    Node* ld_addp = in(MemNode::Address);
+    Node* src = ac->in(ArrayCopyNode::Src);
+    const TypeAryPtr* ary_t = phase->type(src)->isa_aryptr();
+
+    // This is a load from a cloned array. The corresponding arraycopy ac must
+    // have set the value for the load and we can return ac but only if the load
+    // is known to be within bounds. This is checked below.
+    if (ary_t != NULL && ld_addp->is_AddP()) {
+      Node* ld_offs = ld_addp->in(AddPNode::Offset);
+      BasicType ary_elem = ary_t->klass()->as_array_klass()->element_type()->basic_type();
+      jlong header = arrayOopDesc::base_offset_in_bytes(ary_elem);
+      jlong elemsize = type2aelembytes(ary_elem);
+
+      const TypeX*   ld_offs_t = phase->type(ld_offs)->isa_intptr_t();
+      const TypeInt* sizetype  = ary_t->size();
+
+      if (ld_offs_t->_lo >= header && ld_offs_t->_hi < (sizetype->_lo * elemsize + header)) {
+        // The load is known to be within bounds. It receives its value from ac.
+        return ac;
+      }
+      // The load is known to be out-of-bounds.
+    }
+    // The load could be out-of-bounds. It must not be hoisted but must remain
+    // dependent on the runtime range check. This is achieved by returning NULL.
   } else if (mem->is_Proj() && mem->in(0) != NULL && mem->in(0)->is_ArrayCopy()) {
     ArrayCopyNode* ac = mem->in(0)->as_ArrayCopy();
 
@@ -1985,12 +2008,14 @@ uint LoadNode::match_edge(uint idx) const {
 //  with the value stored truncated to a byte.  If no truncation is
 //  needed, the replacement is done in LoadNode::Identity().
 //
-Node *LoadBNode::Ideal(PhaseGVN *phase, bool can_reshape) {
+Node* LoadBNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   Node* mem = in(MemNode::Memory);
   Node* value = can_see_stored_value(mem,phase);
-  if( value && !phase->type(value)->higher_equal( _type ) ) {
-    Node *result = phase->transform( new LShiftINode(value, phase->intcon(24)) );
-    return new RShiftINode(result, phase->intcon(24));
+  if (value != NULL) {
+    Node* narrow = Compile::narrow_value(T_BYTE, value, _type, phase, false);
+    if (narrow != value) {
+      return narrow;
+    }
   }
   // Identity call will handle the case where truncation is not needed.
   return LoadNode::Ideal(phase, can_reshape);
@@ -2020,8 +2045,12 @@ const Type* LoadBNode::Value(PhaseGVN* phase) const {
 Node* LoadUBNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   Node* mem = in(MemNode::Memory);
   Node* value = can_see_stored_value(mem, phase);
-  if (value && !phase->type(value)->higher_equal(_type))
-    return new AndINode(value, phase->intcon(0xFF));
+  if (value != NULL) {
+    Node* narrow = Compile::narrow_value(T_BOOLEAN, value, _type, phase, false);
+    if (narrow != value) {
+      return narrow;
+    }
+  }
   // Identity call will handle the case where truncation is not needed.
   return LoadNode::Ideal(phase, can_reshape);
 }
@@ -2047,11 +2076,15 @@ const Type* LoadUBNode::Value(PhaseGVN* phase) const {
 //  with the value stored truncated to a char.  If no truncation is
 //  needed, the replacement is done in LoadNode::Identity().
 //
-Node *LoadUSNode::Ideal(PhaseGVN *phase, bool can_reshape) {
+Node* LoadUSNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   Node* mem = in(MemNode::Memory);
   Node* value = can_see_stored_value(mem,phase);
-  if( value && !phase->type(value)->higher_equal( _type ) )
-    return new AndINode(value,phase->intcon(0xFFFF));
+  if (value != NULL) {
+    Node* narrow = Compile::narrow_value(T_CHAR, value, _type, phase, false);
+    if (narrow != value) {
+      return narrow;
+    }
+  }
   // Identity call will handle the case where truncation is not needed.
   return LoadNode::Ideal(phase, can_reshape);
 }
@@ -2077,12 +2110,14 @@ const Type* LoadUSNode::Value(PhaseGVN* phase) const {
 //  with the value stored truncated to a short.  If no truncation is
 //  needed, the replacement is done in LoadNode::Identity().
 //
-Node *LoadSNode::Ideal(PhaseGVN *phase, bool can_reshape) {
+Node* LoadSNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   Node* mem = in(MemNode::Memory);
   Node* value = can_see_stored_value(mem,phase);
-  if( value && !phase->type(value)->higher_equal( _type ) ) {
-    Node *result = phase->transform( new LShiftINode(value, phase->intcon(16)) );
-    return new RShiftINode(result, phase->intcon(16));
+  if (value != NULL) {
+    Node* narrow = Compile::narrow_value(T_SHORT, value, _type, phase, false);
+    if (narrow != value) {
+      return narrow;
+    }
   }
   // Identity call will handle the case where truncation is not needed.
   return LoadNode::Ideal(phase, can_reshape);
@@ -2822,18 +2857,13 @@ Node *StoreCMNode::Ideal(PhaseGVN *phase, bool can_reshape){
 
 //------------------------------Value-----------------------------------------
 const Type* StoreCMNode::Value(PhaseGVN* phase) const {
-  // Either input is TOP ==> the result is TOP
-  const Type *t = phase->type( in(MemNode::Memory) );
-  if( t == Type::TOP ) return Type::TOP;
-  t = phase->type( in(MemNode::Address) );
-  if( t == Type::TOP ) return Type::TOP;
-  t = phase->type( in(MemNode::ValueIn) );
-  if( t == Type::TOP ) return Type::TOP;
+  // Either input is TOP ==> the result is TOP (checked in StoreNode::Value).
   // If extra input is TOP ==> the result is TOP
-  t = phase->type( in(MemNode::OopStore) );
-  if( t == Type::TOP ) return Type::TOP;
-
-  return StoreNode::Value( phase );
+  const Type* t = phase->type(in(MemNode::OopStore));
+  if (t == Type::TOP) {
+    return Type::TOP;
+  }
+  return StoreNode::Value(phase);
 }
 
 
@@ -2841,6 +2871,9 @@ const Type* StoreCMNode::Value(PhaseGVN* phase) const {
 //----------------------------------SCMemProjNode------------------------------
 const Type* SCMemProjNode::Value(PhaseGVN* phase) const
 {
+  if (in(0) == NULL || phase->type(in(0)) == Type::TOP) {
+    return Type::TOP;
+  }
   return bottom_type();
 }
 
@@ -2856,6 +2889,27 @@ LoadStoreNode::LoadStoreNode( Node *c, Node *mem, Node *adr, Node *val, const Ty
   init_req(MemNode::Address, adr);
   init_req(MemNode::ValueIn, val);
   init_class_id(Class_LoadStore);
+}
+
+//------------------------------Value-----------------------------------------
+const Type* LoadStoreNode::Value(PhaseGVN* phase) const {
+  // Either input is TOP ==> the result is TOP
+  if (!in(MemNode::Control) || phase->type(in(MemNode::Control)) == Type::TOP) {
+    return Type::TOP;
+  }
+  const Type* t = phase->type(in(MemNode::Memory));
+  if (t == Type::TOP) {
+    return Type::TOP;
+  }
+  t = phase->type(in(MemNode::Address));
+  if (t == Type::TOP) {
+    return Type::TOP;
+  }
+  t = phase->type(in(MemNode::ValueIn));
+  if (t == Type::TOP) {
+    return Type::TOP;
+  }
+  return bottom_type();
 }
 
 uint LoadStoreNode::ideal_reg() const {
@@ -2901,6 +2955,15 @@ uint LoadStoreNode::size_of() const { return sizeof(*this); }
 //----------------------------------LoadStoreConditionalNode--------------------
 LoadStoreConditionalNode::LoadStoreConditionalNode( Node *c, Node *mem, Node *adr, Node *val, Node *ex ) : LoadStoreNode(c, mem, adr, val, NULL, TypeInt::BOOL, 5) {
   init_req(ExpectedIn, ex );
+}
+
+const Type* LoadStoreConditionalNode::Value(PhaseGVN* phase) const {
+  // Either input is TOP ==> the result is TOP
+  const Type* t = phase->type(in(ExpectedIn));
+  if (t == Type::TOP) {
+    return Type::TOP;
+  }
+  return LoadStoreNode::Value(phase);
 }
 
 //=============================================================================

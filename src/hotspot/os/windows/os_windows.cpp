@@ -417,6 +417,7 @@ struct tm* os::gmtime_pd(const time_t* clock, struct tm* res) {
   return NULL;
 }
 
+JNIEXPORT
 LONG WINAPI topLevelExceptionFilter(struct _EXCEPTION_POINTERS* exceptionInfo);
 
 // Thread start routine for all newly created threads
@@ -2134,23 +2135,23 @@ int os::signal_wait() {
 
 LONG Handle_Exception(struct _EXCEPTION_POINTERS* exceptionInfo,
                       address handler) {
-  JavaThread* thread = (JavaThread*) Thread::current_or_null();
-  // Save pc in thread
-#ifdef _M_AMD64
-  // Do not blow up if no thread info available.
-  if (thread) {
-    thread->set_saved_exception_pc((address)(DWORD_PTR)exceptionInfo->ContextRecord->Rip);
-  }
-  // Set pc to handler
-  exceptionInfo->ContextRecord->Rip = (DWORD64)handler;
+  Thread* thread = Thread::current_or_null();
+
+#if defined(_M_AMD64)
+  #define PC_NAME Rip
+#elif defined(_M_IX86)
+  #define PC_NAME Eip
 #else
-  // Do not blow up if no thread info available.
-  if (thread) {
-    thread->set_saved_exception_pc((address)(DWORD_PTR)exceptionInfo->ContextRecord->Eip);
-  }
-  // Set pc to handler
-  exceptionInfo->ContextRecord->Eip = (DWORD)(DWORD_PTR)handler;
+  #error unknown architecture
 #endif
+
+  // Save pc in thread
+  if (thread != nullptr && thread->is_Java_thread()) {
+    ((JavaThread*)thread)->set_saved_exception_pc((address)(DWORD_PTR)exceptionInfo->ContextRecord->PC_NAME);
+  }
+
+  // Set pc to handler
+  exceptionInfo->ContextRecord->PC_NAME = (DWORD64)handler;
 
   // Continue the execution
   return EXCEPTION_CONTINUE_EXECUTION;
@@ -2355,6 +2356,7 @@ bool os::win32::get_frame_at_stack_banging_point(JavaThread* thread,
 }
 
 //-----------------------------------------------------------------------------
+JNIEXPORT
 LONG WINAPI topLevelExceptionFilter(struct _EXCEPTION_POINTERS* exceptionInfo) {
   if (InterceptOSException) return EXCEPTION_CONTINUE_SEARCH;
   DWORD exception_code = exceptionInfo->ExceptionRecord->ExceptionCode;
@@ -3081,8 +3083,9 @@ char* os::reserve_memory_aligned(size_t size, size_t alignment, int file_desc) {
   assert(extra_size >= size, "overflow, size is too large to allow alignment");
 
   char* aligned_base = NULL;
+  static const int max_attempts = 20;
 
-  do {
+  for (int attempt = 0; attempt < max_attempts && aligned_base == NULL; attempt ++) {
     char* extra_base = os::reserve_memory(extra_size, NULL, alignment, file_desc);
     if (extra_base == NULL) {
       return NULL;
@@ -3090,15 +3093,22 @@ char* os::reserve_memory_aligned(size_t size, size_t alignment, int file_desc) {
     // Do manual alignment
     aligned_base = align_up(extra_base, alignment);
 
+    bool rc = false;
     if (file_desc != -1) {
-      os::unmap_memory(extra_base, extra_size);
+      rc = os::unmap_memory(extra_base, extra_size);
     } else {
-      os::release_memory(extra_base, extra_size);
+      rc = os::release_memory(extra_base, extra_size);
+    }
+    assert(rc, "release failed");
+    if (!rc) {
+      return NULL;
     }
 
     aligned_base = os::reserve_memory(size, aligned_base, 0, file_desc);
 
-  } while (aligned_base == NULL);
+  }
+
+  assert(aligned_base != NULL, "Did not manage to re-map after %d attempts?", max_attempts);
 
   return aligned_base;
 }
@@ -4919,15 +4929,25 @@ static int stdinAvailable(int fd, long *pbytes) {
 char* os::pd_map_memory(int fd, const char* file_name, size_t file_offset,
                         char *addr, size_t bytes, bool read_only,
                         bool allow_exec) {
+
+  errno_t err;
+  wchar_t* wide_path = wide_abs_unc_path(file_name, err);
+
+  if (wide_path == NULL) {
+    return NULL;
+  }
+
   HANDLE hFile;
   char* base;
 
-  hFile = CreateFile(file_name, GENERIC_READ, FILE_SHARE_READ, NULL,
+  hFile = CreateFileW(wide_path, GENERIC_READ, FILE_SHARE_READ, NULL,
                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
-    log_info(os)("CreateFile() failed: GetLastError->%ld.", GetLastError());
+    log_info(os)("CreateFileW() failed: GetLastError->%ld.", GetLastError());
+    os::free(wide_path);
     return NULL;
   }
+  os::free(wide_path);
 
   if (allow_exec) {
     // CreateFileMapping/MapViewOfFileEx can't map executable memory
