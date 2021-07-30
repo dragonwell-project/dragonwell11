@@ -25,6 +25,10 @@
 
 package sun.nio.ch;
 
+import com.alibaba.wisp.engine.WispEngine;
+import jdk.internal.misc.SharedSecrets;
+import jdk.internal.misc.WispEngineAccess;
+
 import java.io.IOException;
 import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
@@ -48,6 +52,8 @@ import static sun.nio.ch.EPoll.EPOLL_CTL_MOD;
  */
 
 class EPollSelectorImpl extends SelectorImpl {
+
+    private static final WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
 
     // maximum number of events to poll in one call to epoll_wait
     private static final int NUM_EPOLLEVENTS = Math.min(IOUtil.fdLimit(), 1024);
@@ -117,7 +123,9 @@ class EPollSelectorImpl extends SelectorImpl {
 
             do {
                 long startTime = timedPoll ? System.nanoTime() : 0;
-                numEntries = EPoll.wait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, to);
+                numEntries = WispEngine.transparentWispSwitch() ?
+                        handleEPollWithWisp(to) :
+                        EPoll.wait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, to);
                 if (numEntries == IOStatus.INTERRUPTED && timedPoll) {
                     // timed poll interrupted so need to adjust timeout
                     long adjust = System.nanoTime() - startTime;
@@ -135,6 +143,20 @@ class EPollSelectorImpl extends SelectorImpl {
         }
         processDeregisterQueue();
         return processEvents(numEntries, action);
+    }
+
+    private int handleEPollWithWisp(long timeout) throws IOException {
+        if (timeout != 0 && WEA.usingWispEpoll(Thread.currentThread())) {
+            final int updated = EPoll.wait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, 0);
+            if (updated > 0) {
+                return updated;
+            }
+            WEA.registerEpollEvent(epfd);
+            WEA.park(TimeUnit.MILLISECONDS.toNanos(timeout));
+            return EPoll.wait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, 0);
+        } else {
+            return EPoll.wait(epfd, pollArrayAddress, NUM_EPOLLEVENTS, (int) timeout);
+        }
     }
 
     /**

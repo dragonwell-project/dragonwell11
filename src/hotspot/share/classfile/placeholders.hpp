@@ -25,6 +25,7 @@
 #ifndef SHARE_VM_CLASSFILE_PLACEHOLDERS_HPP
 #define SHARE_VM_CLASSFILE_PLACEHOLDERS_HPP
 
+#include "runtime/coroutine.hpp"
 #include "runtime/thread.hpp"
 #include "utilities/hashtable.hpp"
 
@@ -258,7 +259,7 @@ class PlaceholderEntry : public HashtableEntry<Symbol*, mtClass> {
 // define token. Appends for debugging of requestor order
   void add_seen_thread(Thread* thread, PlaceholderTable::classloadAction action) {
     assert_lock_strong(SystemDictionary_lock);
-    SeenThread* threadEntry = new SeenThread(thread);
+    SeenThread* threadEntry = new SeenThread(UseWispMonitor ? WispThread::current(thread) : thread);
     SeenThread* seen = actionToQueue(action);
 
     if (seen == NULL) {
@@ -276,6 +277,9 @@ class PlaceholderEntry : public HashtableEntry<Symbol*, mtClass> {
 
   bool check_seen_thread(Thread* thread, PlaceholderTable::classloadAction action) {
     assert_lock_strong(SystemDictionary_lock);
+    if (UseWispMonitor) {
+      thread = WispThread::current(thread);
+    }
     SeenThread* threadQ = actionToQueue(action);
     SeenThread* seen = threadQ;
     while (seen) {
@@ -294,6 +298,9 @@ class PlaceholderEntry : public HashtableEntry<Symbol*, mtClass> {
   // if found, deletes SeenThread
   bool remove_seen_thread(Thread* thread, PlaceholderTable::classloadAction action) {
     assert_lock_strong(SystemDictionary_lock);
+    if (UseWispMonitor) {
+      thread = WispThread::current(thread);
+    }
     SeenThread* threadQ = actionToQueue(action);
     SeenThread* seen = threadQ;
     SeenThread* prev = NULL;

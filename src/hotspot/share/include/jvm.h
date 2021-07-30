@@ -252,6 +252,9 @@ JNIEXPORT jboolean JNICALL
 JVM_IsInterrupted(JNIEnv *env, jobject thread, jboolean clearInterrupted);
 
 JNIEXPORT jboolean JNICALL
+JVM_CheckAndClearNativeInterruptForWisp(JNIEnv* env, jobject task, jobject thread);
+
+JNIEXPORT jboolean JNICALL
 JVM_HoldsLock(JNIEnv *env, jclass threadClass, jobject obj);
 
 JNIEXPORT void JNICALL
@@ -262,6 +265,9 @@ JVM_GetAllThreads(JNIEnv *env, jclass dummy);
 
 JNIEXPORT void JNICALL
 JVM_SetNativeThreadName(JNIEnv *env, jobject jthread, jstring name);
+
+JNIEXPORT jboolean JNICALL
+JVM_IsInNative(JNIEnv *env, jobject jthread);
 
 /* getStackTrace() and getAllStackTraces() method */
 JNIEXPORT jobjectArray JNICALL
@@ -1333,6 +1339,14 @@ typedef struct JDK1_1InitArgs {
     jint debugPort;
 } JDK1_1InitArgs;
 
+JNIEXPORT void JNICALL
+JVM_SetWispTask(JNIEnv* env, jclass clz, jlong coroutinePtr, jint task_id, jobject task, jobject engine);
+
+JNIEXPORT jint JNICALL
+JVM_GetProxyUnpark(JNIEnv* env, jclass clz, jintArray res);
+
+JNIEXPORT void JNICALL
+JVM_MarkPreempt(JNIEnv* env, jclass clz, jobject thread);
 
 #ifdef __cplusplus
 } /* extern "C" */

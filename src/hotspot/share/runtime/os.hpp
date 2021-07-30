@@ -509,6 +509,8 @@ class os: AllStatic {
 
   static void free_thread(OSThread* osthread);
 
+  static bool is_signal_dispatcher_thread(JavaThread* thread);
+
   // thread id on Linux/64bit is 64bit, on Windows and Solaris, it's 32bit
   static intx current_thread_id();
   static int current_process_id();
@@ -1052,5 +1054,7 @@ template<> struct IsRegisteredEnum<os::SuspendResume::State> : public TrueType {
 // It'd also be eligible for inlining on many platforms.
 
 extern "C" int SpinPause();
+
+bool clear_interrupt_for_wisp(Thread *);
 
 #endif // SHARE_VM_RUNTIME_OS_HPP

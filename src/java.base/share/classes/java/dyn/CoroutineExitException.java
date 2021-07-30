@@ -29,36 +29,39 @@ package java.dyn;
  * Implementation of exeception for coroutine exit
  */
 public class CoroutineExitException extends RuntimeException {
-	private static final long serialVersionUID = -2651365020938997924L;
+    private static final long serialVersionUID = -2651365020938997924L;
 
     /**
      * Allocates a new {@code CoroutineExitException} object
      */
-	public CoroutineExitException() {
-	}
+    public CoroutineExitException() {
+    }
 
     /**
      * Allocates a new {@code CoroutineExitException} object
+     *
      * @param message String
+     * @param cause   Throwable
+     */
+    public CoroutineExitException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    /**
+     * Allocates a new {@code CoroutineExitException} object
+     *
+     * @param message String
+     */
+    public CoroutineExitException(String message) {
+        super(message);
+    }
+
+    /**
+     * Allocates a new {@code CoroutineExitException} object
+     *
      * @param cause Throwable
      */
-	public CoroutineExitException(String message, Throwable cause) {
-		super(message, cause);
-	}
-
-    /**
-     * Allocates a new {@code CoroutineExitException} object
-     * @param message String
-     */
-	public CoroutineExitException(String message) {
-		super(message);
-	}
-
-    /**
-     * Allocates a new {@code CoroutineExitException} object
-     * @param cause Throwable
-     */
-	public CoroutineExitException(Throwable cause) {
-		super(cause);
-	}
+    public CoroutineExitException(Throwable cause) {
+        super(cause);
+    }
 }

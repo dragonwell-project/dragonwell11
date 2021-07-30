@@ -67,6 +67,7 @@
 #include "prims/methodComparator.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/fieldDescriptor.inline.hpp"
+#include "runtime/coroutine.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/javaCalls.hpp"
 #include "runtime/mutexLocker.hpp"
@@ -4011,6 +4012,23 @@ jint InstanceKlass::get_cached_class_file_len() {
 
 unsigned char * InstanceKlass::get_cached_class_file_bytes() {
   return VM_RedefineClasses::get_cached_class_file_bytes(_cached_class_file);
+}
+
+bool InstanceKlass::is_reentrant_initialization(Thread *thread)  {
+  if (UseWispMonitor) {
+    assert(thread != NULL, "sanity check");
+    thread = WispThread::current(thread);
+  }
+  return thread == _init_thread;
+}
+
+void InstanceKlass::set_init_thread(Thread *thread)  {
+  if (UseWispMonitor && thread != NULL) {
+    assert(thread->is_Java_thread(), "sanity check");
+    assert(((JavaThread*) thread)->current_coroutine() != NULL, "sanity check");
+    thread = WispThread::current(thread);
+  }
+  _init_thread = thread;
 }
 
 #if INCLUDE_CDS

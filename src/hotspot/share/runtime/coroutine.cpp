@@ -23,8 +23,15 @@
  */
 
 #include "precompiled.hpp"
+#include "prims/privilegedStack.hpp"
 #include "runtime/coroutine.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/interfaceSupport.inline.hpp"
+#include "runtime/jniHandles.inline.hpp"
+#include "runtime/objectMonitor.hpp"
+#include "runtime/objectMonitor.inline.hpp"
+#include "services/threadService.hpp"
+
 #ifdef TARGET_ARCH_x86
 # include "vmreg_x86.inline.hpp"
 #endif
@@ -34,7 +41,7 @@
 #ifdef TARGET_ARCH_zero
 # include "vmreg_zero.inline.hpp"
 #endif
-#include "jniHandles.inline.hpp"
+
 
 #ifdef _WINDOWS
 
@@ -109,19 +116,36 @@ Coroutine* Coroutine::create_thread_coroutine(JavaThread* thread, CoroutineStack
   coro->_last_handle_mark = NULL;
   coro->_active_handles = thread->active_handles();
   coro->_metadata_handles = NULL;
+  coro->_thread_status = java_lang_Thread::RUNNABLE;
   coro->_java_call_counter = 0;
 #if defined(_WINDOWS)
   coro->_last_SEH = NULL;
 #endif
+  coro->_privileged_stack_top = NULL;
+  coro->_wisp_thread  = UseWispMonitor ? new WispThread(coro) : NULL;
+  coro->_wisp_engine  = NULL;
+  coro->_wisp_task    = NULL;
+  coro->_wisp_task_id = WISP_ID_NOT_SET;
+  coro->_enable_steal_count = 1;
+  coro->_wisp_post_steal_resource_area = NULL;
+  thread->set_current_coroutine(coro);
   return coro;
 }
+
+/**
+ * The initial value for corountine' active handles, which will be replaced with a real one
+ * when the coroutine invokes call_virtual (before running any real logic).
+ */
+static JNIHandleBlock* shared_empty_JNIHandleBlock = JNIHandleBlock::allocate_block();
 
 Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack, oop coroutineObj) {
   Coroutine* coro = new Coroutine();
   if (coro == NULL) {
     return NULL;
   }
+
   intptr_t** d = (intptr_t**)stack->stack_base();
+  *(--d) = NULL;          // Make it to be 16 bytes(original is 8*5=40 bytes) aligned which be required by some instruction likes movaps otherwise we will incur crash.
   *(--d) = NULL;
   jobject obj = JNIHandles::make_global(Handle(thread, coroutineObj));
   *(--d) = (intptr_t*)obj;
@@ -139,17 +163,33 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
   coro->_resource_area = NULL;
   coro->_handle_area = NULL;
   coro->_last_handle_mark = NULL;
-  coro->_active_handles = thread->active_handles();
+  coro->_active_handles = shared_empty_JNIHandleBlock;
   coro->_metadata_handles = NULL;
+  coro->_thread_status = java_lang_Thread::RUNNABLE;
   coro->_java_call_counter = 0;
 #if defined(_WINDOWS)
   coro->_last_SEH = NULL;
 #endif
+  coro->_privileged_stack_top = NULL;
+  coro->_wisp_thread  = UseWispMonitor ? new WispThread(coro) : NULL;
+  coro->_wisp_engine  = NULL;
+  coro->_wisp_task    = NULL;
+  coro->_wisp_task_id = WISP_ID_NOT_SET;
+  // if coro->_enable_steal_count == coro->_java_call_counter is true, we can do work steal.
+  // when a coroutine starts, the `_java_call_counter` is 0,
+  // then it will call java method `Coroutine.startInternal()` and then `_java_call_counter` is 1.
+  // so we set `_enable_steal_count` to 1 which means this coroutine can be stolen when it starts.
+  coro->_enable_steal_count = 1;
+  coro->_wisp_post_steal_resource_area = new (mtWisp) WispResourceArea(coro, 32);
   return coro;
 }
 
 Coroutine::~Coroutine() {
   remove_from_list(_thread->coroutine_list());
+  if (_wisp_thread != NULL) {
+    delete _wisp_thread;
+  }
+  delete _wisp_post_steal_resource_area;
   if (!_is_thread_coroutine && _state != Coroutine::_created) {
     assert(_resource_area != NULL, "_resource_area is NULL");
     assert(_handle_area != NULL, "_handle_area is NULL");
@@ -191,10 +231,18 @@ public:
 void Coroutine::oops_do(OopClosure* f, CodeBlobClosure* cf) {
   oops_do_Closure fc(f, cf);
   frames_do(&fc);
-  if (_state == _onstack &&_handle_area != NULL) {
+  if (_state == _onstack) {
+    assert(_handle_area != NULL, "_onstack coroutine should have _handle_area");
     DEBUG_CORO_ONLY(tty->print_cr("collecting handle area %08x", _handle_area));
     _handle_area->oops_do(f);
     _active_handles->oops_do(f);
+    if (_privileged_stack_top != NULL) {
+      _privileged_stack_top->oops_do(f);
+    } 
+  }
+  if (_wisp_task != NULL) {
+    f->do_oop((oop*) &_wisp_engine);
+    f->do_oop((oop*) &_wisp_task);
   }
 }
 
@@ -248,6 +296,10 @@ bool Coroutine::is_disposable() {
   return _handle_area == NULL;
 }
 
+void Coroutine::set_wisp_engine(oop x) {
+  _wisp_engine = x;
+}
+
 
 CoroutineStack* CoroutineStack::create_thread_stack(JavaThread* thread) {
   CoroutineStack* stack = new CoroutineStack(0);
@@ -270,7 +322,7 @@ CoroutineStack* CoroutineStack::create_stack(JavaThread* thread, intptr_t size/*
     default_size = true;
   }
 
-  uint reserved_pages = StackShadowPages + StackRedPages + StackYellowPages;
+  uint reserved_pages = StackShadowPages + StackRedPages + StackYellowPages + + StackReservedPages;
   uintx real_stack_size = size + (reserved_pages * os::vm_page_size());
   uintx reserved_size = align_up(real_stack_size, os::vm_allocation_granularity());
 
@@ -292,7 +344,7 @@ CoroutineStack* CoroutineStack::create_stack(JavaThread* thread, intptr_t size/*
 
   if (os::uses_stack_guard_pages()) {
     address low_addr = stack->stack_base() - stack->stack_size();
-    size_t len = (StackYellowPages + StackRedPages) * os::vm_page_size();
+    size_t len = (StackYellowPages + StackRedPages + StackReservedPages) * os::vm_page_size();
 
     bool allocate = os::must_commit_stack_guard_pages();
 
@@ -350,5 +402,560 @@ frame CoroutineStack::last_frame(Coroutine* coro, RegisterMap& map) const {
   address pc = ((address*)_last_sp)[1];
   intptr_t* sp = ((intptr_t*)_last_sp) + 2;
 
+  map.set_location(rbp->as_VMReg(), (address)_last_sp);
+  map.set_include_argument_oops(false);
+
   return frame(sp, fp, pc);
 }
+
+void Coroutine::print_stack_on(outputStream* st) {
+  if (_state == Coroutine::_onstack) {
+    oop thread_obj = NULL;
+    st->print("\n - Coroutine [%p]", this);
+    if (_wisp_task != NULL) {
+      thread_obj = com_alibaba_wisp_engine_WispTask::get_threadWrapper(_wisp_task);
+      char buf[128] = "<cached>";
+      if (thread_obj != NULL) {
+        oop name = java_lang_Thread::name(thread_obj);
+        if (name != NULL) {
+          java_lang_String::as_utf8_string(name, buf, sizeof(buf));
+        }
+      }
+      st->print(" \"%s\" #%d active=%d steal=%d steal_fail=%d", buf,
+          com_alibaba_wisp_engine_WispTask::get_id(_wisp_task),
+          com_alibaba_wisp_engine_WispTask::get_activeCount(_wisp_task),
+          com_alibaba_wisp_engine_WispTask::get_stealCount(_wisp_task),
+          com_alibaba_wisp_engine_WispTask::get_stealFailureCount(_wisp_task));
+    } // else, we're only using the JKU part
+    st->print("\n");
+
+    ResourceMark rm;
+    RegisterMap reg_map(_thread);
+    frame last_frame = _stack->last_frame(this, reg_map);
+
+    int count = 0;
+    JavaThread* t = UseWispMonitor ? _wisp_thread : _thread;
+    for (vframe* vf = vframe::new_vframe(&last_frame, &reg_map, t); vf; vf = vf->sender()) {
+      if (vf->is_java_frame()) {
+        javaVFrame* jvf = javaVFrame::cast(vf);
+        java_lang_Throwable::print_stack_element(st, jvf->method(), jvf->bci());
+
+        if (UseWispMonitor && JavaMonitorsInStackTrace) {
+          // t is WispThread
+          t->set_threadObj(thread_obj);
+          // ensure thread()->current_park_blocker() fetch the correct thread_obj
+          jvf->print_lock_info_on(st, count++);
+        }
+      }
+    }
+  }
+}
+
+
+//  ---------- lock support -----------
+bool WispThread::_wisp_booted = false;
+Method* WispThread::parkMethod = NULL;
+Method* WispThread::unparkMethod = NULL;
+GrowableArray<int>* WispThread::_proxy_unpark = NULL;
+
+void WispThread::set_wisp_booted(Thread* thread) {
+  // In JDK11, it introduces metaspace compact. Storing the method isn't safe.
+  // The flow should be changed.
+  CallInfo callinfo;
+  LinkInfo link_info(SystemDictionary::com_alibaba_wisp_engine_WispTask_klass(), vmSymbols::park_name(), vmSymbols::long_void_signature());
+  LinkResolver::resolve_static_call(callinfo, link_info, true, thread);
+  methodHandle method = callinfo.selected_method();
+  assert(method.not_null(), "should have thrown exception");
+  parkMethod = method();
+
+  LinkInfo link_info_unpark(SystemDictionary::com_alibaba_wisp_engine_WispTask_klass(), vmSymbols::unparkById_name(), vmSymbols::int_void_signature());
+  LinkResolver::resolve_static_call(callinfo, link_info_unpark, true, thread);
+  method = callinfo.selected_method();
+  assert(method.not_null(), "should have thrown exception");
+  unparkMethod = method();
+
+  if (UseWispMonitor) {
+    _proxy_unpark = new (ResourceObj::C_HEAP, mtWisp) GrowableArray<int>(30, true);
+    if (!AlwaysLockClassLoader) {
+      SystemDictionary::system_dict_lock_change(thread);
+    }
+  }
+
+  _wisp_booted = true; // set after parkMethod != null
+}
+
+/*
+ * Avoid coroutine switch in the following scenarios:
+ *
+ * - _wisp_booted: 
+ *   We guarantee the classes referenced by WispTask.park(called in WispThread::park in native) 
+ *   are already loaded after _wisp_booted is set(as true). Otherwise it might result in loading class during execution of WispTask.park.
+ *   Coroutine switch caused by object monitors in class loading might lead to recursive deadlock.
+ *
+ * - !com_alibaba_wisp_engine_WispEngine::is_critical(_coroutine->wisp_engine()):
+ *   If the program is already running in kernel code of wisp engine(marked by WispEngine.isInCritical at Java level),  we don't expect 
+ *   the switch while coroutine running into 'synchronized' block which is heavily used by Java NIO library.
+ *   Otherwise, it might lead to potential recursive deadlock.
+ * 
+ * - monitor->object() != java_lang_ref_Reference::pending_list_lock():
+ *   pending_list_lock(PLL) is special ObjectMonitor used in GC vm operation. 
+ *   if we treated it as normal monitor(T10965418)
+ *   - 'dead lock' in jni_critical case:
+ *     Given coroutine A, B running in the same thread,
+ *     1. coroutine A called jni_ReleasePrimitiveArrayCritical, and triggered GC
+ *     1.1. VM_GC_Operation::doit_prologue() -> acquired PLL and yielded to coroutine B(because of contending)
+ *     2. If coroutine B called jni_GetPrimitiveArrayCritical at this moment, it would be blocked by GC flag(jni_lock)
+ *     3. Unfortunately, A doesn't have any chance to release PLL(acquired in 1.1). As a result, the process is suspended.
+ *   - if we disable switch in InstanceRefKlass::acquire_pending_list_lock(ObjectSynchronizer::fast_enter)
+ *     Given coroutine A, B running in the same thread,
+ *     1. coroutine A attempted to acquire PLL and yielded out (because of contending)
+ *     2. coroutine B in VM_GC_Operation::doit_prologue() attempted to acquire PLL(which is triggered by allocation failure),  gets blocked
+ *       as we disable the switch in InstanceRefKlass::acquire_pending_list_lock.
+ *     3. Another thread unparked A, but unfortunately the engine is already blocked.
+ *   So , totally disable the switch in PLL is better solution(monitor->object() != java_lang_ref_Reference::pending_list_lock()).
+ *
+*/
+void WispThread::before_enqueue(ObjectMonitor* monitor, ObjectWaiter* ow) {
+  JavaThreadState st = _thread->_thread_state;
+  if (st != _thread_in_vm) {
+    assert(st == _thread_blocked, "_thread_state should be _thread_blocked");
+    ThreadStateTransition::transition(_thread, st, _thread_in_vm);
+  }
+  bool is_sd_lock = monitor->object() == SystemDictionary_lock->obj();
+  if (_wisp_booted && _coroutine->wisp_task_id() != Coroutine::WISP_ID_NOT_SET
+      // For java threads, including JvmtiAgentThread, ServiceThread,
+      // SurrogateLockerThread, CompilerThread which are only used in JVM,
+      // because we don't initialize co-routine stuff for them, the initial
+      // value of _coroutine->wisp_task_id() for them should be Coroutine::WISP_ID_NOT_SET.
+      && !com_alibaba_wisp_engine_WispEngine::in_critical(_coroutine->wisp_engine())
+      //&& monitor->object() != java_lang_ref_Reference::pending_list_lock()
+      && !_thread->in_critical()
+      && Compile_lock->owner() != _thread
+      // case holding Compile_lock,  we will park for lock contention
+      // not for monitor->wait()
+      // so we'll be unparked immediately. It's safe to block the JavaThread 
+      && !(is_sd_lock && ow->TState != ObjectWaiter::TS_WAIT)
+      // case parking for fetching SystemDictionary_lock fails, DO NOT schedule
+      // otherwise we'll encounter DEADLOCK because of fetching CompilerQeueu_lock in java
+      ) {
+    ow->_using_wisp_park = true;
+    ow->_park_wisp_id = _coroutine->wisp_task_id();
+    com_alibaba_wisp_engine_WispTask::set_jvmParkStatus(_coroutine->wisp_task(), 0); //reset
+  } else {
+    ow->_using_wisp_park = false;
+    ow->_park_wisp_id = Coroutine::WISP_ID_NOT_SET;
+  }
+  // when we're operating on SystemDictionary_lock, we're running jvm codes,
+  // if the unpark was lazy dispatched, the thread may block on a jvm Monitor
+  // before the unpark disptach.
+  // So we proxy all unpark operations on the SystemDictionary_lock.
+  ow->_proxy_wisp_unpark = is_sd_lock;
+  ow->_timeout = is_sd_lock && ow->TState != ObjectWaiter::TS_WAIT ? 1 : -1;
+  if (st != _thread_in_vm) {
+    ThreadStateTransition::transition(_thread, _thread_in_vm, st);
+  }
+}
+
+void WispThread::park(long millis, const ObjectWaiter* ow) {
+  assert(ow->_thread->is_Wisp_thread(), "not wisp thread");
+  JavaThread* jt = ((WispThread*) ow->_thread)->thread();
+  assert(jt == Thread::current(), "current");
+
+  if (ow->_timeout > 0) {
+    millis = ow->_timeout;
+    assert(!ow->_using_wisp_park, "invariant");
+  }
+
+  if (ow->_using_wisp_park) {
+    assert(parkMethod != NULL, "parkMethod should be resolved in set_wisp_booted");
+
+    ThreadStateTransition::transition(jt, _thread_blocked, _thread_in_vm);
+
+    JavaValue result(T_VOID);
+    JavaCallArguments args;
+    args.push_long(millis * 1000000); // to nanos
+
+    // thread steal support
+    WispPostStealHandleUpdateMark w(jt);   // special one, because park() is inside an EnableStealMark, so the _enable_steal_count counter has been added one.
+
+    // when TenantThreadStop is on, we may receive TenantDeathException
+    // and return before unpark().
+    // Do not use a TenantShutdownMark to change the behavior.
+    JavaCalls::call(&result, methodHandle(parkMethod), &args, jt);
+
+    // the runtime can not handle the exception on monitorenter bci
+    // we need clear it to prevent jvm crash
+    if (jt->has_pending_exception()) {
+      jt->clear_pending_exception();
+    }
+
+    ThreadStateTransition::transition(jt, _thread_in_vm, _thread_blocked);
+  } else {
+    if (millis <= 0) {
+      ow->_event->park();
+    } else {
+      ow->_event->park(millis);
+    }
+  }
+}
+
+void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, ParkEvent* event, TRAPS) {
+  if (!using_wisp_park) {
+    event->unpark();
+    return;
+  }
+
+  JavaThread* jt = THREAD->is_Wisp_thread() ? ((WispThread*) THREAD)->thread() : (JavaThread*) THREAD;
+
+  assert(UseWispMonitor, "UseWispMonitor must be true here");
+  bool proxy_unpark_special_case = false;
+  WispThread* wt = WispThread::current(THREAD);
+  proxy_unpark_special_case = wt->is_proxy_unpark();
+  wt->clear_proxy_unpark_flag();
+
+  if (proxy_unpark || proxy_unpark_special_case ||
+      jt->is_Compiler_thread() ||
+      jt->is_hidden_from_external_view() ||
+      // SurrogateLockerThread and ServiceThread are "is_hidden_from_external_view()"
+      jt->is_jvmti_agent_thread()) { // not normal java therad
+    // proxy_unpark mechanism:
+    // After we change SystemDictionary_lock from Mutex* to objectMonitor,
+    // we need to face the reality that some non-JavaThread may produce
+    // wisp unpark, but they can not invoke java methods.
+    // So we introduce a unpark dispatch java thread, then append the unpark requests
+    // to a list, the dispatch thread will fetch and dispatch unparks.
+
+    // due to the fact that we modify the priority of Wisp_lock from `non-leaf` to `special`,
+    // so we'd use `MutexLockerEx` and `_no_safepoint_check_flag` to make our program run
+    MutexLockerEx mu(Wisp_lock, Mutex::_no_safepoint_check_flag);
+    _proxy_unpark->append(task_id);
+    Wisp_lock->notify(); // only one consumer
+    return;
+  }
+
+  JavaValue result(T_VOID);
+  JavaCallArguments args;
+  args.push_int(task_id);
+  bool in_java = false;
+  oop pending_excep = NULL;
+  const char* pending_file = NULL;
+  int pending_line = 0;
+  // Class not found exception may appear here.
+  // If there exists an exception, the java call could not succeed.
+  // So must record and clear excpetions here.
+  if (jt->has_pending_exception()) {
+    pending_excep = jt->pending_exception();
+    pending_file  = jt->exception_file();
+    pending_line  = jt->exception_line();
+    jt->clear_pending_exception();
+  }
+  if (jt->thread_state() == _thread_in_Java) {
+    in_java = true;
+    ThreadStateTransition::transition_from_java(jt, _thread_in_vm);
+  }
+  // Do java calls to perform unpark work.
+  {
+    // unpark is very important, should not interruted by tenant shutdown
+    assert(unparkMethod != NULL, "unparkMethod should be resolved in set_wisp_booted");
+    JavaCalls::call(&result, methodHandle(unparkMethod), &args, jt);
+  }
+  // ~tsm may produce an exception and c1 monitor_exit has an exception_mark
+  // clear the exception to prevent jvm crash
+  if (jt->has_pending_exception()) {
+    jt->clear_pending_exception();
+  }
+  if (in_java) {
+    ThreadStateTransition::transition(jt, _thread_in_vm, _thread_in_Java);
+  }
+  if (pending_excep != NULL) {
+    jt->set_pending_exception(pending_excep, pending_file, pending_line);
+  }
+}
+
+int WispThread::get_proxy_unpark(jintArray res) {
+  MutexLockerEx mu(Wisp_lock, Mutex::_no_safepoint_check_flag);
+  while (_proxy_unpark == NULL || _proxy_unpark->is_empty()) {
+    Wisp_lock->wait();
+  }
+  typeArrayOop a = typeArrayOop(JNIHandles::resolve_non_null(res));
+  if (a == NULL) {
+    return 0;
+  }
+  int copy_cnt = a->length() < _proxy_unpark->length() ? a->length() : _proxy_unpark->length();
+  int copy_start = _proxy_unpark->length() - copy_cnt < 0 ? 0 : _proxy_unpark->length() - copy_cnt;
+  memcpy(a->int_at_addr(0), _proxy_unpark->adr_at(copy_start), copy_cnt * sizeof(int));
+  _proxy_unpark->trunc_to(copy_start);
+
+  return copy_cnt;
+}
+
+
+bool WispThread::is_interrupted(bool clear_interrupted) {
+  if (_coroutine->wisp_task() == NULL) {
+    // wisp is not initialized
+    return Thread::is_interrupted(_thread, clear_interrupted);
+  }
+  int interrupted = com_alibaba_wisp_engine_WispTask::get_interrupted(_coroutine->wisp_task());
+  if (interrupted && clear_interrupted) {
+    com_alibaba_wisp_engine_WispTask::set_interrupted(_coroutine->wisp_task(), 0);
+  }
+  return interrupted != 0;
+}
+
+void WispThread::interrupt(int task_id, TRAPS) {
+  assert(UseWispMonitor, "sanity");
+  assert(((JavaThread*) THREAD)->thread_state() == _thread_in_vm, "thread state");
+  JavaValue result(T_VOID);
+  JavaCallArguments args;
+  args.push_int(task_id);
+  JavaCalls::call_static(&result,
+      SystemDictionary::com_alibaba_wisp_engine_WispTask_klass(),
+      vmSymbols::interruptById_name(),
+      vmSymbols::int_void_signature(),
+      &args,
+      THREAD);
+
+}
+
+EnableStealMark::EnableStealMark(Thread* thread) {
+  assert(JavaThread::current() == thread, "current thread check");
+  if (EnableSteal) {
+    if (thread->is_Java_thread()) {
+      _thread = (JavaThread*) thread;
+      _coroutine = _thread->current_coroutine();
+      _enable_steal_count = _coroutine->add_enable_steal_count();
+    } else {
+      _coroutine = NULL;
+    }
+  }
+}
+
+EnableStealMark::~EnableStealMark() {
+  if (EnableSteal && _coroutine != NULL) {
+    assert(_coroutine->thread() == JavaThread::current(), "must be");
+    bool eq = _enable_steal_count == _coroutine->dec_enable_steal_count();
+    assert(eq, "enable_steal_count not balanced");
+  }
+}
+
+static uintx chunk_wisp_post_steal_handles_do(Chunk *chunk, char *chunk_top, JavaThread *real_thread) {
+  WispPostStealResource *bottom = (WispPostStealResource *) chunk->bottom();
+  WispPostStealResource *top    = (WispPostStealResource *) chunk_top;
+  uintx handles_visited = top - bottom;
+  assert(top >= bottom && top <= (WispPostStealResource *) chunk->top(), "just checking");
+  while (bottom < top) {
+    // we overwrite our real thread or jnienv to every slot
+    if (bottom->type == WispPostStealResource::ThreadRef) {
+      bottom->update_thread_ref(real_thread);
+    } else if (bottom->type == WispPostStealResource::JNIEnvRef) {
+      bottom->update_jnienv_ref(real_thread->jni_environment());
+    } else {
+      ShouldNotReachHere();
+    }
+    bottom++;
+  }
+  return handles_visited;
+}
+
+void WispResourceArea::wisp_post_steal_handles_do(JavaThread *real_thread) {
+  uintx handles_visited = 0;
+  // First handle the current chunk. It is filled to the high water mark.
+  handles_visited += chunk_wisp_post_steal_handles_do(_chunk, _hwm, real_thread);
+  // Then handle all previous chunks. They are completely filled.
+  Chunk *k = _first;
+  while (k != _chunk) {
+    handles_visited += chunk_wisp_post_steal_handles_do(k, k->top(), real_thread);
+    k = k->next();
+  }
+}
+
+class WispPostStealHandle : public StackObj {
+private:
+  void allocate_handle(WispResourceArea *area, Thread **t) {
+    WispPostStealResource *src = area->real_allocate_handle();
+    src->type = WispPostStealResource::ThreadRef;
+    src->u.thread_ref = t;
+  }
+  void allocate_handle(WispResourceArea *area, JNIEnv **t) {
+    WispPostStealResource *src = area->real_allocate_handle();
+    src->type = WispPostStealResource::JNIEnvRef;
+    src->u.jnienv_ref = t;
+  }
+public:
+  template <typename T> explicit WispPostStealHandle(T* stackObj) {
+    Thread *& ref = stackObj->thread_ref();
+    JavaThread *thread = ((JavaThread *)ref);
+    assert(thread->is_Java_thread(), "must be");
+    allocate_handle(thread->current_coroutine()->wisp_post_steal_resource_area(), &ref);
+  }
+  explicit WispPostStealHandle(Thread ** thread_ptr) {
+    JavaThread *thread = (JavaThread *)*thread_ptr;
+    assert((*thread_ptr)->is_Java_thread(), "must be");
+    allocate_handle(thread->current_coroutine()->wisp_post_steal_resource_area(), thread_ptr);
+  }
+  explicit WispPostStealHandle(JNIEnv ** jnienv_ptr) {
+    JavaThread *thread = JavaThread::thread_from_jni_environment(*jnienv_ptr);
+    assert(thread->is_Java_thread(), "must be");
+    allocate_handle(thread->current_coroutine()->wisp_post_steal_resource_area(), jnienv_ptr);
+  }
+};
+
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *& th1, Thread *& th2,
+        methodHandle & m1, methodHandle *& m2,
+        JavaCallWrapper & w)
+{
+  initialize(th1);
+
+  if (!_success)  return;
+  WispPostStealHandle h((Thread **)&th1);
+  WispPostStealHandle h1(&th2);
+  WispPostStealHandle h2(&m1);
+  WispPostStealHandle h3(m2);
+  WispPostStealHandle h4(&w);
+}
+
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(Thread *& th,
+        methodHandle *m1, methodHandle *m2,
+        JavaCallWrapper *w)
+{
+  initialize(*((JavaThread **)&th));
+
+  if (!_success)  return;
+  WispPostStealHandle h(&th);
+  if (m1)  { WispPostStealHandle h(m1); }
+  if (m2)  { WispPostStealHandle h(m2); }
+  if (w)   { WispPostStealHandle h(w); }
+}
+
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *& th1, Thread *& th2,
+        JNIEnv *& env, ThreadInVMfromNative & tiv, HandleMarkCleaner & hmc,
+        JavaThreadInObjectWaitState *jtios, vframeStream *f, methodHandle *m)
+{
+  initialize(th1);
+
+  if (!_success)  return;
+  WispPostStealHandle h((Thread **)&th1);
+  WispPostStealHandle h1(&th2);
+  WispPostStealHandle h2(&env);
+  WispPostStealHandle h3(&tiv);
+  WispPostStealHandle h4(&hmc);
+  if (jtios) { WispPostStealHandle h(jtios); }
+  if (f)     { WispPostStealHandle h(f); }
+  if (m)     { WispPostStealHandle h(m); }
+}
+
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *& th1, Thread *& th2,
+        ThreadInVMfromJavaNoAsyncException & tiva, HandleMarkCleaner & hmc)
+{
+  initialize(th1);
+
+  if (!_success)  return;
+  WispPostStealHandle h((Thread **)&th1);
+  WispPostStealHandle h1(&th2);
+  WispPostStealHandle h2(&tiva);
+  WispPostStealHandle h3(&hmc);
+}
+
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *& th1, Thread *& th2,
+        ThreadInVMfromJavaNoAsyncException & tiva)
+{
+  initialize(th1);
+
+  if (!_success)  return;
+  WispPostStealHandle h((Thread **)&th1);
+  WispPostStealHandle h1(&th2);
+  WispPostStealHandle h2(&tiva);
+}
+
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(HandleMarkCleaner & hmc)
+{
+  assert(hmc.thread_ref()->is_Java_thread(), "sanity");
+  initialize((JavaThread*)hmc.thread_ref());
+
+  if (!_success)  return;
+  WispPostStealHandle h(&hmc);
+}
+
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *thread, ThreadBlockInVM & tbv)
+{
+  initialize(thread, true);
+
+  if (!_success)  return;
+  WispPostStealHandle h(&tbv);
+}
+
+WispPostStealHandleUpdateMark::WispPostStealHandleUpdateMark(JavaThread *&th)    // this is a special one
+{
+  initialize(th, true);
+
+  if (!_success)  return;
+  WispPostStealHandle h((Thread **)&th);
+}
+
+bool WispPostStealHandleUpdateMark::check(JavaThread *current, bool sp) {
+  assert(current == JavaThread::current(), "must be");
+  Coroutine *coroutine = current->current_coroutine();
+  if (!EnableSteal ||
+      coroutine == current->coroutine_list() ||
+      // if we won't steal it, then no need to allocate handles.
+      coroutine->enable_steal_count() != (sp ? current->java_call_counter()+1 : current->java_call_counter())) {
+    _success = false;
+    return false;
+  }
+  _success = true;
+  return true;
+}
+
+WispPostStealHandleUpdateMark::~WispPostStealHandleUpdateMark() {
+  if (!_success)  return;
+  WispResourceArea* area = _area;   // help compilers with poor alias analysis
+  assert(area == _coroutine->wisp_post_steal_resource_area(), "sanity check");
+  assert(area->_nesting > 0, "must stack allocate HandleMarks" );
+  debug_only(area->_nesting--);
+
+  // Delete later chunks
+  if( _chunk->next() ) {
+    // reset arena size before delete chunks. Otherwise, the total
+    // arena size could exceed total chunk size
+    assert(area->size_in_bytes() > size_in_bytes(), "Sanity check");
+    area->set_size_in_bytes(size_in_bytes());
+    _chunk->next_chop();
+  } else {
+    assert(area->size_in_bytes() == size_in_bytes(), "Sanity check");
+  }
+  // Roll back arena to saved top markers
+  area->_chunk = _chunk;
+  area->_hwm = _hwm;
+  area->_max = _max;
+#ifdef ASSERT
+  // clear out first chunk (to detect allocation bugs)
+  if (ZapVMHandleArea) {
+    memset(_hwm, badHandleValue, _max - _hwm);
+  }
+#endif
+
+}
+
+void Coroutine::initialize_coroutine_support(JavaThread* thread) {
+  assert(EnableCoroutine, "Coroutine is disabled");
+  guarantee(thread == JavaThread::current(), "sanity check");
+
+  if (UseWispMonitor) {
+    assert(thread->parker(), "sanity check");
+    java_lang_Thread::set_park_event(
+        thread->threadObj(), (uintptr_t) thread->parker());
+  }
+
+  EXCEPTION_MARK
+  HandleMark hm(thread);
+  Handle obj(thread, thread->threadObj());
+  JavaValue result(T_VOID);
+
+  JavaCalls::call_virtual(&result,
+      obj,
+      SystemDictionary::Thread_klass(),
+      vmSymbols::initializeCoroutineSupport_method_name(),
+      vmSymbols::void_method_signature(),
+      thread);
+}
+

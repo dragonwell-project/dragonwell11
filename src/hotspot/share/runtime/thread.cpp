@@ -458,6 +458,9 @@ Thread::~Thread() {
 // safepoint and the Thread is not "protected".
 //
 void Thread::check_for_dangling_thread_pointer(Thread *thread) {
+  if (UseWispMonitor && thread->is_Wisp_thread()) {
+    thread = ((WispThread*) thread)->thread();
+  }
   assert(!thread->is_Java_thread() || Thread::current() == thread ||
          !((JavaThread *) thread)->on_thread_list() ||
          SafepointSynchronize::is_at_safepoint() ||
@@ -1108,6 +1111,22 @@ static oop create_initial_thread(Handle thread_group, JavaThread* thread,
   return thread_oop();
 }
 
+static void call_initializeWispClass(TRAPS) {
+  assert(EnableCoroutine, "Coroutine is disabled");
+  Klass* klass =  SystemDictionary::resolve_or_fail(vmSymbols::com_alibaba_wisp_engine_WispEngine(), true, CHECK);
+  JavaValue result(T_VOID);
+  JavaCalls::call_static(&result, klass, vmSymbols::initializeWispClass_name(),
+                                         vmSymbols::void_method_signature(), CHECK);
+}
+
+static void call_startWispDaemons(TRAPS) {
+  assert(EnableCoroutine, "Coroutine is disabled");
+  Klass* klass =  SystemDictionary::resolve_or_fail(vmSymbols::com_alibaba_wisp_engine_WispEngine(), true, CHECK);
+  JavaValue result(T_VOID);
+  JavaCalls::call_static(&result, klass, vmSymbols::startWispDaemons_name(),
+                                         vmSymbols::void_method_signature(), CHECK);
+}
+
 char java_runtime_name[128] = "";
 char java_runtime_version[128] = "";
 char java_runtime_vendor_version[128] = "";
@@ -1598,6 +1617,7 @@ void JavaThread::initialize() {
   set_callee_target(NULL);
   set_vm_result(NULL);
   set_vm_result_2(NULL);
+  _vm_result_for_wisp = NULL;
   set_vframe_array_head(NULL);
   set_vframe_array_last(NULL);
   set_deferred_locals(NULL);
@@ -1647,6 +1667,7 @@ void JavaThread::initialize() {
   _coroutine_stack_list = NULL;
   _coroutine_list = NULL;
   _current_coroutine = NULL;
+  _wisp_preempt = false;
 
   _thread_stat = NULL;
   _thread_stat = new ThreadStatistics();
@@ -1667,9 +1688,7 @@ void JavaThread::initialize() {
   // Setup safepoint state info for this thread
   ThreadSafepointState::create(this);
 
-#ifdef ASSERT
   _java_call_counter = 0;
-#endif
 
   // JVMTI PopFrame support
   _popframe_condition = popframe_inactive;
@@ -1884,6 +1903,10 @@ void JavaThread::thread_main_inner() {
       this->set_native_thread_name(this->get_thread_name());
     }
     HandleMark hm(this);
+    if (EnableCoroutine && !is_Compiler_thread()) {
+      // compiler thread never calls back into java
+      Coroutine::initialize_coroutine_support(this);
+    }
     this->entry_point()(this, this);
   }
 
@@ -2052,6 +2075,27 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
            "should not have a Java frame when detaching or exiting");
     ObjectSynchronizer::release_monitors_owned_by_thread(this);
     assert(!this->has_pending_exception(), "release_monitors should have cleared");
+  }
+
+  if (EnableCoroutine &&
+      // SurrogateLockerThread, JvmtiAgentThread, ServiceThread, CompilerThread
+      // are extended from JavaThread, but their entries are not thread_entry hence
+      // coroutineSupport was not initialized. We should not call `destroyCoroutineSupport` here.
+      !is_Compiler_thread() &&
+      !is_hidden_from_external_view() &&
+      // SurrogateLockerThread and ServiceThread are "is_hidden_from_external_view()"
+      !is_jvmti_agent_thread()) {
+    assert(!UseWispMonitor || destroy_vm ||
+        java_lang_Thread::park_event(_threadObj), "park_event should been set");
+    EXCEPTION_MARK;
+    JavaValue result(T_VOID);
+    JavaCalls::call_virtual(&result,
+                            threadObj, SystemDictionary::Thread_klass(),
+                            vmSymbols::destroyCoroutineSupport_method_name(),
+                            vmSymbols::void_method_signature(), THREAD);
+    assert(_current_coroutine == _coroutine_list, "not thread coroutine");
+    assert(_coroutine_list->next() == _coroutine_list, "ensure all coroutine has benn killed");
+    CLEAR_PENDING_EXCEPTION;
   }
 
   // These things needs to be done while we are still a Java Thread. Make sure that thread
@@ -2964,6 +3008,9 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
   // around using this function
   f->do_oop((oop*) &_threadObj);
   f->do_oop((oop*) &_vm_result);
+  if (EnableCoroutine) {
+    f->do_oop((oop*) &_vm_result_for_wisp);
+  }
   f->do_oop((oop*) &_exception_oop);
   f->do_oop((oop*) &_pending_async_exception);
 
@@ -2975,7 +3022,6 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
 void JavaThread::nmethods_do(CodeBlobClosure* cf) {
   assert((!has_last_Java_frame() && java_call_counter() == 0) ||
          (has_last_Java_frame() && java_call_counter() > 0), "wrong java_sp info!");
-
   if (has_last_Java_frame()) {
     // Traverse the execution stack
     for (StackFrameStream fst(this); !fst.is_done(); fst.next()) {
@@ -3644,6 +3690,14 @@ static void call_initPhase3(TRAPS) {
   JavaValue result(T_VOID);
   JavaCalls::call_static(&result, klass, vmSymbols::initPhase3_name(),
                                          vmSymbols::void_method_signature(), CHECK);
+
+  if (EnableCoroutine) {
+    call_initializeWispClass(CHECK);
+    call_startWispDaemons(THREAD);
+    if (HAS_PENDING_EXCEPTION) {
+      vm_exit_during_initialization(Handle(THREAD, PENDING_EXCEPTION));
+    }
+  }
 }
 
 void Threads::initialize_java_lang_classes(JavaThread* main_thread, TRAPS) {
@@ -3683,6 +3737,10 @@ void Threads::initialize_java_lang_classes(JavaThread* main_thread, TRAPS) {
   // Phase 1 of the system initialization in the library, java.lang.System class initialization
   call_initPhase1(CHECK);
 
+  if (EnableCoroutine) {
+    initialize_class(vmSymbols::java_dyn_CoroutineSupport(), CHECK);
+    Coroutine::initialize_coroutine_support((JavaThread*) THREAD);
+  }
   // get the Java runtime name, version, and vendor info after java.lang.System is initialized
   JDK_Version::set_runtime_name(get_java_runtime_name(THREAD));
   JDK_Version::set_runtime_version(get_java_runtime_version(THREAD));
@@ -4671,7 +4729,19 @@ JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
 
   DO_JAVA_THREADS(t_list, p) {
     // first, see if owner is the address of a Java thread
-    if (owner == (address)p) return p;
+    if (UseWispMonitor) {
+      if (p->coroutine_list()) {
+        Coroutine* c = p->coroutine_list();
+        do {
+          if ((address) c->wisp_thread() == owner) {
+            return c->wisp_thread();
+          }
+          c = c->next();
+        } while (c != p->coroutine_list());
+      }
+    } else if (owner == (address)p) {
+      return p;
+    }
   }
 
   // Cannot assert on lack of success here since this function may be
@@ -4685,7 +4755,18 @@ JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
   //
   JavaThread* the_owner = NULL;
   DO_JAVA_THREADS(t_list, q) {
-    if (q->is_lock_owned(owner)) {
+    if (UseWispMonitor) {
+      if (q->coroutine_list()) {
+        Coroutine* c = q->coroutine_list();
+        do {
+          if (c->wisp_thread()->is_lock_owned(owner)) {
+            the_owner = c->wisp_thread();
+            break;
+          }
+          c = c->next();
+        } while (c != q->coroutine_list());
+      }
+    } else if (q->is_lock_owned(owner)) {
       the_owner = q;
       break;
     }
@@ -4727,6 +4808,14 @@ void Threads::print_on(outputStream* st, bool print_stacks,
         p->trace_stack();
       } else {
         p->print_stack_on(st);
+        if (EnableCoroutine) {
+          assert(p->coroutine_list() != NULL, "coroutine list");
+          Coroutine* c = p->coroutine_list();
+          do {
+            c->print_stack_on(st);
+            c = c->next();
+          } while (c != p->coroutine_list());
+        }
       }
     }
     st->cr();

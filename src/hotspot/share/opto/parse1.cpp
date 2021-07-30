@@ -2177,6 +2177,11 @@ void Parse::return_current(Node* value) {
   if (C->env()->dtrace_method_probes()) {
     make_dtrace_method_exit(method());
   }
+  // Deadlocks may happen if programs yield at return of synchronized methods.
+  // Because the yield may come before monitorexit.
+  if (EnableCoroutine && EnableCoroutineTimeSlice && (!method()->is_synchronized())) {
+    make_wisp_yield(method());
+  }
   SafePointNode* exit_return = _exits.map();
   exit_return->in( TypeFunc::Control  )->add_req( control() );
   exit_return->in( TypeFunc::I_O      )->add_req( i_o    () );

@@ -40,6 +40,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import com.alibaba.wisp.engine.WispEngine;
+import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.module.ServicesCatalog;
 import jdk.internal.reflect.ConstantPool;
 import sun.reflect.annotation.AnnotationType;
@@ -305,4 +307,27 @@ public interface JavaLangAccess {
      * @throws IllegalArgumentException for malformed surrogates
      */
     byte[] getBytesUTF8NoRepl(String s);
+
+    /**
+     * Returns a reference to the currently executing thread object.
+     */
+    Thread currentThread0();
+
+    void yield0();
+
+    void setWispEngine(Thread thread, WispEngine engine);
+
+    WispEngine getWispEngine(Thread thread);
+
+    void setWispTask(Thread thread, WispTask task);
+
+    WispTask getWispTask(Thread thread);
+
+    void setWispAlive(Thread thread, boolean b);
+
+    boolean isInNative(Thread thread);
+
+    void threadExit(Thread thread);
+
+    void wispBooted();
 }

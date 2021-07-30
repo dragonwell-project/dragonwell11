@@ -72,6 +72,10 @@ class JavaCallWrapper: StackObj {
 
   bool             is_first_frame() const   { return _anchor.last_Java_sp() == NULL; }
 
+  Thread *&        thread_ref()             {
+    assert(EnableCoroutine, "EnableCoroutine is off");
+    return (Thread *&)_thread;
+  }
 };
 
 

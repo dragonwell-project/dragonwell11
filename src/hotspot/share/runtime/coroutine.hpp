@@ -31,6 +31,7 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/javaFrameAnchor.hpp"
 #include "runtime/monitorChunk.hpp"
+#include "runtime/thread.hpp"
 
 // number of heap words that prepareSwitch will add as a safety measure to the CoroutineData size
 #define COROUTINE_DATA_OVERSIZE (64)
@@ -47,6 +48,7 @@
 
 class Coroutine;
 class CoroutineStack;
+class WispThread;
 
 
 template<class T>
@@ -75,6 +77,8 @@ public:
   virtual void frames_do(frame* fr, RegisterMap* map) = 0;
 };
 
+class WispPostStealHandleUpdateMark;
+class WispResourceArea;
 
 class Coroutine: public CHeapObj<mtThread>, public DoublyLinkedList<Coroutine> {
 public:
@@ -85,6 +89,9 @@ public:
     _dead       = 0x00000003,      // TODO is this really needed?
     _dummy      = 0xffffffff
   };
+  enum Consts {
+    WISP_ID_NOT_SET = -1,
+  };
 
 private:
   CoroutineState  _state;
@@ -94,12 +101,24 @@ private:
   JavaThread*     _thread;
   CoroutineStack* _stack;
 
+  int             _wisp_task_id;
+  oop             _wisp_engine;
+  oop             _wisp_task;
+  WispThread*     _wisp_thread;
+
   ResourceArea*   _resource_area;
   HandleArea*     _handle_area;
   HandleMark*     _last_handle_mark;
   JNIHandleBlock* _active_handles;
   GrowableArray<Metadata*>* _metadata_handles;
+  JavaFrameAnchor _anchor;
+  PrivilegedElement*  _privileged_stack_top;
+  java_lang_Thread::ThreadStatus _thread_status;
+  int             _enable_steal_count;
   int             _java_call_counter;
+
+  // work steal pool
+  WispResourceArea*       _wisp_post_steal_resource_area;
 
 #ifdef _LP64
   intptr_t        _storage[2];
@@ -115,6 +134,7 @@ public:
 
   void run(jobject coroutine);
 
+  static void initialize_coroutine_support(JavaThread* thread);
   static Coroutine* create_thread_coroutine(JavaThread* thread, CoroutineStack* stack);
   static Coroutine* create_coroutine(JavaThread* thread, CoroutineStack* stack, oop coroutineObj);
 
@@ -128,8 +148,23 @@ public:
 
   CoroutineStack* stack() const     { return _stack; }
 
+  int wisp_task_id() const          { return _wisp_task_id; }
+  void set_wisp_task_id(int x)      { _wisp_task_id = x; }
+
+  oop wisp_engine() const           { return _wisp_engine; }
+  void set_wisp_engine(oop x);
+
+  oop wisp_task() const             { return _wisp_task; }
+  void set_wisp_task(oop x)         { _wisp_task = x;    }
+
+  WispThread* wisp_thread() const   { return _wisp_thread; }
+
   ResourceArea* resource_area() const     { return _resource_area; }
   void set_resource_area(ResourceArea* x) { _resource_area = x; }
+
+  // work steal support
+  WispResourceArea* wisp_post_steal_resource_area() const  { return _wisp_post_steal_resource_area; }
+  void change_thread_for_wisp(JavaThread *thread);
 
   HandleArea* handle_area() const         { return _handle_area; }
   void set_handle_area(HandleArea* x)     { _handle_area = x; }
@@ -143,16 +178,24 @@ public:
   GrowableArray<Metadata*>* metadata_handles() const          { return _metadata_handles; }
   void set_metadata_handles(GrowableArray<Metadata*>* handles){ _metadata_handles = handles; }
 
+  int enable_steal_count()                { return _enable_steal_count; }
+  int add_enable_steal_count()            { return ++_enable_steal_count; }
+  int dec_enable_steal_count()            { return _enable_steal_count--; }
+
   int java_call_counter() const           { return _java_call_counter; }
   void set_java_call_counter(int x)       { _java_call_counter = x; }
 
   bool is_disposable();
+
+  void print_stack_on(outputStream* st);
 
   // GC support
   void oops_do(OopClosure* f, CodeBlobClosure* cf);
   void nmethods_do(CodeBlobClosure* cf);
   void metadata_do(void f(Metadata*));
   void frames_do(void f(frame*, const RegisterMap* map));
+
+  static ByteSize thread_offset()             { return byte_offset_of(Coroutine, _thread); }
 
   static ByteSize state_offset()              { return byte_offset_of(Coroutine, _state); }
   static ByteSize stack_offset()              { return byte_offset_of(Coroutine, _stack); }
@@ -162,9 +205,15 @@ public:
   static ByteSize last_handle_mark_offset()   { return byte_offset_of(Coroutine, _last_handle_mark); }
   static ByteSize active_handles_offset()     { return byte_offset_of(Coroutine, _active_handles); }
   static ByteSize metadata_handles_offset()   { return byte_offset_of(Coroutine, _metadata_handles); }
-#ifdef ASSERT
+  static ByteSize privileged_stack_top_offset(){ return byte_offset_of(Coroutine, _privileged_stack_top); }
+  static ByteSize last_Java_sp_offset()       {
+    return byte_offset_of(Coroutine, _anchor) + JavaFrameAnchor::last_Java_sp_offset();
+  }
+  static ByteSize last_Java_pc_offset()       {
+    return byte_offset_of(Coroutine, _anchor) + JavaFrameAnchor::last_Java_pc_offset();
+  }
+  static ByteSize thread_status_offset()      { return byte_offset_of(Coroutine, _thread_status); }
   static ByteSize java_call_counter_offset()  { return byte_offset_of(Coroutine, _java_call_counter); }
-#endif
 
 #ifdef _LP64
   static ByteSize storage_offset()            { return byte_offset_of(Coroutine, _storage); }
@@ -176,6 +225,7 @@ private:
 public:
   static ByteSize last_SEH_offset()           { return byte_offset_of(Coroutine, _last_SEH); }
 #endif
+  static ByteSize wisp_thread_offset()        { return byte_offset_of(Coroutine, _wisp_thread); }
 };
 
 class CoroutineStack: public CHeapObj<mtThread>, public DoublyLinkedList<CoroutineStack> {
@@ -248,5 +298,238 @@ template<class T> void DoublyLinkedList<T>::insert_into_list(pointer& list) {
     _next->_last = (T*)this;
   }
 }
+
+class ObjectWaiter;
+
+class WispThread: public JavaThread {
+  friend class Coroutine;
+private:
+  static bool _wisp_booted;
+  static Method* parkMethod;
+  static Method* unparkMethod;
+  static GrowableArray<int>* _proxy_unpark;
+
+  Coroutine*  _coroutine;
+  JavaThread* _thread;
+
+  bool _is_proxy_unpark;
+
+  WispThread(Coroutine *c): _coroutine(c), _thread(c->thread()), _is_proxy_unpark(false) {
+    set_osthread(new OSThread(NULL, NULL));
+    set_thread_state(_thread_in_vm);
+  }
+
+  virtual ~WispThread() {
+    delete osthread();
+    set_osthread(NULL);
+  }
+
+public:
+  static bool wisp_booted()           { return _wisp_booted; }
+  static void set_wisp_booted(Thread* thread);
+
+  virtual bool is_Wisp_thread() const { return true; }
+
+  Coroutine* coroutine() const        { return _coroutine; }
+
+  JavaThread* thread()   const        { return _thread; }
+
+  void change_thread(JavaThread *thread) { assert(thread->is_Java_thread(), "must be"); _thread = thread; }    // steal support
+
+  bool is_interrupted(bool clear_interrupted);
+  static void interrupt(int task_id, TRAPS);
+
+  static ByteSize thread_offset()     { return byte_offset_of(WispThread, _thread); }
+
+  bool is_proxy_unpark()      { return _is_proxy_unpark; }
+  void set_proxy_unpark_flag()         { _is_proxy_unpark = true; }
+  void clear_proxy_unpark_flag()       { _is_proxy_unpark = false; }
+
+  virtual bool is_lock_owned(address adr) const {
+    CoroutineStack* stack = _coroutine->stack();
+    return stack->stack_base() >= adr &&
+      adr > (stack->stack_base() - stack->stack_size());
+  }
+
+  // we must set ObjectWaiter members before node enqueued(observed by other threads)
+  void before_enqueue(ObjectMonitor* monitor, ObjectWaiter* ow);
+  static void park(long millis, const ObjectWaiter* ow);
+  static void unpark(const ObjectWaiter* ow, TRAPS) {
+    unpark(ow->_park_wisp_id, ow->_using_wisp_park, ow->_proxy_wisp_unpark, ow->_event, THREAD);
+  }
+  static void unpark(int task_id, bool using_wisp_park, bool proxy_unpark, ParkEvent* event, TRAPS);
+  static int get_proxy_unpark(jintArray res);
+
+  static WispThread* current(Thread* thread) {
+    assert(thread->is_Java_thread(), "invariant") ;
+    return thread->is_Wisp_thread() ? (WispThread*) thread : 
+      ((JavaThread*) thread)->current_coroutine()->wisp_thread();
+  }
+};
+
+// we supported coroutine stealing for following native calls:
+// 1. sun.reflect.NativeMethodAccessorImpl.invoke0()
+// 2. sun.reflect.NativeConstructorAccessorImpl.newInstance0()
+// 3. java.security.AccessController.doPrivileged()
+// 4. java.lang.Object.wait()
+// 5,6,7. monitorenter for interp, c1 and c2
+class EnableStealMark: public StackObj {
+private:
+  JavaThread*  _thread;
+  Coroutine*   _coroutine;
+  int          _enable_steal_count;
+public:
+  EnableStealMark(Thread* thread);
+  ~EnableStealMark();
+};
+
+struct WispStealCandidate {
+private:
+  Symbol *_holder;
+  Symbol *_name;
+  Symbol *_signature;
+public:
+  WispStealCandidate (Symbol *holder, Symbol *name, Symbol *signature) : _holder(holder), _name(name), _signature(signature) {}
+private:
+  bool is_method_invoke() {
+    return _holder == vmSymbols::sun_reflect_NativeMethodAccessorImpl() && // sun.reflect.NativeMethodAccessorImpl.invoke0()
+           _name == vmSymbols::invoke0_name() &&
+           _signature == vmSymbols::invoke0_signature();
+  }
+  bool is_constructor_newinstance() {
+    return _holder == vmSymbols::sun_reflect_NativeConstructorAccessorImpl() &&  // sun.reflect.NativeConstructorAccessorImpl.newInstance0()
+           _name == vmSymbols::newInstance0_name() &&
+           _signature == vmSymbols::newInstance0_signature();
+  }
+  bool is_doPrivilege() {
+    return _holder == vmSymbols::java_security_AccessController() && // java.security.AccessController.doPrivilege(***)
+           _name == vmSymbols::doPrivileged_name() &&
+           (_signature == vmSymbols::doPrivileged_signature_1() ||   // doPrivilege() has four native functions
+            _signature == vmSymbols::doPrivileged_signature_2() ||
+            _signature == vmSymbols::doPrivileged_signature_3() ||
+            _signature == vmSymbols::doPrivileged_signature_4());
+  }
+  bool is_object_wait() {
+    return _holder == vmSymbols::java_lang_Object() &&   // java.lang.Object.wait()
+           _name == vmSymbols::wait_name() &&
+           _signature == vmSymbols::long_void_signature();
+  }
+public:
+  bool is_steal_candidate() {
+    return is_constructor_newinstance() || is_doPrivilege() || is_method_invoke() || is_object_wait();
+  }
+};
+
+struct WispPostStealResource {
+public:
+  union {
+    Thread **thread_ref;
+    JNIEnv **jnienv_ref;
+  } u;
+  enum Type{
+    ThreadRef,
+    JNIEnvRef
+  } type;
+public:
+  void update_thread_ref(JavaThread *real_thread) { *u.thread_ref = real_thread; }
+  void update_jnienv_ref(JNIEnv *real_jnienv) { *u.jnienv_ref = real_jnienv; }
+};
+
+// First letter indicates type of the frame:
+//    J: Java frame (compiled)
+//    j: Java frame (interpreted)
+//    V: VM frame (C/C++)
+//    v: Other frames running VM generated code (e.g. stubs, adapters, etc.)
+//    C: C/C++ frame
+#define WISP_THREAD_UPDATE get_thread(r15)
+#define WISP_X86_CONVENTION_V2J_UPDATE __ WISP_THREAD_UPDATE
+#define WISP_X86_CONVENTION_V2j_UPDATE __ WISP_THREAD_UPDATE
+#define WISP_COMPILER_RESTORE_FORCE_UPDATE __ WISP_THREAD_UPDATE
+#define WISP_j2v_UPDATE __ movptr(thread, r15_thread)
+#define WISP_V2v_UPDATE WISP_THREAD_UPDATE
+
+class WispPostStealHandleUpdateMark;
+
+class WispResourceArea: public ResourceArea {
+  friend class WispPostStealHandleUpdateMark;
+private:
+  Coroutine *_outer;
+public:
+  WispResourceArea(Coroutine *outer, MEMFLAGS flags = mtWisp) : ResourceArea(flags), _outer(outer) {}
+
+  WispResourceArea(Coroutine *outer, size_t init_size, MEMFLAGS flags = mtWisp) : ResourceArea(init_size, flags), _outer(outer) { }
+
+  WispPostStealResource* real_allocate_handle() {
+#ifdef ASSERT
+    WispPostStealResource *src = (WispPostStealResource *) (UseMallocOnly ? internal_malloc_4(sizeof(WispPostStealResource)) : Amalloc_4(sizeof(WispPostStealResource)));
+#else
+    WispPostStealResource *src = (WispPostStealResource *) Amalloc_4(sizeof(WispPostStealResource));
+#endif
+    return src;
+  }
+
+  // thread steal support
+  void wisp_post_steal_handles_do(JavaThread *real_thread);
+};
+
+inline void Coroutine::change_thread_for_wisp(JavaThread *thread) {
+  this->wisp_post_steal_resource_area()->wisp_post_steal_handles_do(thread);
+}
+
+class ThreadInVMfromNative;
+class ThreadInVMfromJavaNoAsyncException;
+class HandleMarkCleaner;
+class JavaThreadInObjectWaitState;
+class ThreadBlockInVM;
+class vframeStream;
+
+class WispPostStealHandleUpdateMark: public StackObj {
+private:
+  WispResourceArea *_area;          // Resource area to stack allocate
+  Chunk *_chunk;                // saved arena chunk
+  char *_hwm, *_max;
+  size_t _size_in_bytes;
+  Coroutine *_coroutine;
+  bool _success;
+
+  bool check(JavaThread *current, bool sp = false);
+
+  void initialize(JavaThread *thread, bool sp = false) {
+    if (!check(thread, sp)) return;
+    Coroutine *coroutine = thread->current_coroutine();
+    _coroutine = coroutine;
+    _area = coroutine->wisp_post_steal_resource_area();
+    _chunk = _area->_chunk;
+    _hwm = _area->_hwm;
+    _max= _area->_max;
+    _size_in_bytes = _area->size_in_bytes();
+    debug_only(_area->_nesting++;)
+    assert( _area->_nesting > 0, "must stack allocate RMs" );
+  }
+public:
+  WispPostStealHandleUpdateMark(JavaThread *& th1, Thread *& th2,   // constructor only for JavaCalls::call()
+                    methodHandle & m1, methodHandle *& m2,
+                    JavaCallWrapper & w);
+  WispPostStealHandleUpdateMark(Thread *& th,                       // constructor for misc
+                    methodHandle *m1 = NULL, methodHandle *m2 = NULL,
+                    JavaCallWrapper *w = NULL);
+  WispPostStealHandleUpdateMark(JavaThread *& th1, Thread *& th2,   // constructor only for JVM_ENTRY
+                    JNIEnv *& env, ThreadInVMfromNative & tiv, HandleMarkCleaner & hmc,
+                    JavaThreadInObjectWaitState *jtios = NULL, vframeStream *f = NULL, methodHandle *m = NULL);
+  WispPostStealHandleUpdateMark(JavaThread *& th1, Thread *& th2,   // constructor only for Interpreter::monitorenter
+                    ThreadInVMfromJavaNoAsyncException & tiva, HandleMarkCleaner & hmc);
+  WispPostStealHandleUpdateMark(JavaThread *& th1, Thread *& th2,   // constructor for other monitorenters
+                    ThreadInVMfromJavaNoAsyncException & tiva);
+  WispPostStealHandleUpdateMark(HandleMarkCleaner & hmc);
+  WispPostStealHandleUpdateMark(JavaThread *thread, ThreadBlockInVM & tbv);  // constructor is used inside objectMonitor call, which is also within EnableStealMark scope.
+  WispPostStealHandleUpdateMark(JavaThread *& th);                  // this is a special one, used for a fix inside EnableStealMark
+
+  ~WispPostStealHandleUpdateMark();
+
+
+private:
+  size_t size_in_bytes() { return _size_in_bytes; }
+};
+
 
 #endif // SHARE_VM_RUNTIME_COROUTINE_HPP

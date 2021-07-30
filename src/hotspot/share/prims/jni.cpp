@@ -4015,30 +4015,6 @@ static jint JNI_CreateJavaVM_inner(JavaVM **vm, void **penv, void *args) {
       InternalVMTests::run();
     }
 #endif
-    if (EnableCoroutine) {
-      JavaThread* __the_thread__ = thread;
-      HandleMark hm(THREAD);
-      Handle obj(THREAD, thread->threadObj());
-      JavaValue result(T_VOID);
-
-      if (SystemDictionary::java_dyn_CoroutineSupport_klass() != NULL) {
-        InstanceKlass::cast(SystemDictionary::Class_klass())->initialize(CHECK_0);
-        InstanceKlass::cast(SystemDictionary::java_dyn_CoroutineSupport_klass())->initialize(CHECK_0);
-        JavaCalls::call_virtual(&result,
-                                obj,
-                                SystemDictionary::Thread_klass(),
-                                vmSymbols::initializeCoroutineSupport_method_name(),
-                                vmSymbols::void_method_signature(),
-                                THREAD);
-        if (THREAD->has_pending_exception()) {
-          Handle exception(THREAD, THREAD->pending_exception());
-          java_lang_Throwable::print_stack_trace(exception, tty);
-          THREAD->clear_pending_exception();
-          vm_abort(false);
-        }
-      }
-    }
-
 
     // Since this is not a JVM_ENTRY we have to set the thread state manually before leaving.
     ThreadStateTransition::transition_and_fence(thread, _thread_in_vm, _thread_in_native);
@@ -4267,6 +4243,10 @@ static jint attach_current_thread(JavaVM *vm, void **penv, void *_args, bool dae
   post_thread_start_event(thread);
 
   *(JNIEnv**)penv = thread->jni_environment();
+
+  if (EnableCoroutine) {
+    Coroutine::initialize_coroutine_support(JavaThread::current());
+  }
 
   // Now leaving the VM, so change thread_state. This is normally automatically taken care
   // of in the JVM_ENTRY. But in this situation we have to do it manually. Notice, that by

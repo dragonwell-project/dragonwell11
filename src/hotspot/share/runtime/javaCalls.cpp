@@ -100,7 +100,7 @@ JavaCallWrapper::JavaCallWrapper(const methodHandle& callee_method, Handle recei
   _anchor.copy(_thread->frame_anchor());
   _thread->frame_anchor()->clear();
 
-  debug_only(_thread->inc_java_call_counter());
+  _thread->inc_java_call_counter();
   _thread->set_active_handles(new_handles);     // install new handle block and reset Java frame linkage
 
   assert (_thread->thread_state() != _thread_in_native, "cannot set native pc to NULL");
@@ -134,7 +134,7 @@ JavaCallWrapper::~JavaCallWrapper() {
 
   _thread->frame_anchor()->zap();
 
-  debug_only(_thread->dec_java_call_counter());
+  _thread->dec_java_call_counter();
 
   if (_anchor.last_Java_sp() == NULL) {
     _thread->set_base_of_stack_pointer(NULL);
@@ -345,6 +345,9 @@ void JavaCalls::call(JavaValue* result, const methodHandle& method, JavaCallArgu
   // Check if we need to wrap a potential OS exception handler around thread
   // This is used for e.g. Win32 structured exception handlers
   assert(THREAD->is_Java_thread(), "only JavaThreads can make JavaCalls");
+  assert(!UseWispMonitor || !is_init_completed() ||
+      java_lang_Thread::park_event(((JavaThread*) THREAD)->threadObj()),
+      "park_event need to be set before calling java");
   // Need to wrap each and every time, since there might be native code down the
   // stack that has installed its own exception handlers
   os::os_exception_wrapper(call_helper, result, method, args, THREAD);
@@ -447,6 +450,10 @@ void JavaCalls::call_helper(JavaValue* result, const methodHandle& method, JavaC
   // do call
   { JavaCallWrapper link(method, receiver, result, CHECK);
     { HandleMark hm(thread);  // HandleMark used by HandleMarkCleaner
+
+      // thread steal support
+      methodHandle* m = const_cast<methodHandle*>(&method);
+      WispPostStealHandleUpdateMark w(thread, THREAD, *m, m, link);
 
       StubRoutines::call_stub()(
         (address)&link,

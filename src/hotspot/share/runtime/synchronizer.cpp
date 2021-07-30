@@ -34,6 +34,7 @@
 #include "oops/oop.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/biasedLocking.hpp"
+#include "runtime/coroutine.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/mutexLocker.hpp"
@@ -153,6 +154,9 @@ static volatile int gMonitorPopulation = 0;  // # Extant -- in circulation
 // into a single notifyAndExit() runtime primitive.
 
 bool ObjectSynchronizer::quick_notify(oopDesc * obj, Thread * self, bool all) {
+  if (UseWispMonitor) {
+    self = WispThread::current(self);
+  }
   assert(!SafepointSynchronize::is_at_safepoint(), "invariant");
   assert(self->is_Java_thread(), "invariant");
   assert(((JavaThread *) self)->thread_state() == _thread_in_Java, "invariant");
@@ -203,9 +207,12 @@ bool ObjectSynchronizer::quick_notify(oopDesc * obj, Thread * self, bool all) {
 
 bool ObjectSynchronizer::quick_enter(oop obj, Thread * Self,
                                      BasicLock * lock) {
+  if (UseWispMonitor) {
+    Self = WispThread::current(Self);
+  }
   assert(!SafepointSynchronize::is_at_safepoint(), "invariant");
   assert(Self->is_Java_thread(), "invariant");
-  assert(((JavaThread *) Self)->thread_state() == _thread_in_Java, "invariant");
+  assert(UseWispMonitor || ((JavaThread *) Self)->thread_state() == _thread_in_Java, "invariant");
   NoSafepointVerifier nsv;
   if (obj == NULL) return false;       // Need to throw NPE
   const markOop mark = obj->mark();
@@ -331,6 +338,58 @@ void ObjectSynchronizer::fast_exit(oop object, BasicLock* lock, TRAPS) {
                               inflate_cause_vm_internal)->exit(true, THREAD);
 }
 
+void ObjectSynchronizer::fast_exit(Handle object, BasicLock* lock, TRAPS) {
+  assert(EnableCoroutine, "Coroutine is disabled");
+  markOop mark = object->mark();
+  // We cannot check for Biased Locking if we are racing an inflation.
+  assert(mark == markOopDesc::INFLATING() ||
+         !mark->has_bias_pattern(), "should not see bias pattern here");
+
+  markOop dhw = lock->displaced_header();
+  if (dhw == NULL) {
+    // If the displaced header is NULL, then this exit matches up with
+    // a recursive enter. No real work to do here except for diagnostics.
+#ifndef PRODUCT
+    if (mark != markOopDesc::INFLATING()) {
+      // Only do diagnostics if we are not racing an inflation. Simply
+      // exiting a recursive enter of a Java Monitor that is being
+      // inflated is safe; see the has_monitor() comment below.
+      assert(!mark->is_neutral(), "invariant");
+      assert(!mark->has_locker() ||
+             THREAD->is_lock_owned((address)mark->locker()), "invariant");
+      if (mark->has_monitor()) {
+        // The BasicLock's displaced_header is marked as a recursive
+        // enter and we have an inflated Java Monitor (ObjectMonitor).
+        // This is a special case where the Java Monitor was inflated
+        // after this thread entered the stack-lock recursively. When a
+        // Java Monitor is inflated, we cannot safely walk the Java
+        // Monitor owner's stack and update the BasicLocks because a
+        // Java Monitor can be asynchronously inflated by a thread that
+        // does not own the Java Monitor.
+        ObjectMonitor * m = mark->monitor();
+        assert(((oop)(m->object()))->mark() == mark, "invariant");
+        assert(m->is_entered(THREAD), "invariant");
+      }
+    }
+#endif
+    return;
+  }
+
+  if (mark == (markOop) lock) {
+    // If the object is stack-locked by the current thread, try to
+    // swing the displaced header from the BasicLock back to the mark.
+    assert(dhw->is_neutral(), "invariant");
+    if (object->cas_set_mark(dhw, mark) == mark) {
+      TEVENT(fast_exit: release stack-lock);
+      return;
+    }
+  }
+
+  // We have to take the slow-path of possible inflation and then exit.
+  ObjectSynchronizer::inflate(THREAD,
+                              object(),
+                              inflate_cause_vm_internal)->exit(true, THREAD);
+}
 // -----------------------------------------------------------------------------
 // Interpreter/Compiler Slow Case
 // This routine is used to handle interpreter/compiler slow case
@@ -372,6 +431,10 @@ void ObjectSynchronizer::slow_enter(Handle obj, BasicLock* lock, TRAPS) {
 // failed in the interpreter/compiler code. Simply use the heavy
 // weight monitor should be ok, unless someone find otherwise.
 void ObjectSynchronizer::slow_exit(oop object, BasicLock* lock, TRAPS) {
+  fast_exit(object, lock, THREAD);
+}
+
+void ObjectSynchronizer::slow_exit(Handle object, BasicLock* lock, TRAPS) {
   fast_exit(object, lock, THREAD);
 }
 
@@ -463,6 +526,8 @@ ObjectLocker::ObjectLocker(Handle obj, Thread* thread, bool doLock) {
     TEVENT(ObjectLocker);
 
     ObjectSynchronizer::fast_enter(_obj, &_lock, false, _thread);
+
+    assert(!EnableSteal || thread == Thread::current(), "must not be stealed");
   }
 }
 
@@ -518,7 +583,6 @@ void ObjectSynchronizer::notify(Handle obj, TRAPS) {
     BiasedLocking::revoke_and_rebias(obj, false, THREAD);
     assert(!obj->mark()->has_bias_pattern(), "biases should be revoked by now");
   }
-
   markOop mark = obj->mark();
   if (mark->has_locker() && THREAD->is_lock_owned((address)mark->locker())) {
     return;
@@ -826,7 +890,9 @@ bool ObjectSynchronizer::current_thread_holds_lock(JavaThread* thread,
     assert(!h_obj->mark()->has_bias_pattern(), "biases should be revoked by now");
   }
 
-  assert(thread == JavaThread::current(), "Can only be called on current thread");
+  assert(thread == JavaThread::current() ||
+      UseWispMonitor && thread == WispThread::current(JavaThread::current()),
+      "Can only be called on current thread");
   oop obj = h_obj();
 
   markOop mark = ReadStableMark(obj);
@@ -1881,7 +1947,7 @@ class ReleaseJavaMonitorsClosure: public MonitorClosure {
 void ObjectSynchronizer::release_monitors_owned_by_thread(TRAPS) {
   assert(THREAD == JavaThread::current(), "must be current Java thread");
   NoSafepointVerifier nsv;
-  ReleaseJavaMonitorsClosure rjmc(THREAD);
+  ReleaseJavaMonitorsClosure rjmc(UseWispMonitor ? WispThread::current(THREAD) : THREAD);
   Thread::muxAcquire(&gListLock, "release_monitors_owned_by_thread");
   ObjectSynchronizer::monitors_iterate(&rjmc);
   Thread::muxRelease(&gListLock);
@@ -1977,3 +2043,58 @@ int ObjectSynchronizer::verify_objmon_isinpool(ObjectMonitor *monitor) {
 }
 
 #endif
+
+void SystemDictObjMonitor::lock(BasicLock* lock, TRAPS) {
+  assert(UseWispMonitor, "SystemDictObjMonitor if only for UseWispMonitor");
+  if (!is_obj_lock()) {
+    _monitor->lock();
+    if (is_obj_lock()) {
+      // set_obj_lock has been called before we fetch the lock.
+      // now _monitor is Pointless. re-fetch the objectMonitor to
+      // satisfy the critical section semantics.
+      _monitor->unlock();
+      ObjectSynchronizer::fast_enter(Handle(THREAD, _obj), lock, false, THREAD);
+    }
+  } else {
+    ObjectSynchronizer::fast_enter(Handle(THREAD, _obj), lock, false, THREAD);
+  }
+}
+
+void SystemDictObjMonitor::unlock(BasicLock* lock, TRAPS) {
+  assert(UseWispMonitor, "SystemDictObjMonitor if only for UseWispMonitor");
+  if (!is_obj_lock()) {
+    _monitor->unlock();
+  } else {
+    ObjectSynchronizer::fast_exit(_obj, lock, THREAD);
+  }
+}
+
+void SystemDictObjMonitor::wait(BasicLock* lock, TRAPS) {
+  assert(UseWispMonitor, "SystemDictObjMonitor if only for UseWispMonitor");
+  if (!is_obj_lock()) {
+    _monitor->wait();
+    if (is_obj_lock()) {
+      _monitor->unlock();
+      ObjectSynchronizer::fast_enter(Handle(THREAD, _obj), lock, false, THREAD);
+    }
+  } else {
+    ObjectSynchronizer::wait(Handle(THREAD, _obj), 0, THREAD);
+  }
+}
+
+void SystemDictObjMonitor::notify_all(TRAPS) {
+  assert(UseWispMonitor, "SystemDictObjMonitor if only for UseWispMonitor");
+  if (!is_obj_lock()) {
+    _monitor->notify_all();
+  } else {
+    ObjectSynchronizer::notifyall(Handle(THREAD, _obj), THREAD);
+  }
+}
+
+void SystemDictObjMonitor::set_obj_lock(oop obj, TRAPS) {
+  MutexLocker mu(_monitor, THREAD);
+  assert(UseWispMonitor, "UseWispMonitor if off");
+  assert(_obj == NULL, "_obj already been set");
+  _obj = obj;
+  _monitor->notify_all();
+}

@@ -128,6 +128,7 @@ module java.base {
     exports javax.security.auth.spi;
     exports javax.security.auth.x500;
     exports javax.security.cert;
+    exports com.alibaba.wisp.engine;
 
 
     // additional qualified exports may be inserted at build time

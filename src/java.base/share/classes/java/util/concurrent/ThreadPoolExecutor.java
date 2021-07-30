@@ -35,6 +35,10 @@
 
 package java.util.concurrent;
 
+import com.alibaba.wisp.engine.WispEngine;
+import com.alibaba.wisp.engine.WispWorkerContainer;
+import jdk.internal.misc.SharedSecrets;
+
 import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
@@ -1299,6 +1303,108 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         this.keepAliveTime = unit.toNanos(keepAliveTime);
         this.threadFactory = threadFactory;
         this.handler = handler;
+        if (WispEngine.transparentWispSwitch() && WispEngine.enableThreadAsWisp()) {
+            this.wispTaskLimit = estimateWispTaskLimit();
+        }
+    }
+
+    private Boolean putToLocalEngine;
+
+    boolean putToCurrentEngine() {
+        if (putToLocalEngine == null)
+            putToLocalEngine = SharedSecrets.getWispEngineAccess().ifPutToCurrentEngine();
+        return putToLocalEngine;
+    }
+
+    private Boolean putToManagedThread;
+
+    private boolean ifPutToManagedThread() {
+        if (putToManagedThread == null)
+            putToManagedThread = SharedSecrets.getWispEngineAccess().ifPutToManagedThread();
+        return putToManagedThread;
+    }
+
+    private String threadNamePrefix;
+    private AtomicInteger nextThreadId = new AtomicInteger();
+    private String getNextThreadName() {
+        if (threadNamePrefix == null) {
+            if (getThreadFactory() == null) {
+                threadNamePrefix = "tp-coroutine";
+            } else {
+                threadNamePrefix = getThreadFactory().newThread(() -> {}).getName().replaceAll("-?\\d+$", "");
+            }
+        }
+        return threadNamePrefix + "-" + (nextThreadId.getAndIncrement() & 0xFFFFFFF) % getMaximumPoolSize();
+    }
+
+    /**
+     * running wisp task counter for this {@code ThreadPoolExecutor}
+     */
+    private final AtomicInteger runningWispTaskCount = new AtomicInteger(0);
+
+    private static int accumulate(int v1, int v2) {
+        assert v1 > 0 && v2 > 0;
+        if (v1 >= Integer.MAX_VALUE - v2) {
+            return Integer.MAX_VALUE;
+        }
+        return v1 + v2;
+    }
+
+    private int wispTaskLimit = Integer.MAX_VALUE;
+
+    private int estimateLinkedBlockingDequeLimit(LinkedBlockingDeque<?> queue) {
+        int capacity = queue.getCapacity();
+        return accumulate(capacity, getMaximumPoolSize());
+    }
+
+    private int estimateLinkedBlockingQueueLimit(LinkedBlockingQueue<?> queue) {
+        int capacity = queue.getCapacity();
+        return accumulate(capacity, getMaximumPoolSize());
+    }
+
+    private int estimateArrayBlockingQueueLimit(ArrayBlockingQueue<?> queue) {
+        return accumulate(queue.items.length, getMaximumPoolSize());
+    }
+
+    /**
+     * estimate wisp task limit for this {@code ThreadPoolExecutor} according to {@code ThreadPoolExecutor#workQueue}
+     * @return estimated wisp task limit
+     */
+    private int estimateWispTaskLimit() {
+        if (workQueue instanceof LinkedBlockingDeque) {
+            return estimateLinkedBlockingDequeLimit((LinkedBlockingDeque) workQueue);
+        } else if (workQueue instanceof LinkedBlockingQueue) {
+            return estimateLinkedBlockingQueueLimit((LinkedBlockingQueue) workQueue);
+        } else if (workQueue instanceof ArrayBlockingQueue) {
+            return estimateArrayBlockingQueueLimit((ArrayBlockingQueue) workQueue);
+        } else if (workQueue instanceof SynchronousQueue ) {
+            return getMaximumPoolSize();
+        } else if (workQueue instanceof DelayQueue || workQueue instanceof PriorityBlockingQueue
+                || workQueue instanceof LinkedTransferQueue) {
+            return Integer.MAX_VALUE;
+        }
+        // default value
+        return Integer.MAX_VALUE;
+    }
+
+    private long getWispTaskLimit() {
+        return wispTaskLimit;
+    }
+
+    /**
+     * Increment running wisp task counter if this {@code ThreadPoolExecutor} is not full.
+     * @return true if successful.
+     */
+    private boolean incrementWispTaskCount() {
+        for (;;) {
+            int cur = runningWispTaskCount.get();
+            if (cur >= getWispTaskLimit()) {
+                return false;
+            }
+            if (runningWispTaskCount.compareAndSet(cur, cur + 1)) {
+                return true;
+            }
+        }
     }
 
     /**
@@ -1318,6 +1424,36 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     public void execute(Runnable command) {
         if (command == null)
             throw new NullPointerException();
+
+        if (WispEngine.transparentWispSwitch() && WispEngine.enableThreadAsWisp()) {
+            Runnable wrappedCommand = command;
+            if (SharedSecrets.getWispEngineAccess().useThreadPoolLimit()
+                    && (putToCurrentEngine() || ifPutToManagedThread())) {
+                if (!incrementWispTaskCount()) {
+                    reject(command);
+                    return;
+                }
+                // wrap origin task
+                wrappedCommand = () -> {
+                    try {
+                        command.run();
+                    } finally {
+                        int restTasks = runningWispTaskCount.decrementAndGet();
+                        assert restTasks >= 0;
+                    }
+                };
+
+            }
+            if (putToCurrentEngine()) {
+                SharedSecrets.getWispEngineAccess().dispatch(wrappedCommand, getNextThreadName());
+                return;
+            } else if (ifPutToManagedThread()) {
+                String usage = SharedSecrets.getWispEngineAccess().getThreadUsage(
+                        SharedSecrets.getJavaLangAccess().currentThread0().getName());
+                WispWorkerContainer.INSTANCE.dispatch(usage, getNextThreadName(), wrappedCommand, null);
+                return;
+            }
+        }
         /*
          * Proceed in 3 steps:
          *

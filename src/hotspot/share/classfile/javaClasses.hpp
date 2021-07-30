@@ -360,6 +360,7 @@ class java_lang_Thread : AllStatic {
   static int _tid_offset;
   static int _thread_status_offset;
   static int _park_blocker_offset;
+  static int _park_event_offset;
 
   static void compute_offsets();
 
@@ -401,6 +402,12 @@ class java_lang_Thread : AllStatic {
   // Blocker object responsible for thread parking
   static oop park_blocker(oop java_thread);
 
+  // Pointer to type-stable park handler, encoded as jlong.
+  // Should be set when apparently null
+  // For details, see unsafe.cpp Unsafe_Unpark
+  static jlong park_event(oop java_thread);
+  static bool set_park_event(oop java_thread, jlong ptr);
+
   // Java Thread Status for JVMTI and M&M use.
   // This thread status info is saved in threadStatus field of
   // java.lang.Thread java class.
@@ -438,6 +445,8 @@ class java_lang_Thread : AllStatic {
   static ThreadStatus get_thread_status(oop java_thread_oop);
 
   static const char*  thread_status_name(oop java_thread_oop);
+
+  static int thread_status_offset() { return _thread_status_offset; }
 
   // Debugging
   friend class JavaClasses;
@@ -1587,6 +1596,37 @@ public:
 
   // Debugging
   friend class JavaClasses;
+};
+
+class com_alibaba_wisp_engine_WispEngine: AllStatic {
+private:
+  static int _isInCritical_offset;
+public:
+  static bool in_critical(oop obj);
+
+  static void compute_offsets();
+};
+
+class com_alibaba_wisp_engine_WispTask: AllStatic {
+private:
+  static int _jvmParkStatus_offset;
+  static int _id_offset;
+  static int _threadWrapper_offset;
+  static int _interrupted_offset;
+  static int _activeCount_offset;
+  static int _stealCount_offset;
+  static int _stealFailureCount_offset;
+public:
+  static void set_jvmParkStatus(oop obj, jint status);
+  static int  get_id(oop obj);
+  static oop  get_threadWrapper(oop obj);
+  static int  get_interrupted(oop obj);
+  static void set_interrupted(oop obj, jint interrupted);
+  static int  get_activeCount(oop obj);
+  static int  get_stealCount(oop obj);
+  static int  get_stealFailureCount(oop obj);
+
+  static void compute_offsets();
 };
 
 // Interface to hard-coded offset checking

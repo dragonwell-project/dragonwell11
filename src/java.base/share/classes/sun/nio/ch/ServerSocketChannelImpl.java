@@ -48,6 +48,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.alibaba.wisp.engine.WispEngine;
+import jdk.internal.misc.SharedSecrets;
+import jdk.internal.misc.WispEngineAccess;
 import sun.net.NetHooks;
 import sun.net.ext.ExtendedSocketOptions;
 import static sun.net.ext.ExtendedSocketOptions.SOCK_STREAM;
@@ -60,6 +63,8 @@ class ServerSocketChannelImpl
     extends ServerSocketChannel
     implements SelChImpl
 {
+    private static final WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
+
     // Used to make native close and configure calls
     private static NativeDispatcher nd;
 
@@ -279,12 +284,29 @@ class ServerSocketChannelImpl
             InetSocketAddress[] isaa = new InetSocketAddress[1];
 
             boolean blocking = isBlocking();
+
+            final boolean wispAndBlocking = WispEngine.transparentWispSwitch() && blocking;
+
             try {
                 begin(blocking);
-                do {
+                if (wispAndBlocking) {
+                    IOUtil.configureBlocking(fd, false);
+                }
+                for (;;) {
                     n = accept(this.fd, newfd, isaa);
-                } while (n == IOStatus.INTERRUPTED && isOpen());
+                    if ((n == IOStatus.INTERRUPTED) && isOpen())
+                        continue;
+                    if (wispAndBlocking && n < 0) {
+                        WEA.registerEvent(this, SelectionKey.OP_ACCEPT);
+                        WEA.park(-1);
+                        continue;
+                    }
+                    break;
+                }
             } finally {
+                if (wispAndBlocking) {
+                    IOUtil.configureBlocking(fd, true);
+                }
                 end(blocking, n > 0);
                 assert IOStatus.check(n);
             }

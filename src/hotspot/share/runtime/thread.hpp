@@ -95,6 +95,7 @@ class WorkerThread;
 
 class Coroutine;
 class CoroutineStack;
+class WispThread;
 
 // Class hierarchy
 // - Thread
@@ -407,6 +408,7 @@ class Thread: public ThreadShadow {
   // Testers
   virtual bool is_VM_thread()       const            { return false; }
   virtual bool is_Java_thread()     const            { return false; }
+  virtual bool is_Wisp_thread()     const            { return false; }
   virtual bool is_Compiler_thread() const            { return false; }
   virtual bool is_Code_cache_sweeper_thread() const  { return false; }
   virtual bool is_service_thread() const             { return false; }
@@ -930,7 +932,6 @@ class JavaThread: public Thread {
   bool           _on_thread_list;                // Is set when this JavaThread is added to the Threads list
   oop            _threadObj;                     // The Java level thread object
 
-#ifdef ASSERT
  private:
   int _java_call_counter;
 
@@ -942,7 +943,6 @@ class JavaThread: public Thread {
     _java_call_counter--;
   }
  private:  // restore original namespace restriction
-#endif  // ifdef ASSERT
 
 #ifndef PRODUCT
  public:
@@ -985,6 +985,7 @@ class JavaThread: public Thread {
   // Used to pass back results to the interpreter or generated code running Java code.
   oop           _vm_result;    // oop result is GC-preserved
   Metadata*     _vm_result_2;  // non-oop result
+  oop           _vm_result_for_wisp;  // this oop result is only for java call in _monitorexit
 
   // See ReduceInitialCardMarks: this holds the precise space interval of
   // the most recent slow path allocation for which compiled code has
@@ -1139,6 +1140,7 @@ class JavaThread: public Thread {
   CoroutineStack*   _coroutine_stack_list;
   Coroutine*        _coroutine_list;
   Coroutine*        _current_coroutine;
+  bool              _wisp_preempt;
 
   intptr_t          _coroutine_temp;
 
@@ -1148,12 +1150,15 @@ class JavaThread: public Thread {
   CoroutineStack*& coroutine_stack_list()        { return _coroutine_stack_list; }
   Coroutine*& coroutine_list()                   { return _coroutine_list; }
   Coroutine* current_coroutine()                 { return _current_coroutine; }
+  void set_current_coroutine(Coroutine *coro)    { _current_coroutine = coro; }
+  void set_wisp_preempt(bool b)                  { _wisp_preempt = b; }
 
   static ByteSize coroutine_temp_offset()        { return byte_offset_of(JavaThread, _coroutine_temp); }
   static ByteSize current_coroutine_offset()     { return byte_offset_of(JavaThread, _current_coroutine); }
-
+  static ByteSize wisp_preempt_offset()          { return byte_offset_of(JavaThread, _wisp_preempt); }
   void initialize_coroutine_support();
 
+  bool is_expected_thread_entry(ThreadFunction entry_point) { return _entry_point == entry_point; }
  private:
 
 #ifndef PRODUCT
@@ -1253,7 +1258,7 @@ class JavaThread: public Thread {
 #if !(defined(PPC64) || defined(AARCH64))
   JavaThreadState thread_state() const           { return _thread_state; }
   void set_thread_state(JavaThreadState s)       {
-    assert(current_or_null() == NULL || current_or_null() == this,
+    assert(UseWispMonitor || current_or_null() == NULL || current_or_null() == this,
            "state change should only be called by the current thread");
     _thread_state = s;
   }
@@ -1399,7 +1404,7 @@ class JavaThread: public Thread {
   // Special method to handle a pending external suspend request
   // when a suspend equivalent condition lifts.
   bool handle_special_suspend_equivalent_condition() {
-    assert(is_suspend_equivalent(),
+    assert(is_suspend_equivalent() || UseWispMonitor,
            "should only be called in a suspend equivalence condition");
     MutexLockerEx ml(SR_lock(), Mutex::_no_safepoint_check_flag);
     bool ret = is_external_suspend();
@@ -1502,6 +1507,8 @@ class JavaThread: public Thread {
 
   Metadata*    vm_result_2() const               { return _vm_result_2; }
   void set_vm_result_2  (Metadata* x)          { _vm_result_2   = x; }
+  oop  vm_result_for_wisp() const                { return _vm_result_for_wisp; }
+  void set_vm_result_for_wisp  (oop x)           { _vm_result_for_wisp   = x; }
 
   MemRegion deferred_card_mark() const           { return _deferred_card_mark; }
   void set_deferred_card_mark(MemRegion mr)      { _deferred_card_mark = mr;   }
@@ -1742,6 +1749,7 @@ class JavaThread: public Thread {
   static ByteSize callee_target_offset()         { return byte_offset_of(JavaThread, _callee_target); }
   static ByteSize vm_result_offset()             { return byte_offset_of(JavaThread, _vm_result); }
   static ByteSize vm_result_2_offset()           { return byte_offset_of(JavaThread, _vm_result_2); }
+  static ByteSize vm_result_for_wisp_offset()    { return byte_offset_of(JavaThread, _vm_result_for_wisp ); }
   static ByteSize thread_state_offset()          { return byte_offset_of(JavaThread, _thread_state); }
   static ByteSize saved_exception_pc_offset()    { return byte_offset_of(JavaThread, _saved_exception_pc); }
   static ByteSize osthread_offset()              { return byte_offset_of(JavaThread, _osthread); }
@@ -1761,9 +1769,7 @@ class JavaThread: public Thread {
   static ByteSize stack_guard_state_offset()     { return byte_offset_of(JavaThread, _stack_guard_state); }
   static ByteSize reserved_stack_activation_offset() { return byte_offset_of(JavaThread, _reserved_stack_activation); }
   static ByteSize suspend_flags_offset()         { return byte_offset_of(JavaThread, _suspend_flags); }
-#ifdef ASSERT
   static ByteSize java_call_counter_offset()     { return byte_offset_of(JavaThread, _java_call_counter); }
-#endif
 
   static ByteSize do_not_unlock_if_synchronized_offset() { return byte_offset_of(JavaThread, _do_not_unlock_if_synchronized); }
   static ByteSize should_post_on_exceptions_flag_offset() {
@@ -1928,6 +1934,7 @@ class JavaThread: public Thread {
   PrivilegedElement* privileged_stack_top() const       { return _privileged_stack_top; }
   void set_privileged_stack_top(PrivilegedElement *e)   { _privileged_stack_top = e; }
   void register_array_for_gc(GrowableArray<oop>* array) { _array_for_gc = array; }
+  static ByteSize privileged_stack_top_offset()         { return byte_offset_of(JavaThread, _privileged_stack_top); }
 
  public:
   // Thread local information maintained by JVMTI.

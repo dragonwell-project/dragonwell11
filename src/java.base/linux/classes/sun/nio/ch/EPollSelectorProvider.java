@@ -25,6 +25,10 @@
 
 package sun.nio.ch;
 
+import com.alibaba.wisp.engine.WispEngine;
+import com.alibaba.wisp.util.io.SleepSelector;
+import jdk.internal.misc.SharedSecrets;
+
 import java.io.IOException;
 import java.nio.channels.*;
 import java.nio.channels.spi.*;
@@ -33,6 +37,15 @@ public class EPollSelectorProvider
     extends SelectorProviderImpl
 {
     public AbstractSelector openSelector() throws IOException {
+        AbstractSelector sel = new EPollSelectorImpl(this);
+        if (WispEngine.transparentWispSwitch() &&
+                SharedSecrets.getWispEngineAccess().ifSpinSelector()) {
+            sel = new SleepSelector(sel);
+        }
+        return sel;
+    }
+
+    public AbstractSelector openSelector0() throws IOException {
         return new EPollSelectorImpl(this);
     }
 

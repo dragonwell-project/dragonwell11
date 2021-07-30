@@ -183,6 +183,16 @@ $(eval $(call SetupCopyFiles, COPY_NET_PROPERTIES, \
 
 TARGETS += $(COPY_NET_PROPERTIES)
 
+################################################################################
+
+$(eval $(call SetupCopyFiles, COPY_WISP_PROPERTIES, \
+    FILES := $(TOPDIR)/src/java.base/share/conf/wisp.properties, \
+    DEST := $(CONF_DST_DIR), \
+))
+
+TARGETS += $(COPY_WISP_PROPERTIES)
+
+
 ifeq ($(OPENJDK_TARGET_OS), solaris)
   $(eval $(call SetupCopyFiles, COPY_SDP_CONF, \
       FILES := $(TOPDIR)/src/java.base/$(OPENJDK_TARGET_OS_TYPE)/conf/sdp/sdp.conf.template, \
