@@ -40,8 +40,21 @@ Special thanks to those who have made contributions to Alibaba's internal JDK bu
 
 Technologies included in Alibaba Dragonwell have been published in following papers
 
-* ICSE'19：https://2019.icse-conferences.org/event/icse-2019-technical-papers-safecheck-safety-enhancement-of-java-unsafe-api
+## 2021
 
-* ICPE'18: https://dl.acm.org/citation.cfm?id=3186295
+- Yifei Zhang, Tianxiao Gu, Xiaolin Zheng, Lei Yu, Wei Kuai, Sanhong Li [**Towards a Serverless Java Runtime**](https://ase21-industry.hotcrp.com/doc/ase21-industry-paper7.pdf?cap=07ax_GWBvNW-0U) In _ASE 2021 Industry Showcase_, to appear
 
-* ICSE'18 SEIP  https://www.icse2018.org/event/icse-2018-software-engineering-in-practice-java-performance-troubleshooting-and-optimization-at-alibaba
+## 2020
+
+- Mingyu Wu, Ziming Zhao, Yanfei Yang, Haoyu Li, Haibo Chen, Binyu Zang, Haibing Guan, Sanhong Li, Chuansheng Lu, Tongbao Zhang [**Platinum: A CPU-Efficient Concurrent Garbage Collector for Tail-Reduction of Interactive Services**](https://www.usenix.org/system/files/atc20-wu-mingyu.pdf) In _USENIX ATC 2020_, pp. 159&ndash;172
+
+## 2019
+
+- Shiyou Huang, Jianmei Guo, Sanhong Li, Xiang Li, Yumin Qi, Kingsum Chow, Jeff Huang [**SafeCheck: Safety Enhancement of Java Unsafe API**](https://2019.icse-conferences.org/details/icse-2019-Technical-Papers/96/SafeCheck-Safety-Enhancement-of-Java-Unsafe-API) In _ICSE 2019_, pp. 889&ndash;899
+
+## 2018
+
+- Fangxi Yin, Denghui Dong, Chuansheng Lu, Tongbao Zhang, Sanhong Li, Jianmei Guo, Kingsum Chow [**Cloud-Scale Java Profiling at Alibaba**](https://dl.acm.org/doi/10.1145/3185768.3186295) In _ICPE Companion 2018_, pp. 99&ndash;100
+
+- Fangxi Yin, Denghui Dong, Sanhong Li, Jianmei Guo, Kingsum Chow [**Java Performance Troubleshooting and Optimization at Alibaba**](https://www.icse2018.org/details/icse-2018-Software-Engineering-in-Practice/4/Java-Performance-Troubleshooting-and-Optimization-at-Alibaba) In _ICSE-SEIP 2018_, pp. 11&ndash;12
+
