@@ -391,6 +391,7 @@ CoroutineStack* CoroutineStack::create_thread_stack(JavaThread* thread) {
   stack->_stack_size = thread->stack_size();
   stack->_last_sp = NULL;
   stack->_default_size = false;
+  stack->_stack_overflow_limit = thread->stack_overflow_limit();
   return stack;
 }
 
@@ -420,16 +421,17 @@ CoroutineStack* CoroutineStack::create_stack(JavaThread* thread, intptr_t size/*
   stack->_stack_size = stack->_virtual_space.committed_size();
   stack->_last_sp = NULL;
   stack->_default_size = default_size;
+  size_t stack_pages_len = (StackYellowPages + StackRedPages + StackReservedPages) * os::vm_page_size();
+  stack->_stack_overflow_limit = stack->stack_base() - stack->stack_size() + stack_pages_len;
 
   if (os::uses_stack_guard_pages()) {
     address low_addr = stack->stack_base() - stack->stack_size();
-    size_t len = (StackYellowPages + StackRedPages + StackReservedPages) * os::vm_page_size();
 
     bool allocate = os::must_commit_stack_guard_pages();
 
-    if (!os::guard_memory((char *) low_addr, len)) {
+    if (!os::guard_memory((char *) low_addr, stack_pages_len)) {
       warning("Attempt to protect stack guard pages failed.");
-      if (os::uncommit_memory((char *) low_addr, len)) {
+      if (os::uncommit_memory((char *) low_addr, stack_pages_len)) {
         warning("Attempt to deallocate stack guard pages failed.");
       }
     }

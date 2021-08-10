@@ -241,7 +241,6 @@ public class CoroutineSupport {
         if (forward == null) {
             forward = getNextCoroutine(old.nativeCoroutine);
         }
-        assert forward == threadCoroutine : "switch to target must be thread coroutine";
         currentCoroutine = forward;
         unlockLater(forward);
         switchToAndTerminate(old, forward);

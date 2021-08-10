@@ -4231,6 +4231,9 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
       __ movl(temp2, Address(target_stack, CoroutineStack::stack_size_offset()));
       __ movl(Address(thread, JavaThread::stack_size_offset()), temp2);
 
+      __ movptr(temp2, Address(target_stack, CoroutineStack::stack_overflow_limit_offset()));
+      __ movptr(Address(thread, JavaThread::stack_overflow_limit_offset()), temp2);
+
       // update JavaThread::_reserved_stack_activation for @ReservedStackAccess support
       __ movptr(Address(thread, JavaThread::reserved_stack_activation_offset()), temp);
     }

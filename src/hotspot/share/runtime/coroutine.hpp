@@ -274,6 +274,8 @@ private:
 
   address         _last_sp;
 
+  address         _stack_overflow_limit;
+
   // objects of this type can only be created via static functions
   CoroutineStack(intptr_t size) : _reserved_space(size) { }
   virtual ~CoroutineStack() { }
@@ -305,6 +307,7 @@ public:
   static ByteSize stack_base_offset()         { return byte_offset_of(CoroutineStack, _stack_base); }
   static ByteSize stack_size_offset()         { return byte_offset_of(CoroutineStack, _stack_size); }
   static ByteSize last_sp_offset()            { return byte_offset_of(CoroutineStack, _last_sp); }
+  static ByteSize stack_overflow_limit_offset()  { return byte_offset_of(CoroutineStack, _stack_overflow_limit); }
 };
 
 template<class T> void DoublyLinkedList<T>::remove_from_list(pointer& list) {
