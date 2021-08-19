@@ -57,6 +57,7 @@ class WispConfiguration {
     static final int WISP_CONTROL_GROUP_CFS_PERIOD;
 
     private static List<String> THREAD_AS_WISP_BLACKLIST;
+    private static List<String> THREAD_AS_WISP_WHITELIST;
 
     static {
         Properties p = java.security.AccessController.doPrivileged(
@@ -133,10 +134,6 @@ class WispConfiguration {
                 ENABLE_THREAD_AS_WISP, "-Dcom.alibaba.wisp.enableThreadAsWisp=true");
         checkDependency(CARRIER_AS_POLLER, "-Dcom.alibaba.wisp.useCarrierAsPoller=true",
                 ALL_THREAD_AS_WISP, "-Dcom.alibaba.wisp.allThreadAsWisp=true");
-        if (ENABLE_THREAD_AS_WISP && !ALL_THREAD_AS_WISP) {
-            throw new IllegalArgumentException("shift thread model by stack configuration is no longer supported," +
-                    " use -XX:+UseWisp2 instead");
-        }
     }
 
     private static void checkDependency(boolean cond, String condStr, boolean preRequire, String preRequireStr) {
@@ -205,7 +202,7 @@ class WispConfiguration {
             }
         }
         THREAD_AS_WISP_BLACKLIST = parseListParameter(p, confProp, "com.alibaba.wisp.threadAsWisp.black");
-
+        THREAD_AS_WISP_WHITELIST = parseListParameter(p, confProp, "com.alibaba.wisp.threadAsWisp.white");
     }
 
     private static final int UNLOADED = 0, LOADING = 1, LOADED = 2;
@@ -229,5 +226,11 @@ class WispConfiguration {
         ensureBizConfigLoaded();
         assert THREAD_AS_WISP_BLACKLIST != null;
         return THREAD_AS_WISP_BLACKLIST;
+    }
+
+    static List<String> getThreadAsWispWhitelist() {
+        ensureBizConfigLoaded();
+        assert THREAD_AS_WISP_WHITELIST != null;
+        return THREAD_AS_WISP_WHITELIST;
     }
 }
