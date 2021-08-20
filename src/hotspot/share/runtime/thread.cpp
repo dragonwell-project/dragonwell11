@@ -2076,8 +2076,6 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
       !is_hidden_from_external_view() &&
       // SurrogateLockerThread and ServiceThread are "is_hidden_from_external_view()"
       !is_jvmti_agent_thread()) {
-    assert(!UseWispMonitor || destroy_vm ||
-        java_lang_Thread::park_event(_threadObj), "park_event should been set");
     EXCEPTION_MARK;
     JavaValue result(T_VOID);
     JavaCalls::call_virtual(&result,

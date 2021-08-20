@@ -377,7 +377,6 @@ private:
 
   WispThread(Coroutine *c): _coroutine(c), _thread(c->thread()), _is_proxy_unpark(false) {
     set_osthread(new OSThread(NULL, NULL));
-    set_thread_state(_thread_in_vm);
     _unpark_status = 0;
     _os_park_reason = 0;
     _has_exception = false;

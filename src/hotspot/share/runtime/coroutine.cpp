@@ -117,6 +117,9 @@ Coroutine* Coroutine::create_thread_coroutine(JavaThread* thread, CoroutineStack
 #endif
   coro->_privileged_stack_top = NULL;
   coro->_wisp_thread  = UseWispMonitor ? new WispThread(coro) : NULL;
+  if (UseWispMonitor) {
+    coro->_wisp_thread->set_thread_state(_thread_in_vm);
+  }
   coro->_wisp_engine  = NULL;
   coro->_wisp_task    = NULL;
   coro->_wisp_task_id = WISP_ID_NOT_SET;
@@ -166,6 +169,9 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
 #endif
   coro->_privileged_stack_top = NULL;
   coro->_wisp_thread  = UseWispMonitor ? new WispThread(coro) : NULL;
+  if (UseWispMonitor) {
+    coro->_wisp_thread->set_thread_state(_thread_in_vm);
+  }
   coro->_wisp_engine  = NULL;
   coro->_wisp_task    = NULL;
   coro->_wisp_task_id = WISP_ID_NOT_SET;
@@ -1291,8 +1297,6 @@ void Coroutine::initialize_coroutine_support(JavaThread* thread) {
 
   if (UseWispMonitor) {
     assert(thread->parker(), "sanity check");
-    java_lang_Thread::set_park_event(
-        thread->threadObj(), (uintptr_t) thread->parker());
   }
 
   EXCEPTION_MARK

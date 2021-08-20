@@ -369,7 +369,6 @@ class java_lang_Thread : AllStatic {
   static int _tid_offset;
   static int _thread_status_offset;
   static int _park_blocker_offset;
-  static int _park_event_offset ;
   static int _resourceContainer_offset;
 
   static void compute_offsets();

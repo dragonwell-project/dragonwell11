@@ -345,10 +345,6 @@ void JavaCalls::call(JavaValue* result, const methodHandle& method, JavaCallArgu
   // Check if we need to wrap a potential OS exception handler around thread
   // This is used for e.g. Win32 structured exception handlers
   assert(THREAD->is_Java_thread(), "only JavaThreads can make JavaCalls");
-  assert(!UseWispMonitor || !is_init_completed() ||
-      ((JavaThread*) THREAD)->is_attaching_via_jni() ||
-      java_lang_Thread::park_event(((JavaThread*) THREAD)->threadObj()),
-      "park_event need to be set before calling java");
   // Need to wrap each and every time, since there might be native code down the
   // stack that has installed its own exception handlers
   os::os_exception_wrapper(call_helper, result, method, args, THREAD);

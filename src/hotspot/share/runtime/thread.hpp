@@ -1252,7 +1252,7 @@ class JavaThread: public Thread {
 #if !(defined(PPC64) || defined(AARCH64))
   JavaThreadState thread_state() const           { return _thread_state; }
   void set_thread_state(JavaThreadState s)       {
-    assert(UseWispMonitor || current_or_null() == NULL || current_or_null() == this,
+    assert((UseWispMonitor && is_Wisp_thread()) || current_or_null() == NULL || current_or_null() == this,
            "state change should only be called by the current thread");
     _thread_state = s;
   }
