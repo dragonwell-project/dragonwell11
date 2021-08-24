@@ -16,10 +16,10 @@ import static jdk.testlibrary.Asserts.assertTrue;
 
 public class TestThreadAsWispWhiteList {
     public static void main(String[] args) throws Exception {
-        FutureTask<Boolean> future = new FutureTask<>(ThreadAsWispWhiteListTest::isRealThread);
+        FutureTask<Boolean> future = new FutureTask<>(TestThreadAsWispWhiteList::isRealThread);
         new Thread(future, "wisp-1").start();
         assertFalse(future.get());
-        future = new FutureTask<>(ThreadAsWispWhiteListTest::isRealThread);
+        future = new FutureTask<>(TestThreadAsWispWhiteList::isRealThread);
         new Thread(future, "thread-1").start();
         assertTrue(future.get());
     }

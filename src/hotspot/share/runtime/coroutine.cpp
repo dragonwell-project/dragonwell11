@@ -740,7 +740,7 @@ void WispThread::park(long millis, const ObjectWaiter* ow) {
   assert (!jt->has_pending_exception(), "should not have any pending exception");
   if (jt->has_async_exception()) {
     assert(UseWisp2 && Wisp2ThreadStop, "pre-condition");
-    assert(jt->has_thread_death_exception(), "must be wisp_thread_death_exception");
+    assert(jt->has_aync_thread_death_exception(), "must be wisp_thread_death_exception");
     // JavaCalls will be skipped if current thread has a pending exception
     // mannually clear all async exceptions before calling into java
     jt->clear_aync_thread_death_exception();
