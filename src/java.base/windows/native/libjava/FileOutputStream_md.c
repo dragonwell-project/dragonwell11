@@ -61,7 +61,7 @@ Java_java_io_FileOutputStream_open0(JNIEnv *env, jobject this,
 }
 
 JNIEXPORT void JNICALL
-Java_java_io_FileOutputStream_write(JNIEnv *env, jobject this, jint byte, jboolean append) {
+Java_java_io_FileOutputStream_write0(JNIEnv *env, jobject this, jint byte, jboolean append) {
     writeSingle(env, this, byte, append, fos_fd);
 }
 

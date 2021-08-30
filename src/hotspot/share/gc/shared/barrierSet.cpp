@@ -26,6 +26,7 @@
 #include "gc/shared/barrierSet.hpp"
 #include "gc/shared/barrierSetAssembler.hpp"
 #include "runtime/thread.hpp"
+#include "runtime/coroutine.hpp"
 #include "utilities/macros.hpp"
 
 BarrierSet* BarrierSet::_barrier_set = NULL;
@@ -37,7 +38,12 @@ void BarrierSet::set_barrier_set(BarrierSet* barrier_set) {
   // The barrier set was not initialized when the this thread (the main thread)
   // was created, so the call to BarrierSet::on_thread_create() had to be deferred
   // until we have a barrier set. Now we have a barrier set, so we make the call.
-  _barrier_set->on_thread_create(Thread::current());
+  Thread *thread = Thread::current();
+  _barrier_set->on_thread_create(thread);
+  if (UseWispMonitor) {
+    WispThread* wisp_thread = WispThread::current(thread);
+    _barrier_set->on_thread_create(wisp_thread);
+  }
 }
 
 // Called from init.cpp

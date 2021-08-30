@@ -73,6 +73,7 @@ public class strace007 {
     static final int SLEEP_TIME = 50;
     static final String[] EXPECTED_METHODS = {
             "java.lang.Thread.sleep",
+            "java.lang.Thread.sleep0",
             "nsk.stress.strace.strace007Thread.run",
             "nsk.stress.strace.strace007Thread.recursiveMethod"
     };

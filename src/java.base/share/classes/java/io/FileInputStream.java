@@ -26,6 +26,9 @@
 package java.io;
 
 import java.nio.channels.FileChannel;
+
+
+import jdk.internal.misc.SharedSecrets;
 import sun.nio.ch.FileChannelImpl;
 
 
@@ -228,7 +231,11 @@ class FileInputStream extends InputStream
      * @exception  IOException  if an I/O error occurs.
      */
     public int read() throws IOException {
-        return read0();
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> read0());
+        } else {
+            return read0();
+        }
     }
 
     private native int read0() throws IOException;
@@ -240,7 +247,15 @@ class FileInputStream extends InputStream
      * @param len the number of bytes that are written
      * @exception IOException If an I/O error has occurred.
      */
-    private native int readBytes(byte b[], int off, int len) throws IOException;
+    private native int readBytes0(byte b[], int off, int len) throws IOException;
+
+    private int readBytes(byte b[], int off, int len) throws IOException {
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> readBytes0(b, off, len));
+        } else {
+            return readBytes0(b, off, len);
+        }
+    }
 
     /**
      * Reads up to <code>b.length</code> bytes of data from this input

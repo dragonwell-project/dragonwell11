@@ -76,6 +76,7 @@
  */
 module java.base {
 
+    exports java.dyn;
     exports java.io;
     exports java.lang;
     exports java.lang.annotation;
@@ -127,6 +128,8 @@ module java.base {
     exports javax.security.auth.spi;
     exports javax.security.auth.x500;
     exports javax.security.cert;
+    exports com.alibaba.rcm;
+    exports com.alibaba.wisp.engine;
 
 
     // additional qualified exports may be inserted at build time
@@ -334,7 +337,8 @@ module java.base {
         java.prefs;
     exports sun.util.resources to
         jdk.localedata;
-
+    exports com.alibaba.rcm.internal to
+            jdk.management;
 
     // the service types defined by the APIs in this module
 

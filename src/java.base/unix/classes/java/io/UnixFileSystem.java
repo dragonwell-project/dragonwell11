@@ -26,6 +26,7 @@
 package java.io;
 
 import java.util.Properties;
+import jdk.internal.misc.SharedSecrets;
 
 import jdk.internal.util.StaticProperty;
 import sun.security.action.GetPropertyAction;
@@ -281,12 +282,25 @@ class UnixFileSystem extends FileSystem {
         // anyway.
         cache.clear();
         javaHomePrefixCache.clear();
-        return rename0(f1, f2);
+        if (SharedSecrets.getWispFileSyncIOAccess() != null && SharedSecrets.getWispFileSyncIOAccess().usingAsyncFileIO()) {
+            return asynchronousRename(this, f1, f2);
+        } else {
+            return rename0(f1, f2);
+        }
     }
     private native boolean rename0(File f1, File f2);
     public native boolean setLastModifiedTime(File f, long time);
     public native boolean setReadOnly(File f);
 
+    private boolean asynchronousRename(UnixFileSystem fs, File f1, File f2) {
+        boolean result = false;
+        try {
+            result = SharedSecrets.getWispFileSyncIOAccess().executeAsAsyncFileIO(() -> fs.rename0(f1, f2));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return result;
+    }
 
     /* -- Filesystem interface -- */
 

@@ -180,6 +180,9 @@
   nonstatic_field(JavaThread,                  _pending_transfer_to_interpreter,              bool)                                  \
   nonstatic_field(JavaThread,                  _jvmci_counters,                               jlong*)                                \
   nonstatic_field(JavaThread,                  _reserved_stack_activation,                    address)                               \
+  nonstatic_field(JavaThread,                  _current_coroutine,                            Coroutine*)                            \
+  nonstatic_field(Coroutine,                   _wisp_thread,                                  WispThread*)                           \
+  nonstatic_field(WispThread,                  _thread,                                       JavaThread*)                           \
                                                                                                                                      \
   static_field(java_lang_Class,                _klass_offset,                                 int)                                   \
   static_field(java_lang_Class,                _array_klass_offset,                           int)                                   \

@@ -447,6 +447,8 @@
   template(module_entry_name,                         "module_entry")                             \
   template(resolved_references_name,                  "<resolved_references>")                    \
   template(init_lock_name,                            "<init_lock>")                              \
+  template(initializeWispClass_name,                  "initializeWispClass")                      \
+  template(startWispDaemons_name,                     "startWispDaemons")                         \
                                                                                                   \
   /* name symbols needed by intrinsics */                                                         \
   VM_INTRINSICS_DO(VM_INTRINSIC_IGNORE, VM_SYMBOL_IGNORE, template, VM_SYMBOL_IGNORE, VM_ALIAS_IGNORE) \
@@ -463,6 +465,7 @@
   template(void_double_signature,                     "()D")                                      \
   template(bool_void_signature,                       "(Z)V")                                     \
   template(int_void_signature,                        "(I)V")                                     \
+  template(long_void_signature,                       "(J)V")                                     \
   template(int_int_signature,                         "(I)I")                                     \
   template(char_char_signature,                       "(C)C")                                     \
   template(short_short_signature,                     "(S)S")                                     \
@@ -494,6 +497,7 @@
   template(object_object_signature,                   "(Ljava/lang/Object;)Ljava/lang/Object;")   \
   template(string_void_signature,                     "(Ljava/lang/String;)V")                    \
   template(string_int_signature,                      "(Ljava/lang/String;)I")                    \
+  template(runnable_void_signature,                   "(Ljava/lang/Runnable;)V")                  \
   template(throwable_void_signature,                  "(Ljava/lang/Throwable;)V")                 \
   template(void_throwable_signature,                  "()Ljava/lang/Throwable;")                  \
   template(throwable_throwable_signature,             "(Ljava/lang/Throwable;)Ljava/lang/Throwable;")             \
@@ -646,7 +650,58 @@
   template(classRedefinedCount_name,                   "classRedefinedCount")                                     \
   template(classLoader_name,                           "classLoader")                                             \
   template(componentType_name,                         "componentType")                                           \
-                                                                                                                  \
+  /* coroutine support */                                                                                         \
+  template(java_dyn_CoroutineSupport,                  "java/dyn/CoroutineSupport")                               \
+  template(java_dyn_CoroutineBase,                     "java/dyn/CoroutineBase")                                  \
+  template(java_dyn_CoroutineExitException,            "java/dyn/CoroutineExitException")                         \
+  template(com_alibaba_wisp_engine_WispTask,           "com/alibaba/wisp/engine/WispTask")                        \
+  template(com_alibaba_wisp_engine_WispTask_CacheableCoroutine,                                                   \
+                                                       "com/alibaba/wisp/engine/WispTask$CacheableCoroutine")     \
+  template(com_alibaba_wisp_engine_WispEngine,         "com/alibaba/wisp/engine/WispEngine")                      \
+  template(com_alibaba_wisp_engine_WispCarrier,         "com/alibaba/wisp/engine/WispCarrier")                    \
+  template(com_alibaba_wisp_engine_WispEventPump,      "com/alibaba/wisp/engine/WispEventPump")                   \
+  template(isInCritical_name,                          "isInCritical")                                            \
+  template(jdkParkStatus_name,                         "jdkParkStatus")                                           \
+  template(shutdownPending_name,                       "shutdownPending")                                         \
+  template(jvmParkStatus_name,                         "jvmParkStatus")                                           \
+  template(id_name,                                    "id")                                                      \
+  template(threadWrapper_name,                         "threadWrapper")                                           \
+  template(activeCount_name,                           "activeCount")                                             \
+  template(stealCount_name,                            "stealCount")                                              \
+  template(stealFailureCount_name,                     "stealFailureCount")                                       \
+  template(preemptCount_name,                          "preemptCount")                                            \
+  template(unparkById_name,                            "unparkById")                                              \
+  template(interruptById_name,                         "interruptById")                                           \
+  template(interrupted_name,                           "interrupted")                                             \
+  template(yield_name,                                 "yield")                                                   \
+  template(runOutsideWisp_name,                        "runOutsideWisp")                                          \
+  template(nativeCoroutine_name,                       "nativeCoroutine")                                         \
+  template(stack_name,                                 "stack")                                                   \
+  template(current_name,                               "current")                                                 \
+  template(java_dyn_CoroutineBase_signature,           "Ljava/dyn/CoroutineBase;")                                \
+  template(reflect_method_signature,                   "Ljava/lang/reflect/Method;")                              \
+  template(startInternal_method_name,                  "startInternal")                                           \
+  template(initializeCoroutineSupport_method_name,     "initializeCoroutineSupport")                              \
+  template(destroyCoroutineSupport_method_name,        "destroyCoroutineSupport")                                 \
+  template(bci_name,                                   "bci")                                                     \
+  template(localCount_name,                            "localCount")                                              \
+  template(expressionCount_name,                       "expressionCount")                                         \
+  template(scalarValues_name,                          "scalarValues")                                            \
+  template(objectValues_name,                          "objectValues")                                            \
+  template(long_array_signature,                       "[J")                                                      \
+   /* coroutine work steal support */                                                                              \
+  template(java_security_AccessController,             "java/security/AccessController")                          \
+  template(doPrivileged_name,                          "doPrivileged")                                            \
+  template(doPrivileged_signature_1,                   "(Ljava/security/PrivilegedAction;)Ljava/lang/Object;")    \
+  template(doPrivileged_signature_2,                   "(Ljava/security/PrivilegedAction;Ljava/security/AccessControlContext;)Ljava/lang/Object;")    \
+  template(doPrivileged_signature_3,                   "(Ljava/security/PrivilegedExceptionAction;)Ljava/lang/Object;")    \
+  template(doPrivileged_signature_4,                   "(Ljava/security/PrivilegedExceptionAction;Ljava/security/AccessControlContext;)Ljava/lang/Object;")    \
+  template(jdk_internal_reflect_NativeMethodAccessorImpl,       "jdk/internal/reflect/NativeMethodAccessorImpl")                    \
+  template(invoke0_name,                               "invoke0")                                                 \
+  template(invoke0_signature,                          "(Ljava/lang/reflect/Method;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;")  \
+  template(jdk_internal_reflect_NativeConstructorAccessorImpl,  "jdk/internal/reflect/NativeConstructorAccessorImpl")               \
+  template(newInstance0_signature,                     "(Ljava/lang/reflect/Constructor;[Ljava/lang/Object;)Ljava/lang/Object;")  \
+                                                                                                                 \
   /* forEachRemaining support */                                                                                  \
   template(java_util_stream_StreamsRangeIntSpliterator,          "java/util/stream/Streams$RangeIntSpliterator")  \
                                                                                                                   \
@@ -863,7 +918,7 @@
    do_name(     isInterrupted_name,                              "isInterrupted")                                       \
    do_signature(isInterrupted_signature,                         "(Z)Z")                                                \
   do_intrinsic(_currentThread,            java_lang_Thread,       currentThread_name, currentThread_signature,   F_S)   \
-   do_name(     currentThread_name,                              "currentThread")                                       \
+   do_name(     currentThread_name,                              "currentThread0")                                      \
    do_signature(currentThread_signature,                         "()Ljava/lang/Thread;")                                \
                                                                                                                         \
   /* reflective intrinsics, for java/lang/Class, etc. */                                                                \
@@ -1398,13 +1453,22 @@
                                                                                                                                \
    /* (2) Bytecode intrinsics                                                                        */                        \
                                                                                                                                \
-  do_intrinsic(_park,                     jdk_internal_misc_Unsafe,     park_name, park_signature,                     F_R)    \
+  do_intrinsic(_park,                     jdk_internal_misc_Unsafe,     park0_name, park_signature,                    F_R)    \
    do_name(     park_name,                                              "park")                                                \
+   do_name(     park0_name,                                             "park0")                                               \
    do_signature(park_signature,                                         "(ZJ)V")                                               \
-  do_intrinsic(_unpark,                   jdk_internal_misc_Unsafe,     unpark_name, unpark_signature,                 F_R)    \
-   do_name(     unpark_name,                                            "unpark")                                              \
+  do_intrinsic(_unpark,                   jdk_internal_misc_Unsafe,     unpark0_name, unpark_signature,                F_R)    \
+   do_name(     unpark0_name,                                           "unpark0")                                             \
    do_alias(    unpark_signature,                                       /*(LObject;)V*/ object_void_signature)                 \
-                                                                                                                               \
+  /* coroutine intrinsics */                                                                                            \
+  do_intrinsic(_switchTo,                 java_dyn_CoroutineSupport, switchTo_name, switchTo_signature, F_SN)           \
+   do_name(     switchTo_name,                                    "switchTo")                                           \
+   do_signature(switchTo_signature,                               "(Ljava/dyn/CoroutineBase;Ljava/dyn/CoroutineBase;)V") \
+  do_intrinsic(_switchToAndTerminate,     java_dyn_CoroutineSupport, switchToAndTerminate_name, switchTo_signature, F_SN) \
+   do_name(     switchToAndTerminate_name,                        "switchToAndTerminate")                               \
+  do_intrinsic(_switchToAndExit,          java_dyn_CoroutineSupport, switchToAndExit_name, switchTo_signature, F_SN)    \
+   do_name(     switchToAndExit_name,                             "switchToAndExit")                                    \
+                                                                                                                        \
   do_intrinsic(_StringBuilder_void,   java_lang_StringBuilder, object_initializer_name, void_method_signature,     F_R)   \
   do_intrinsic(_StringBuilder_int,    java_lang_StringBuilder, object_initializer_name, int_void_signature,        F_R)   \
   do_intrinsic(_StringBuilder_String, java_lang_StringBuilder, object_initializer_name, string_void_signature,     F_R)   \
@@ -1515,7 +1579,7 @@ class vmSymbols: AllStatic {
     FIRST_SID = NO_SID + 1
   };
   enum {
-    log2_SID_LIMIT = 10         // checked by an assert at start-up
+    log2_SID_LIMIT = 12         // checked by an assert at start-up
   };
 
  private:

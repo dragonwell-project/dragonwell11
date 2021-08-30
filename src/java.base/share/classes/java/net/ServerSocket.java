@@ -25,9 +25,11 @@
 
 package java.net;
 
+import com.alibaba.wisp.engine.WispEngine;
 import jdk.internal.misc.JavaNetSocketAccess;
 import jdk.internal.misc.SharedSecrets;
 import sun.security.util.SecurityConstants;
+import sun.nio.ch.WispServerSocketImpl;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -58,6 +60,9 @@ import java.util.Collections;
  */
 public
 class ServerSocket implements java.io.Closeable {
+
+    private WispServerSocketImpl asyncImpl;
+
     /**
      * Various states of this socket.
      */
@@ -86,6 +91,9 @@ class ServerSocket implements java.io.Closeable {
      */
     ServerSocket(SocketImpl impl) {
         checkPermission();
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         this.impl = impl;
         impl.setServerSocket(this);
     }
@@ -105,6 +113,10 @@ class ServerSocket implements java.io.Closeable {
      * @revised 1.4
      */
     public ServerSocket() throws IOException {
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl = new WispServerSocketImpl();
+            return;
+        }
         setImpl();
     }
 
@@ -247,7 +259,11 @@ class ServerSocket implements java.io.Closeable {
      * @since   1.1
      */
     public ServerSocket(int port, int backlog, InetAddress bindAddr) throws IOException {
-        setImpl();
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl = new WispServerSocketImpl();
+        } else {
+            setImpl();
+        }
         if (port < 0 || port > 0xFFFF)
             throw new IllegalArgumentException(
                        "Port value out of range: " + port);
@@ -273,12 +289,18 @@ class ServerSocket implements java.io.Closeable {
      * @since 1.4
      */
     SocketImpl getImpl() throws SocketException {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         if (!created)
             createImpl();
         return impl;
     }
 
     private void checkOldImpl() {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         if (impl == null)
             return;
         // SocketImpl.connect() is a protected method, therefore we need to use
@@ -299,6 +321,9 @@ class ServerSocket implements java.io.Closeable {
     }
 
     private void setImpl() {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         if (factory != null) {
             impl = factory.createSocketImpl();
             checkOldImpl();
@@ -318,6 +343,9 @@ class ServerSocket implements java.io.Closeable {
      * @since 1.4
      */
     void createImpl() throws SocketException {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         if (impl == null)
             setImpl();
         try {
@@ -388,6 +416,10 @@ class ServerSocket implements java.io.Closeable {
             throw new SocketException("Unresolved address");
         if (backlog < 1)
           backlog = 50;
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.bind(endpoint, backlog);
+            return;
+        }
         try {
             SecurityManager security = System.getSecurityManager();
             if (security != null)
@@ -423,6 +455,9 @@ class ServerSocket implements java.io.Closeable {
      * @see SecurityManager#checkConnect
      */
     public InetAddress getInetAddress() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getInetAddress();
+        }
         if (!isBound())
             return null;
         try {
@@ -452,6 +487,9 @@ class ServerSocket implements java.io.Closeable {
      *          -1 if the socket is not bound yet.
      */
     public int getLocalPort() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getLocalPort();
+        }
         if (!isBound())
             return -1;
         try {
@@ -529,6 +567,9 @@ class ServerSocket implements java.io.Closeable {
             throw new SocketException("Socket is closed");
         if (!isBound())
             throw new SocketException("Socket is not bound yet");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.accept();
+        }
         Socket s = new Socket((SocketImpl) null);
         implAccept(s);
         return s;
@@ -551,6 +592,9 @@ class ServerSocket implements java.io.Closeable {
      * @spec JSR-51
      */
     protected final void implAccept(Socket s) throws IOException {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         SocketImpl si = null;
         try {
             if (s.impl == null)
@@ -599,6 +643,9 @@ class ServerSocket implements java.io.Closeable {
      * @spec JSR-51
      */
     public void close() throws IOException {
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.close();
+        }
         synchronized(closeLock) {
             if (isClosed())
                 return;
@@ -635,6 +682,9 @@ class ServerSocket implements java.io.Closeable {
      * @since 1.4
      */
     public boolean isBound() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.isBound();
+        }
         // Before 1.3 ServerSockets were always bound during creation
         return bound || oldImpl;
     }
@@ -646,6 +696,9 @@ class ServerSocket implements java.io.Closeable {
      * @since 1.4
      */
     public boolean isClosed() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.isClosed();
+        }
         synchronized(closeLock) {
             return closed;
         }
@@ -670,6 +723,10 @@ class ServerSocket implements java.io.Closeable {
     public synchronized void setSoTimeout(int timeout) throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.setSoTimeout(timeout);
+            return;
+        }
         getImpl().setOption(SocketOptions.SO_TIMEOUT, timeout);
     }
 
@@ -684,6 +741,9 @@ class ServerSocket implements java.io.Closeable {
     public synchronized int getSoTimeout() throws IOException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getSoTimeout();
+        }
         Object o = getImpl().getOption(SocketOptions.SO_TIMEOUT);
         /* extra type safety */
         if (o instanceof Integer) {
@@ -732,6 +792,10 @@ class ServerSocket implements java.io.Closeable {
     public void setReuseAddress(boolean on) throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.setReuseAddress(on);
+            return;
+        }
         getImpl().setOption(SocketOptions.SO_REUSEADDR, Boolean.valueOf(on));
     }
 
@@ -748,6 +812,9 @@ class ServerSocket implements java.io.Closeable {
     public boolean getReuseAddress() throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getReuseAddress();
+        }
         return ((Boolean) (getImpl().getOption(SocketOptions.SO_REUSEADDR))).booleanValue();
     }
 
@@ -765,6 +832,9 @@ class ServerSocket implements java.io.Closeable {
      * @return  a string representation of this socket.
      */
     public String toString() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.toString();
+        }
         if (!isBound())
             return "ServerSocket[unbound]";
         InetAddress in;
@@ -777,10 +847,16 @@ class ServerSocket implements java.io.Closeable {
     }
 
     void setBound() {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         bound = true;
     }
 
     void setCreated() {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         created = true;
     }
 
@@ -815,6 +891,9 @@ class ServerSocket implements java.io.Closeable {
      * @see        SecurityManager#checkSetFactory
      */
     public static synchronized void setSocketFactory(SocketImplFactory fac) throws IOException {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         if (factory != null) {
             throw new SocketException("factory already defined");
         }
@@ -867,6 +946,10 @@ class ServerSocket implements java.io.Closeable {
         }
         if (isClosed())
             throw new SocketException("Socket is closed");
+         if (WispEngine.transparentWispSwitch()) {
+             asyncImpl.setReceiveBufferSize(size);
+             return;
+         }
         getImpl().setOption(SocketOptions.SO_RCVBUF, size);
     }
 
@@ -888,6 +971,9 @@ class ServerSocket implements java.io.Closeable {
     throws SocketException{
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getReceiveBufferSize();
+        }
         int result = 0;
         Object o = getImpl().getOption(SocketOptions.SO_RCVBUF);
         if (o instanceof Integer) {
@@ -971,7 +1057,11 @@ class ServerSocket implements java.io.Closeable {
     public <T> ServerSocket setOption(SocketOption<T> name, T value)
         throws IOException
     {
-        getImpl().setOption(name, value);
+        if (WispEngine.transparentWispSwitch()) {
+            getChannel().setOption(name, value);
+        } else {
+            getImpl().setOption(name, value);
+        }
         return this;
     }
 
@@ -999,7 +1089,7 @@ class ServerSocket implements java.io.Closeable {
      * @since 9
      */
     public <T> T getOption(SocketOption<T> name) throws IOException {
-        return getImpl().getOption(name);
+        return WispEngine.transparentWispSwitch() ? getChannel().getOption(name) : getImpl().getOption(name);
     }
 
     private static Set<SocketOption<?>> options;

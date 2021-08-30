@@ -95,3 +95,8 @@ Java_sun_nio_ch_EPoll_wait(JNIEnv *env, jclass clazz, jint epfd,
     }
     return res;
 }
+
+JNIEXPORT jint JNICALL
+Java_sun_nio_ch_EPoll_errnoENOENT(JNIEnv *env, jclass this) {
+    return (jint)ENOENT;
+}

@@ -1064,9 +1064,9 @@ void Monitor::jvm_raw_unlock() {
 bool Monitor::wait(bool no_safepoint_check, long timeout,
                    bool as_suspend_equivalent) {
   // Make sure safepoint checking is used properly.
-  assert(!(_safepoint_check_required == Monitor::_safepoint_check_never && no_safepoint_check == false),
+  assert(EnableCoroutine || !(_safepoint_check_required == Monitor::_safepoint_check_never && no_safepoint_check == false),
          "This lock should never have a safepoint check: %s", name());
-  assert(!(_safepoint_check_required == Monitor::_safepoint_check_always && no_safepoint_check == true),
+  assert(EnableCoroutine || !(_safepoint_check_required == Monitor::_safepoint_check_always && no_safepoint_check == true),
          "This lock should always have a safepoint check: %s", name());
 
   Thread * const Self = Thread::current();

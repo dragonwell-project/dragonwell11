@@ -25,6 +25,9 @@
 
 package java.net;
 
+import com.alibaba.wisp.engine.WispEngine;
+import sun.nio.ch.WispUdpSocketImpl;
+
 import java.io.IOException;
 import java.nio.channels.DatagramChannel;
 import java.security.AccessController;
@@ -67,6 +70,8 @@ import java.util.Collections;
  */
 public
 class DatagramSocket implements java.io.Closeable {
+
+    private WispUdpSocketImpl asyncImpl;
     /**
      * Various states of this socket.
      */
@@ -237,8 +242,12 @@ class DatagramSocket implements java.io.Closeable {
      * @since   1.4
      */
     public DatagramSocket(SocketAddress bindaddr) throws SocketException {
-        // create a datagram socket.
-        createImpl();
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl = new WispUdpSocketImpl(this);
+        } else {
+            // create a datagram socket.
+            createImpl();
+        }
         if (bindaddr != null) {
             try {
                 bind(bindaddr);
@@ -324,6 +333,9 @@ class DatagramSocket implements java.io.Closeable {
     static Class<?> implClass = null;
 
     void createImpl() throws SocketException {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         if (impl == null) {
             if (factory != null) {
                 impl = factory.createDatagramSocketImpl();
@@ -351,6 +363,9 @@ class DatagramSocket implements java.io.Closeable {
      * @since 1.4
      */
     DatagramSocketImpl getImpl() throws SocketException {
+        if (WispEngine.transparentWispSwitch()) {
+            throw new UnsupportedOperationException();
+        }
         if (!created)
             createImpl();
         return impl;
@@ -380,6 +395,10 @@ class DatagramSocket implements java.io.Closeable {
             addr = new InetSocketAddress(0);
         if (!(addr instanceof InetSocketAddress))
             throw new IllegalArgumentException("Unsupported address type!");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.bind(addr);
+            return;
+        }
         InetSocketAddress epoint = (InetSocketAddress) addr;
         if (epoint.isUnresolved())
             throw new SocketException("Unresolved address");
@@ -456,6 +475,10 @@ class DatagramSocket implements java.io.Closeable {
      * @see #disconnect
      */
     public void connect(InetAddress address, int port) {
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.connect(address, port);
+            return;
+        }
         try {
             connectInternal(address, port);
         } catch (SocketException se) {
@@ -493,6 +516,10 @@ class DatagramSocket implements java.io.Closeable {
         InetSocketAddress epoint = (InetSocketAddress) addr;
         if (epoint.isUnresolved())
             throw new SocketException("Unresolved address");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.connect(addr);
+            return;
+        }
         connectInternal(epoint.getAddress(), epoint.getPort());
     }
 
@@ -503,6 +530,10 @@ class DatagramSocket implements java.io.Closeable {
      * @see #connect
      */
     public void disconnect() {
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.disconnect();
+            return;
+        }
         synchronized (this) {
             if (isClosed())
                 return;
@@ -527,6 +558,9 @@ class DatagramSocket implements java.io.Closeable {
      * @since 1.4
      */
     public boolean isBound() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.isBound();
+        }
         return bound;
     }
 
@@ -541,6 +575,9 @@ class DatagramSocket implements java.io.Closeable {
      * @since 1.4
      */
     public boolean isConnected() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.isConnected();
+        }
         return connectState != ST_NOT_CONNECTED;
     }
 
@@ -555,6 +592,9 @@ class DatagramSocket implements java.io.Closeable {
      * @return the address to which this socket is connected.
      */
     public InetAddress getInetAddress() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getInetAddress();
+        }
         return connectedAddress;
     }
 
@@ -569,6 +609,9 @@ class DatagramSocket implements java.io.Closeable {
      * @return the port number to which this socket is connected.
      */
     public int getPort() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getPort();
+        }
         return connectedPort;
     }
 
@@ -654,6 +697,10 @@ class DatagramSocket implements java.io.Closeable {
      * @spec JSR-51
      */
     public void send(DatagramPacket p) throws IOException  {
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.send(p);
+            return;
+        }
         InetAddress packetAddress = null;
         synchronized (p) {
             if (isClosed())
@@ -728,6 +775,10 @@ class DatagramSocket implements java.io.Closeable {
      * @spec JSR-51
      */
     public synchronized void receive(DatagramPacket p) throws IOException {
+        if (WispEngine.transparentWispSwitch()) {
+            p.length = asyncImpl.receive(p, p.bufLength);
+            return;
+        }
         synchronized (p) {
             if (!isBound())
                 bind(new InetSocketAddress(0));
@@ -847,6 +898,9 @@ class DatagramSocket implements java.io.Closeable {
      * @since   1.1
      */
     public InetAddress getLocalAddress() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getLocalAddress();
+        }
         if (isClosed())
             return null;
         InetAddress in = null;
@@ -874,6 +928,9 @@ class DatagramSocket implements java.io.Closeable {
                 {@code 0} if it is not bound yet.
      */
     public int getLocalPort() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getLocalPort();
+        }
         if (isClosed())
             return -1;
         try {
@@ -901,6 +958,10 @@ class DatagramSocket implements java.io.Closeable {
     public synchronized void setSoTimeout(int timeout) throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.setSoTimeout(timeout);
+            return;
+        }
         getImpl().setOption(SocketOptions.SO_TIMEOUT, timeout);
     }
 
@@ -916,6 +977,9 @@ class DatagramSocket implements java.io.Closeable {
     public synchronized int getSoTimeout() throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getSoTimeout();
+        }
         if (getImpl() == null)
             return 0;
         Object o = getImpl().getOption(SocketOptions.SO_TIMEOUT);
@@ -963,6 +1027,10 @@ class DatagramSocket implements java.io.Closeable {
         }
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.setSendBufferSize(size);
+            return;
+        }
         getImpl().setOption(SocketOptions.SO_SNDBUF, size);
     }
 
@@ -978,6 +1046,9 @@ class DatagramSocket implements java.io.Closeable {
     public synchronized int getSendBufferSize() throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getSendBufferSize();
+        }
         int result = 0;
         Object o = getImpl().getOption(SocketOptions.SO_SNDBUF);
         if (o instanceof Integer) {
@@ -1021,6 +1092,10 @@ class DatagramSocket implements java.io.Closeable {
         }
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.setReceiveBufferSize(size);
+            return;
+        }
         getImpl().setOption(SocketOptions.SO_RCVBUF, size);
     }
 
@@ -1036,6 +1111,9 @@ class DatagramSocket implements java.io.Closeable {
     throws SocketException{
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getReceiveBufferSize();
+        }
         int result = 0;
         Object o = getImpl().getOption(SocketOptions.SO_RCVBUF);
         if (o instanceof Integer) {
@@ -1081,6 +1159,10 @@ class DatagramSocket implements java.io.Closeable {
     public synchronized void setReuseAddress(boolean on) throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.setReuseAddress(on);
+            return;
+        }
         // Integer instead of Boolean for compatibility with older DatagramSocketImpl
         if (oldImpl)
             getImpl().setOption(SocketOptions.SO_REUSEADDR, on?-1:0);
@@ -1100,6 +1182,9 @@ class DatagramSocket implements java.io.Closeable {
     public synchronized boolean getReuseAddress() throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getReuseAddress();
+        }
         Object o = getImpl().getOption(SocketOptions.SO_REUSEADDR);
         return ((Boolean)o).booleanValue();
     }
@@ -1124,6 +1209,10 @@ class DatagramSocket implements java.io.Closeable {
     public synchronized void setBroadcast(boolean on) throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.setBroadcast(on);
+            return;
+        }
         getImpl().setOption(SocketOptions.SO_BROADCAST, Boolean.valueOf(on));
     }
 
@@ -1138,6 +1227,9 @@ class DatagramSocket implements java.io.Closeable {
     public synchronized boolean getBroadcast() throws SocketException {
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getBroadcast();
+        }
         return ((Boolean)(getImpl().getOption(SocketOptions.SO_BROADCAST))).booleanValue();
     }
 
@@ -1184,6 +1276,10 @@ class DatagramSocket implements java.io.Closeable {
 
         if (isClosed())
             throw new SocketException("Socket is closed");
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.setTrafficClass(tc);
+            return;
+        }
         try {
             getImpl().setOption(SocketOptions.IP_TOS, tc);
         } catch (SocketException se) {
@@ -1211,6 +1307,9 @@ class DatagramSocket implements java.io.Closeable {
      * @see #setTrafficClass(int)
      */
     public synchronized int getTrafficClass() throws SocketException {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.getTrafficClass();
+        }
         if (isClosed())
             throw new SocketException("Socket is closed");
         return ((Integer)(getImpl().getOption(SocketOptions.IP_TOS))).intValue();
@@ -1229,6 +1328,10 @@ class DatagramSocket implements java.io.Closeable {
      * @spec JSR-51
      */
     public void close() {
+        if (WispEngine.transparentWispSwitch()) {
+            asyncImpl.close();
+            return;
+        }
         synchronized(closeLock) {
             if (isClosed())
                 return;
@@ -1244,6 +1347,9 @@ class DatagramSocket implements java.io.Closeable {
      * @since 1.4
      */
     public boolean isClosed() {
+        if (WispEngine.transparentWispSwitch()) {
+            return asyncImpl.isClosed();
+        }
         synchronized(closeLock) {
             return closed;
         }
@@ -1264,7 +1370,7 @@ class DatagramSocket implements java.io.Closeable {
      * @spec JSR-51
      */
     public DatagramChannel getChannel() {
-        return null;
+        return WispEngine.transparentWispSwitch() ? asyncImpl.getChannel() : null;
     }
 
     /**

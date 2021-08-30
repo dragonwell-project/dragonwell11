@@ -104,6 +104,7 @@ abstract class Task<T> implements Runnable {
         Predicate<String> startsWithJavaCompiler      = path -> path.toString().startsWith("java.compiler/java");
         Predicate<String> startsWithJavaLogging       = path -> path.toString().startsWith("java.logging/java");
         Predicate<String> startsWithJavaPrefs         = path -> path.toString().startsWith("java.prefs/java");
+        Predicate<String> notStartsWithJavaDyn        = path -> !path.toString().startsWith("java.base/java/dyn");
 
         fileNames = Files.walk(modules)
                 .map(Path::toString)
@@ -121,7 +122,8 @@ abstract class Task<T> implements Runnable {
                     .or(startsWithJavaSQL)
                     .or(startsWithJavaCompiler)
                     .or(startsWithJavaLogging)
-                    .or(startsWithJavaPrefs))
+                    .or(startsWithJavaPrefs)
+                    .and(notStartsWithJavaDyn))
                 .map(s -> s.replace('/', '.'))
                 .filter(path -> path.toString().endsWith(".class"))
                 .map(s -> s.substring(0, s.length() - 6))  // drop .class

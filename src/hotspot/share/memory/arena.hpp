@@ -88,6 +88,8 @@ class Chunk: CHeapObj<mtChunk> {
   static void clean_chunk_pool();
 };
 
+class WispPostStealHandleUpdateMark;
+
 //------------------------------Arena------------------------------------------
 // Fast allocation of memory
 class Arena : public CHeapObj<mtNone> {
@@ -96,6 +98,7 @@ protected:
   friend class HandleMark;
   friend class NoHandleMark;
   friend class VMStructs;
+  friend class WispPostStealHandleUpdateMark;
 
   MEMFLAGS    _flags;           // Memory tracking flags
 

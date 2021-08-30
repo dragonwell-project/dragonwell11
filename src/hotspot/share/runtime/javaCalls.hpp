@@ -56,6 +56,8 @@ class JavaCallWrapper: StackObj {
    JavaCallWrapper(const methodHandle& callee_method, Handle receiver, JavaValue* result, TRAPS);
   ~JavaCallWrapper();
 
+  void initialize(JavaThread* thread, JNIHandleBlock* handles, Method* callee_method, oop receiver, JavaValue* result);
+
   // Accessors
   JavaThread*      thread() const           { return _thread; }
   JNIHandleBlock*  handles() const          { return _handles; }
@@ -70,6 +72,10 @@ class JavaCallWrapper: StackObj {
 
   bool             is_first_frame() const   { return _anchor.last_Java_sp() == NULL; }
 
+  Thread *&        thread_ref()             {
+    assert(EnableCoroutine, "EnableCoroutine is off");
+    return (Thread *&)_thread;
+  }
 };
 
 

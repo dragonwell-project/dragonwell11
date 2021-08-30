@@ -63,6 +63,8 @@ class StubAssembler;
   stub(monitorenter_nofpu)             /* optimized version that does not preserve fpu registers */ \
   stub(monitorexit)                  \
   stub(monitorexit_nofpu)              /* optimized version that does not preserve fpu registers */ \
+  stub(monitorexit_proxy)                  \
+  stub(monitorexit_nofpu_proxy)              /* optimized version that does not preserve fpu registers */ \
   stub(deoptimize)                   \
   stub(access_field_patching)        \
   stub(load_klass_patching)          \
@@ -91,6 +93,9 @@ class Runtime1: public AllStatic {
   enum StubID {
     RUNTIME1_STUBS(DECLARE_STUB_ID, DECLARE_LAST_STUB_ID)
   };
+
+  // only a function pointer
+  static void (*monitorenter_address_C1)(JavaThread *, oopDesc* obj, BasicObjectLock *);
 
   // statistics
 #ifndef PRODUCT
@@ -159,7 +164,8 @@ class Runtime1: public AllStatic {
 
   static void monitorenter(JavaThread* thread, oopDesc* obj, BasicObjectLock* lock);
   static void monitorexit (JavaThread* thread, BasicObjectLock* lock);
-
+  static void monitorexit_wisp (JavaThread* thread, BasicObjectLock* lock);
+  static void monitorexit_wisp_proxy (JavaThread* thread, BasicObjectLock* lock);
   static void deoptimize(JavaThread* thread, jint trap_request);
 
   static int access_field_patching(JavaThread* thread);

@@ -143,6 +143,7 @@ class OptoRuntime : public AllStatic {
   static address _multianewarrayN_Java;
   static address _vtable_must_compile_Java;
   static address _complete_monitor_locking_Java;
+  static address _complete_wisp_monitor_unlocking_Java;
   static address _rethrow_Java;
   static address _monitor_notify_Java;
   static address _monitor_notifyAll_Java;
@@ -173,6 +174,8 @@ public:
   // Slow-path Locking and Unlocking
   static void complete_monitor_locking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread);
   static void complete_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread);
+  static void complete_wisp_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread);
+  static void complete_wisp_proxy_monitor_unlocking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread);
 
   static void monitor_notify_C(oopDesc* obj, JavaThread* thread);
   static void monitor_notifyAll_C(oopDesc* obj, JavaThread* thread);
@@ -223,6 +226,7 @@ private:
   static address multianewarrayN_Java()                  { return _multianewarrayN_Java; }
   static address vtable_must_compile_stub()              { return _vtable_must_compile_Java; }
   static address complete_monitor_locking_Java()         { return _complete_monitor_locking_Java; }
+  static address complete_wisp_monitor_unlocking_Java()  { return _complete_wisp_monitor_unlocking_Java;   }
   static address monitor_notify_Java()                   { return _monitor_notify_Java; }
   static address monitor_notifyAll_Java()                { return _monitor_notifyAll_Java; }
 
@@ -255,6 +259,7 @@ private:
   static const TypeFunc* multianewarrayN_Type(); // multianewarray
   static const TypeFunc* complete_monitor_enter_Type();
   static const TypeFunc* complete_monitor_exit_Type();
+  static const TypeFunc* complete_wisp_monitor_exit_Type();
   static const TypeFunc* monitor_notify_Type();
   static const TypeFunc* uncommon_trap_Type();
   static const TypeFunc* athrow_Type();
@@ -323,6 +328,8 @@ private:
 
   // JFR support
   static const TypeFunc* jfr_fast_object_alloc_Type();
+  // Yield support
+  static const TypeFunc* yield_method_exit_Type();
 
  private:
  static NamedCounter * volatile _named_counters;

@@ -36,6 +36,10 @@
 
 package java.util.concurrent;
 
+import com.alibaba.wisp.engine.WispEngine;
+import jdk.internal.misc.SharedSecrets;
+import jdk.internal.misc.WispEngineAccess;
+
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.AbstractQueue;
@@ -90,6 +94,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public class SynchronousQueue<E> extends AbstractQueue<E>
     implements BlockingQueue<E>, java.io.Serializable {
     private static final long serialVersionUID = -3223113410248163686L;
+
+    private static WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
 
     /*
      * This class implements extensions of the dual stack and dual
@@ -458,7 +464,8 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
                     s.waiter = w; // establish waiter so can park next iter
                 else if (!timed)
                     LockSupport.park(this);
-                else if (nanos > SPIN_FOR_TIMEOUT_THRESHOLD)
+                else if (nanos > SPIN_FOR_TIMEOUT_THRESHOLD ||
+                        WispEngine.transparentWispSwitch() && WEA.hasMoreTasks())
                     LockSupport.parkNanos(this, nanos);
             }
         }
@@ -468,6 +475,9 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
          * fulfiller.
          */
         boolean shouldSpin(SNode s) {
+            if (WispEngine.transparentWispSwitch() && WEA.hasMoreTasks()) {
+                return false;
+            }
             SNode h = head;
             return (h == s || h == null || isFulfilling(h.mode));
         }
@@ -757,7 +767,8 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
                     s.waiter = w;
                 else if (!timed)
                     LockSupport.park(this);
-                else if (nanos > SPIN_FOR_TIMEOUT_THRESHOLD)
+                else if (nanos > SPIN_FOR_TIMEOUT_THRESHOLD ||
+                        WispEngine.transparentWispSwitch() && WEA.hasMoreTasks())
                     LockSupport.parkNanos(this, nanos);
             }
         }

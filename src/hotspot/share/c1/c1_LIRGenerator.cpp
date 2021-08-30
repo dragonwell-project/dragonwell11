@@ -429,7 +429,7 @@ CodeEmitInfo* LIRGenerator::state_for(Instruction* x, ValueStack* state, bool ig
         // all locals are dead on exit from the synthetic unlocker
         liveness.clear();
       } else {
-        assert(x->as_MonitorEnter() || x->as_ProfileInvoke(), "only other cases are MonitorEnter and ProfileInvoke");
+        assert(x->as_MonitorEnter() || x->as_ProfileInvoke() || (UseWispMonitor && x->as_MonitorExit()), "only other cases are MonitorEnter and ProfileInvoke, or Wisp MonitorExit");
       }
     }
     if (!liveness.is_valid()) {
@@ -651,14 +651,21 @@ void LIRGenerator::monitor_enter(LIR_Opr object, LIR_Opr lock, LIR_Opr hdr, LIR_
 }
 
 
-void LIRGenerator::monitor_exit(LIR_Opr object, LIR_Opr lock, LIR_Opr new_hdr, LIR_Opr scratch, int monitor_no) {
+void LIRGenerator::monitor_exit(LIR_Opr object, LIR_Opr lock, LIR_Opr new_hdr, LIR_Opr scratch, int monitor_no, CodeEmitInfo* info_for_exception, CodeEmitInfo* info, bool at_method_return) {
   if (!GenerateSynchronizationCode) return;
   // setup registers
   LIR_Opr hdr = lock;
   lock = new_hdr;
-  CodeStub* slow_path = new MonitorExitStub(lock, UseFastLocking, monitor_no);
-  __ load_stack_address_monitor(monitor_no, lock);
-  __ unlock_object(hdr, object, lock, scratch, slow_path);
+  CodeStub* slow_path;
+  if (UseWispMonitor) {
+    slow_path = new MonitorExitStub(lock, UseFastLocking, monitor_no, info, at_method_return);
+    __ load_stack_address_monitor(monitor_no, lock);
+    __ unlock_object(hdr, object, lock, scratch, slow_path, info_for_exception);
+  } else {
+    slow_path = new MonitorExitStub(lock, UseFastLocking, monitor_no);
+    __ load_stack_address_monitor(monitor_no, lock);
+    __ unlock_object(hdr, object, lock, scratch, slow_path);
+  }
 }
 
 #ifndef PRODUCT

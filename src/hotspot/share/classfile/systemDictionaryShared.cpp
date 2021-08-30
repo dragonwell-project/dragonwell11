@@ -511,7 +511,7 @@ InstanceKlass* SystemDictionaryShared::find_or_load_shared_class(
       ObjectLocker ol(lockObject, THREAD, DoObjectLock);
 
       {
-        MutexLocker mu(SystemDictionary_lock, THREAD);
+        SystemDictLocker mu(SystemDictionary_lock, THREAD);
         Klass* check = find_class(d_hash, name, dictionary);
         if (check != NULL) {
           return InstanceKlass::cast(check);

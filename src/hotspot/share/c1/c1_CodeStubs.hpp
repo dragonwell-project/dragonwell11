@@ -342,11 +342,23 @@ class MonitorExitStub: public MonitorAccessStub {
  private:
   bool _compute_lock;
   int  _monitor_ix;
-
+  CodeEmitInfo* _info;
+  bool _at_method_return;
  public:
   MonitorExitStub(LIR_Opr lock_reg, bool compute_lock, int monitor_ix)
     : MonitorAccessStub(LIR_OprFact::illegalOpr, lock_reg),
-      _compute_lock(compute_lock), _monitor_ix(monitor_ix) { }
+      _compute_lock(compute_lock), _monitor_ix(monitor_ix), _at_method_return(false) { }
+  // This constructor is used in Wisp only. Generating CodeEmitInfo for furter use.
+  MonitorExitStub(LIR_Opr lock_reg, bool compute_lock, int monitor_ix, CodeEmitInfo* info, bool at_method_return)
+    : MonitorAccessStub(LIR_OprFact::illegalOpr, lock_reg),
+      _compute_lock(compute_lock), _monitor_ix(monitor_ix), _at_method_return(at_method_return) {
+      if (info) {
+        assert(UseWispMonitor, "This path should be reached only when using WispMonitor");
+        _info = new CodeEmitInfo(info);
+      } else {
+        _info = NULL;
+      }
+  }
   virtual void emit_code(LIR_Assembler* e);
   virtual void visit(LIR_OpVisitState* visitor) {
     assert(_obj_reg->is_illegal(), "unused");
@@ -354,6 +366,9 @@ class MonitorExitStub: public MonitorAccessStub {
       visitor->do_temp(_lock_reg);
     } else {
       visitor->do_input(_lock_reg);
+    }
+    if (UseWispMonitor && _info != NULL) {
+      visitor->do_slow_case(_info);
     }
   }
 #ifndef PRODUCT
