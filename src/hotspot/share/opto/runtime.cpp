@@ -98,6 +98,7 @@ address OptoRuntime::_multianewarray5_Java                        = NULL;
 address OptoRuntime::_multianewarrayN_Java                        = NULL;
 address OptoRuntime::_vtable_must_compile_Java                    = NULL;
 address OptoRuntime::_complete_monitor_locking_Java               = NULL;
+address OptoRuntime::_complete_wisp_monitor_unlocking_Java        = NULL;
 address OptoRuntime::_monitor_notify_Java                         = NULL;
 address OptoRuntime::_monitor_notifyAll_Java                      = NULL;
 address OptoRuntime::_rethrow_Java                                = NULL;
@@ -141,6 +142,7 @@ bool OptoRuntime::generate(ciEnv* env) {
   gen(env, _multianewarray5_Java           , multianewarray5_Type         , multianewarray5_C               ,    0 , true , false, false);
   gen(env, _multianewarrayN_Java           , multianewarrayN_Type         , multianewarrayN_C               ,    0 , true , false, false);
   gen(env, _complete_monitor_locking_Java  , complete_monitor_enter_Type  , SharedRuntime::complete_monitor_locking_C, 0, false, false, false);
+  gen(env, _complete_wisp_monitor_unlocking_Java  , complete_wisp_monitor_exit_Type  , SharedRuntime::complete_wisp_monitor_unlocking_C, 0, false, false, false);
   gen(env, _monitor_notify_Java            , monitor_notify_Type          , monitor_notify_C                ,    0 , false, false, false);
   gen(env, _monitor_notifyAll_Java         , monitor_notify_Type          , monitor_notifyAll_C             ,    0 , false, false, false);
   gen(env, _rethrow_Java                   , rethrow_Type                 , rethrow_C                       ,    2 , true , false, true );
@@ -602,6 +604,21 @@ const TypeFunc *OptoRuntime::complete_monitor_exit_Type() {
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0, fields);
 
   return TypeFunc::make(domain, range);
+}
+
+const TypeFunc *OptoRuntime::complete_wisp_monitor_exit_Type() {
+  // create input type (domain)
+  const Type **fields = TypeTuple::fields(2);
+  fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;  // Object to be Locked
+  fields[TypeFunc::Parms+1] = TypeRawPtr::BOTTOM;   // Address of stack location for lock
+  const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+2,fields);
+
+  // create result type (range)
+  fields = TypeTuple::fields(0);
+
+  const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+0,fields);
+
+  return TypeFunc::make(domain,range);
 }
 
 const TypeFunc *OptoRuntime::monitor_notify_Type() {
@@ -1292,7 +1309,8 @@ JRT_ENTRY_NO_ASYNC(address, OptoRuntime::handle_exception_C_helper(JavaThread* t
   assert(thread->exception_oop() != NULL, "exception oop is found");
   address handler_address = NULL;
 
-  Handle exception(thread, thread->exception_oop());
+  Handle exception(thread, WispThread::is_current_death_pending(thread)?
+    Universe::wisp_thread_death_exception() : thread->exception_oop());
   address pc = thread->exception_pc();
 
   // Clear out the exception oop and pc since looking up an

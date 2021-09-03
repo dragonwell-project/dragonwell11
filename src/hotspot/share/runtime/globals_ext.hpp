@@ -41,7 +41,29 @@
   manageable(intx, ArrayAllocationWarningSize, (512*M),                     \
              "Desired size in bytes of array space allocation before "      \
              "printing a warning")                                          \
-//add new Dragonwell specific flags here
+                                                                            \
+  product(bool, EnableCoroutine, false,                                     \
+          "Enable coroutine support")                                       \
+                                                                            \
+  product(uintx, DefaultCoroutineStackSize, 128*K,                          \
+          "Default size of stack that is associated with new coroutine")    \
+                                                                            \
+  product(bool, UseWispMonitor, false,                                      \
+          "yields to next coroutine when ObjectMonitor is contended")       \
+                                                                            \
+  product(bool, UseWisp2, false,                                            \
+          "Enable Wisp2")                                                   \
+  product(bool, Wisp2ThreadStop, false,                                     \
+          "ThreadDeath cannot be catched")                                  \
+                                                                            \
+  manageable(bool, PrintThreadCoroutineInfo, false,                         \
+          "print the park/unpark information for thread coroutine")         \
+                                                                            \
+  diagnostic(bool, VerboseWisp, false,                                      \
+          "Print verbose Wisp information")                                 \
+
+  //add new AJDK specific flags here
+
 
 DRAGONWELL_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, \
                  DECLARE_PD_PRODUCT_FLAG, DECLARE_DIAGNOSTIC_FLAG, DECLARE_EXPERIMENTAL_FLAG, \

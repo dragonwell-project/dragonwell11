@@ -840,13 +840,13 @@ static bool should_reexecute_implied_by_bytecode(JVMState *jvms, bool is_anewarr
 }
 
 // Helper function for adding JVMState and debug information to node
-void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
+void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw, bool is_wisp) {
   // Add the safepoint edges to the call (or other safepoint).
 
   // Make sure dead locals are set to top.  This
   // should help register allocation time and cut down on the size
   // of the deoptimization information.
-  assert(dead_locals_are_killed(), "garbage in debug info before safepoint");
+  assert(is_wisp || dead_locals_are_killed(), "garbage in debug info before safepoint");
 
   // Walk the inline list to fill in the correct set of JVMState's
   // Also fill in the associated edges for each JVMState.
@@ -888,7 +888,7 @@ void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
 
   // For a known set of bytecodes, the interpreter should reexecute them if
   // deoptimization happens. We set the reexecute state for them here
-  if (out_jvms->is_reexecute_undefined() && //don't change if already specified
+  if (!is_wisp && out_jvms->is_reexecute_undefined() && //don't change if already specified
       should_reexecute_implied_by_bytecode(out_jvms, call->is_AllocateArray())) {
 #ifdef ASSERT
     int inputs = 0, not_used; // initialized by GraphKit::compute_stack_effects()
@@ -1874,7 +1874,6 @@ void GraphKit::set_predefined_output_for_runtime_call(Node* call,
     set_all_memory_call(call);
   }
 }
-
 
 // Replace the call with the current state of the kit.
 void GraphKit::replace_call(CallNode* call, Node* result, bool do_replaced_nodes) {
@@ -3243,6 +3242,8 @@ Node* GraphKit::insert_mem_bar_volatile(int opcode, int alias_idx, Node* precede
   return membar;
 }
 
+#define __ ideal.
+
 //------------------------------shared_lock------------------------------------
 // Emit locking code.
 FastLockNode* GraphKit::shared_lock(Node* obj) {
@@ -3313,7 +3314,7 @@ FastLockNode* GraphKit::shared_lock(Node* obj) {
 
 //------------------------------shared_unlock----------------------------------
 // Emit unlocking code.
-void GraphKit::shared_unlock(Node* box, Node* obj) {
+void GraphKit::shared_unlock(Node* box, Node* obj, bool at_method_return) {
   // bci is either a monitorenter bc or InvocationEntryBci
   // %%% SynchronizationEntryBCI is redundant; use InvocationEntryBci in interfaces
   assert(SynchronizationEntryBCI == InvocationEntryBci, "");
@@ -3329,7 +3330,7 @@ void GraphKit::shared_unlock(Node* box, Node* obj) {
   insert_mem_bar(Op_MemBarReleaseLock);
 
   const TypeFunc *tf = OptoRuntime::complete_monitor_exit_Type();
-  UnlockNode *unlock = new UnlockNode(C, tf);
+  UnlockNode *unlock = new UnlockNode(C, tf, at_method_return);
 #ifdef ASSERT
   unlock->set_dbg_jvms(sync_jvms());
 #endif
@@ -3344,13 +3345,24 @@ void GraphKit::shared_unlock(Node* box, Node* obj) {
   unlock->init_req(TypeFunc::Parms + 1, box);
   unlock = _gvn.transform(unlock)->as_Unlock();
 
+  bool has_popped = false;
+  if (UseWispMonitor && jvms()->has_method() && !at_method_return) {
+    has_popped = true;
+    // we need to pop it first, or the monitor will be added to PcDesc and
+    // ScopeDesc, then we will have the has-been-unlocked lock here. When a de-opt happens,
+    // the has-been-unlocked lock will be put on to the interpreter stack.
+    map()->pop_monitor( );
+    add_safepoint_edges(unlock, false, true);
+  }
   Node* mem = reset_memory();
 
   // unlock has no side-effects, sets few values
   set_predefined_output_for_runtime_call(unlock, mem, TypeRawPtr::BOTTOM);
 
   // Kill monitor from debug info
-  map()->pop_monitor( );
+  if (!has_popped) {
+    map()->pop_monitor( );
+  }
 }
 
 //-------------------------------get_layout_helper-----------------------------

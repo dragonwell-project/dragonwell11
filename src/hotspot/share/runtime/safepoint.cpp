@@ -941,6 +941,10 @@ void SafepointSynchronize::block(JavaThread *thread) {
     thread->handle_special_runtime_exit_condition(
       !thread->is_at_poll_safepoint() && (state != _thread_in_native_trans));
   }
+
+  if (EnableCoroutine) {
+    Coroutine::after_safepoint(thread);
+  }
 }
 
 // ------------------------------------------------------------------------------------------------------
@@ -1206,6 +1210,13 @@ void ThreadSafepointState::handle_polling_page_exception() {
     // Block the thread
     SafepointMechanism::block_if_requested(thread());
 
+    if (EnableCoroutine) {
+      Coroutine::after_safepoint(thread());
+    }
+    // pay attention: since the call to Coroutine::after_safepoint(thread());
+    // might trigger the GC, any oop value used before this call must be
+    // preserved over GCs(e.g via Handle).
+
     // restore oop result, if any
     if (return_oop) {
       caller_fr.set_saved_oop_result(&map, return_value());
@@ -1222,6 +1233,13 @@ void ThreadSafepointState::handle_polling_page_exception() {
     // Block the thread
     SafepointMechanism::block_if_requested(thread());
     set_at_poll_safepoint(false);
+
+    if (EnableCoroutine) {
+      // we should move this logic forward, to make sure
+      // the sanity check of pending/pending async ex
+      // check is effective for this java call.
+      Coroutine::after_safepoint(thread());
+    }
 
     // If we have a pending async exception deoptimize the frame
     // as otherwise we may never deliver it.

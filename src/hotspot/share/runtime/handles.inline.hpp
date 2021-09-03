@@ -104,6 +104,17 @@ inline void HandleMark::pop_and_restore() {
   debug_only(area->_handle_mark_nesting--);
 }
 
+inline void HandleMark::change_thread_for_wisp(Thread *thread) {
+  assert(EnableCoroutine, "Coroutine is disabled");
+  if (_thread == thread)  return;
+  HandleMark *hm = this;
+  // change thread for the whole list
+  while (hm != NULL) {
+    hm->_thread = thread;
+    hm = hm->_previous_handle_mark;
+  }
+}
+
 inline HandleMarkCleaner::HandleMarkCleaner(Thread* thread) {
   _thread = thread;
   _thread->last_handle_mark()->push();

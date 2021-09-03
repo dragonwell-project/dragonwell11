@@ -252,7 +252,6 @@ JRT_LEAF(jfloat, SharedRuntime::frem(jfloat  x, jfloat  y))
 #endif
 JRT_END
 
-
 JRT_LEAF(jdouble, SharedRuntime::drem(jdouble x, jdouble y))
 #ifdef _WIN64
   union { jdouble d; julong l; } xbits, ybits;
@@ -2049,6 +2048,13 @@ void SharedRuntime::monitor_enter_helper(oopDesc* obj, BasicLock* lock, JavaThre
   if (PrintBiasedLockingStatistics) {
     Atomic::inc(BiasedLocking::slow_path_entry_count_addr());
   }
+
+  // must place it befor EnableStealMark.
+  WispPostStealHandleUpdateMark w(thread, THREAD, __tiv);
+
+  // Coroutine work steal support
+  EnableStealMark p(THREAD);
+
   Handle h_obj(THREAD, obj);
   if (UseBiasedLocking) {
     // Retry fast entry if bias is revoked to avoid unnecessary inflation
@@ -2066,19 +2072,99 @@ void SharedRuntime::monitor_enter_helper(oopDesc* obj, BasicLock* lock, JavaThre
 
 // Handles the uncommon case in locking, i.e., contention or an inflated lock.
 JRT_BLOCK_ENTRY(void, SharedRuntime::complete_monitor_locking_C(oopDesc* obj, BasicLock* lock, JavaThread* thread))
+  WispPostStealHandleUpdateMark w(thread, __hm);
   SharedRuntime::monitor_enter_helper(obj, lock, thread, true);
+JRT_END
+
+void complete_wisp_unlocking_common(oopDesc* _obj, BasicLock* lock, bool leaf, bool proxy_unpark, TRAPS) {
+  assert(EnableCoroutine, "Coroutine is disabled");
+  oop obj(_obj);
+  assert(JavaThread::current() == THREAD, "invariant");
+  // I'm not convinced we need the code contained by MIGHT_HAVE_PENDING anymore
+  // testing was unable to ever fire the assert that guarded it so I have removed it.
+  assert(!HAS_PENDING_EXCEPTION, "Do we need code below anymore?");
+#undef MIGHT_HAVE_PENDING
+#ifdef MIGHT_HAVE_PENDING
+  // Save and restore any pending_exception around the exception mark.
+  // While the slow_exit must not throw an exception, we could come into
+  // this routine with one set.
+  oop pending_excep = NULL;
+  const char* pending_file;
+  int pending_line;
+  if (HAS_PENDING_EXCEPTION) {
+    pending_excep = PENDING_EXCEPTION;
+    pending_file  = THREAD->exception_file();
+    pending_line  = THREAD->exception_line();
+    CLEAR_PENDING_EXCEPTION;
+  }
+#endif /* MIGHT_HAVE_PENDING */
+
+  assert(!UseWispMonitor || (!proxy_unpark || leaf), "if proxy unpark, must be a leaf");
+  assert(leaf || UseWispMonitor, "if not a leaf, must have wisp monitor");
+
+  WispThread* wisp_thread = WispThread::current((JavaThread*)THREAD);
+  if (proxy_unpark) {
+    wisp_thread->set_proxy_unpark_flag();
+  }
+
+  {
+    Thread* thread_tmp = NULL;
+    ExceptionMark __em(thread_tmp);
+    if (leaf) {
+      // Exit must be non-blocking, and therefore no exceptions can be thrown.
+      ObjectSynchronizer::slow_exit(obj, lock, THREAD);
+    } else {
+      HandleMarkCleaner __hm(THREAD);
+      Handle h_obj(THREAD, obj);
+      ObjectSynchronizer::fast_exit(h_obj, lock, THREAD);
+    }
+  }
+
+  if (proxy_unpark) {
+    wisp_thread->clear_proxy_unpark_flag();
+  }
+
+#ifdef MIGHT_HAVE_PENDING
+  if (pending_excep != NULL) {
+    THREAD->set_pending_exception(pending_excep, pending_file, pending_line);
+  }
+#endif /* MIGHT_HAVE_PENDING */
+}
+
+// Handles the uncommon cases of monitor unlocking in compiled code
+JRT_LEAF(void, SharedRuntime::complete_wisp_proxy_monitor_unlocking_C(oopDesc* _obj, BasicLock* lock, JavaThread * THREAD))
+  NoSafepointVerifier nsv;
+  complete_wisp_unlocking_common(_obj, lock, true, true, THREAD);
+JRT_END
+
+JRT_ENTRY_NO_ASYNC(void, SharedRuntime::complete_wisp_monitor_unlocking_C(oopDesc* _obj, BasicLock* lock, JavaThread* thread))
+  complete_wisp_unlocking_common(_obj, lock, false, false, THREAD);
 JRT_END
 
 void SharedRuntime::monitor_exit_helper(oopDesc* obj, BasicLock* lock, JavaThread* thread,
                                         bool use_inlined_fast_locking) {
   assert(JavaThread::current() == thread, "invariant");
   // Exit must be non-blocking, and therefore no exceptions can be thrown.
+  assert(!UseWispMonitor, "wisp monitor shouldn't go here");
+
   EXCEPTION_MARK;
   if (use_inlined_fast_locking) {
     // When using fast locking, the compiled code has already tried the fast case
-    ObjectSynchronizer::slow_exit(obj, lock, THREAD);
+    if (UseWispMonitor) {
+      HandleMarkCleaner __hm(THREAD);
+      Handle h_obj(THREAD, obj);
+      ObjectSynchronizer::slow_exit(h_obj, lock, thread);
+    } else {
+      ObjectSynchronizer::slow_exit(obj, lock, thread);
+    }
   } else {
-    ObjectSynchronizer::fast_exit(obj, lock, THREAD);
+    if (UseWispMonitor) {
+      HandleMarkCleaner __hm(THREAD);
+      Handle h_obj(THREAD, obj);
+      ObjectSynchronizer::fast_exit(h_obj, lock, thread);
+    } else {
+      ObjectSynchronizer::fast_exit(obj, lock, thread);
+    }
   }
 }
 

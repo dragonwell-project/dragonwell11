@@ -84,6 +84,15 @@
   f(java_util_concurrent_locks_AbstractOwnableSynchronizer) \
   //end
 
+#define BASIC_JAVA_CLASSES_DO_PART_COROUTINE(f) \
+  f(java_dyn_CoroutineBase) \
+  f(com_alibaba_wisp_engine_WispCarrier) \
+  f(com_alibaba_wisp_engine_WispTask) \
+  f(com_alibaba_wisp_engine_WispControlGroup) \
+  f(com_alibaba_wisp_engine_WispControlGroup_CpuLimit) \
+  f(com_alibaba_rcm_internal_AbstractResourceContainer) \
+  //end
+
 #define BASIC_JAVA_CLASSES_DO(f) \
         BASIC_JAVA_CLASSES_DO_PART1(f) \
         BASIC_JAVA_CLASSES_DO_PART2(f)
@@ -360,6 +369,7 @@ class java_lang_Thread : AllStatic {
   static int _tid_offset;
   static int _thread_status_offset;
   static int _park_blocker_offset;
+  static int _resourceContainer_offset;
 
   static void compute_offsets();
 
@@ -374,6 +384,7 @@ class java_lang_Thread : AllStatic {
   static void set_thread(oop java_thread, JavaThread* thread);
   // Name
   static oop name(oop java_thread);
+  static oop resourceContainer(oop java_thread);
   static void set_name(oop java_thread, oop name);
   // Priority
   static ThreadPriority priority(oop java_thread);
@@ -400,6 +411,12 @@ class java_lang_Thread : AllStatic {
 
   // Blocker object responsible for thread parking
   static oop park_blocker(oop java_thread);
+
+  // Pointer to type-stable park handler, encoded as jlong.
+  // Should be set when apparently null
+  // For details, see unsafe.cpp Unsafe_Unpark
+  static jlong park_event(oop java_thread);
+  static bool set_park_event(oop java_thread, jlong ptr);
 
   // Java Thread Status for JVMTI and M&M use.
   // This thread status info is saved in threadStatus field of
@@ -438,6 +455,8 @@ class java_lang_Thread : AllStatic {
   static ThreadStatus get_thread_status(oop java_thread_oop);
 
   static const char*  thread_status_name(oop java_thread_oop);
+
+  static int thread_status_offset() { return _thread_status_offset; }
 
   // Debugging
   friend class JavaClasses;
@@ -1570,6 +1589,101 @@ class InjectedField {
   CALLSITECONTEXT_INJECTED_FIELDS(macro)    \
   STACKFRAMEINFO_INJECTED_FIELDS(macro)     \
   MODULE_INJECTED_FIELDS(macro)
+
+class java_dyn_CoroutineBase: AllStatic {
+private:
+  // Note that to reduce dependencies on the JDK we compute these offsets at run-time.
+  static int _data_offset;
+
+  static void compute_offsets();
+
+public:
+  // Accessors
+  static jlong data(oop obj);
+  static void set_data(oop obj, jlong value);
+
+  static int get_data_offset()    { return _data_offset; }
+
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+
+  // Debugging
+  friend class JavaClasses;
+};
+
+class com_alibaba_wisp_engine_WispCarrier: AllStatic {
+private:
+  static int _isInCritical_offset;
+public:
+  static bool in_critical(oop obj);
+
+  static void compute_offsets();
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+};
+
+class com_alibaba_wisp_engine_WispTask: AllStatic {
+private:
+  static int _jvmParkStatus_offset;
+  static int _jdkParkStatus_offset;
+  static int _id_offset;
+  static int _threadWrapper_offset;
+  static int _interrupted_offset;
+  static int _activeCount_offset;
+  static int _stealCount_offset;
+  static int _stealFailureCount_offset;
+  static int _preemptCount_offset;
+  static int _controlGroup_offset;
+  static int _ttr_offset;
+  static int _shutdownPending_offset;
+public:
+  static void set_jvmParkStatus(oop obj, jint status);
+  static int  get_jvmParkStatus(oop obj);
+  static int  get_jdkParkStatus(oop obj);
+  static int  get_id(oop obj);
+  static oop  get_threadWrapper(oop obj);
+  static int  get_interrupted(oop obj);
+  static void set_interrupted(oop obj, jint interrupted);
+  static int  get_activeCount(oop obj);
+  static int  get_stealCount(oop obj);
+  static int  get_stealFailureCount(oop obj);
+  static int  get_preemptCount(oop obj);
+  static void set_preemptCount(oop obj, jint count);
+  static oop  get_controlGroup(oop obj);
+  static oop  get_cpuLimit(oop obj);
+  static long get_ttr(oop obj);
+  static bool get_shutdownPending(oop obj);
+
+  static void compute_offsets();
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+};
+
+class com_alibaba_wisp_engine_WispControlGroup: AllStatic {
+private:
+  static int _cpuLimit_offset;
+public:
+  static oop  get_cpuLimit(oop obj);
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+  static void compute_offsets();
+};
+
+class com_alibaba_wisp_engine_WispControlGroup_CpuLimit: AllStatic {
+private:
+  static int _cfsPeriod_offset;
+  static int _cfsQuota_offset;
+public:
+  static long get_cfsPeriod(oop obj);
+  static long get_cfsQuota(oop obj);
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+  static void compute_offsets();
+};
+
+class com_alibaba_rcm_internal_AbstractResourceContainer: AllStatic {
+private:
+  static int _id_offset;
+public:
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+  static long get_id(oop obj);
+  static void compute_offsets();
+};
 
 // Interface to hard-coded offset checking
 

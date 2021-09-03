@@ -25,6 +25,9 @@
 
 package jdk.internal.misc;
 
+import com.alibaba.wisp.engine.WispEngine;
+import sun.nio.ch.EpollAccess;
+
 import javax.crypto.SealedObject;
 import java.io.ObjectInputFilter;
 import java.lang.module.ModuleDescriptor;
@@ -76,6 +79,10 @@ public class SharedSecrets {
     private static JavaIORandomAccessFileAccess javaIORandomAccessFileAccess;
     private static JavaSecuritySignatureAccess javaSecuritySignatureAccess;
     private static JavaxCryptoSealedObjectAccess javaxCryptoSealedObjectAccess;
+    private static WispEngineAccess wispEngineAccess;
+    private static EpollAccess epollAccess;
+    private static RCMAccesss rcmAccesss;
+    private static WispFileSyncIOAccess wispFileSyncIOAccess;
 
     public static JavaUtilJarAccess javaUtilJarAccess() {
         if (javaUtilJarAccess == null) {
@@ -361,4 +368,45 @@ public class SharedSecrets {
         }
         return javaxCryptoSealedObjectAccess;
     }
+
+    public static WispEngineAccess getWispEngineAccess() {
+        return wispEngineAccess;
+    }
+
+    public static void setWispEngineAccess(WispEngineAccess wispEngineAccess) {
+        SharedSecrets.wispEngineAccess = wispEngineAccess;
+    }
+
+    public static UnsafeAccess getUnsafeAccess() {
+        return Unsafe.access;
+    }
+
+    public static EpollAccess getEpollAccess() {
+        if (epollAccess == null) {
+            EpollAccess.initializeEpoll();
+        }
+        return epollAccess;
+    }
+
+    public static void setEpollAccess(EpollAccess epollAccess) {
+        SharedSecrets.epollAccess = epollAccess;
+    }
+
+    public static RCMAccesss getRCMAccess() {
+        return rcmAccesss;
+    }
+
+    public static void setRCMAccesss(RCMAccesss rcmAccesss) {
+        SharedSecrets.rcmAccesss = rcmAccesss;
+    }
+
+
+    public static WispFileSyncIOAccess getWispFileSyncIOAccess() {
+        return wispFileSyncIOAccess;
+    }
+
+    public static void setWispFileSyncIOAccess(WispFileSyncIOAccess wispAsyncIOAccess) {
+        SharedSecrets.wispFileSyncIOAccess = wispAsyncIOAccess;
+    }
+
 }

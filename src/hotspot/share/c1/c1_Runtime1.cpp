@@ -209,7 +209,6 @@ CodeBlob* Runtime1::generate_blob(BufferBlob* buffer_blob, int stub_id, const ch
   assert(oop_maps == NULL || sasm->frame_size() != no_frame_size,
          "if stub has an oop map it must have a valid frame size");
   assert(!expect_oop_map || oop_maps != NULL, "must have an oopmap");
-
   // align so printing shows nop's instead of random code at the end (SimpleStubs are aligned)
   sasm->align(BytesPerWord);
   // make sure all code is in code buffer
@@ -497,7 +496,8 @@ JRT_ENTRY_NO_ASYNC(static address, exception_handler_for_pc_helper(JavaThread* t
   // Reset method handle flag.
   thread->set_is_method_handle_return(false);
 
-  Handle exception(thread, ex);
+  Handle exception(thread, WispThread::is_current_death_pending(thread)?
+    (oopDesc*) Universe::wisp_thread_death_exception() : ex);
   nm = CodeCache::find_nmethod(pc);
   assert(nm != NULL, "this is not an nmethod");
   // Adjust the pc as needed/
@@ -689,6 +689,9 @@ JRT_ENTRY(void, Runtime1::throw_incompatible_class_change_error(JavaThread* thre
   SharedRuntime::throw_and_post_jvmti_exception(thread, vmSymbols::java_lang_IncompatibleClassChangeError());
 JRT_END
 
+// funtions in `Runtime1` are all private, so add a function pointer to get its address
+void (*Runtime1::monitorenter_address_C1)(JavaThread *, oopDesc* obj, BasicObjectLock *) = Runtime1::monitorenter;
+address monitorenter_address_C1 = (address)Runtime1::monitorenter_address_C1;
 
 JRT_BLOCK_ENTRY(void, Runtime1::monitorenter(JavaThread* thread, oopDesc* obj, BasicObjectLock* lock))
   NOT_PRODUCT(_monitorenter_slowcase_cnt++;)
@@ -699,18 +702,65 @@ JRT_BLOCK_ENTRY(void, Runtime1::monitorenter(JavaThread* thread, oopDesc* obj, B
       lock->set_obj(obj);
     }
   }
+  WispPostStealHandleUpdateMark w(thread, __hm);
   SharedRuntime::monitor_enter_helper(obj, lock->lock(), thread, UseFastLocking);
 JRT_END
 
+
+JRT_ENTRY_NO_ASYNC(void, Runtime1::monitorexit_wisp(JavaThread* thread, BasicObjectLock* lock))
+  NOT_PRODUCT(_monitorexit_slowcase_cnt++;)
+  assert(UseWispMonitor, "UseWispMonitor is off");
+  Thread* thread_tmp = NULL;
+  ExceptionMark __em(thread_tmp);
+  oop obj = lock->obj();
+  // Almost a copy from Runtime1::monitorexit,
+  // excpet that handles are used to access objects.
+  Handle h_obj(thread, obj);
+  ObjectSynchronizer::fast_exit(h_obj, lock->lock(), THREAD);
+JRT_END
+
+
+// Handle spcecial case for wisp unpark.
+// This function is executed only when the following four conditions are all satisfied
+// 1. A synchronized method is compiled by C1
+// 2. An exception happened in this method
+// 3. There is no exception handler in this method, So it needs to unwind to its caller
+// 4. GC happened during unpark
+// This path will not call Java, so JRT_LEAF is used.
+JRT_LEAF(void, Runtime1::monitorexit_wisp_proxy(JavaThread* thread, BasicObjectLock* lock))
+  NoSafepointVerifier nsv;
+  NOT_PRODUCT(_monitorexit_slowcase_cnt++;)
+  assert(UseWispMonitor, "UseWispMonitor is off");
+  EXCEPTION_MARK;
+  oop obj = lock->obj();
+  assert(oopDesc::is_oop(obj), "must be NULL or an object");
+  // Setting _is_proxy_unpark of current wisp thread to true.
+  // Proxy unpark will be used when this flag is true.
+  WispThread* wisp_thread = WispThread::current(thread);
+  wisp_thread->set_proxy_unpark_flag();
+  // When using fast locking, the compiled code has already tried the fast case
+  if (UseFastLocking) {
+    ObjectSynchronizer::slow_exit(obj, lock->lock(), THREAD);
+  } else {
+    ObjectSynchronizer::fast_exit(obj, lock->lock(), THREAD);
+  }
+  // proxy_unpark flag may get uncleared here. we need to force clear it
+  // to prevent disturbances from the monitorenter next time.
+  wisp_thread->clear_proxy_unpark_flag();
+JRT_END
 
 JRT_LEAF(void, Runtime1::monitorexit(JavaThread* thread, BasicObjectLock* lock))
   NOT_PRODUCT(_monitorexit_slowcase_cnt++;)
   assert(thread->last_Java_sp(), "last_Java_sp must be set");
   oop obj = lock->obj();
   assert(oopDesc::is_oop(obj), "must be NULL or an object");
-  SharedRuntime::monitor_exit_helper(obj, lock->lock(), thread, UseFastLocking);
+  if (UseWispMonitor) {
+    HandleMarkCleaner __hm(thread);
+    SharedRuntime::monitor_exit_helper(obj, lock->lock(), thread, UseFastLocking);
+  } else {
+    SharedRuntime::monitor_exit_helper(obj, lock->lock(), thread, UseFastLocking);
+  }
 JRT_END
-
 // Cf. OptoRuntime::deoptimize_caller_frame
 JRT_ENTRY(void, Runtime1::deoptimize(JavaThread* thread, jint trap_request))
   // Called from within the owner thread, so no need for safepoint

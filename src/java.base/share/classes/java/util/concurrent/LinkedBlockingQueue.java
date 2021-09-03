@@ -164,6 +164,10 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
     /** Wait queue for waiting puts */
     private final Condition notFull = putLock.newCondition();
 
+    int getCapacity() {
+        return capacity;
+    }
+
     /**
      * Signals a waiting take. Called only from put/offer (which do not
      * otherwise ordinarily lock takeLock.)

@@ -100,7 +100,7 @@ JavaCallWrapper::JavaCallWrapper(const methodHandle& callee_method, Handle recei
   _anchor.copy(_thread->frame_anchor());
   _thread->frame_anchor()->clear();
 
-  debug_only(_thread->inc_java_call_counter());
+  _thread->inc_java_call_counter();
   _thread->set_active_handles(new_handles);     // install new handle block and reset Java frame linkage
 
   assert (_thread->thread_state() != _thread_in_native, "cannot set native pc to NULL");
@@ -115,6 +115,15 @@ JavaCallWrapper::JavaCallWrapper(const methodHandle& callee_method, Handle recei
   }
 }
 
+void JavaCallWrapper::initialize(JavaThread* thread, JNIHandleBlock* handles, Method* callee_method, oop receiver, JavaValue* result) {
+  assert(EnableCoroutine, "EnableCoroutine is off");
+  _thread = thread;
+  _handles = handles;
+  _callee_method = callee_method;
+  _receiver = receiver;
+  _result = result;
+  _anchor.clear();
+}
 
 JavaCallWrapper::~JavaCallWrapper() {
   assert(_thread == JavaThread::current(), "must still be the same thread");
@@ -125,7 +134,7 @@ JavaCallWrapper::~JavaCallWrapper() {
 
   _thread->frame_anchor()->zap();
 
-  debug_only(_thread->dec_java_call_counter());
+  _thread->dec_java_call_counter();
 
   if (_anchor.last_Java_sp() == NULL) {
     _thread->set_base_of_stack_pointer(NULL);
@@ -438,6 +447,10 @@ void JavaCalls::call_helper(JavaValue* result, const methodHandle& method, JavaC
   // do call
   { JavaCallWrapper link(method, receiver, result, CHECK);
     { HandleMark hm(thread);  // HandleMark used by HandleMarkCleaner
+
+      // thread steal support
+      methodHandle* m = const_cast<methodHandle*>(&method);
+      WispPostStealHandleUpdateMark w(thread, THREAD, *m, m, link);
 
       StubRoutines::call_stub()(
         (address)&link,

@@ -1131,6 +1131,12 @@ void frame::nmethods_do(CodeBlobClosure* cf) {
   }
 }
 
+void frame::compiledMethods_do(CodeBlobClosure* cf) {
+  if (_cb != NULL && _cb->is_compiled()) {
+    cf->do_code_blob(_cb);
+  }
+}
+
 
 // call f() on the interpreted Method*s in the stack.
 // Have to walk the entire code cache for the compiled frames Yuck.
@@ -1295,6 +1301,11 @@ StackFrameStream::StackFrameStream(JavaThread *thread, bool update) : _reg_map(t
   _is_done = false;
 }
 
+StackFrameStream::StackFrameStream(JavaThread *thread, frame last_frame, bool update) : _reg_map(thread, update) {
+  assert(EnableCoroutine, "EnableCoroutine is off");
+  _fr = last_frame;
+  _is_done = false;
+}
 
 #ifndef PRODUCT
 

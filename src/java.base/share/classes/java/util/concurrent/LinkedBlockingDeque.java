@@ -198,6 +198,9 @@ public class LinkedBlockingDeque<E>
         addAll(c);
     }
 
+    int getCapacity() {
+        return capacity;
+    }
 
     // Basic linking and unlinking operations, called only while holding lock
 

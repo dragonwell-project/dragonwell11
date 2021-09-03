@@ -40,6 +40,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.module.ServicesCatalog;
 import jdk.internal.reflect.ConstantPool;
 import sun.reflect.annotation.AnnotationType;
@@ -305,4 +307,40 @@ public interface JavaLangAccess {
      * @throws IllegalArgumentException for malformed surrogates
      */
     byte[] getBytesUTF8NoRepl(String s);
+
+    /**
+     * Returns a reference to the currently executing thread object.
+     */
+    Thread currentThread0();
+
+    void yield0();
+
+    void setWispTask(Thread thread, WispTask task);
+
+    WispTask getWispTask(Thread thread);
+
+    void setWispAlive(Thread thread, boolean b);
+
+    boolean isInSameNative(Thread thread);
+
+    void threadExit(Thread thread);
+
+    void wispBooted();
+
+    /**
+     * Set the value of {@code thread.resourceContainer}
+     *
+     * @param thread target thread to be modified
+     */
+    void setResourceContainer(Thread thread, AbstractResourceContainer container);
+
+    /**
+     * Get the reference to the thread attached {@code ResourceContainer}
+     */
+    AbstractResourceContainer getResourceContainer(Thread thread);
+
+    /**
+     * Get the reference to the thread's inherited {@code ResourceContainer}
+     */
+    AbstractResourceContainer getInheritedResourceContainer(Thread thread);
 }

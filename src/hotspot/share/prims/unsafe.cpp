@@ -28,6 +28,7 @@
 #include "classfile/classFileStream.hpp"
 #include "classfile/vmSymbols.hpp"
 #include "jfr/jfrEvents.hpp"
+#include "compiler/compileBroker.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/access.inline.hpp"
@@ -37,6 +38,7 @@
 #include "oops/typeArrayOop.inline.hpp"
 #include "prims/unsafe.hpp"
 #include "runtime/atomic.hpp"
+#include "runtime/coroutine.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/jniHandles.inline.hpp"
@@ -1007,6 +1009,160 @@ UNSAFE_ENTRY(jint, Unsafe_GetLoadAverage0(JNIEnv *env, jobject unsafe, jdoubleAr
   return ret;
 } UNSAFE_END
 
+JVM_ENTRY(jlong, CoroutineSupport_getNativeThreadCoroutine(JNIEnv* env, jclass klass))
+  DEBUG_CORO_PRINT("CoroutineSupport_getNativeThreadCoroutine\n");
+  assert(EnableCoroutine, "pre-condition");
+
+  Coroutine* list = thread->coroutine_list();
+  assert(list != NULL, "thread isn't initialized for coroutines");
+
+  return (jlong)list;
+JVM_END
+
+JVM_ENTRY(void, CoroutineSupport_switchTo(JNIEnv* env, jclass klass, jobject old_coroutine, jobject target_coroutine))
+  ShouldNotReachHere();
+JVM_END
+
+JVM_ENTRY(void, CoroutineSupport_switchToAndTerminate(JNIEnv* env, jclass klass, jobject old_coroutine, jobject target_coroutine))
+
+  assert(old_coroutine != NULL, "NULL old CoroutineBase in switchToAndTerminate");
+  assert(target_coroutine == NULL, "expecting NULL");
+
+  oop old_oop = JNIHandles::resolve(old_coroutine);
+  Coroutine* coro = (Coroutine*)java_dyn_CoroutineBase::data(old_oop);
+  assert(coro != NULL, "NULL old coroutine in switchToAndTerminate");
+
+  java_dyn_CoroutineBase::set_data(old_oop, 0);
+
+  CoroutineStack::free_stack(coro->stack(), thread);
+  delete coro;
+JVM_END
+
+JVM_ENTRY(void, CoroutineSupport_switchToAndExit(JNIEnv* env, jclass klass, jobject old_coroutine, jobject target_coroutine))
+  {
+    THROW(vmSymbols::java_dyn_CoroutineExitException());
+  }
+JVM_END
+
+JVM_ENTRY(jlong, CoroutineSupport_createCoroutine(JNIEnv* env, jclass klass, jobject coroutine, jlong stack_size))
+  DEBUG_CORO_PRINT("CoroutineSupport_createCoroutine\n");
+
+  assert(coroutine != NULL, "cannot create coroutine with NULL Coroutine object");
+
+  if (stack_size == 0 || stack_size < -1) {
+    THROW_MSG_0(vmSymbols::java_lang_IllegalArgumentException(), "invalid stack size");
+  }
+
+  CoroutineStack* stack = CoroutineStack::create_stack(thread, stack_size);
+  if (stack == NULL) {
+    THROW_0(vmSymbols::java_lang_OutOfMemoryError());
+  }
+
+  Coroutine* coro = Coroutine::create_coroutine(thread, stack, JNIHandles::resolve(coroutine));
+  if (coro == NULL) {
+    THROW_0(vmSymbols::java_lang_OutOfMemoryError());
+  }
+  coro->insert_into_list(thread->coroutine_list());
+  return (jlong)coro;
+JVM_END
+
+JVM_ENTRY(jboolean, CoroutineSupport_testDisposableAndTryReleaseStack(JNIEnv* env, jclass klass, jlong coroutineLong))
+  DEBUG_CORO_PRINT("CoroutineSupport_testDisposableAndTryReleaseStack\n");
+  Coroutine* coro = (Coroutine*)coroutineLong;
+  assert(coro != NULL, "cannot free NULL coroutine");
+  assert(!coro->is_thread_coroutine(), "cannot free thread coroutine");
+
+  jboolean is_disposable = coro->is_disposable();
+  if (is_disposable) {
+    CoroutineStack::free_stack(coro->stack(), thread);
+    delete coro;
+  }
+  return is_disposable;
+JVM_END
+
+JVM_ENTRY(jobject, CoroutineSupport_cleanupCoroutine(JNIEnv* env, jclass klass))
+  DEBUG_CORO_PRINT("CoroutineSupport_cleanupCoroutine\n");
+
+  // TODO: implementation needed...
+
+  return NULL;
+JVM_END
+
+JVM_ENTRY(void, CoroutineSupport_setWispBooted(JNIEnv* env, jclass klass))
+  DEBUG_CORO_PRINT("CoroutineSupport_setWispBooted\n");
+  WispThread::set_wisp_booted(thread);
+JVM_END
+
+JVM_ENTRY (jobject, CoroutineSupport_getNextCoroutine(JNIEnv* env, jclass klass, jlong coroPtr))
+  assert(EnableCoroutine, "pre-condition");
+  Coroutine* coro = (Coroutine*)coroPtr;
+  assert (coro->next()->coroutine() != NULL, "coroutine oop can't be null");
+  return JNIHandles::make_local(env, coro->next()->coroutine());
+JVM_END
+
+JVM_ENTRY (void, CoroutineSupport_moveCoroutine(JNIEnv* env, jclass klass, jlong coroPtr, jlong targetPtr))
+  assert(EnableCoroutine, "pre-condition");
+  Coroutine* coro = (Coroutine*)coroPtr;
+  Coroutine* target = (Coroutine*)targetPtr;
+  Coroutine::move(coro, target);
+JVM_END
+
+JVM_ENTRY (void, CoroutineSupport_markThreadCoroutine(JNIEnv* env, jclass klass, jlong coroPtr, jobject coroObj))
+  assert(EnableCoroutine, "pre-condition");
+  Coroutine* coro = (Coroutine*)coroPtr;
+  oop x = JNIHandles::resolve_non_null(coroObj);
+  coro->set_coroutine(x);
+  assert (coro->is_thread_coroutine() == true, "should be called by thread coro");
+  assert (coro->coroutine() != NULL, "coroutine oop can't be null");
+JVM_END
+
+JVM_ENTRY(jboolean, CoroutineSupport_stealCoroutine(JNIEnv* env, jclass klass, jlong coroPtr))
+  // We've already locked the target's thread
+  // and source's thread. target_thread->coroutine_list()s have
+  // no way to be changed during this process.
+  //
+  // The lock will also block coroutine switch operation,
+  // so we must finish the steal operation as soon as possible.
+  Coroutine* coro = (Coroutine*) coroPtr;
+  if (coro == NULL || coro->enable_steal_count() != coro->java_call_counter()|| coro->is_yielding()) {
+      return false;       // an Exception throws and the coroutine being stealed is exited
+  }
+  assert(coro->thread() != thread, "steal from self");
+  assert(coro->state() != Coroutine::_current, "running");
+  coro->remove_from_list(coro->thread()->coroutine_list());
+  coro->insert_into_list(thread->coroutine_list());
+  // change thread logic
+  if (coro->last_handle_mark() != NULL) {
+    coro->last_handle_mark()->change_thread_for_wisp(thread);
+  }
+  coro->change_thread_for_wisp(thread);
+  coro->set_thread(thread);
+  if (UseWispMonitor) {
+    if (coro->wisp_thread()) {
+      coro->wisp_thread()->change_thread(thread);
+      coro->set_wisp_engine(thread->current_coroutine()->wisp_engine());
+    }
+  }
+  return true;
+JVM_END
+
+JVM_ENTRY (jboolean, CoroutineSupport_shouldThrowException0(JNIEnv* env, jclass klass, jlong coroPtr))
+  assert(EnableCoroutine, "pre-condition");
+  Coroutine* coro = (Coroutine*)coroPtr;
+  assert(coro == thread->current_coroutine(), "invariant");
+  return coro->clinit_call_count() == 0;
+JVM_END
+
+JVM_ENTRY (jobjectArray, CoroutineSupport_getCoroutineStack(JNIEnv* env, jclass klass, jlong coroPtr))
+  assert(EnableCoroutine, "pre-condition");
+
+  JvmtiVMObjectAllocEventCollector oam;
+
+  Coroutine* coro = (Coroutine*)coroPtr;
+
+  Handle stacktraces = ThreadService::dump_coroutine_stack_trace(coro, CHECK_NULL);
+  return (jobjectArray)JNIHandles::make_local(env, stacktraces());
+JVM_END
 
 /// JVM_RegisterUnsafeMethods
 
@@ -1073,8 +1229,8 @@ static JNINativeMethod jdk_internal_misc_Unsafe_methods[] = {
     {CC "compareAndExchangeInt",  CC "(" OBJ "J""I""I"")I", FN_PTR(Unsafe_CompareAndExchangeInt)},
     {CC "compareAndExchangeLong", CC "(" OBJ "J""J""J"")J", FN_PTR(Unsafe_CompareAndExchangeLong)},
 
-    {CC "park",               CC "(ZJ)V",                FN_PTR(Unsafe_Park)},
-    {CC "unpark",             CC "(" OBJ ")V",           FN_PTR(Unsafe_Unpark)},
+    {CC "park0",              CC "(ZJ)V",                FN_PTR(Unsafe_Park)},
+    {CC "unpark0",            CC "(" OBJ ")V",           FN_PTR(Unsafe_Unpark)},
 
     {CC "getLoadAverage0",    CC "([DI)I",               FN_PTR(Unsafe_GetLoadAverage0)},
 
@@ -1093,6 +1249,32 @@ static JNINativeMethod jdk_internal_misc_Unsafe_methods[] = {
     {CC "isBigEndian0",       CC "()Z",                  FN_PTR(Unsafe_isBigEndian0)},
     {CC "unalignedAccess0",   CC "()Z",                  FN_PTR(Unsafe_unalignedAccess0)}
 };
+
+#define COBA "Ljava/dyn/CoroutineBase;"
+#define COR "Ljava/dyn/Coroutine;"
+#define STE "Ljava/lang/StackTraceElement;"
+
+JNINativeMethod coroutine_support_methods[] = {
+    {CC"switchTo",                CC"("COBA COBA")V", FN_PTR(CoroutineSupport_switchTo)},
+    {CC"switchToAndTerminate",    CC"("COBA COBA")V", FN_PTR(CoroutineSupport_switchToAndTerminate)},
+    {CC"switchToAndExit",         CC"("COBA COBA")V", FN_PTR(CoroutineSupport_switchToAndExit)},
+    {CC"getNativeThreadCoroutine",CC"()J",            FN_PTR(CoroutineSupport_getNativeThreadCoroutine)},
+    {CC"createCoroutine",         CC"("COBA"J)J",     FN_PTR(CoroutineSupport_createCoroutine)},
+    {CC"testDisposableAndTryReleaseStack", 
+                                  CC"(J)Z",           FN_PTR(CoroutineSupport_testDisposableAndTryReleaseStack)},
+    {CC"cleanupCoroutine",        CC"()"COBA,         FN_PTR(CoroutineSupport_cleanupCoroutine)},
+    {CC"setWispBooted",           CC"()V",            FN_PTR(CoroutineSupport_setWispBooted)},
+    {CC"stealCoroutine",          CC"(J)Z",           FN_PTR(CoroutineSupport_stealCoroutine)},
+    {CC"getNextCoroutine",        CC"(J)"COR,         FN_PTR(CoroutineSupport_getNextCoroutine)},
+    {CC"moveCoroutine",           CC"(JJ)V",          FN_PTR(CoroutineSupport_moveCoroutine)},
+    {CC"markThreadCoroutine",     CC"(J"COBA")V",     FN_PTR(CoroutineSupport_markThreadCoroutine)},
+    {CC"getCoroutineStack",       CC"(J)["STE,        FN_PTR(CoroutineSupport_getCoroutineStack)},
+    {CC"shouldThrowException0", CC"(J)Z",           FN_PTR(CoroutineSupport_shouldThrowException0)},
+};
+
+#define COMPILE_CORO_METHODS_BEFORE (3)
+
+#undef COBA
 
 #undef CC
 #undef FN_PTR
@@ -1120,3 +1302,31 @@ JVM_ENTRY(void, JVM_RegisterJDKInternalMiscUnsafeMethods(JNIEnv *env, jclass uns
   int ok = env->RegisterNatives(unsafeclass, jdk_internal_misc_Unsafe_methods, sizeof(jdk_internal_misc_Unsafe_methods)/sizeof(JNINativeMethod));
   guarantee(ok == 0, "register jdk.internal.misc.Unsafe natives");
 } JVM_END
+
+JVM_ENTRY(void, JVM_RegisterCoroutineSupportMethods(JNIEnv *env, jclass corocls))
+  {
+    assert(EnableCoroutine, "coroutine not enabled");
+
+    ThreadToNativeFromVM ttnfv(thread);
+    {
+      int coro_method_count = (int)(sizeof(coroutine_support_methods)/sizeof(JNINativeMethod));
+
+      for (int i=0; i<coro_method_count; i++) {
+        env->RegisterNatives(corocls, coroutine_support_methods + i, 1);
+        if (env->ExceptionOccurred()) {
+          tty->print_cr("Warning:  Coroutine classes not found (%i)", i);
+          env->ExceptionDescribe();
+          vm_exit(1);
+        }
+      }
+      for (int i = 0; i < COMPILE_CORO_METHODS_BEFORE; i++) {
+        jmethodID id = env->GetStaticMethodID(corocls, coroutine_support_methods[i].name, coroutine_support_methods[i].signature);
+        {
+          ThreadInVMfromNative tivfn(thread);
+          methodHandle method(Method::resolve_jmethod_id(id));
+          AdapterHandlerLibrary::create_native_wrapper(method);
+        }
+      }
+    }
+  }
+JVM_END

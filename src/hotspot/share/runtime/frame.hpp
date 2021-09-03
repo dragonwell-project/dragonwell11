@@ -378,6 +378,7 @@ class frame {
   // Memory management
   void oops_do(OopClosure* f, CodeBlobClosure* cf, RegisterMap* map) { oops_do_internal(f, cf, map, true); }
   void nmethods_do(CodeBlobClosure* cf);
+  void compiledMethods_do(CodeBlobClosure* cf);
 
   // RedefineClasses support for finding live interpreted methods on the stack
   void metadata_do(void f(Metadata*));
@@ -459,6 +460,7 @@ class StackFrameStream : public StackObj {
   bool        _is_done;
  public:
    StackFrameStream(JavaThread *thread, bool update = true);
+   StackFrameStream(JavaThread *thread, frame last_frame, bool update = true);
 
   // Iteration
   inline bool is_done();

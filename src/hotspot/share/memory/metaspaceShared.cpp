@@ -431,6 +431,14 @@ void MetaspaceShared::serialize(SerializeClosure* soc) {
   soc->do_tag(666);
 }
 
+void MetaspaceShared::serialize_well_known_classes(SerializeClosure* soc) {
+  if (EnableCoroutine) {
+    java_dyn_CoroutineBase::serialize_offsets(soc);
+    com_alibaba_wisp_engine_WispCarrier::serialize_offsets(soc);
+    com_alibaba_wisp_engine_WispTask::serialize_offsets(soc);
+  }
+}
+
 address MetaspaceShared::cds_i2i_entry_code_buffers(size_t total_size) {
   if (DumpSharedSpaces) {
     if (_cds_i2i_entry_code_buffers == NULL) {
