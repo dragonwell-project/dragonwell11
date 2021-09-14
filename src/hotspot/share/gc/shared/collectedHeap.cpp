@@ -202,6 +202,7 @@ bool CollectedHeap::is_oop(oop object) const {
 
 CollectedHeap::CollectedHeap() :
   _is_gc_active(false),
+  _cleanup_unused(false),
   _total_collections(0),
   _total_full_collections(0),
   _gc_cause(GCCause::_no_gc),

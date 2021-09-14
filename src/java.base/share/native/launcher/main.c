@@ -93,6 +93,80 @@ WinMain(HINSTANCE inst, HINSTANCE previnst, LPSTR cmdline, int cmdshow)
     __initenv = _environ;
 
 #else /* JAVAW */
+
+#include <sys/wait.h>
+
+static int is_checkpoint = 0;
+
+static void parse_checkpoint(const char *arg) {
+    if (!is_checkpoint) {
+        const char *checkpoint_arg = "-XX:CRaCCheckpointTo";
+        const int len = strlen(checkpoint_arg);
+        if (0 == strncmp(arg, checkpoint_arg, len)) {
+            is_checkpoint = 1;
+        }
+    }
+}
+
+static pid_t g_child_pid = -1;
+
+static int wait_for_children() {
+    int status = -1;
+    pid_t pid;
+    do {
+        int st = 0;
+        pid = wait(&st);
+        if (pid == g_child_pid) {
+            status = st;
+        }
+    } while (-1 != pid || ECHILD != errno);
+
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+
+    if (WIFSIGNALED(status)) {
+        // Try to terminate the current process with the same signal
+        // as the child process was terminated
+        const int sig = WTERMSIG(status);
+        signal(sig, SIG_DFL);
+        raise(sig);
+        // Signal was ignored, return 128+n as bash does
+        // see https://linux.die.net/man/1/bash
+        return 128+sig;
+    }
+
+    return 1;
+}
+
+static void sighandler(int sig, siginfo_t *info, void *param) {
+    if (0 < g_child_pid) {
+        kill(g_child_pid, sig);
+    }
+}
+
+static void setup_sighandler() {
+    struct sigaction sigact;
+    sigfillset(&sigact.sa_mask);
+    sigact.sa_flags = SA_SIGINFO;
+    sigact.sa_sigaction = sighandler;
+
+    for (int sig = 1; sig < __SIGRTMIN; ++sig) {
+        if (sig == SIGKILL || sig == SIGSTOP) {
+            continue;
+        }
+        if (-1 == sigaction(sig, &sigact, NULL)) {
+            perror("sigaction");
+        }
+    }
+
+    sigset_t allset;
+    sigfillset(&allset);
+    if (-1 == sigprocmask(SIG_UNBLOCK, &allset, NULL)) {
+        perror("sigprocmask");
+    }
+}
+
 JNIEXPORT int
 main(int argc, char **argv)
 {
@@ -183,6 +257,7 @@ main(int argc, char **argv)
         }
         // Iterate the rest of command line
         for (i = 1; i < argc; i++) {
+            parse_checkpoint(argv[i]);
             JLI_List argsInFile = JLI_PreprocessArg(argv[i], JNI_TRUE);
             if (NULL == argsInFile) {
                 JLI_List_add(args, JLI_StringDup(argv[i]));
@@ -201,6 +276,18 @@ main(int argc, char **argv)
         // add the NULL pointer at argv[argc]
         JLI_List_add(args, NULL);
         margv = args->elements;
+    }
+
+    // Avoid unexpected process completion when checkpointing under docker container run
+    // by creating the main process waiting for children before exit.
+    if (is_checkpoint && 1 == getpid()) {
+        g_child_pid = fork();
+        if (0 < g_child_pid) {
+            // The main process should forward signals to the child.
+            setup_sighandler();
+            const int status = wait_for_children();
+            exit(status);
+        }
     }
 #endif /* WIN32 */
     return JLI_Launch(margc, margv,

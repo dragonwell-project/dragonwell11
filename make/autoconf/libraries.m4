@@ -130,6 +130,15 @@ AC_DEFUN_ONCE([LIB_SETUP_LIBRARIES],
     BASIC_JVM_LIBS="$BASIC_JVM_LIBS -lthread"
   fi
 
+  # librt for legacy clock_gettime
+  if test "x$OPENJDK_TARGET_OS" = xlinux; then
+    # Hotspot needs to link librt to get the clock_* functions.
+    # But once our supported minimum build and runtime platform
+    # has glibc 2.17, this can be removed as the functions are
+    # in libc.
+    BASIC_JVM_LIBS="$BASIC_JVM_LIBS -lrt"
+  fi
+
   # Because RISC-V only has word-sized atomics, it requries libatomic where
   # other common architectures do not.  So link libatomic by default.
   if test "x$OPENJDK_TARGET_OS" = xlinux && test "x$OPENJDK_TARGET_CPU" = xriscv64; then

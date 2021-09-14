@@ -34,13 +34,16 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
+import jdk.crac.Context;
+import jdk.crac.Resource;
+import jdk.internal.crac.JDKResource;
 import jdk.internal.misc.InnocuousThread;
 
 /**
  * CleanerImpl manages a set of object references and corresponding cleaning actions.
  * CleanerImpl provides the functionality of {@link java.lang.ref.Cleaner}.
  */
-public final class CleanerImpl implements Runnable {
+public final class CleanerImpl implements Runnable, JDKResource {
 
     /**
      * An object to access the CleanerImpl from a Cleaner; set by Cleaner init.
@@ -89,6 +92,7 @@ public final class CleanerImpl implements Runnable {
         phantomCleanableList = new PhantomCleanableRef();
         weakCleanableList = new WeakCleanableRef();
         softCleanableList = new SoftCleanableRef();
+        jdk.internal.crac.Core.getJDKContext().register(this);
     }
 
     /**
@@ -154,6 +158,20 @@ public final class CleanerImpl implements Runnable {
                 // (including interruption of cleanup thread)
             }
         }
+    }
+
+    @Override
+    public Priority getPriority() {
+        return Priority.CLEANERS;
+    }
+
+    @Override
+    public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
+        queue.waitForWaiters(1);
+    }
+
+    @Override
+    public void afterRestore(Context<? extends Resource> context) throws Exception {
     }
 
     /**

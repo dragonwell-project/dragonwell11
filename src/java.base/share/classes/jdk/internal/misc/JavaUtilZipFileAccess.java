@@ -44,5 +44,5 @@ public interface JavaUtilZipFileAccess {
     public Stream<String> entryNameStream(ZipFile zip);
     public void setExtraAttributes(ZipEntry ze, int extraAttrs);
     public int getExtraAttributes(ZipEntry ze);
+    public void beforeCheckpoint(ZipFile zip);
 }
-
