@@ -280,4 +280,16 @@ class VMManagementImpl implements VMManagement {
             return Collections.emptyList();
         }
     }
+
+    // CRaC support
+    private native long getRestoreTime0();
+    private native long getUptimeSinceRestore0();
+
+    public long getRestoreTime() {
+        return getRestoreTime0();
+    }
+
+    public long getUptimeSinceRestore() {
+        return getUptimeSinceRestore0();
+    }
 }

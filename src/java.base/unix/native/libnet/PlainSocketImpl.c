@@ -144,6 +144,19 @@ Java_java_net_PlainSocketImpl_initProto(JNIEnv *env, jclass cls) {
     marker_fd = getMarkerFD();
 }
 
+JNIEXPORT void JNICALL
+Java_java_net_PlainSocketImpl_beforeCheckpoint0(JNIEnv *env, jclass cls) {
+    /* synchronized by closeLock */
+    close(marker_fd);
+    marker_fd = -1;
+}
+
+JNIEXPORT void JNICALL
+Java_java_net_PlainSocketImpl_afterRestore0(JNIEnv *env, jclass cls) {
+    /* synchronized by closeLock */
+    marker_fd = getMarkerFD();
+}
+
 /* a global reference to the java.net.SocketException class. In
  * socketCreate, we ensure that this is initialized. This is to
  * prevent the problem where socketCreate runs out of file
@@ -766,7 +779,7 @@ Java_java_net_PlainSocketImpl_socketAvailable(JNIEnv *env, jobject this) {
  * Signature: (Z)V
  */
 JNIEXPORT void JNICALL
-Java_java_net_PlainSocketImpl_socketClose0(JNIEnv *env, jobject this,
+Java_java_net_PlainSocketImpl_socketClose1(JNIEnv *env, jobject this,
                                           jboolean useDeferredClose) {
 
     jobject fdObj = (*env)->GetObjectField(env, this, psi_fdID);

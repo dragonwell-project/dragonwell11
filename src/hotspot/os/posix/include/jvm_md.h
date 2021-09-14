@@ -94,6 +94,10 @@
 #define SHUTDOWN2_SIGNAL SIGINT
 #define SHUTDOWN3_SIGNAL SIGTERM
 
+#ifdef LINUX
+#define RESTORE_SIGNAL   (SIGRTMIN + 2)
+#endif
+
 /* With 1.4.1 libjsig added versioning: used in os_solaris.cpp and jsig.c */
 #define JSIG_VERSION_1_4_1   0x30140100
 

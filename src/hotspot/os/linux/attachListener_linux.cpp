@@ -28,7 +28,10 @@
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/os.inline.hpp"
 #include "services/attachListener.hpp"
+#include "attachListener_linux.hpp"
 #include "services/dtraceAttacher.hpp"
+#include "linuxAttachOperation.hpp"
+#include "memory/resourceArea.hpp"
 
 #include <unistd.h>
 #include <signal.h>
@@ -36,10 +39,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
-
-#ifndef UNIX_PATH_MAX
-#define UNIX_PATH_MAX   sizeof(((struct sockaddr_un *)0)->sun_path)
-#endif
 
 // The attach mechanism on Linux uses a UNIX domain socket. An attach listener
 // thread is created at startup or is created on-demand via a signal from
@@ -57,78 +56,12 @@
 //    obtain the credentials of client. We check that the effective uid
 //    of the client matches this process.
 
-// forward reference
-class LinuxAttachOperation;
-
-class LinuxAttachListener: AllStatic {
- private:
-  // the path to which we bind the UNIX domain socket
-  static char _path[UNIX_PATH_MAX];
-  static bool _has_path;
-
-  // the file descriptor for the listening socket
-  static volatile int _listener;
-
-  static bool _atexit_registered;
-
-  // reads a request from the given connected socket
-  static LinuxAttachOperation* read_request(int s);
-
- public:
-  enum {
-    ATTACH_PROTOCOL_VER = 1                     // protocol version
-  };
-  enum {
-    ATTACH_ERROR_BADVERSION     = 101           // error codes
-  };
-
-  static void set_path(char* path) {
-    if (path == NULL) {
-      _path[0] = '\0';
-      _has_path = false;
-    } else {
-      strncpy(_path, path, UNIX_PATH_MAX);
-      _path[UNIX_PATH_MAX-1] = '\0';
-      _has_path = true;
-    }
-  }
-
-  static void set_listener(int s)               { _listener = s; }
-
-  // initialize the listener, returns 0 if okay
-  static int init();
-
-  static char* path()                   { return _path; }
-  static bool has_path()                { return _has_path; }
-  static int listener()                 { return _listener; }
-
-  // write the given buffer to a socket
-  static int write_fully(int s, char* buf, int len);
-
-  static LinuxAttachOperation* dequeue();
-};
-
-class LinuxAttachOperation: public AttachOperation {
- private:
-  // the connection to the client
-  int _socket;
-
- public:
-  void complete(jint res, bufferedStream* st);
-
-  void set_socket(int s)                                { _socket = s; }
-  int socket() const                                    { return _socket; }
-
-  LinuxAttachOperation(char* name) : AttachOperation(name) {
-    set_socket(-1);
-  }
-};
-
 // statics
 char LinuxAttachListener::_path[UNIX_PATH_MAX];
 bool LinuxAttachListener::_has_path;
 volatile int LinuxAttachListener::_listener = -1;
 bool LinuxAttachListener::_atexit_registered = false;
+LinuxAttachOperation* LinuxAttachListener::_current_op = NULL;
 
 // Supporting class to help split a buffer into individual components
 class ArgumentIterator : public StackObj {
@@ -377,6 +310,7 @@ LinuxAttachOperation* LinuxAttachListener::dequeue() {
       ::close(s);
       continue;
     } else {
+      _current_op = op;
       return op;
     }
   }
@@ -397,6 +331,18 @@ int LinuxAttachListener::write_fully(int s, char* buf, int len) {
   return 0;
 }
 
+// An operation completion is splitted into two parts.
+// For proper handling the jcmd connection at CRaC checkpoint action.
+// An effectively_complete_raw is called in checkpoint processing, before criu engine calls, for properly closing the socket.
+// The complete() gets called after restore for proper deletion the leftover object.
+
+void LinuxAttachOperation::complete(jint result, bufferedStream* st) {
+  LinuxAttachOperation::effectively_complete_raw(result, st);
+  // reset the current op as late as possible, this happens on attach listener thread.
+  LinuxAttachListener::reset_current_op();
+  delete this;
+}
+
 // Complete an operation by sending the operation result and any result
 // output to the client. At this time the socket is in blocking mode so
 // potentially we can block if there is a lot of data and the client is
@@ -405,15 +351,33 @@ int LinuxAttachListener::write_fully(int s, char* buf, int len) {
 // if there are operations that involves a very big reply then it the
 // socket could be made non-blocking and a timeout could be used.
 
-void LinuxAttachOperation::complete(jint result, bufferedStream* st) {
-  JavaThread* thread = JavaThread::current();
-  ThreadBlockInVM tbivm(thread);
+void LinuxAttachOperation::effectively_complete_raw(jint result, bufferedStream* st) {
 
-  thread->set_suspend_equivalent();
-  // cleared by handle_special_suspend_equivalent_condition() or
-  // java_suspend_self() via check_and_wait_while_suspended()
+  if (_effectively_completed) {
+    assert(st->size() == 0, "no lost output");
+    return;
+  }
 
   // write operation result
+  Thread* thread = Thread::current();
+  if (thread->is_Java_thread()) {
+    JavaThread* jt = (JavaThread* )thread;
+    ThreadBlockInVM((JavaThread*) thread);
+    jt->set_suspend_equivalent();
+    // cleared by handle_special_suspend_equivalent_condition() or
+    // java_suspend_self() via check_and_wait_while_suspended()
+
+    write_operation_result(result, st);
+
+    // were we externally suspended while we were waiting?
+    jt->check_and_wait_while_suspended();
+  } else {
+    write_operation_result(result, st);
+  }
+  _effectively_completed = true;
+}
+
+void LinuxAttachOperation::write_operation_result(jint result, bufferedStream* st) {
   char msg[32];
   sprintf(msg, "%d\n", result);
   int rc = LinuxAttachListener::write_fully(this->socket(), msg, strlen(msg));
@@ -421,18 +385,30 @@ void LinuxAttachOperation::complete(jint result, bufferedStream* st) {
   // write any result data
   if (rc == 0) {
     LinuxAttachListener::write_fully(this->socket(), (char*) st->base(), st->size());
-    ::shutdown(this->socket(), 2);
+    ::shutdown(this->socket(), SHUT_RDWR);
   }
 
   // done
   ::close(this->socket());
-
-  // were we externally suspended while we were waiting?
-  thread->check_and_wait_while_suspended();
-
-  delete this;
+  st->reset();
 }
 
+static void assert_listener_thread() {
+#ifdef ASSERT
+  ResourceMark rm; // For retrieving the thread names
+  assert(strcmp("Attach Listener", Thread::current()->name()) == 0, "should gets called from Attach Listener thread");
+#endif
+}
+
+LinuxAttachOperation* LinuxAttachListener::get_current_op() {
+  assert_listener_thread();
+  return LinuxAttachListener::_current_op;
+}
+
+void LinuxAttachListener::reset_current_op() {
+  assert_listener_thread();
+  LinuxAttachListener::_current_op = NULL;
+}
 
 // AttachListener functions
 

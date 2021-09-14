@@ -322,3 +322,19 @@ Java_sun_management_VMManagementImpl_getClassVerificationTime
     return jmm_interface->GetLongAttribute(env, NULL,
                                            JMM_CLASS_VERIFY_TOTAL_TIME_MS);
 }
+
+JNIEXPORT jlong JNICALL
+Java_sun_management_VMManagementImpl_getRestoreTime0
+  (JNIEnv *env, jobject dummy)
+{
+    return jmm_interface->GetLongAttribute(env, NULL,
+                                           JMM_JVM_RESTORE_START_TIME_MS);
+}
+
+JNIEXPORT jlong JNICALL
+Java_sun_management_VMManagementImpl_getUptimeSinceRestore0
+  (JNIEnv *env, jobject dummy)
+{
+    return jmm_interface->GetLongAttribute(env, NULL,
+                                           JMM_JVM_UPTIME_SINCE_RESTORE_MS);
+}

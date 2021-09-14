@@ -25,6 +25,7 @@
 
 package sun.security.action;
 
+import java.security.AccessController;
 /**
  * A convenience class for retrieving the boolean value of a system property
  * as a privileged action.
@@ -68,5 +69,27 @@ public class GetBooleanAction
      */
     public Boolean run() {
         return Boolean.getBoolean(theProp);
+    }
+
+    /**
+     * Convenience method to get a property without going through doPrivileged
+     * if no security manager is present. This is unsafe for inclusion in a
+     * public API but allowable here since this class is now encapsulated.
+     *
+     * Note that this method performs a privileged action using caller-provided
+     * inputs. The caller of this method should take care to ensure that the
+     * inputs are not tainted and the returned property is not made accessible
+     * to untrusted code if it contains sensitive information.
+     *
+     * @param theProp the name of the system property.
+     */
+    @SuppressWarnings("removal")
+    public static boolean privilegedGetProperty(String theProp) {
+        if (System.getSecurityManager() == null) {
+            return Boolean.getBoolean(theProp);
+        } else {
+            return AccessController.doPrivileged(
+                    new GetBooleanAction(theProp));
+        }
     }
 }
