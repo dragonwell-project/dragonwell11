@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.EOFException;
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.lang.ref.Cleaner.Cleanable;
@@ -61,6 +62,7 @@ import java.util.stream.StreamSupport;
 import jdk.internal.misc.JavaLangAccess;
 import jdk.internal.misc.JavaUtilZipFileAccess;
 import jdk.internal.misc.SharedSecrets;
+import jdk.internal.crac.Core;
 import jdk.internal.misc.VM;
 import jdk.internal.perf.PerfCounter;
 import jdk.internal.ref.CleanerFactory;
@@ -841,6 +843,14 @@ class ZipFile implements ZipConstants, Closeable {
             this.zsrc = Source.get(file, (mode & OPEN_DELETE) != 0, zc);
         }
 
+        public void beforeCheckpoint() {
+            if (zsrc != null) {
+                synchronized (zsrc) {
+                    zsrc.beforeCheckpoint();
+                }
+            }
+        }
+
         /*
          * If {@code ZipFile} has been subclassed and the {@code close} method is
          * overridden, uses the {@code finalizer} mechanism for resource cleanup.
@@ -877,6 +887,10 @@ class ZipFile implements ZipConstants, Closeable {
             @SuppressWarnings("deprecation")
             protected void finalize() throws IOException {
                 zf.close();
+            }
+
+            public Source getSource() {
+                return zsrc;
             }
         }
     }
@@ -1129,6 +1143,10 @@ class ZipFile implements ZipConstants, Closeable {
         }
     }
 
+    private synchronized void beforeCheckpoint() {
+        res.beforeCheckpoint();
+    }
+
     private static boolean isWindows;
     private static final JavaLangAccess JLA;
 
@@ -1190,8 +1208,11 @@ class ZipFile implements ZipConstants, Closeable {
                 public void setExtraAttributes(ZipEntry ze, int extraAttrs) {
                     ze.extraAttributes = extraAttrs;
                 }
-
-             }
+                @Override
+                public void beforeCheckpoint(ZipFile zip) {
+                    zip.beforeCheckpoint();
+                }
+            }
         );
         JLA = jdk.internal.misc.SharedSecrets.getJavaLangAccess();
         isWindows = VM.getSavedProperty("os.name").contains("Windows");
@@ -1227,7 +1248,7 @@ class ZipFile implements ZipConstants, Closeable {
         // private Entry[] entries;             // array of hashed cen entry
         //
         // To reduce the total size of entries further, we use a int[] here to store 3 "int"
-        // {@code hash}, {@code next and {@code "pos for each entry. The entry can then be
+        // {@code hash}, {@code next} and {@code "pos"} for each entry. The entry can then be
         // referred by their index of their positions in the {@code entries}.
         //
         private int[] entries;                  // array of hashed cen entry
@@ -1882,6 +1903,19 @@ class ZipFile implements ZipConstants, Closeable {
                  p += CENHDR + CENNAM(cen, p) + CENEXT(cen, p) + CENCOM(cen, p))
                 count++;
             return count;
+        }
+
+        public void beforeCheckpoint() {
+            synchronized (zfile) {
+                FileDescriptor fd = null;
+                try {
+                    fd = zfile.getFD();
+                } catch (IOException e) {
+                }
+                if (fd != null) {
+                    Core.registerPersistent(fd);
+                }
+            }
         }
     }
 }

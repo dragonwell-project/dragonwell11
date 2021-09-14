@@ -47,6 +47,10 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import jdk.internal.misc.JavaNetInetAddressAccess;
 import jdk.internal.misc.SharedSecrets;
+import jdk.crac.Context;
+import jdk.crac.Resource;
+import jdk.internal.crac.Core;
+import jdk.internal.crac.JDKResource;
 import sun.security.action.*;
 import sun.net.InetAddressCachePolicy;
 import sun.net.util.IPAddressUtil;
@@ -300,6 +304,9 @@ class InetAddress implements java.io.Serializable {
     /** use serialVersionUID from JDK 1.0.2 for interoperability */
     private static final long serialVersionUID = 3286316764910316507L;
 
+    /* Resource registration uses weak references; we need to keep it locally. */
+    private static final JDKResource checkpointListener;
+
     /*
      * Load net library into runtime, and perform initializations.
      */
@@ -339,6 +346,25 @@ class InetAddress implements java.io.Serializable {
                 }
         );
         init();
+        // DNS cache is cleared before the checkpoint; application restored at a later point
+        // or in a different environment should query DNS again.
+        checkpointListener = new JDKResource() {
+            @Override
+            public Priority getPriority() {
+                return Priority.NORMAL;
+            }
+
+            @Override
+            public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
+                cache.clear();
+                expirySet.clear();
+            }
+
+            @Override
+            public void afterRestore(Context<? extends Resource> context) throws Exception {
+            }
+        };
+        Core.getJDKContext().register(checkpointListener);
     }
 
     /**

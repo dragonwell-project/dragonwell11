@@ -51,6 +51,7 @@ import java.util.zip.ZipFile;
 
 import jdk.internal.jmod.JmodFile;
 import jdk.internal.module.ModuleHashes.HashSupplier;
+import jdk.internal.util.jar.PersistentJarFile;
 import sun.net.www.ParseUtil;
 
 
@@ -225,7 +226,7 @@ class ModuleReferences {
 
         static JarFile newJarFile(Path path) {
             try {
-                return new JarFile(new File(path.toString()),
+                return new PersistentJarFile(new File(path.toString()),
                                    true,                       // verify
                                    ZipFile.OPEN_READ,
                                    JarFile.runtimeVersion());

@@ -37,10 +37,13 @@
 #include "logging/logStream.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/filemap.hpp"
+#include "memory/oopFactory.hpp"
 #include "oops/oop.inline.hpp"
+#include "oops/typeArrayOop.inline.hpp"
 #include "os_linux.inline.hpp"
 #include "os_share_linux.hpp"
 #include "osContainer_linux.hpp"
+#include "perfMemory_linux.hpp"
 #include "prims/jniFastGetField.hpp"
 #include "prims/jvm_misc.hpp"
 #include "runtime/arguments.hpp"
@@ -66,8 +69,10 @@
 #include "runtime/vm_version.hpp"
 #include "semaphore_posix.hpp"
 #include "services/attachListener.hpp"
+#include "services/heapDumper.hpp"
 #include "services/memTracker.hpp"
 #include "services/runtimeService.hpp"
+#include "linuxAttachOperation.hpp"
 #include "utilities/align.hpp"
 #include "utilities/decoder.hpp"
 #include "utilities/defaultStream.hpp"
@@ -76,13 +81,16 @@
 #include "utilities/growableArray.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/vmError.hpp"
+#include "attachListener_linux.hpp"
 
 // put OS-includes here
+# include <arpa/inet.h>
 # include <sys/types.h>
 # include <sys/mman.h>
 # include <sys/stat.h>
 # include <sys/select.h>
 # include <sys/sendfile.h>
+# include <sys/sysmacros.h>
 # include <pthread.h>
 # include <signal.h>
 # include <errno.h>
@@ -112,6 +120,7 @@
 #ifdef __GLIBC__
 # include <malloc.h>
 #endif
+# include <libgen.h>
 
 #ifndef _GNU_SOURCE
   #define _GNU_SOURCE
@@ -152,6 +161,266 @@ enum CoredumpFilterBit {
   DAX_SHARED_BIT = 1 << 8
 };
 
+class FdsInfo {
+public:
+
+  enum state_t {
+    INVALID = -3,
+    CLOSED = -2,
+    ROOT = -1,
+    DUP_OF_0 = 0,
+    // ...
+  };
+
+  enum mark_t {
+    M_ZIP_CACHE    = 1 << 0,
+    M_CANT_RESTORE = 1 << 1,
+    M_CLASSPATH    = 1 << 2,
+    M_PERSISTENT   = 1 << 3,
+  };
+
+private:
+  struct fdinfo {
+    struct stat stat;
+    state_t state;
+    unsigned mark;
+
+    int flags;
+  };
+
+  bool same_fd(int fd1, int fd2);
+
+  fdinfo *_fdinfos;
+  int _len;
+
+  void assert_mark(int i) {
+    assert(inited(), "");
+    assert(i < len(), "");
+    assert(_fdinfos[i].state != CLOSED, "");
+  }
+
+public:
+  void initialize();
+
+  bool inited() { return _fdinfos != NULL; }
+  int len() { return _len; }
+
+  state_t get_state(int i, state_t orstate = INVALID) {
+    assert(inited(), "");
+    if (i < len()) {
+      return _fdinfos[i].state;
+    }
+    guarantee(orstate != INVALID, "can't use default orstate");
+    return orstate;
+  }
+
+  void set_state(int i, state_t newst) {
+    assert(inited(), "");
+    assert(i < len(), "");
+    _fdinfos[i].state = newst;
+  }
+
+  void mark(int i, mark_t m) {
+    assert_mark(i);
+    _fdinfos[i].mark |= (unsigned)m;
+  }
+  void clear(int i, mark_t m) {
+    assert_mark(i);
+    _fdinfos[i].mark &= ~(unsigned)m;
+  }
+  bool check(int i, mark_t m) {
+    assert_mark(i);
+    return 0 != (_fdinfos[i].mark & (unsigned)m);
+  }
+
+  struct stat* get_stat(int i) {
+    assert(inited(), "");
+    assert(i < len(), "");
+    return &_fdinfos[i].stat;
+  }
+
+  FdsInfo(bool do_init = true) :
+    _fdinfos(NULL),
+    _len(-1)
+  {
+    if (do_init) {
+      initialize();
+    }
+  }
+
+  ~FdsInfo() {
+    if (_fdinfos) {
+      FREE_C_HEAP_ARRAY(fdinfo, _fdinfos);
+    }
+  }
+};
+
+struct PersistentResourceDesc {
+  int _fd;
+  dev_t _st_dev;
+  ino_t _st_ino;
+  PersistentResourceDesc(int fd, int st_dev, int st_ino) :
+    _fd(fd),
+    _st_dev((dev_t)st_dev),
+    _st_ino((ino_t)st_ino)
+  {}
+
+  PersistentResourceDesc() :
+    _fd(INT_MAX)
+  {}
+};
+
+struct CracFailDep {
+  int _type;
+  char* _msg;
+  CracFailDep(int type, char* msg) :
+    _type(type),
+    _msg(msg)
+  { }
+  CracFailDep() :
+    _type(JVM_CR_FAIL),
+    _msg(NULL)
+  { }
+};
+
+class CracRestoreParameters : public CHeapObj<mtInternal> {
+  char* _raw_content;
+  GrowableArray<const char *>* _properties;
+  const char* _args;
+
+  struct header {
+    jlong _restore_time;
+    jlong _restore_counter;
+    int _nprops;
+    int _env_memory_size;
+  };
+
+  static bool write_check_error(int fd, const void *buf, int count) {
+    int wret = write(fd, buf, count);
+    if (wret != count) {
+      if (wret < 0) {
+        perror("shm error");
+      } else {
+        fprintf(stderr, "write shm truncated");
+      }
+      return false;
+    }
+    return true;
+  }
+
+  static int system_props_length(const SystemProperty* props) {
+    int len = 0;
+    while (props != NULL) {
+      ++len;
+      props = props->next();
+    }
+    return len;
+  }
+
+  static int env_vars_size(const char* const * env) {
+    int len = 0;
+    for (; *env; ++env) {
+      len += strlen(*env) + 1;
+    }
+    return len;
+  }
+
+ public:
+  const char *args() const { return _args; }
+  GrowableArray<const char *>* properties() const { return _properties; }
+
+  CracRestoreParameters() :
+    _raw_content(NULL),
+    _properties(new (ResourceObj::C_HEAP, mtInternal) GrowableArray<const char *>(0, true)),
+    _args(NULL)
+  {}
+
+  ~CracRestoreParameters() {
+    if (_raw_content) {
+      FREE_C_HEAP_ARRAY(char, _raw_content);
+    }
+    delete _properties;
+  }
+
+  static bool write_to(int fd,
+      const SystemProperty* props,
+      const char *args,
+      jlong restore_time,
+      jlong restore_counter) {
+    header hdr = {
+      restore_time,
+      restore_counter,
+      system_props_length(props),
+      env_vars_size(environ)
+    };
+
+    if (!write_check_error(fd, (void *)&hdr, sizeof(header))) {
+      return false;
+    }
+
+    const SystemProperty* p = props;
+    while (p != NULL) {
+      char prop[4096];
+      int len = snprintf(prop, sizeof(prop), "%s=%s", p->key(), p->value());
+      guarantee((0 < len) && ((unsigned)len < sizeof(prop)), "property does not fit temp buffer");
+      if (!write_check_error(fd, prop, len+1)) {
+        return false;
+      }
+      p = p->next();
+    }
+
+    // Write env vars
+    for (char** env = environ; *env; ++env) {
+      if (!write_check_error(fd, *env, strlen(*env) + 1)) {
+        return false;
+      }
+    }
+
+    return write_check_error(fd, args, strlen(args)+1); // +1 for null char
+  }
+
+  bool read_from(int fd);
+
+};
+
+class VM_Crac: public VM_Operation {
+  const bool _dry_run;
+  bool _ok;
+  GrowableArray<CracFailDep>* _failures;
+  CracRestoreParameters _restore_parameters;
+  outputStream* _ostream;
+  LinuxAttachOperation* _attach_op;
+
+public:
+  VM_Crac(bool dry_run, bufferedStream* jcmd_stream) :
+    _dry_run(dry_run),
+    _ok(false),
+    _failures(new (ResourceObj::C_HEAP, mtInternal) GrowableArray<CracFailDep>(0, true)),
+    _restore_parameters(),
+    _ostream(jcmd_stream ? jcmd_stream : tty),
+    _attach_op(jcmd_stream ? LinuxAttachListener::get_current_op() : NULL)
+  { }
+
+  ~VM_Crac() {
+    delete _failures;
+  }
+
+  GrowableArray<CracFailDep>* failures() { return _failures; }
+  bool ok() { return _ok; }
+  const char* new_args() { return _restore_parameters.args(); }
+  GrowableArray<const char *>* new_properties() { return _restore_parameters.properties(); }
+  virtual bool allow_nested_vm_operations() const  { return true; }
+  VMOp_Type type() const { return VMOp_VM_Crac; }
+  void doit();
+  bool read_shm(int shmid);
+
+private:
+  bool is_socket_from_jcmd(int sock_fd);
+  void report_ok_to_jcmd_if_any();
+  void print_resources(const char* msg, ...);
+  void trace_cr(const char* msg, ...);
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 // global variables
 julong os::Linux::_physical_memory = 0;
@@ -178,6 +447,13 @@ os::Linux::mallinfo2_func_t os::Linux::_mallinfo2 = NULL;
 static jlong initial_time_count=0;
 
 static int clock_tics_per_sec = 100;
+
+// CRaC
+static const char* _crengine = NULL;
+static jlong _restore_start_time;
+static jlong _restore_start_counter;
+static FdsInfo _vm_inited_fds(false);
+static GrowableArray<PersistentResourceDesc>* _persistent_resources = NULL;
 
 // If the VM might have been created on the primordial thread, we need to resolve the
 // primordial thread stack bounds and check if the current thread might be the
@@ -536,7 +812,7 @@ extern "C" void breakpoint() {
 // signal support
 
 debug_only(static bool signal_sets_initialized = false);
-static sigset_t unblocked_sigs, vm_sigs;
+static sigset_t unblocked_sigs, blocked_sigs, vm_sigs;
 
 void os::Linux::signal_sets_init() {
   // Should also have an assertion stating we are still single-threaded.
@@ -580,6 +856,10 @@ void os::Linux::signal_sets_init() {
   if (!ReduceSignalUsage) {
     sigaddset(&vm_sigs, BREAK_SIGNAL);
   }
+
+  sigemptyset(&blocked_sigs);
+  sigaddset(&blocked_sigs, RESTORE_SIGNAL);
+
   debug_only(signal_sets_initialized = true);
 
 }
@@ -608,6 +888,7 @@ void os::Linux::hotspot_sigmask(Thread* thread) {
   osthread->set_caller_sigmask(caller_sigmask);
 
   pthread_sigmask(SIG_UNBLOCK, os::Linux::unblocked_signals(), NULL);
+  pthread_sigmask(SIG_BLOCK, &blocked_sigs, NULL);
 
   if (!ReduceSignalUsage) {
     if (thread->is_VM_thread()) {
@@ -6652,6 +6933,866 @@ int os::compare_file_modified_times(const char* file1, const char* file2) {
   return diff;
 }
 
+void os::wake_up(Thread *thread) {
+  pthread_t tid = thread->osthread()->pthread_id();
+  pthread_kill(tid, SIG_WAKE_UP);
+}
+
+// CRaC
+
+jlong os::Linux::restore_start_time() {
+  if (!_restore_start_time) {
+    return -1;
+  }
+  return _restore_start_time;
+}
+
+jlong os::Linux::uptime_since_restore() {
+  if (!_restore_start_counter) {
+    return -1;
+  }
+  return javaTimeNanos() - _restore_start_counter;
+}
+
+void VM_Crac::trace_cr(const char* msg, ...) {
+  if (CRTrace) {
+    va_list ap;
+    va_start(ap, msg);
+    _ostream->print("CR: ");
+    _ostream->vprint_cr(msg, ap);
+    va_end(ap);
+  }
+}
+
+void VM_Crac::print_resources(const char* msg, ...) {
+  if (CRPrintResourcesOnCheckpoint) {
+    va_list ap;
+    va_start(ap, msg);
+    _ostream->vprint(msg, ap);
+    va_end(ap);
+  }
+}
+
+void os::Linux::vm_create_start() {
+  if (!CRaCCheckpointTo) {
+    return;
+  }
+  close_extra_descriptors();
+  _vm_inited_fds.initialize();
+}
+
+/* taken from criu, that took this from kernel */
+#define NFS_PREF ".nfs"
+#define NFS_PREF_LEN ((unsigned)sizeof(NFS_PREF) - 1)
+#define NFS_FILEID_LEN ((unsigned)sizeof(uint64_t) << 1)
+#define NFS_COUNTER_LEN ((unsigned)sizeof(unsigned int) << 1)
+#define NFS_LEN (NFS_PREF_LEN + NFS_FILEID_LEN + NFS_COUNTER_LEN)
+static bool nfs_silly_rename(char* path) {
+  char *sep = strrchr(path, '/');
+  char *base = sep ? sep + 1 : path;
+  if (strncmp(base, NFS_PREF, NFS_PREF_LEN)) {
+    return false;
+  }
+  for (unsigned i = NFS_PREF_LEN; i < NFS_LEN; ++i) {
+    if (!isxdigit(base[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static int readfdlink(int fd, char *link, size_t len) {
+  char fdpath[64];
+  snprintf(fdpath, sizeof(fdpath), "/proc/self/fd/%d", fd);
+  int ret = readlink(fdpath, link, len);
+  if (ret == -1) {
+    return ret;
+  }
+  link[(unsigned)ret < len ? ret : len - 1] = '\0';
+  return ret;
+}
+
+static bool same_stat(struct stat* st1, struct stat* st2) {
+  return st1->st_dev == st2->st_dev &&
+         st1->st_ino == st2->st_ino;
+}
+
+bool FdsInfo::same_fd(int fd1, int fd2) {
+  if (!same_stat(get_stat(fd1), get_stat(fd2))) {
+    return false;
+  }
+
+  int flags1 = fcntl(fd1, F_GETFL);
+  int flags2 = fcntl(fd2, F_GETFL);
+  if (flags1 != flags2) {
+    return false;
+  }
+
+  const int test_flag = O_NONBLOCK;
+  const int new_flags1 = flags1 ^ test_flag;
+  fcntl(fd1, F_SETFL, new_flags1);
+  if (fcntl(fd1, F_GETFL) != new_flags1) {
+    // flag write ignored or handled differently,
+    // don't know what to do
+    return false;
+  }
+
+  const int new_flags2 = fcntl(fd2, F_GETFL);
+  const bool are_same = new_flags1 == new_flags2;
+
+  fcntl(fd1, flags1);
+
+  return are_same;
+}
+
+void FdsInfo::initialize() {
+  assert(!inited(), "should be called only once");
+
+  const int max_fd = sysconf(_SC_OPEN_MAX);
+  _fdinfos = NEW_C_HEAP_ARRAY(fdinfo, max_fd, mtInternal);
+  int last_fd = -1;
+
+  for (int i = 0; i < max_fd; ++i) {
+    fdinfo* info = _fdinfos + i;
+    int r = fstat(i, &info->stat);
+    if (r == -1) {
+      info->state = CLOSED;
+      continue;
+    }
+    info->state = ROOT; // can be changed to DUP_OF_0 + N below
+    info->mark = 0;
+    last_fd = i;
+  }
+  _len = last_fd + 1;
+  _fdinfos = REALLOC_C_HEAP_ARRAY(fdinfo, _fdinfos, _len, mtInternal);
+
+  for (int i = 0; i < _len; ++i) {
+    for (int j = 0; j < i; ++j) {
+      if (get_state(j) == ROOT && same_fd(i, j)) {
+        _fdinfos[i].state = (state_t)(DUP_OF_0 + j);
+        break;
+      }
+    }
+
+    if (get_state(i) == ROOT) {
+      char fdpath[PATH_MAX];
+      int r = readfdlink(i, fdpath, sizeof(fdpath));
+      guarantee(-1 != r, "can't stat fd");
+      if (get_stat(i)->st_nlink == 0 ||
+          strstr(fdpath, "(deleted)") ||
+          nfs_silly_rename(fdpath)) {
+        mark(i, FdsInfo::M_CANT_RESTORE);
+      }
+    }
+  }
+}
+
+static void mark_classpath_entry(FdsInfo *fds, char* cp) {
+  struct stat st;
+  if (-1 == stat(cp, &st)) {
+    return;
+  }
+  for (int i = 0; i < fds->len(); ++i) {
+    if (same_stat(&st, fds->get_stat(i))) {
+      fds->mark(i, FdsInfo::M_CLASSPATH);
+    }
+  }
+}
+
+static void do_classpaths(void (*fn)(FdsInfo*, char*), FdsInfo *fds, char* classpath) {
+  assert(SafepointSynchronize::is_at_safepoint(),
+      "can't do nasty things with sysclasspath");
+  char *cp = classpath;
+  char *n;
+  while ((n = strchr(cp, ':'))) {
+    *n = '\0';
+    fn(fds, cp);
+    *n = ':';
+    cp = n + 1;
+  }
+  mark_classpath_entry(fds, cp);
+}
+
+
+static void mark_all_in(FdsInfo *fds, char* dirpath) {
+  DIR *dir = os::opendir(dirpath);
+  if (!dir) {
+    return;
+  }
+
+  struct dirent* dent;
+  while ((dent = os::readdir(dir))) {
+    for (int i = 0; i < fds->len(); ++i) {
+      if (fds->get_state(i) != FdsInfo::ROOT) {
+        continue;
+      }
+      struct stat* fstat = fds->get_stat(i);
+      if (dent->d_ino == fstat->st_ino) {
+        fds->mark(i, FdsInfo::M_CLASSPATH);
+      }
+    }
+  }
+
+  os::closedir(dir);
+}
+
+static void mark_persistent(FdsInfo *fds) {
+  if (!_persistent_resources) {
+    return;
+  }
+
+  for (int i = 0; i < _persistent_resources->length(); ++i) {
+    PersistentResourceDesc* pr = _persistent_resources->adr_at(i);
+    int fd = pr->_fd;
+    if (fds->len() <= fd) {
+      break;
+    }
+    if (fds->get_state(fd) != FdsInfo::ROOT) {
+      continue;
+    }
+    struct stat* st = fds->get_stat(fd);
+    if (st->st_dev == pr->_st_dev && st->st_ino == pr->_st_ino) {
+      fds->mark(fd, FdsInfo::M_PERSISTENT);
+    }
+  }
+
+  delete _persistent_resources;
+  _persistent_resources = NULL;
+}
+
+static int cr_util_path(char* path, int len) {
+  os::jvm_path(path, len);
+  // path is ".../lib/server/libjvm.so"
+  char *after_elem = NULL;
+  for (int i = 0; i < 2; ++i) {
+    after_elem = strrchr(path, '/');
+    *after_elem = '\0';
+  }
+  return after_elem - path;
+}
+
+static bool compute_crengine() {
+  if (!CREngine) {
+    return true;
+  }
+
+  if (CREngine[0] == '/') {
+    _crengine = CREngine;
+    return true;
+  }
+
+  char path[JVM_MAXPATHLEN];
+  int pathlen = cr_util_path(path, sizeof(path));
+  strcat(path + pathlen, "/");
+  strcat(path + pathlen, CREngine);
+
+  struct stat st;
+  if (0 != stat(path, &st)) {
+    warning("Could not find %s: %s", path, strerror(errno));
+    return false;
+  }
+
+  _crengine = os::strdup(path);
+  return true;
+}
+
+static int call_crengine() {
+  if (!_crengine) {
+    return -1;
+  }
+
+  pid_t pid = fork();
+  if (pid == -1) {
+    perror("cannot fork for crengine");
+    return -1;
+  }
+  if (pid == 0) {
+    execl(_crengine, _crengine, "checkpoint", CRaCCheckpointTo, NULL);
+    perror("execl");
+    exit(1);
+  }
+
+  int status;
+  int ret;
+  do {
+    ret = waitpid(pid, &status, 0);
+  } while (ret == -1 && errno == EINTR);
+
+  if (ret == -1 || !WIFEXITED(status)) {
+    return -1;
+  }
+  return WEXITSTATUS(status) == 0 ? 0 : -1;
+}
+
+class CracSHM {
+  char _path[128];
+public:
+  CracSHM(int id) {
+    int shmpathlen = snprintf(_path, sizeof(_path), "/crac_%d", id);
+    if (shmpathlen < 0 || sizeof(_path) <= (size_t)shmpathlen) {
+      fprintf(stderr, "shmpath is too long: %d\n", shmpathlen);
+    }
+  }
+
+  int open(int mode) {
+    int shmfd = shm_open(_path, mode, 0600);
+    if (-1 == shmfd) {
+      perror("shm_open");
+    }
+    return shmfd;
+  }
+
+  void unlink() {
+    shm_unlink(_path);
+  }
+};
+
+static int checkpoint_restore(int *shmid) {
+
+  int cres = call_crengine();
+  if (cres < 0) {
+    return JVM_CHECKPOINT_ERROR;
+  }
+
+  sigset_t waitmask;
+  sigemptyset(&waitmask);
+  sigaddset(&waitmask, RESTORE_SIGNAL);
+
+  siginfo_t info;
+  int sig;
+  do {
+    sig = sigwaitinfo(&waitmask, &info);
+  } while (sig == -1 && errno == EINTR);
+  assert(sig == RESTORE_SIGNAL, "got what requested");
+
+  if (CRTraceStartupTime) {
+    tty->print_cr("STARTUPTIME " JLONG_FORMAT " restore-native", os::javaTimeNanos());
+  }
+
+  if (info.si_code != SI_QUEUE || info.si_int < 0) {
+    tty->print("JVM: invalid info for restore provided: %s", info.si_code == SI_QUEUE ? "queued" : "not queued");
+    if (info.si_code == SI_QUEUE) {
+      tty->print(" code %d", info.si_int);
+    }
+    tty->cr();
+    return JVM_CHECKPOINT_ERROR;
+  }
+
+  if (0 < info.si_int) {
+    *shmid = info.si_int;
+  }
+
+  return JVM_CHECKPOINT_OK;
+}
+
+static const char* stat2strtype(mode_t mode) {
+  switch (mode & S_IFMT) {
+  case S_IFSOCK: return "socket";
+  case S_IFLNK:  return "symlink";
+  case S_IFREG:  return "regular";
+  case S_IFBLK:  return "block";
+  case S_IFDIR:  return "directory";
+  case S_IFCHR:  return "character";
+  case S_IFIFO:  return "fifo";
+  default:       break;
+  }
+  return "unknown";
+}
+
+static int stat2stfail(mode_t mode) {
+  switch (mode & S_IFMT) {
+  case S_IFSOCK:
+    return JVM_CR_FAIL_SOCK;
+  case S_IFLNK:
+  case S_IFREG:
+  case S_IFBLK:
+  case S_IFDIR:
+  case S_IFCHR:
+    return JVM_CR_FAIL_FILE;
+  case S_IFIFO:
+    return JVM_CR_FAIL_PIPE;
+  default:
+    break;
+  }
+  return JVM_CR_FAIL;
+}
+
+static bool find_sock_details(int sockino, const char* base, bool v6, char* buf, size_t sz) {
+  char filename[16];
+  snprintf(filename, sizeof(filename), "/proc/net/%s", base);
+  FILE* f = fopen(filename, "r");
+  if (!f) {
+    return false;
+  }
+  int r = fscanf(f, "%*[^\n]");
+  if (r) {} // suppress warn unused gcc diagnostic
+
+  char la[33], ra[33];
+  int lp, rp;
+  int ino;
+  //   sl  local_address         remote_address        st   tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+  //    0: 0100007F:08AE         00000000:0000         0A   00000000:00000000 00:00000000 00000000  1000        0 2988639
+  //  %4d: %08X%08X%08X%08X:%04X %08X%08X%08X%08X:%04X %02X %08X:%08X         %02X:%08lX  %08X       %5u      %8d %d
+  bool eof;
+  do {
+    eof = EOF == fscanf(f, "%*d: %[^:]:%X %[^:]:%X %*X %*X:%*X %*X:%*X %*X %*d %*d %d%*[^\n]\n",
+        la, &lp, ra, &rp, &ino);
+  } while (ino != sockino && !eof);
+  fclose(f);
+
+  if (ino != sockino) {
+    return false;
+  }
+
+  struct in6_addr a6l, a6r;
+  struct in_addr a4l, a4r;
+  if (v6) {
+    for (int i = 0; i < 4; ++i) {
+      sscanf(la + i * 8, "%8" PRIX32, a6l.s6_addr32 + i);
+      sscanf(ra + i * 8, "%8" PRIX32, a6r.s6_addr32 + i);
+    }
+  } else {
+    sscanf(la, "%" PRIX32, &a4l.s_addr);
+    sscanf(ra, "%" PRIX32, &a4r.s_addr);
+  }
+
+  int const af = v6 ? AF_INET6 : AF_INET;
+  void* const laddr = v6 ? (void*)&a6l : (void*)&a4l;
+  void* const raddr = v6 ? (void*)&a6r : (void*)&a4r;
+  char lstrb[48], rstrb[48];
+  const char* const lstr = ::inet_ntop(af, laddr, lstrb, sizeof(lstrb)) ? lstrb : "NONE";
+  const char* const rstr = ::inet_ntop(af, raddr, rstrb, sizeof(rstrb)) ? rstrb : "NONE";
+  int msgsz = snprintf(buf, sz, "%s localAddr %s localPort %d remoteAddr %s remotePort %d",
+        base, lstr, lp, rstr, rp);
+  return msgsz < (int)sz;
+}
+
+static const char* sock_details(const char* details, char* buf, size_t sz) {
+  int sockino;
+  if (sscanf(details, "socket:[%d]", &sockino) <= 0) {
+    return details;
+  }
+
+  const char* bases[] = { "tcp", "udp", "tcp6", "udp6", NULL };
+  for (const char** b = bases; *b; ++b) {
+    if (find_sock_details(sockino, *b, 2 <= b - bases, buf, sz)) {
+      return buf;
+    }
+  }
+
+  return details;
+}
+
+bool VM_Crac::read_shm(int shmid) {
+  CracSHM shm(shmid);
+  int shmfd = shm.open(O_RDONLY);
+  shm.unlink();
+  if (shmfd < 0) {
+    return false;
+  }
+  bool ret = _restore_parameters.read_from(shmfd);
+  close(shmfd);
+  return ret;
+}
+
+// If checkpoint is called throught the API, jcmd operation and jcmd output doesn't exist.
+bool VM_Crac::is_socket_from_jcmd(int sock) {
+  if (_attach_op == NULL)
+    return false;
+  int sock_fd = _attach_op->socket();
+  return sock == sock_fd;
+}
+
+void VM_Crac::report_ok_to_jcmd_if_any() {
+  if (_attach_op == NULL)
+    return;
+  bufferedStream* buf = static_cast<bufferedStream*>(_ostream);
+  _attach_op->effectively_complete_raw(JNI_OK, buf);
+  // redirect any further output to console
+  _ostream = tty;
+}
+
+void VM_Crac::doit() {
+
+  AttachListener::abort();
+
+  FdsInfo fds;
+  do_classpaths(mark_classpath_entry, &fds, Arguments::get_sysclasspath());
+  do_classpaths(mark_classpath_entry, &fds, Arguments::get_appclasspath());
+  do_classpaths(mark_all_in, &fds, Arguments::get_ext_dirs());
+  mark_persistent(&fds);
+
+  // dry-run fails checkpoint
+  bool ok = !_dry_run;
+
+  for (int i = 0; i < fds.len(); ++i) {
+    if (fds.get_state(i) == FdsInfo::CLOSED) {
+      continue;
+    }
+
+    char detailsbuf[PATH_MAX];
+    int linkret = readfdlink(i, detailsbuf, sizeof(detailsbuf));
+    const char* details = 0 < linkret ? detailsbuf : "";
+    print_resources("JVM: FD fd=%d type=%s: details1=\"%s\" ",
+        i, stat2strtype(fds.get_stat(i)->st_mode), details);
+
+    if (_vm_inited_fds.get_state(i, FdsInfo::CLOSED) != FdsInfo::CLOSED) {
+      print_resources("OK: inherited from process env\n");
+      continue;
+    }
+
+    struct stat* st = fds.get_stat(i);
+    if (S_ISCHR(st->st_mode)) {
+      const int mjr = major(st->st_rdev);
+      const int mnr = minor(st->st_rdev);
+      if (mjr == 1 && (mnr == 8 || mnr == 9)) {
+        print_resources("OK: always available, random or urandom\n");
+        continue;
+      }
+    }
+
+    if (fds.check(i, FdsInfo::M_CLASSPATH) && !fds.check(i, FdsInfo::M_CANT_RESTORE)) {
+      print_resources("OK: in classpath\n");
+      continue;
+    }
+
+    if (fds.check(i, FdsInfo::M_PERSISTENT)) {
+      print_resources("OK: assured persistent\n");
+      continue;
+    }
+
+    if (S_ISSOCK(st->st_mode)) {
+      if (is_socket_from_jcmd(i)){
+        print_resources("OK: jcmd socket\n");
+        continue;
+      }
+      details = sock_details(details, detailsbuf, sizeof(detailsbuf));
+      print_resources(" details2=\"%s\" ", details);
+    }
+
+    print_resources("BAD: opened by application\n");
+    ok = false;
+
+    char* msg = NEW_C_HEAP_ARRAY(char, strlen(details) + 1, mtInternal);
+    strcpy(msg, details);
+    _failures->append(CracFailDep(stat2stfail(st->st_mode & S_IFMT), msg));
+  }
+
+  if (!ok && CRHeapDumpOnCheckpointException) {
+    HeapDumper::dump_heap();
+  }
+
+  if (!ok && CRDoThrowCheckpointException) {
+    return;
+  }
+
+  if (!PerfMemoryLinux::checkpoint(CRaCCheckpointTo)) {
+    return;
+  }
+
+  int shmid = 0;
+  if (CRAllowToSkipCheckpoint) {
+    trace_cr("Skip Checkpoint");
+  } else {
+    trace_cr("Checkpoint ...");
+    report_ok_to_jcmd_if_any();
+    int ret = checkpoint_restore(&shmid);
+    if (ret == JVM_CHECKPOINT_ERROR) {
+      PerfMemoryLinux::restore();
+      return;
+    }
+  }
+
+  if (shmid <= 0 || !VM_Crac::read_shm(shmid)) {
+    _restore_start_time = os::javaTimeMillis();
+    _restore_start_counter = os::javaTimeNanos();
+  }
+  PerfMemoryLinux::restore();
+
+  _ok = true;
+}
+
+void os::Linux::register_persistent_fd(int fd, int st_dev, int st_ino) {
+  if (!CRaCCheckpointTo) {
+    return;
+  }
+  if (!_persistent_resources) {
+    _persistent_resources = new (ResourceObj::C_HEAP, mtInternal)
+      GrowableArray<PersistentResourceDesc>(0, true/*C_heap*/);
+  }
+  int dup = -1;
+  int i = 0;
+  while (i < _persistent_resources->length()) {
+    int pfd = _persistent_resources->adr_at(i)->_fd;
+    if (pfd == fd) {
+      dup = i;
+      break;
+    } else if (fd < pfd) {
+      break;
+    }
+    ++i;
+  }
+
+  if (0 <= dup) {
+    _persistent_resources->at_put(dup, PersistentResourceDesc(fd, st_dev, st_ino));
+  } else {
+    _persistent_resources->insert_before(i, PersistentResourceDesc(fd, st_dev, st_ino));
+  }
+}
+
+void os::Linux::deregister_persistent_fd(int fd, int st_dev, int st_ino) {
+  if (!CRaCCheckpointTo) {
+    return;
+  }
+  if (!_persistent_resources) {
+    return;
+  }
+  int i = 0;
+  while (i < _persistent_resources->length()) {
+    PersistentResourceDesc* pr = _persistent_resources->adr_at(i);
+    if (pr->_fd == fd && pr->_st_dev == (dev_t)st_dev && pr->_st_ino == (ino_t)st_ino) {
+      break;
+    }
+  }
+  if (i < _persistent_resources->length()) {
+    _persistent_resources->remove_at(i);
+  }
+}
+
+bool os::Linux::prepare_checkpoint() {
+  struct stat st;
+
+  if (0 == stat(CRaCCheckpointTo, &st)) {
+    if ((st.st_mode & S_IFMT) != S_IFDIR) {
+      warning("%s: not a directory", CRaCCheckpointTo);
+      return false;
+    }
+  } else {
+    if (-1 == mkdir(CRaCCheckpointTo, 0700)) {
+      warning("cannot create %s: %s", CRaCCheckpointTo, strerror(errno));
+      return false;
+    }
+    if (-1 == rmdir(CRaCCheckpointTo)) {
+      warning("cannot cleanup after check: %s", strerror(errno));
+      // not fatal
+    }
+  }
+
+  if (!compute_crengine()) {
+    return false;
+  }
+
+  return true;
+}
+
+static Handle ret_cr(int ret, Handle new_args, Handle new_props, Handle err_codes, Handle err_msgs, TRAPS) {
+  objArrayOop bundleObj = oopFactory::new_objectArray(5, CHECK_NH);
+  objArrayHandle bundle(THREAD, bundleObj);
+  jvalue jval = { .i = ret };
+  oop retObj = java_lang_boxing_object::create(T_INT, &jval, CHECK_NH);
+  bundle->obj_at_put(0, retObj);
+  bundle->obj_at_put(1, new_args());
+  bundle->obj_at_put(2, new_props());
+  bundle->obj_at_put(3, err_codes());
+  bundle->obj_at_put(4, err_msgs());
+  return bundle;
+}
+
+/** Checkpoint main entry.
+ */
+Handle os::Linux::checkpoint(bool dry_run, jlong jcmd_stream, TRAPS) {
+  if (!CRaCCheckpointTo) {
+    return ret_cr(JVM_CHECKPOINT_NONE, Handle(), Handle(), Handle(), Handle(), THREAD);
+  }
+
+  if (-1 == mkdir(CRaCCheckpointTo, 0700) && errno != EEXIST) {
+    warning("cannot create %s: %s", CRaCCheckpointTo, strerror(errno));
+    return ret_cr(JVM_CHECKPOINT_NONE, Handle(), Handle(), Handle(), Handle(), THREAD);
+  }
+
+  Universe::heap()->set_cleanup_unused(true);
+  Universe::heap()->collect(GCCause::_full_gc_alot);
+  Universe::heap()->set_cleanup_unused(false);
+
+  VM_Crac cr(dry_run, (bufferedStream*)jcmd_stream);
+  {
+    MutexLocker ml(Heap_lock);
+    VMThread::execute(&cr);
+  }
+  if (cr.ok()) {
+    oop new_args = NULL;
+    if (cr.new_args()) {
+      new_args = java_lang_String::create_oop_from_str(cr.new_args(), CHECK_NH);
+    }
+    GrowableArray<const char *>* new_properties = cr.new_properties();
+    objArrayOop propsObj = oopFactory::new_objArray(SystemDictionary::String_klass(), new_properties->length(), CHECK_NH);
+    objArrayHandle props(THREAD, propsObj);
+
+    for (int i = 0; i < new_properties->length(); i++) {
+      oop propObj = java_lang_String::create_oop_from_str(new_properties->at(i), CHECK_NH);
+      props->obj_at_put(i, propObj);
+    }
+    return ret_cr(JVM_CHECKPOINT_OK, Handle(THREAD, new_args), props, Handle(), Handle(), THREAD);
+  }
+
+  GrowableArray<CracFailDep>* failures = cr.failures();
+
+  typeArrayOop codesObj = oopFactory::new_intArray(failures->length(), CHECK_NH);
+  typeArrayHandle codes(THREAD, codesObj);
+  objArrayOop msgsObj = oopFactory::new_objArray(SystemDictionary::String_klass(), failures->length(), CHECK_NH);
+  objArrayHandle msgs(THREAD, msgsObj);
+
+  for (int i = 0; i < failures->length(); ++i) {
+    codes->int_at_put(i, failures->at(i)._type);
+    oop msgObj = java_lang_String::create_oop_from_str(failures->at(i)._msg, CHECK_NH);
+    FREE_C_HEAP_ARRAY(char, failures->at(i)._msg);
+    msgs->obj_at_put(i, msgObj);
+  }
+
+  return ret_cr(JVM_CHECKPOINT_ERROR, Handle(), Handle(), codes, msgs, THREAD);
+}
+
+void os::Linux::restore() {
+  struct stat st;
+
+  jlong restore_time = javaTimeMillis();
+  jlong restore_counter = javaTimeNanos();
+
+  compute_crengine();
+
+  int id = getpid();
+  CracSHM shm(id);
+  int shmfd = shm.open(O_RDWR | O_CREAT);
+  if (0 <= shmfd) {
+    if (CracRestoreParameters::write_to(
+          shmfd,
+          Arguments::system_properties(),
+          Arguments::java_command() ? Arguments::java_command() : "",
+          restore_time,
+          restore_counter)) {
+      char strid[32];
+      snprintf(strid, sizeof(strid), "%d", id);
+      setenv("CRAC_NEW_ARGS_ID", strid, true);
+    }
+    close(shmfd);
+  }
+
+
+  if (_crengine) {
+    execl(_crengine, _crengine, "restore", CRaCRestoreFrom, NULL);
+    warning("cannot execute \"%s restore ...\" (%s)", _crengine, strerror(errno));
+  }
+}
+
+static char modules_path[JVM_MAXPATHLEN] = { '\0' };
+
+static bool is_fd_ignored(int fd, const char *path) {
+  if (!strcmp(modules_path, path)) {
+    // Path to the modules directory is opened early when JVM is booted up and won't be closed.
+    // We can ignore this for purposes of CRaC.
+    return true;
+  }
+
+  const char *list = CRaCIgnoredFileDescriptors;
+  while (list && *list) {
+    const char *end = strchr(list, ',');
+    if (!end) {
+      end = list + strlen(list);
+    }
+    char *invalid;
+    int ignored_fd = strtol(list, &invalid, 10);
+    if (invalid == end) { // entry was integer -> file descriptor
+      if (fd == ignored_fd) {
+        log_trace(os)("CRaC not closing file descriptor %d (%s) as it is marked as ignored.", fd, path);
+        return true;
+      }
+    } else { // interpret entry as path
+      int path_len = path ? strlen(path) : -1;
+      if (path_len != -1 && path_len == end - list && !strncmp(path, list, end - list)) {
+        log_trace(os)("CRaC not closing file descriptor %d (%s) as it is marked as ignored.", fd, path);
+        return true;
+      }
+    }
+    if (*end) {
+      list = end + 1;
+    } else {
+      break;
+    }
+  }
+  return false;
+}
+
+void os::Linux::close_extra_descriptors() {
+  // Path to the modules directory is opened early when JVM is booted up and won't be closed.
+  // We can ignore this for purposes of CRaC.
+  if (modules_path[0] == '\0') {
+    const char* fileSep = os::file_separator();
+    jio_snprintf(modules_path, JVM_MAXPATHLEN, "%s%slib%smodules", Arguments::get_java_home(), fileSep, fileSep);
+  }
+
+  char path[PATH_MAX];
+  struct dirent *dp;
+
+  DIR *dir = opendir("/proc/self/fd");
+  while (dp = readdir(dir)) {
+    int fd = atoi(dp->d_name);
+    if (fd > 2 && fd != dirfd(dir)) {
+      int r = readfdlink(fd, path, sizeof(path));
+      if (!is_fd_ignored(fd, r != -1 ? path : NULL)) {
+        log_warning(os)("CRaC closing file descriptor %d: %s\n", fd, path);
+        close(fd);
+      }
+    }
+  }
+  closedir(dir);
+}
+
+bool CracRestoreParameters::read_from(int fd) {
+  struct stat st;
+  if (fstat(fd, &st)) {
+    perror("fstat (ignoring restore parameters)");
+    return false;
+  }
+
+  char *contents = NEW_C_HEAP_ARRAY(char, st.st_size, mtInternal);
+  if (read(fd, contents, st.st_size) < 0) {
+    perror("read (ignoring restore parameters)");
+    FREE_C_HEAP_ARRAY(char, contents);
+    return false;
+  }
+
+  _raw_content = contents;
+
+  // parse the contents to read new system properties and arguments
+  header* hdr = (header*)_raw_content;
+  char* cursor = _raw_content + sizeof(header);
+
+  ::_restore_start_time = hdr->_restore_time;
+  ::_restore_start_counter = hdr->_restore_counter;
+
+  for (int i = 0; i < hdr->_nprops; i++) {
+    assert((cursor + strlen(cursor) <= contents + st.st_size), "property length exceeds shared memory size");
+    int idx = _properties->append(cursor);
+    int prop_len = strlen(cursor) + 1;
+    cursor = cursor + prop_len;
+  }
+
+  char* env_mem = NEW_C_HEAP_ARRAY(char, hdr->_env_memory_size, mtArguments); // left this pointer unowned, it is freed when process dies
+  memcpy(env_mem, cursor, hdr->_env_memory_size);
+
+  const char* env_end = env_mem + hdr->_env_memory_size;
+  while (env_mem < env_end) {
+    const size_t s = strlen(env_mem) + 1;
+    assert(env_mem + s <= env_end, "env vars exceed memory buffer, maybe ending 0 is lost");
+    putenv(env_mem);
+    env_mem += s;
+  }
+  cursor += hdr->_env_memory_size;
+
+  _args = cursor;
+  return true;
+}
+
 /////////////// Unit tests ///////////////
 
 #ifndef PRODUCT
@@ -6709,9 +7850,9 @@ class TestReserveMemorySpecial : AllStatic {
 
     // sizes to test
     const size_t sizes[] = {
-      lp, lp + ag, lp + lp / 2, lp * 2,
-      lp * 2 + ag, lp * 2 - ag, lp * 2 + lp / 2,
-      lp * 10, lp * 10 + lp / 2
+            lp, lp + ag, lp + lp / 2, lp * 2,
+            lp * 2 + ag, lp * 2 - ag, lp * 2 + lp / 2,
+            lp * 10, lp * 10 + lp / 2
     };
     const int num_sizes = sizeof(sizes) / sizeof(size_t);
 
@@ -6724,14 +7865,14 @@ class TestReserveMemorySpecial : AllStatic {
     // Pre-allocate two areas; they shall be as large as the largest allocation
     //  and aligned to the largest alignment we will be testing.
     const size_t mapping_size = sizes[num_sizes - 1] * 2;
-    char* const mapping1 = (char*) ::mmap(NULL, mapping_size,
-      PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE,
-      -1, 0);
+    char *const mapping1 = (char *) ::mmap(NULL, mapping_size,
+                                           PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,
+                                           -1, 0);
     assert(mapping1 != MAP_FAILED, "should work");
 
-    char* const mapping2 = (char*) ::mmap(NULL, mapping_size,
-      PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE,
-      -1, 0);
+    char *const mapping2 = (char *) ::mmap(NULL, mapping_size,
+                                           PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,
+                                           -1, 0);
     assert(mapping2 != MAP_FAILED, "should work");
 
     // Unmap the first mapping, but leave the second mapping intact: the first
@@ -6746,7 +7887,7 @@ class TestReserveMemorySpecial : AllStatic {
     for (int i = 0; i < num_sizes; i++) {
       const size_t size = sizes[i];
       for (size_t alignment = ag; is_aligned(size, alignment); alignment *= 2) {
-        char* p = os::Linux::reserve_memory_special_huge_tlbfs_mixed(size, alignment, NULL, false);
+        char *p = os::Linux::reserve_memory_special_huge_tlbfs_mixed(size, alignment, NULL, false);
         test_log(SIZE_FORMAT_HEX " " SIZE_FORMAT_HEX " ->  " PTR_FORMAT " %s",
                  size, alignment, p2i(p), (p != NULL ? "" : "(failed)"));
         if (p != NULL) {
@@ -6764,8 +7905,8 @@ class TestReserveMemorySpecial : AllStatic {
     for (int i = 0; i < num_sizes; i++) {
       const size_t size = sizes[i];
       for (size_t alignment = ag; is_aligned(size, alignment); alignment *= 2) {
-        char* const req_addr = align_up(mapping1, alignment);
-        char* p = os::Linux::reserve_memory_special_huge_tlbfs_mixed(size, alignment, req_addr, false);
+        char *const req_addr = align_up(mapping1, alignment);
+        char *p = os::Linux::reserve_memory_special_huge_tlbfs_mixed(size, alignment, req_addr, false);
         test_log(SIZE_FORMAT_HEX " " SIZE_FORMAT_HEX " " PTR_FORMAT " ->  " PTR_FORMAT " %s",
                  size, alignment, p2i(req_addr), p2i(p),
                  ((p != NULL ? (p == req_addr ? "(exact match)" : "") : "(failed)")));
@@ -6784,8 +7925,8 @@ class TestReserveMemorySpecial : AllStatic {
     for (int i = 0; i < num_sizes; i++) {
       const size_t size = sizes[i];
       for (size_t alignment = ag; is_aligned(size, alignment); alignment *= 2) {
-        char* const req_addr = align_up(mapping2, alignment);
-        char* p = os::Linux::reserve_memory_special_huge_tlbfs_mixed(size, alignment, req_addr, false);
+        char *const req_addr = align_up(mapping2, alignment);
+        char *p = os::Linux::reserve_memory_special_huge_tlbfs_mixed(size, alignment, req_addr, false);
         test_log(SIZE_FORMAT_HEX " " SIZE_FORMAT_HEX " " PTR_FORMAT " ->  " PTR_FORMAT " %s",
                  size, alignment, p2i(req_addr), p2i(p), ((p != NULL ? "" : "(failed)")));
         // as the area around req_addr contains already existing mappings, the API should always
@@ -6795,8 +7936,7 @@ class TestReserveMemorySpecial : AllStatic {
     }
 
     ::munmap(mapping2, mapping_size);
-
-  }
+}
 
   static void test_reserve_memory_special_huge_tlbfs() {
     if (!UseHugeTLBFS) {

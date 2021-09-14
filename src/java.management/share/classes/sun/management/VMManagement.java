@@ -105,4 +105,8 @@ public interface VMManagement {
 
     // Performance counter support
     public List<Counter>   getInternalCounters(String pattern);
+
+    // CRaC support
+    public long getRestoreTime();
+    public long getUptimeSinceRestore();
 }

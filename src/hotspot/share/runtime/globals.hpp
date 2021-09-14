@@ -2701,6 +2701,40 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
                                                                             \
   product(bool, UseCompactObjectHeaders, false,                             \
           "Use compact 64-bit object headers in 64-bit VM.")                \
+                                                                            \
+  product(ccstr, CRaCCheckpointTo, NULL, "Path to checkpoint image")        \
+                                                                            \
+  product(ccstr, CRaCRestoreFrom, NULL, "Path to image for restore, "       \
+      "replaces the initializing VM on success")                            \
+                                                                            \
+  product(ccstr, CREngine, "criuengine", "Path or name of a program "       \
+      "implementing checkpoint/restore")                                    \
+                                                                            \
+  product(bool, CRaCIgnoreRestoreIfUnavailable, false, "Ignore "            \
+      "-XX:CRaCRestoreFrom and continue initialization if restore is "      \
+      "unavailable")                                                        \
+                                                                            \
+  product(ccstr, CRaCIgnoredFileDescriptors, NULL, "Comma-separated list "  \
+      "of file descriptor numbers or paths. All file descriptors greater "  \
+      "than 2 (stdin, stdout and stderr are excluded automatically) not "   \
+      "in this list are closed when the VM is started.")                    \
+                                                                            \
+  product(bool, CRAllowToSkipCheckpoint, false,                             \
+          "Allow implementation to not call Checkpoint if helper not found")\
+                                                                            \
+  diagnostic(bool, CRHeapDumpOnCheckpointException, false, "Dump heap on "  \
+      "CheckpointException thrown because of C/RaC precondition failed")    \
+                                                                            \
+  diagnostic(bool, CRPrintResourcesOnCheckpoint, false, "Print resources "  \
+      "to decide CheckpointException")                                      \
+                                                                            \
+  diagnostic(bool, CRTraceStartupTime, false, "Trace startup time")         \
+                                                                            \
+  experimental(bool, CRDoThrowCheckpointException, true, "Throw "           \
+      "CheckpointException if uncheckpointable resource handle found")      \
+                                                                            \
+  product(bool, CRTrace, true, "Minimal C/R tracing")                       \
+                                                                            \
 
 #define VM_FLAGS(develop,                                                   \
                  develop_pd,                                                \
@@ -2752,6 +2786,7 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
 /*
  *  Macros for factoring of globals
  */
+
 
 // Interface macros
 #define DECLARE_PRODUCT_FLAG(type, name, value, doc)      extern "C" type name;
