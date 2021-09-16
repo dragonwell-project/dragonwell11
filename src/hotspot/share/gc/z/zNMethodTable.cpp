@@ -546,21 +546,22 @@ void ZNMethodTable::entry_oops_do(ZNMethodTableEntry entry, OopClosure* cl) {
   }
 }
 
-class ZNMethodTableEntryToOopsDo : public ZNMethodTableEntryClosure {
+class ZNMethodTableEntryToOopsDoAndDisarm : public ZNMethodTableEntryClosure {
 private:
   OopClosure* _cl;
 
 public:
-  ZNMethodTableEntryToOopsDo(OopClosure* cl) :
+  ZNMethodTableEntryToOopsDoAndDisarm(OopClosure* cl) :
       _cl(cl) {}
 
   void do_nmethod_entry(ZNMethodTableEntry entry) {
     ZNMethodTable::entry_oops_do(entry, _cl);
+    ZNMethodTable::disarm_nmethod(entry.method());
   }
 };
 
-void ZNMethodTable::oops_do(OopClosure* cl) {
-  ZNMethodTableEntryToOopsDo entry_cl(cl);
+void ZNMethodTable::oops_do_and_disarm(OopClosure* cl) {
+  ZNMethodTableEntryToOopsDoAndDisarm entry_cl(cl);
   nmethod_entries_do(&entry_cl);
 }
 

@@ -76,7 +76,7 @@ public:
 
   static ZReentrantLock* lock_for_nmethod(nmethod* nm);
 
-  static void oops_do(OopClosure* cl);
+  static void oops_do_and_disarm(OopClosure* cl);
 
   static void entry_oops_do(ZNMethodTableEntry entry, OopClosure* cl);
 
