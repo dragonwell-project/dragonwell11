@@ -1,3 +1,0 @@
-FinalVariableAssignedToInCatchBlockTest.java:52:13: compiler.err.var.might.already.be.assigned: i
-FinalVariableAssignedToInCatchBlockTest.java:92:9: compiler.err.var.might.already.be.assigned: i
-2 errors
