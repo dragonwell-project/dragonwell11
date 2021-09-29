@@ -31,8 +31,13 @@ ZVirtualMemoryManager::ZVirtualMemoryManager() :
     _manager(),
     _initialized(false) {
 
-  log_info(gc, init)("Address Space: " PTR_FORMAT " - " PTR_FORMAT " (" SIZE_FORMAT "T)",
-                     ZAddressSpaceStart, ZAddressSpaceEnd, ZAddressSpaceSize / K / G);
+  if (ZAddressSpaceSize / K / G != 0) {
+    log_info(gc, init)("Address Space: " PTR_FORMAT " - " PTR_FORMAT " (" SIZE_FORMAT "T)",
+                       ZAddressSpaceStart, ZAddressSpaceEnd, ZAddressSpaceSize / K / G);
+  } else {
+    log_info(gc, init)("Address Space: " PTR_FORMAT " - " PTR_FORMAT " (" SIZE_FORMAT "G)",
+                       ZAddressSpaceStart, ZAddressSpaceEnd, ZAddressSpaceSize / G);
+  }
 
   // Reserve address space
   if (!reserve(ZAddressSpaceStart, ZAddressSpaceSize)) {
