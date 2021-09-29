@@ -4101,7 +4101,7 @@ void MacroAssembler::movoop(Register dst, jobject obj, bool immediate) {
     oop_index = oop_recorder()->find_index(obj);
   }
   RelocationHolder rspec = oop_Relocation::spec(oop_index);
-  if (! immediate) {
+  if (ZGC_ONLY(ZMemoryTagging || )! immediate) {
     address dummy = address(uintptr_t(pc()) & -wordSize); // A nearby aligned address
     ldr_constant(dst, Address(dummy, rspec));
   } else

@@ -87,6 +87,9 @@
           "Unload the classes every Nth ZGC cycle."                         \
           "Set to zero to disable class unloading.")                        \
                                                                             \
+  product(bool, ZMemoryTagging, false,                                      \
+          "Enable AArch64 TBI feature for memory tagging.")                 \
+                                                                            \
   diagnostic(uint, ZStatisticsInterval, 10,                                 \
           "Time between statistics print outs (in seconds)")                \
           range(1, (uint)-1)                                                \

@@ -320,16 +320,24 @@ void ZPhysicalMemoryManager::try_enable_uncommit(size_t min_capacity, size_t max
 }
 
 void ZPhysicalMemoryManager::nmt_commit(uintptr_t offset, size_t size) const {
-  // From an NMT point of view we treat the first heap view (marked0) as committed
-  const uintptr_t addr = ZAddress::marked0(offset);
-  MemTracker::record_virtual_memory_commit((void*)addr, size, CALLER_PC);
+  if (ZMemoryTagging) {
+    MemTracker::record_virtual_memory_commit((void*)offset, size, CALLER_PC);
+  } else {
+    // From an NMT point of view we treat the first heap view (marked0) as committed
+    const uintptr_t addr = ZAddress::marked0(offset);
+    MemTracker::record_virtual_memory_commit((void*)addr, size, CALLER_PC);
+  }
 }
 
 void ZPhysicalMemoryManager::nmt_uncommit(uintptr_t offset, size_t size) const {
   if (MemTracker::tracking_level() > NMT_minimal) {
-    const uintptr_t addr = ZAddress::marked0(offset);
     Tracker tracker(Tracker::uncommit);
-    tracker.record((address)addr, size);
+    if (ZMemoryTagging) {
+      tracker.record((address)offset, size);
+    } else {
+      const uintptr_t addr = ZAddress::marked0(offset);
+      tracker.record((address)addr, size);
+    }
   }
 }
 
@@ -430,6 +438,8 @@ void ZPhysicalMemoryManager::pretouch(uintptr_t offset, size_t size) const {
   if (ZVerifyViews) {
     // Pre-touch good view
     pretouch_view(ZAddress::good(offset), size);
+  } else if (ZMemoryTagging) {
+    pretouch_view(offset, size);
   } else {
     // Pre-touch all views
     pretouch_view(ZAddress::marked0(offset), size);
@@ -444,6 +454,8 @@ void ZPhysicalMemoryManager::map(uintptr_t offset, const ZPhysicalMemory& pmem) 
   if (ZVerifyViews) {
     // Map good view
     map_view(ZAddress::good(offset), pmem);
+  } else if (ZMemoryTagging) {
+    map_view(offset, pmem);
   } else {
     // Map all views
     map_view(ZAddress::marked0(offset), pmem);
@@ -460,6 +472,8 @@ void ZPhysicalMemoryManager::unmap(uintptr_t offset, size_t size) const {
   if (ZVerifyViews) {
     // Unmap good view
     unmap_view(ZAddress::good(offset), size);
+  } else if (ZMemoryTagging) {
+    unmap_view(offset, size);
   } else {
     // Unmap all views
     unmap_view(ZAddress::marked0(offset), size);

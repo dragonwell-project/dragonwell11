@@ -45,8 +45,11 @@ ZVirtualMemoryManager::ZVirtualMemoryManager() :
   }
 
   // Make the complete address view free
-  _manager.free(0, ZAddressOffsetMax);
-
+  if (ZMemoryTagging) {
+    _manager.free(ZAddressSpaceStart, ZAddressOffsetMax - ZAddressSpaceStart);
+  } else {
+    _manager.free(0, ZAddressOffsetMax);
+  }
   // Register address space with native memory tracker
   nmt_reserve(ZAddressSpaceStart, ZAddressSpaceSize);
 

@@ -25,5 +25,6 @@
 #include "gc/z/zArguments.hpp"
 
 void ZArguments::initialize_platform() {
-  // Does nothing
+  // x86 doesn't support MT.
+  FLAG_SET_DEFAULT(ZMemoryTagging, false);
 }

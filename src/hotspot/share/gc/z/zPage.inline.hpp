@@ -141,7 +141,11 @@ inline ZPhysicalMemory& ZPage::physical_memory() {
 
 inline uint8_t ZPage::numa_id() {
   if (_numa_id == (uint8_t)-1) {
-    _numa_id = (uint8_t)ZNUMA::memory_id(ZAddress::good(start()));
+    if (ZMemoryTagging) {
+      _numa_id = (uint8_t) ZNUMA::memory_id(start());
+    } else {
+      _numa_id = (uint8_t)ZNUMA::memory_id(ZAddress::good(start()));
+    }
   }
 
   return _numa_id;

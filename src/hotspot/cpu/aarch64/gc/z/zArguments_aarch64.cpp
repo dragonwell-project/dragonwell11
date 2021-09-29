@@ -31,4 +31,10 @@ void ZArguments::initialize_platform() {
   // Disable class unloading - we don't support concurrent class unloading yet.
   FLAG_SET_DEFAULT(ClassUnloading, false);
   FLAG_SET_DEFAULT(ClassUnloadingWithConcurrentMark, false);
+
+  if(ZMemoryTagging && ZVerifyViews && FLAG_IS_CMDLINE(ZMemoryTagging) && FLAG_IS_CMDLINE(ZVerifyViews)) {
+    warning("ZMemoryTagging is incompatible with ZVerifyViews"
+            "; ignoring ZMemoryTagging flag." );
+    ZMemoryTagging = false;
+  }
 }

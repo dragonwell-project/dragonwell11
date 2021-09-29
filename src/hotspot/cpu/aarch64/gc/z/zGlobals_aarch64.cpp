@@ -145,6 +145,9 @@ static const size_t DEFAULT_MAX_ADDRESS_BIT = 47;
 // Minimum value returned, if probing fails: 64GB
 static const size_t MINIMUM_MAX_ADDRESS_BIT = 36;
 
+static const size_t MT_METADATA_SHIFT_BIT = 56;
+static const size_t MT_MIN_ADDRESS_SHIFT_BIT = 32;
+
 size_t count_leading_zeros(size_t addr) {
 #if defined(TARGET_COMPILER_gcc)
   assert(addr != 0, "precondition");
@@ -232,23 +235,39 @@ static size_t probe_valid_max_address_bit() {
 }
 
 uintptr_t ZPlatformAddressSpaceStart() {
-  const uintptr_t first_heap_view_address = (uintptr_t)1 << (ZPlatformAddressMetadataShift() + 0);
-  const size_t min_address_offset = 0;
+  uintptr_t first_heap_view_address = 0;
+  size_t min_address_offset = 0;
+  if (ZMemoryTagging) {
+    min_address_offset = (size_t)1 << MT_MIN_ADDRESS_SHIFT_BIT;
+  } else {
+    first_heap_view_address = (uintptr_t)1 << (ZPlatformAddressMetadataShift() + 0);
+  }
   return first_heap_view_address + min_address_offset;
 }
 
 uintptr_t ZPlatformAddressSpaceEnd() {
-  const uintptr_t last_heap_view_address = (uintptr_t)1 << (ZPlatformAddressMetadataShift() + 2);
-  const size_t max_address_offset = (size_t)1 << ZPlatformAddressOffsetBits();
+  uintptr_t last_heap_view_address = 0;
+  size_t max_address_offset = (size_t)1 << ZPlatformAddressOffsetBits();
+  if (!ZMemoryTagging) {
+    last_heap_view_address = (uintptr_t)1 << (ZPlatformAddressMetadataShift() + 2);
+  }
   return last_heap_view_address + max_address_offset;
 }
 
 uintptr_t ZPlatformAddressReservedStart() {
-  return ZPlatformAddressSpaceStart();
+  if (ZMemoryTagging) {
+    return ZPlatformAddressSpaceStart() | ((size_t) 1 << MT_METADATA_SHIFT_BIT);
+  } else {
+    return ZPlatformAddressSpaceStart();
+  }
 }
 
 uintptr_t ZPlatformAddressReservedEnd() {
-  return ZPlatformAddressSpaceEnd();
+  if (ZMemoryTagging) {
+    return ZPlatformAddressSpaceEnd() | ((size_t) 1 << (MT_METADATA_SHIFT_BIT + 2));
+  } else {
+    return ZPlatformAddressSpaceEnd();
+  }
 }
 
 size_t ZPlatformAddressOffsetBits() {
@@ -262,5 +281,9 @@ size_t ZPlatformAddressOffsetBits() {
 }
 
 size_t ZPlatformAddressMetadataShift() {
-  return ZPlatformAddressOffsetBits();
+  if (ZMemoryTagging) {
+    return MT_METADATA_SHIFT_BIT;
+  } else {
+    return ZPlatformAddressOffsetBits();
+  }
 }
