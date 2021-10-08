@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @summary Test timer implementation
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+EnableCoroutine TestOverflow
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine TestOverflow
 */
 
 

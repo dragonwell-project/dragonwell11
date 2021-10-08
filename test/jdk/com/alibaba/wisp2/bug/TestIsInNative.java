@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @summary test Thread.isInNative() is correct
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+EnableCoroutine TestIsInNative
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine TestIsInNative
  */
 
 import jdk.internal.misc.SharedSecrets;

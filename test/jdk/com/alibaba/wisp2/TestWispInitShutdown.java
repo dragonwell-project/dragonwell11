@@ -2,7 +2,8 @@
  * @test
  * @summary TestWispInitShutdown
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestWispInitShutdown
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestWispInitShutdown
  */
 
 import com.alibaba.wisp.engine.WispEngine;

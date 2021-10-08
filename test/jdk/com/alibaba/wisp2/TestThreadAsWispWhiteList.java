@@ -4,7 +4,8 @@
  * @summary test thread as wisp white list
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.enableThreadAsWisp=true -Dcom.alibaba.wisp.allThreadAsWisp=false -Dcom.alibaba.wisp.threadAsWisp.white=name:wisp-* TestThreadAsWispWhiteList
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.enableThreadAsWisp=true -Dcom.alibaba.wisp.allThreadAsWisp=false -Dcom.alibaba.wisp.threadAsWisp.white=name:wisp-* TestThreadAsWispWhiteList
  */
 
 import jdk.internal.misc.SharedSecrets;

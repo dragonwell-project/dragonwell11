@@ -1614,7 +1614,7 @@ class com_alibaba_wisp_engine_WispCarrier: AllStatic {
 private:
   static int _isInCritical_offset;
 public:
-  static bool in_critical(oop obj);
+  static jboolean in_critical(oop obj);
 
   static void compute_offsets();
   static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;

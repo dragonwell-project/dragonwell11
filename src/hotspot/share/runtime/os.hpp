@@ -1055,6 +1055,4 @@ template<> struct IsRegisteredEnum<os::SuspendResume::State> : public TrueType {
 
 extern "C" int SpinPause();
 
-bool clear_interrupt_for_wisp(Thread *);
-
 #endif // SHARE_VM_RUNTIME_OS_HPP

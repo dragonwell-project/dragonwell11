@@ -1,6 +1,7 @@
 /*
  * @test
  * @summary Test the fix that unpark might not be handled in WispThread::unpark due to due to WispEngine of main thread not properly been initialized in premain().
+ * @requires os.family == "linux"
  *
  * @run shell testPremainWithWispMonitor.sh
  */

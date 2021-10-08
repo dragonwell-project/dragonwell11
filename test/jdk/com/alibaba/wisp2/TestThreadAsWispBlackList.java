@@ -4,7 +4,8 @@
  * @summary test all thread as wisp black list
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm  -XX:+UseWisp2 TestThreadAsWispBlackList
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions  -XX:+UseWisp2 TestThreadAsWispBlackList
  */
 
 import jdk.internal.misc.SharedSecrets;

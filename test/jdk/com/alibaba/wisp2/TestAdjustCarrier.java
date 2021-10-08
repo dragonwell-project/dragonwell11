@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @summary test for adjusting carrier number at runtime
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.growCarrierTickUs=200000  TestAdjustCarrier
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.growCarrierTickUs=200000  TestAdjustCarrier
  */
 
 import com.alibaba.wisp.engine.WispEngine;

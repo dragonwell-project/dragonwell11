@@ -1,7 +1,8 @@
 /*
  * @test
  * @summary verify vm not crash when we're preempted frequently
- * @run main/othervm -XX:ActiveProcessorCount=1 -XX:+UseWisp2 TestWispPreemptBug
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:ActiveProcessorCount=1 -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestWispPreemptBug
  */
 
 import java.security.MessageDigest;

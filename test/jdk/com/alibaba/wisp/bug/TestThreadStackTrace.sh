@@ -4,6 +4,7 @@
 # @summary test Thread.getStackTrace() in wisp transparentAsync model
 # @modules java.base/jdk.internal.misc
 # @modules java.base/com.alibaba.wisp.engine:+open
+# @requires os.family == "linux"
 # @run shell TestThreadStackTrace.sh
 #
 
@@ -110,7 +111,7 @@ then
 fi
 
 #run
-${JAVA} -XX:+PrintSafepointStatistics  -XX:PrintSafepointStatisticsCount=1 -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=1 -cp ${TESTCLASSES} ${TEST_CLASS} > output.txt  2>&1
+${JAVA} -XX:+PrintSafepointStatistics  -XX:PrintSafepointStatisticsCount=1 -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=1 -cp ${TESTCLASSES} ${TEST_CLASS} > output.txt  2>&1
 rm -f $TEST_WISP_CONFIG
 cat output.txt
 

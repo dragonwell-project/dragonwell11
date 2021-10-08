@@ -5,7 +5,8 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/sun.nio.ch
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.transparentAsync=true TestGlobalPoller
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.transparentAsync=true TestGlobalPoller
 */
 
 import com.alibaba.wisp.engine.WispEngine;

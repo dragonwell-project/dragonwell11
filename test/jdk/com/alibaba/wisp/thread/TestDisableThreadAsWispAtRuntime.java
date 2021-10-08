@@ -4,7 +4,8 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestDisableThreadAsWispAtRuntime
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestDisableThreadAsWispAtRuntime
 */
 
 import com.alibaba.wisp.engine.WispEngine;

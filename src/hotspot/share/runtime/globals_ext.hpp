@@ -42,18 +42,18 @@
              "Desired size in bytes of array space allocation before "      \
              "printing a warning")                                          \
                                                                             \
-  product(bool, EnableCoroutine, false,                                     \
+  experimental(bool, EnableCoroutine, false,                                \
           "Enable coroutine support")                                       \
                                                                             \
   product(uintx, DefaultCoroutineStackSize, 128*K,                          \
           "Default size of stack that is associated with new coroutine")    \
                                                                             \
-  product(bool, UseWispMonitor, false,                                      \
+  experimental(bool, UseWispMonitor, false,                                 \
           "yields to next coroutine when ObjectMonitor is contended")       \
                                                                             \
-  product(bool, UseWisp2, false,                                            \
+  experimental(bool, UseWisp2, false,                                       \
           "Enable Wisp2")                                                   \
-  product(bool, Wisp2ThreadStop, false,                                     \
+  experimental(bool, Wisp2ThreadStop, false,                                \
           "ThreadDeath cannot be catched")                                  \
                                                                             \
   manageable(bool, PrintThreadCoroutineInfo, false,                         \

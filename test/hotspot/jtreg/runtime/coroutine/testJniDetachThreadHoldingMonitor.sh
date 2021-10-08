@@ -2,6 +2,7 @@
 
 ## @test
 ##
+## @requires os.family == "linux"
 ## @summary test DetachCurrentThread unpark
 ## @run shell testJniDetachThreadHoldingMonitor.sh
 ##

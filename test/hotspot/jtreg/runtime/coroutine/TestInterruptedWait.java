@@ -1,8 +1,9 @@
 /*
  * @test
  * @summary test obj.wait() could be interrupted
+ * @requires os.family == "linux"
  * @library /test/lib
- * @run main/othervm -XX:+UseWisp2 TestInterruptedWait
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestInterruptedWait
  */
 
 import java.util.concurrent.atomic.AtomicBoolean;

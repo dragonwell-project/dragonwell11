@@ -2,7 +2,8 @@
  * @test
  * @summary Test timer implement
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+EnableCoroutine TestTimer
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine TestTimer
 */
 
 

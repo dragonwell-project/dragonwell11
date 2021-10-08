@@ -2,6 +2,7 @@
 
 ## @test
 ##
+## @requires os.family == "linux"
 ## @summary test jni MonitorExit
 ## @run shell testJniMonitorExit.sh
 ##

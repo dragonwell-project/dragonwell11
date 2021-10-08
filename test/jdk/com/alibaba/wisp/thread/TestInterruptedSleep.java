@@ -2,7 +2,8 @@
  * @test
  * @summary test InterruptedException was thrown by sleep()
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestInterruptedSleep
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestInterruptedSleep
 */
 
 import com.alibaba.wisp.engine.WispEngine;

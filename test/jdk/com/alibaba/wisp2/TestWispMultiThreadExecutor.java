@@ -4,8 +4,9 @@
  * @library /lib/testlibrary
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm -XX:+EnableCoroutine  -Dcom.alibaba.wisp.profile=true -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableHandOff=false  TestWispMultiThreadExecutor
- * @run main/othervm -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableHandOff=false  TestWispMultiThreadExecutor
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine  -Dcom.alibaba.wisp.profile=true -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableHandOff=false  TestWispMultiThreadExecutor
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableHandOff=false  TestWispMultiThreadExecutor
 */
 
 import com.alibaba.wisp.engine.WispEngine;

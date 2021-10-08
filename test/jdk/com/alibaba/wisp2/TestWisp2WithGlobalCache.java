@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @summary test the task exit flow for ThreadAsWisp task
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:ActiveProcessorCount=2 -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.version=2 -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableThreadAsWisp=true -Dcom.alibaba.wisp.allThreadAsWisp=true -Dcom.alibaba.wisp.engineTaskCache=2 TestWisp2WithGlobalCache
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:ActiveProcessorCount=2 -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.version=2 -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableThreadAsWisp=true -Dcom.alibaba.wisp.allThreadAsWisp=true -Dcom.alibaba.wisp.engineTaskCache=2 TestWisp2WithGlobalCache
  */
 
 import jdk.internal.misc.SharedSecrets;

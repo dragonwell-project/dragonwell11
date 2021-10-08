@@ -3,7 +3,8 @@
  * @summary test submit task to engine.
  * @library /lib/testlibrary
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestEngineExecutor
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestEngineExecutor
 */
 
 import com.alibaba.wisp.engine.WispEngine;

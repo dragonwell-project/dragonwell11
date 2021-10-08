@@ -1621,7 +1621,7 @@ int java_lang_Thread::_resourceContainer_offset = 0 ;
   macro(_tid_offset,           k, "tid", long_signature, false); \
   macro(_thread_status_offset, k, "threadStatus", int_signature, false); \
   macro(_park_blocker_offset,  k, "parkBlocker", object_signature, false); \
-  macro(_resourceContainer_offset,    k, "resourceContainer", vmSymbols::resourcecontainer_signature, false); \
+  macro(_resourceContainer_offset,    k, "resourceContainer", resourcecontainer_signature, false); \
 
 void java_lang_Thread::compute_offsets() {
   assert(_group_offset == 0, "offsets should be initialized only once");
@@ -4463,7 +4463,7 @@ void com_alibaba_wisp_engine_WispCarrier::serialize_offsets(SerializeClosure* f)
 }
 #endif
 
-bool com_alibaba_wisp_engine_WispCarrier::in_critical(oop obj) {
+jboolean com_alibaba_wisp_engine_WispCarrier::in_critical(oop obj) {
   return obj->bool_field(_isInCritical_offset);
 }
 
@@ -4516,7 +4516,7 @@ int com_alibaba_wisp_engine_WispTask::_ttr_offset = 0;
   macro(_stealFailureCount_offset,  k, vmSymbols::stealFailureCount_name(), int_signature,  false); \
   macro(_preemptCount_offset,       k, vmSymbols::preemptCount_name(),      int_signature,  false); \
   macro(_shutdownPending_offset,    k, vmSymbols::shutdownPending_name(),   bool_signature, false); \
-  macro(_controlGroup_offset,        k, vmSymbols::controlGroup_name(),   vmSymbols::controlGroup_signature, false); \
+  macro(_controlGroup_offset,        k, vmSymbols::controlGroup_name(),   controlGroup_signature, false); \
   macro(_ttr_offset,                 k, vmSymbols::ttr_name(),   long_signature, false);
 
 void com_alibaba_wisp_engine_WispTask::compute_offsets() {
@@ -4540,7 +4540,7 @@ long com_alibaba_wisp_engine_WispTask::get_ttr(oop obj) {
 }
 
 #define WISPCG_FIELDS_DO(macro) \
-  macro(_cpuLimit_offset,      k, vmSymbols::cpuLimit_name(),     vmSymbols::controlGroup_Limit_signature,  false);
+  macro(_cpuLimit_offset,      k, vmSymbols::cpuLimit_name(),     controlGroup_Limit_signature,  false);
 
 int com_alibaba_wisp_engine_WispControlGroup::_cpuLimit_offset = 0;
 

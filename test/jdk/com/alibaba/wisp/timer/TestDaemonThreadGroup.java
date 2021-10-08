@@ -4,7 +4,8 @@
  * @summary Test Daemon Thread Group implementation
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.useCarrierAsPoller=false TestDaemonThreadGroup
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  -Dcom.alibaba.wisp.useCarrierAsPoller=false TestDaemonThreadGroup
 */
 
 

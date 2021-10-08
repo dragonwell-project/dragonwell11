@@ -4,7 +4,8 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @summary Verify yield not really happened when queue is empty
- * @run main/othervm  -XX:+UseWisp2 TestYieldEmptyQueue
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions  -XX:+UseWisp2 TestYieldEmptyQueue
  */
 
 import com.alibaba.wisp.engine.WispEngine;

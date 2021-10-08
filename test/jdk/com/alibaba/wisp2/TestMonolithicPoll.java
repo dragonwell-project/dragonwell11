@@ -4,8 +4,9 @@
  * @summary verify epollArray is set for Selector.select()
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.monolithicPoll=true TestMonolithicPoll
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.monolithicPoll=false TestMonolithicPoll
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.monolithicPoll=true TestMonolithicPoll
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.monolithicPoll=false TestMonolithicPoll
  */
 
 import com.alibaba.wisp.engine.WispTask;

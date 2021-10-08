@@ -2,7 +2,8 @@
  * @test
  * @summary test a special wisp unpark case for C1 compiled method
  * @modules java.base/jdk.internal.misc
- * @run main/othervm  -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -XX:TieredStopAtLevel=1 TestC1ThrowSyncException
+ * @requires os.family == "linux"
+ * @run main/othervm  -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -XX:TieredStopAtLevel=1 TestC1ThrowSyncException
  */
 
 

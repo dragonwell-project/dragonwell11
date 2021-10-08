@@ -1,8 +1,9 @@
 /*
  * @test
  * @summary Test low level coroutine implement
- * @run main/othervm -XX:+EnableCoroutine TestCoroutine
- * @run main/othervm -XX:+EnableCoroutine  TestCoroutine
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine TestCoroutine
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine  TestCoroutine
 */
 
 import java.dyn.Coroutine;

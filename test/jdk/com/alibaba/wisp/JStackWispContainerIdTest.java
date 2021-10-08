@@ -4,6 +4,7 @@
  * @summary Test jstack control group id
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.rcm.internal:+open
+ * @requires os.family == "linux"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=5 JStackWispContainerIdTest
  */
 

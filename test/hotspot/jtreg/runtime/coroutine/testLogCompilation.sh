@@ -5,6 +5,7 @@
 # @library /testlibrary
 # @compile TestSimpleWisp.java
 #
+# @requires os.family == "linux"
 # @summary test coroutine and -XX:+LogCompilation could work together
 # @run shell testLogCompilation.sh
 #
@@ -28,6 +29,6 @@ esac
 
 JAVA=${TESTJAVA}${FS}bin${FS}java
 
-${JAVA} -XX:+UnlockDiagnosticVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -XX:+LogCompilation -Xcomp -cp ${TESTCLASSES} TestSimpleWisp
+${JAVA} -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -XX:+LogCompilation -Xcomp -cp ${TESTCLASSES} TestSimpleWisp
 
 exit $?

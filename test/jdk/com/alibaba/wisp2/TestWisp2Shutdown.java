@@ -3,7 +3,8 @@
  * @summary TestWisp2Shutdown
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestWisp2Shutdown
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestWisp2Shutdown
  */
 
 import java.util.concurrent.CountDownLatch;

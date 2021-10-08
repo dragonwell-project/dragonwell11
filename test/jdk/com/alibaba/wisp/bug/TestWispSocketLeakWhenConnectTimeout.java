@@ -2,7 +2,8 @@
  * @test
  * @library /lib/testlibrary
  * @summary test the fix to fd leakage when socket connect timeout
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  TestWispSocketLeakWhenConnectTimeout
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  TestWispSocketLeakWhenConnectTimeout
  */
 
 import java.io.IOException;

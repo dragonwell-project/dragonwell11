@@ -2,7 +2,8 @@
  * @test
  * @summary T12212948
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestLazyUnparkBug
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestLazyUnparkBug
 */
  
 public class TestLazyUnparkBug {

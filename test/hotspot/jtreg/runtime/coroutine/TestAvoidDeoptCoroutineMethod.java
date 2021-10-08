@@ -1,10 +1,11 @@
 /*
  * @test TestAvoidDeoptCoroutineMethod
  * @library /test/lib
+ * @requires os.family == "linux"
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
  * @build TestAvoidDeoptCoroutineMethod
- * @run main/othervm -XX:+EnableCoroutine -Xmx10m -Xms10m -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI TestAvoidDeoptCoroutineMethod
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Xmx10m -Xms10m -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI TestAvoidDeoptCoroutineMethod
  * @summary test avoid coroutine intrinsic method to be deoptimized
  */
 

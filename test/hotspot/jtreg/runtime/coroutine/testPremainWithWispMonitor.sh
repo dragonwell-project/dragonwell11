@@ -31,6 +31,6 @@ done
 
 ${TESTJAVA}/bin/jar ${TESTTOOLVMOPTS} cvfm ${AGENT}.jar ${AGENT}.mf ${AGENT}*.class
 
-${TESTJAVA}/bin/java -XX:+EnableCoroutine -Dcom.alibaba.transparentAsync=true -XX:+UseWispMonitor \
+${TESTJAVA}/bin/java -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.transparentAsync=true -XX:+UseWispMonitor \
         -javaagent:TestPremainWithWispMonitor.jar TestPremainWithWispMonitor
 

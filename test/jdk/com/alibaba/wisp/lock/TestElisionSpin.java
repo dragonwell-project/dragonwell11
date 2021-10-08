@@ -3,7 +3,8 @@
  * @summary Test elision spin
  * @modules java.base/jdk.internal.misc
  * @library /lib/testlibrary
- * @run main/othervm  -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=1 TestElisionSpin
+ * @requires os.family == "linux"
+ * @run main/othervm  -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=1 TestElisionSpin
  */
 
 import com.alibaba.wisp.engine.WispEngine;

@@ -2,7 +2,8 @@
  * @test
  * @library /lib/testlibrary
  * @summary Test Object.wait/notify with coroutine in wisp2
- * @run main/othervm  -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestWisp2WaitNotify
+ * @requires os.family == "linux"
+ * @run main/othervm  -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestWisp2WaitNotify
  */
 
 import com.alibaba.wisp.engine.WispEngine;

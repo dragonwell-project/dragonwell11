@@ -4,10 +4,11 @@
  * @modules java.base/jdk.internal.misc
  *          java.base/jdk.internal.vm.annotation
  * @library /test/lib
+ * @requires os.family == "linux"
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox sun.hotspot.WhiteBox$WhiteBoxPermission
- * @run main/othervm -XX:TieredStopAtLevel=1 -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::bar -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::foo -XX:+PrintDeoptimizationDetails -XX:+IgnoreUnrecognizedVMOptions -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:+UseWisp2 TestSynchronizedMethodWhenUnwindingDeopt
- * @run main/othervm -XX:-TieredCompilation -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::bar -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::foo -XX:+PrintDeoptimizationDetails -XX:+IgnoreUnrecognizedVMOptions -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:+UseWisp2 TestSynchronizedMethodWhenUnwindingDeopt
+ * @run main/othervm -XX:TieredStopAtLevel=1 -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::bar -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::foo -XX:+PrintDeoptimizationDetails -XX:+IgnoreUnrecognizedVMOptions -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestSynchronizedMethodWhenUnwindingDeopt
+ * @run main/othervm -XX:-TieredCompilation -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::bar -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::foo -XX:+PrintDeoptimizationDetails -XX:+IgnoreUnrecognizedVMOptions -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestSynchronizedMethodWhenUnwindingDeopt
  */
 
 import jdk.internal.vm.annotation.ForceInline;

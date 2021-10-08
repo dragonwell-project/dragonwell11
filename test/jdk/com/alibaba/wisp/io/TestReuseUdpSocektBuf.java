@@ -2,7 +2,8 @@
  * @test
  * @library /lib/testlibrary
  * @summary test reuse WispUdpSocket buffer
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestReuseUdpSocektBuf
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestReuseUdpSocektBuf
  */
 
 import java.net.DatagramPacket;

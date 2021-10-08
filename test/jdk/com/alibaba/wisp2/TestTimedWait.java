@@ -1,7 +1,8 @@
 /*
  * @test
  * @summary test timed Jvm park
- * @run main/othervm -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestTimedWait
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 TestTimedWait
  */
 
 import com.alibaba.wisp.engine.WispEngine;
