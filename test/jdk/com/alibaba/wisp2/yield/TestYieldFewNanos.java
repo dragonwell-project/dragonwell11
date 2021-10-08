@@ -4,7 +4,8 @@
  * @modules java.base/jdk.internal.misc
  * @summary Verify park not happened for a very small interval
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm  -XX:+UseWisp2 TestYieldFewNanos
+ * @requires os.family == "linux"
+ * @run main/othervm  -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestYieldFewNanos
  */
 
 import com.alibaba.wisp.engine.WispEngine;

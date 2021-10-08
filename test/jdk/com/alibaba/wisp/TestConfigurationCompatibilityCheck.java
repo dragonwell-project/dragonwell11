@@ -2,6 +2,7 @@
  * @test
  * @summary Test the config compatibility in different wisp version
  * @library /test/lib
+ * @requires os.family == "linux"
  * @run main TestConfigurationCompatibilityCheck
  */
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ public class TestConfigurationCompatibilityCheck {
 
     private static void incompatibility(String... args) throws Exception {
         ArrayList<String> list = new ArrayList<>();
+        list.add("-XX:+UnlockExperimentalVMOptions");
         list.add("-XX:+EnableCoroutine");
         list.addAll(Arrays.asList(args));
         list.add("-version");

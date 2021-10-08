@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm/timeout=2000 -XX:+UseWisp2 -Dcom.alibaba.wisp.config=/tmp/wisp.config -Dcom.alibaba.wisp.profile=true TestWispMonitorData
+ * @requires os.family == "linux"
+ * @run main/othervm/timeout=2000 -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.config=/tmp/wisp.config -Dcom.alibaba.wisp.profile=true TestWispMonitorData
  */
 
 import com.alibaba.management.WispCounterMXBean;

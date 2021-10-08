@@ -27,6 +27,7 @@ package sun.nio.ch;
 
 import java.io.IOException;
 
+import jdk.internal.misc.IOEventAccess;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.Unsafe;
 
@@ -125,7 +126,32 @@ class EPoll {
     static {
         IOUtil.load();
         ENOENT = errnoENOENT();
-        SharedSecrets.setEpollAccess(new EpollAccess() {
+        SharedSecrets.setIOEventAccess(new IOEventAccess() {
+            @Override
+            public int eventCtlAdd() {
+                return EPoll.EPOLL_CTL_ADD;
+            }
+
+            @Override
+            public int eventCtlDel() {
+                return EPoll.EPOLL_CTL_DEL;
+            }
+
+            @Override
+            public int eventCtlMod() {
+                return EPoll.EPOLL_CTL_MOD;
+            }
+
+            @Override
+            public int eventOneShot() {
+                return EPoll.EPOLLONESHOT;
+            }
+
+            @Override
+            public int noEvent() {
+                return EPoll.ENOENT;
+            }
+
             @Override
             public long allocatePollArray(int count) {
                 return EPoll.allocatePollArray(count);
@@ -152,17 +178,17 @@ class EPoll {
             }
 
             @Override
-            public int epollCreate() throws IOException {
+            public int eventCreate() throws IOException {
                 return EPoll.create();
             }
 
             @Override
-            public int epollCtl(int epfd, int opcode, int fd, int events) {
+            public int eventCtl(int epfd, int opcode, int fd, int events) {
                 return EPoll.ctl(epfd, opcode, fd, events);
             }
 
             @Override
-            public int epollWait(int epfd, long pollAddress, int numfds, int timeout) throws IOException {
+            public int eventWait(int epfd, long pollAddress, int numfds, int timeout) throws IOException {
                 return EPoll.wait(epfd, pollAddress, numfds, timeout);
             }
 

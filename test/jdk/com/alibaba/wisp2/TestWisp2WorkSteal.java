@@ -3,10 +3,11 @@
  * @library /lib/testlibrary
  * @summary verification of work stealing really happened, also test the several WorkStealCandidates of Wisp2 in different mode: interp/c1/c2
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.schedule.stealRetry=100  -Dcom.alibaba.wisp.schedule.helpStealRetry=100 TestWisp2WorkSteal
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.schedule.stealRetry=100  -Dcom.alibaba.wisp.schedule.helpStealRetry=100  -Xcomp -client TestWisp2WorkSteal
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.schedule.stealRetry=100  -Dcom.alibaba.wisp.schedule.helpStealRetry=100  -Xcomp -server TestWisp2WorkSteal
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.schedule.stealRetry=100  -Dcom.alibaba.wisp.schedule.helpStealRetry=100  -Xint TestWisp2WorkSteal
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.schedule.stealRetry=100  -Dcom.alibaba.wisp.schedule.helpStealRetry=100 TestWisp2WorkSteal
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.schedule.stealRetry=100  -Dcom.alibaba.wisp.schedule.helpStealRetry=100  -Xcomp -client TestWisp2WorkSteal
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.schedule.stealRetry=100  -Dcom.alibaba.wisp.schedule.helpStealRetry=100  -Xcomp -server TestWisp2WorkSteal
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.schedule.stealRetry=100  -Dcom.alibaba.wisp.schedule.helpStealRetry=100  -Xint TestWisp2WorkSteal
  */
 
 import com.alibaba.wisp.engine.WispEngine;

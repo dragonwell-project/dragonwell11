@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @summary Test for thread WispTask leak
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestId2TaskMapLeak
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestId2TaskMapLeak
 */
 import com.alibaba.wisp.engine.WispEngine;
 import com.alibaba.wisp.engine.WispTask;

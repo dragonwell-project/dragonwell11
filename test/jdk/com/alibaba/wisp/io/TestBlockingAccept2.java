@@ -2,7 +2,8 @@
  * @test
  * @library /lib/testlibrary
  * @summary test blocking accept
- * @run main/othervm -Dcom.alibaba.wisp.carrierEngines=1 -XX:+UseWisp2 TestBlockingAccept2
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -Dcom.alibaba.wisp.carrierEngines=1 -XX:+UseWisp2 TestBlockingAccept2
  */
 
 import com.alibaba.wisp.engine.WispEngine;

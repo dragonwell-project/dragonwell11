@@ -3,6 +3,7 @@
 #
 # @test
 # @library /testlibrary
+# @requires os.family == "linux"
 # @compile TestSimpleWisp.java
 #
 # @summary test Coroutine SwitchTo() crash problem
@@ -40,6 +41,6 @@ gcc -DLINUX -fPIC -shared -o libtest.so \
     -I${COMPILEJAVA}/include -I${COMPILEJAVA}/include/linux \
     ${TESTSRC}/testCoroutineBreakpointSwitchTo.c
 
-${JAVA} -agentpath:libtest.so -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -cp ${TESTCLASSES} TestSimpleWisp
+${JAVA} -agentpath:libtest.so -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -cp ${TESTCLASSES} TestSimpleWisp
 
 exit $?

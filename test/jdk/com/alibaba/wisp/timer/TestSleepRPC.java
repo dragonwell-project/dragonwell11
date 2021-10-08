@@ -2,7 +2,8 @@
  * @test
  * @summary test use sleep in RPC senorina
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestSleepRPC
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestSleepRPC
  **/
 
 import com.alibaba.wisp.engine.WispEngine;

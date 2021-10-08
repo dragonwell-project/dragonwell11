@@ -1,7 +1,8 @@
 /*
  * @test
  * @summary test to run a compiled/synchronized method with wisp enabled.
- * @run main/othervm -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestC2SyncMethod
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestC2SyncMethod
 */
 public class TestC2SyncMethod {
     public synchronized static void main(String[] args) {

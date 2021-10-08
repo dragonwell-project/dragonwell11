@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @summary Test Wisp engine park / unpark
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+UseWisp2 TestPark
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestPark
 */
 
 

@@ -2,7 +2,8 @@
  * @test
  * @summary Test WispEngine's destroy
  * @modules java.base/jdk.internal.misc java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestWispDestroy
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestWispDestroy
 */
 
 import com.alibaba.wisp.engine.WispEngine;

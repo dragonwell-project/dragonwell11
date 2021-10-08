@@ -2,7 +2,8 @@
  * @test
  * @library /lib/testlibrary
  * @summary test reset task doesn't cancel the current task's timer unexpectedly.
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestResetTaskCancelTimerBug
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestResetTaskCancelTimerBug
  */
 
 import com.alibaba.wisp.engine.WispEngine;

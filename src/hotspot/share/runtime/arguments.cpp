@@ -3956,6 +3956,14 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     }
   }
 
+#ifndef LINUX
+  if (EnableCoroutine || UseWispMonitor) {
+    warning("Wisp supports Linux only"
+            "; ignore Wisp related flags");
+    EnableCoroutine = UseWispMonitor = false;
+  }
+#endif
+
   if (Wisp2ThreadStop && !UseWisp2) {
     vm_exit_during_initialization("Wisp2ThreadStop only works with UseWisp2");
   }

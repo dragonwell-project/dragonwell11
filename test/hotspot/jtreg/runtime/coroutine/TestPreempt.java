@@ -1,8 +1,9 @@
 /*
  * @test
  * @summary test wisp time slice preempt
+ * @requires os.family == "linux"
  * @library /test/lib
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.carrierEngines=1 TestPreempt
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.carrierEngines=1 TestPreempt
 
  */
 

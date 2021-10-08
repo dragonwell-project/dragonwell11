@@ -2,6 +2,7 @@
  * @test
  * @library /lib/testlibrary
  * @summary test bug fix of SharedSecrets and Unsafe class initializer circular dependency
+ * @requires os.family == "linux"
  * @run main TestUnsafeDependencyBug 10
  */
 
@@ -27,7 +28,7 @@ public class TestUnsafeDependencyBug {
     }
 
     private static void runLauncherWithWisp() throws Exception {
-        Process p = new ProcessBuilder(System.getProperty("java.home") + "/bin/java", "-XX:+EnableCoroutine")
+        Process p = new ProcessBuilder(System.getProperty("java.home") + "/bin/java", "-XX:+UnlockExperimentalVMOptions", "-XX:+EnableCoroutine")
                 .redirectErrorStream(true)
                 .redirectOutput(new File("/dev/null"))
                 .start();

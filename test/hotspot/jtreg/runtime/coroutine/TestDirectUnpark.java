@@ -1,8 +1,9 @@
 /*
  * @test
  * @library /test/lib
+ * @requires os.family == "linux"
  * @summary Test the optimization of direct unpark with Object.wait/notify
- * @run main/othervm -XX:+UseWisp2 TestDirectUnpark
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestDirectUnpark
 */
 
 import com.alibaba.wisp.engine.WispEngine;

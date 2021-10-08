@@ -3,7 +3,8 @@
  * @summary test thread.isAlive() of wispTask
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @library /lib/testlibrary
- * @run main/othervm -XX:+UseWisp2 TestIsAlive
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestIsAlive
  *
  */
 

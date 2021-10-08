@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @summary Verify timer could be processed when we're yielding
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm  -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=1 TestYieldTimer
+ * @requires os.family == "linux"
+ * @run main/othervm  -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=1 TestYieldTimer
  */
 
 

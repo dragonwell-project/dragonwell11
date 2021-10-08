@@ -43,18 +43,12 @@ LONG WINAPI topLevelExceptionFilter(struct _EXCEPTION_POINTERS* exceptionInfo);
 void coroutine_start(Coroutine* coroutine, jobject coroutineObj) {
   coroutine->thread()->set_thread_state(_thread_in_vm);
 
-  if (UseVectoredExceptions) {
-    // If we are using vectored exception we don't need to set a SEH
-    coroutine->run(coroutineObj);
-  }
-  else {
-    // Install a win32 structured exception handler around every thread created
-    // by VM, so VM can genrate error dump when an exception occurred in non-
-    // Java thread (e.g. VM thread).
-    __try {
-       coroutine->run(coroutineObj);
-    } __except(topLevelExceptionFilter((_EXCEPTION_POINTERS*)_exception_info())) {
-    }
+  // Install a win32 structured exception handler around every thread created
+  // by VM, so VM can genrate error dump when an exception occurred in non-
+  // Java thread (e.g. VM thread).
+  __try {
+     coroutine->run(coroutineObj);
+  } __except(topLevelExceptionFilter((_EXCEPTION_POINTERS*)_exception_info())) {
   }
 
   ShouldNotReachHere();
@@ -218,6 +212,9 @@ void Coroutine::frames_do(FrameClosure* fc) {
       break;
     case Coroutine::_dead:
       // coroutine is dead, ignore
+      break;
+    default:
+      ShouldNotReachHere();
       break;
   }
 }
@@ -1325,3 +1322,15 @@ WispClinitCounterMark::~WispClinitCounterMark() {
   }
 }
 
+bool clear_interrupt_for_wisp(Thread* thread) {
+  assert(EnableCoroutine, "Coroutine is disabled");
+  // If we only use -XX:+EnableCoroutine and -Dcom.alibaba.transparentAsync=true, we will
+  // fall here, so we cannot use `assert(UseWispMonitor)` only.
+  if (UseWispMonitor && thread->is_Wisp_thread()) {
+    thread = ((WispThread *)thread)->thread();
+  }
+  bool interrupted = thread->osthread()->interrupted();
+  thread->osthread()->set_interrupted(false);
+
+  return interrupted;
+}

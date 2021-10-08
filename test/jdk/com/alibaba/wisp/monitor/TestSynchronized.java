@@ -1,7 +1,8 @@
 /*
  * @test
  * @summary Basic test for java primitive lock(synchronized)
- * @run main/othervm -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestSynchronized
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestSynchronized
 */
 
 import com.alibaba.wisp.engine.WispEngine;

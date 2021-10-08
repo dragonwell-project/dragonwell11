@@ -2,7 +2,8 @@
  * @test
  * @library /lib/testlibrary
  * @summary test selector.wakeup() dispatched
- * @run main/othervm -XX:+UseWisp2  TestEpollWakeup 3000
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2  TestEpollWakeup 3000
  */
 
 import java.nio.channels.Selector;

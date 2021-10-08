@@ -3,10 +3,11 @@
 ## @test
 ##
 ## @summary test c1 assertion failure when UseDirectUnpark is enabled (please run it in slowdebug ver.)
+## @requires os.family == "linux"
 ## @run shell testC1AssertFail.sh
 
 
-${TESTJAVA}/bin/java -Xcomp -XX:-UseBiasedLocking -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true &
+${TESTJAVA}/bin/java -Xcomp -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true &
 
 PID=$!
 

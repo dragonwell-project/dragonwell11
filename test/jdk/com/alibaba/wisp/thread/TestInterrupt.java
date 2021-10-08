@@ -1,7 +1,8 @@
 /*
  * @test
  * @summary test thread.interrupt() of wispTask
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestInterrupt
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestInterrupt
  */
 
 import com.alibaba.wisp.engine.WispEngine;

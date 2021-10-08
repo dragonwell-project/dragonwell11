@@ -2,7 +2,8 @@
  * @test
  * @library /lib/testlibrary
  * @summary test long running or blocking syscall task could be retaken
- * @run main/othervm -Dcom.alibaba.wisp.carrierEngines=1 -XX:+UseWisp2 -Dcom.alibaba.wisp.handoffPolicy=ADAPTIVE TestHandOffWithSteal
+ * @requires os.family == "linux"
+ * @run main/othervm -Dcom.alibaba.wisp.carrierEngines=1 -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.handoffPolicy=ADAPTIVE TestHandOffWithSteal
  */
 
 import com.alibaba.wisp.engine.WispEngine;

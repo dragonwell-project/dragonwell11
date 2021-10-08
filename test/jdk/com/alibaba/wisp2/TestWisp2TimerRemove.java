@@ -4,7 +4,8 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @summary verify canceled timers are removed ASAP
- * @run main/othervm -XX:+UseWisp2 TestWisp2TimerRemove
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestWisp2TimerRemove
  */
 
 import com.alibaba.wisp.engine.WispEngine;

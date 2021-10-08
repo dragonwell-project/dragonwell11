@@ -3,7 +3,8 @@
  * @library /lib/testlibrary
  * @summary test reuse WispUdpSocket buffer
  * @modules java.base/jdk.internal.misc
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.enableAsyncFileIO=true WispFileIOTest
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.enableAsyncFileIO=true WispFileIOTest
  */
 
 import jdk.internal.misc.SharedSecrets;

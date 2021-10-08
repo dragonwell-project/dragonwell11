@@ -1,7 +1,8 @@
 /*
  * @test
  * @summary test of memory leak while creating and destroying coroutine/thread
- * @run main/othervm -XX:+EnableCoroutine -Dcom.alibaba.wisp.version=2  -Xmx10m  -Xms10m TestMemLeak
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.version=2  -Xmx10m  -Xms10m TestMemLeak
  */
 
 import java.dyn.Coroutine;

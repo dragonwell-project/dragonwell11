@@ -3,7 +3,8 @@
  * @summary Test invoke dynamic class for lambda with interrupt
  * @modules java.base/jdk.internal.misc
  * @library /lib/testlibrary
- * @run main/othervm -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableHandOff=false -XX:+AllowParallelDefineClass TestInvokeDynamicInterruption
+ * @requires os.family == "linux"
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableHandOff=false -XX:+AllowParallelDefineClass TestInvokeDynamicInterruption
 */
 import com.alibaba.wisp.engine.WispEngine;
 

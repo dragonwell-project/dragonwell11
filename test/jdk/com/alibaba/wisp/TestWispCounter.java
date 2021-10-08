@@ -17,7 +17,8 @@ import static jdk.testlibrary.Asserts.assertTrue;
  * @summary WispCounterMXBean unit test
  * @library /lib/testlibrary
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @run main/othervm/timeout=2000 -XX:+UseWisp2 -Dcom.alibaba.wisp.config=/tmp/wisp.config TestWispCounter
+ * @requires os.family == "linux"
+ * @run main/othervm/timeout=2000 -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.config=/tmp/wisp.config TestWispCounter
 */
 public class TestWispCounter {
 
