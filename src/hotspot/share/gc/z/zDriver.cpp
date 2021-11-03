@@ -199,6 +199,7 @@ public:
 
   virtual bool do_operation() {
     ZStatTimer timer(ZPhasePauseUnloadClass);
+    ZServiceabilityPauseTracer tracer;
     ZHeap::heap()->unload_class();
     return true;
   }
