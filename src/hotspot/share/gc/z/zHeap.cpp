@@ -374,14 +374,9 @@ bool ZHeap::should_unload_class() {
   // ignore ZUnloadClassesFrequency if implied by the GC cause
   const GCCause::Cause cause = ZCollectedHeap::heap()->gc_cause();
   switch (cause) {
-    case GCCause::_wb_young_gc:
-    case GCCause::_wb_conc_mark:
     case GCCause::_wb_full_gc:
-    case GCCause::_dcmd_gc_run:
     case GCCause::_java_lang_system_gc:
     case GCCause::_full_gc_alot:
-    case GCCause::_scavenge_alot:
-    case GCCause::_jvmti_force_gc:
     case GCCause::_metadata_GC_clear_soft_refs:
       return true;
   }
