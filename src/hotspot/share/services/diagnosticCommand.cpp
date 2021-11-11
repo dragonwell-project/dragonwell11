@@ -299,6 +299,7 @@ void JVMTIDataDumpDCmd::execute(DCmdSource source, TRAPS) {
 }
 
 #if INCLUDE_SERVICES
+#if INCLUDE_JVMTI
 JVMTIAgentLoadDCmd::JVMTIAgentLoadDCmd(outputStream* output, bool heap) :
                                        DCmdWithParser(output, heap),
   _libpath("library path", "Absolute path of the JVMTI agent to load.",
@@ -358,6 +359,7 @@ int JVMTIAgentLoadDCmd::num_arguments() {
     return 0;
   }
 }
+#endif // INCLUDE_JVMTI
 #endif // INCLUDE_SERVICES
 
 void PrintSystemPropertiesDCmd::execute(DCmdSource source, TRAPS) {
@@ -506,18 +508,21 @@ HeapDumpDCmd::HeapDumpDCmd(outputStream* output, bool heap) :
   _all("-all", "Dump all objects, including unreachable objects",
        "BOOLEAN", false, "false"),
   _mini_dump("-mini", "Use mini-dump format",
-       "BOOLEAN", false, "false") {
+       "BOOLEAN", false, "false"),
+  _overwrite("-overwrite", "If specified, the dump file will be overwritten if it exists",
+           "BOOLEAN", false, "false") {
   _dcmdparser.add_dcmd_option(&_all);
   _dcmdparser.add_dcmd_option(&_mini_dump);
   _dcmdparser.add_dcmd_argument(&_filename);
+  _dcmdparser.add_dcmd_option(&_overwrite);
 }
 
 void HeapDumpDCmd::execute(DCmdSource source, TRAPS) {
   // Request a full GC before heap dump if _all is false
   // This helps reduces the amount of unreachable objects in the dump
   // and makes it easier to browse.
-  HeapDumper dumper(!_all.value() /* request GC if _all is false*/, _mini_dump.value());
-  int res = dumper.dump(_filename.value());
+  HeapDumper dumper(!_all.value() /* request GC if _all is false*/, false, _mini_dump.value());
+  int res = dumper.dump(_filename.value(), output(), _overwrite.value());
   if (res == 0) {
     if (_mini_dump.value()) {
       output()->print_cr("Mini heap dump file created");

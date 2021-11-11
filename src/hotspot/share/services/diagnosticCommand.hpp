@@ -332,6 +332,7 @@ protected:
   DCmdArgument<char*> _filename;
   DCmdArgument<bool>  _all;
   DCmdArgument<bool>  _mini_dump;
+  DCmdArgument<bool> _overwrite;
 public:
   HeapDumpDCmd(outputStream* output, bool heap);
   static const char* name() {

@@ -44,7 +44,7 @@
 #include "utilities/debug.hpp"
 #include "utilities/formatBuffer.hpp"
 
-volatile bool AttachListener::_initialized;
+volatile AttachListenerState AttachListener::_state = AL_NOT_INITIALIZED;
 
 // Implementation of "properties" command.
 //
@@ -246,7 +246,7 @@ jint dump_heap(AttachOperation* op, outputStream* out) {
     // Request a full GC before heap dump if live_objects_only = true
     // This helps reduces the amount of unreachable objects in the dump
     // and makes it easier to browse.
-    HeapDumper dumper(live_objects_only /* request GC */, mini_heap_dump);
+    HeapDumper dumper(live_objects_only /* request GC */, false, mini_heap_dump);
     int res = dumper.dump(op->arg(0));
     if (res == 0) {
       if (mini_heap_dump) {
@@ -363,6 +363,7 @@ static void attach_listener_thread_entry(JavaThread* thread, TRAPS) {
          "Should already be setup");
 
   if (AttachListener::pd_init() != 0) {
+    AttachListener::set_state(AL_NOT_INITIALIZED);
     return;
   }
   AttachListener::set_initialized();
@@ -370,6 +371,7 @@ static void attach_listener_thread_entry(JavaThread* thread, TRAPS) {
   for (;;) {
     AttachOperation* op = AttachListener::dequeue();
     if (op == NULL) {
+      AttachListener::set_state(AL_NOT_INITIALIZED);
       return;   // dequeue failed or shutdown
     }
 
@@ -413,6 +415,8 @@ static void attach_listener_thread_entry(JavaThread* thread, TRAPS) {
     // operation complete - send result and output to client
     op->complete(res, &st);
   }
+
+  ShouldNotReachHere();
 }
 
 bool AttachListener::has_init_error(TRAPS) {
@@ -436,6 +440,7 @@ void AttachListener::init() {
   const char thread_name[] = "Attach Listener";
   Handle string = java_lang_String::create_from_str(thread_name, THREAD);
   if (has_init_error(THREAD)) {
+    set_state(AL_NOT_INITIALIZED);
     return;
   }
 
@@ -447,6 +452,7 @@ void AttachListener::init() {
                        string,
                        THREAD);
   if (has_init_error(THREAD)) {
+    set_state(AL_NOT_INITIALIZED);
     return;
   }
 
@@ -460,6 +466,7 @@ void AttachListener::init() {
                         thread_oop,
                         THREAD);
   if (has_init_error(THREAD)) {
+    set_state(AL_NOT_INITIALIZED);
     return;
   }
 
