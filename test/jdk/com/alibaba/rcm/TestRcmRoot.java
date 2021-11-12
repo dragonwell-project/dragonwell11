@@ -6,7 +6,7 @@
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.rcm.internal:+open
- * @run main/othervm -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=4 TestRcmRoot
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=4 TestRcmRoot
  */
 
 import jdk.internal.misc.SharedSecrets;

@@ -5,7 +5,7 @@
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @modules java.base/com.alibaba.rcm.internal:+open
  * @summary test RCM thread inheritance callback throw exception .
- * @run main/othervm -XX:+UseWisp2 -XX:ActiveProcessorCount=4 TestExceptionPreidicate
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=4 TestExceptionPreidicate
  */
 
 import com.alibaba.rcm.ResourceContainer;

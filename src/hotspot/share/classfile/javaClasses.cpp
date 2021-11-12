@@ -4492,8 +4492,6 @@ void com_alibaba_rcm_internal_AbstractResourceContainer::compute_offsets() {
 
 #if INCLUDE_CDS
 void com_alibaba_rcm_internal_AbstractResourceContainer::serialize_offsets(SerializeClosure* f) {
-  InstanceKlass *k = SystemDictionary::com_alibaba_rcm_internal_AbstractResourceContainer_klass();
-  assert(k != NULL, "AbstractResourceContainer is null");
   RCM_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
 }
 #endif
@@ -4557,6 +4555,8 @@ void com_alibaba_wisp_engine_WispControlGroup::serialize_offsets(SerializeClosur
 #endif
 
 void com_alibaba_wisp_engine_WispControlGroup::compute_offsets() {
+  InstanceKlass *k = SystemDictionary::com_alibaba_wisp_engine_WispControlGroup_klass();
+  assert(k != NULL, "WispControlGroup is null");
   WISPCG_FIELDS_DO(FIELD_COMPUTE_OFFSET);
 }
 
@@ -4579,8 +4579,6 @@ void com_alibaba_wisp_engine_WispControlGroup_CpuLimit::compute_offsets() {
 
 #if INCLUDE_CDS
 void com_alibaba_wisp_engine_WispControlGroup_CpuLimit::serialize_offsets(SerializeClosure* f) {
-  InstanceKlass *k = SystemDictionary::com_alibaba_wisp_engine_WispControlGroup_CpuLimit_klass();
-  assert(k != NULL, "WispControlGroup$CpuLimit_klass is null");
   WISPCG_CPULIMIT_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
 }
 #endif
