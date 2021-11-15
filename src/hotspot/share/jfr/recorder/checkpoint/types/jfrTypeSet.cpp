@@ -328,6 +328,8 @@ static void write_primitive(JfrCheckpointWriter* writer, KlassPtr type_array_kla
   writer->write(mark_symbol(primitive_symbol(type_array_klass), false));
   writer->write(package_id(Universe::boolArrayKlassObj(), false));
   writer->write(get_primitive_flags());
+  // we use 0 as object size for primitive types since there is no instance concept for primitive types.
+  writer->write((s4)0);
 }
 
 static int primitives_count = 9;
