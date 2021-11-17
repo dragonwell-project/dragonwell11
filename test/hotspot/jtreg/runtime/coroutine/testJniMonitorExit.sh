@@ -8,12 +8,12 @@
 ##
 
 
-export LD_LIBRARY_PATH=.:${COMPILEJAVA}/lib/server:/usr/lib:$LD_LIBRARY_PATH
-echo ${COMPILEJAVA}
+export LD_LIBRARY_PATH=.:${TESTJAVA}/lib/server:/usr/lib:$LD_LIBRARY_PATH
+echo ${TESTJAVA}
 echo $LD_LIBRARY_PATH
 g++ -DLINUX -o testJniMonitorExit \
-    -I${COMPILEJAVA}/include -I${COMPILEJAVA}/include/linux \
-    -L${COMPILEJAVA}/lib/server \
+    -I${TESTJAVA}/include -I${TESTJAVA}/include/linux \
+    -L${TESTJAVA}/lib/server \
     -ljvm -lpthread ${TESTSRC}/testJniMonitorExit.c
 
 ./testJniMonitorExit

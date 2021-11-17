@@ -117,7 +117,6 @@ JNIEXPORT bool JNICALL
 init_libproc(bool debug) {
    // init debug mode
    _libsaproc_debug = debug;
-
    return true;
 }
 

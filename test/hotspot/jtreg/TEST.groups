@@ -127,6 +127,7 @@ tier1_compiler_2 = \
 tier1_compiler_3 = \
   compiler/intrinsics/ \
   compiler/jsr292/ \
+  compiler/locks/ \
   compiler/loopopts/ \
   compiler/macronodes/ \
   compiler/memoryinitialization/ \
@@ -260,6 +261,7 @@ hotspot_gc_shenandoah = \
 
 tier1_runtime = \
   runtime/ \
+ -runtime/coroutine \
  -runtime/6626217/bug_21227.java \
  -runtime/7100935 \
  -runtime/7158988/FieldMonitor.java \
@@ -301,6 +303,7 @@ tier1_runtime = \
  -runtime/Thread/TestThreadDumpMonitorContention.java \
  -runtime/Unsafe/RangeCheck.java \
   sanity/ \
+ -sanity/TestUnsupportedArguments.sh \
   testlibrary_tests/TestMutuallyExclusivePlatformPredicates.java \
  -:tier1_runtime_appcds_exclude \
  -runtime/signal
@@ -503,4 +506,6 @@ vmTestbase_nsk_aod = \
 vmTestbase_nsk_jdb = \
   vmTestbase/nsk/jdb
 
+dragonwell_hs = \
+  runtime/coroutine
 # vmTestbase_*_quick groups are defined in TEST.quick-groups

@@ -26,13 +26,13 @@ if [[ ! -f ${PATH} ]]; then
 fi
 
 /usr/bin/cp ${PATH} .
-${COMPILEJAVA}/bin/javac -cp ${TESTSRCPATH} ${MODULES} ${NAME}.java
+${TESTJAVA}/bin/javac -cp ${TESTSRCPATH} ${MODULES} ${NAME}.java
 
-${COMPILEJAVA}/bin/java -Dtest.jdk=${COMPILEJAVA} -cp ${TESTSRCPATH}:. ${MODULES} -XX:MaxInlineLevel=2 -XX:CompileCommand=exclude,java/util/concurrent/locks/AbstractOwnableSynchronizer.setExclusiveOwnerThread -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true ${NAME}
+${TESTJAVA}/bin/java -Dtest.jdk=${TESTJAVA} -cp ${TESTSRCPATH}:. ${MODULES} -XX:MaxInlineLevel=2 -XX:CompileCommand=exclude,java/util/concurrent/locks/AbstractOwnableSynchronizer.setExclusiveOwnerThread -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true ${NAME}
 checkexit
-${COMPILEJAVA}/bin/java -Dtest.jdk=${COMPILEJAVA} -cp ${TESTSRCPATH}:. ${MODULES} -XX:MaxInlineLevel=2 -XX:CompileCommand=exclude,java/util/concurrent/locks/AbstractOwnableSynchronizer.setExclusiveOwnerThread -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 ${NAME}
+${TESTJAVA}/bin/java -Dtest.jdk=${TESTJAVA} -cp ${TESTSRCPATH}:. ${MODULES} -XX:MaxInlineLevel=2 -XX:CompileCommand=exclude,java/util/concurrent/locks/AbstractOwnableSynchronizer.setExclusiveOwnerThread -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 ${NAME}
 checkexit
-${COMPILEJAVA}/bin/java -Dtest.jdk=${COMPILEJAVA} -cp ${TESTSRCPATH}:. ${MODULES} -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -XX:-Inline -XX:CompileCommand=exclude,java/util/concurrent/locks/AbstractOwnableSynchronizer.setExclusiveOwnerThread -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true ${NAME}
+${TESTJAVA}/bin/java -Dtest.jdk=${TESTJAVA} -cp ${TESTSRCPATH}:. ${MODULES} -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -XX:-Inline -XX:CompileCommand=exclude,java/util/concurrent/locks/AbstractOwnableSynchronizer.setExclusiveOwnerThread -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true ${NAME}
 checkexit
-${COMPILEJAVA}/bin/java -Dtest.jdk=${COMPILEJAVA} -cp ${TESTSRCPATH}:. ${MODULES} -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -XX:-Inline -XX:CompileCommand=exclude,java/util/concurrent/locks/AbstractOwnableSynchronizer.setExclusiveOwnerThread -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 ${NAME}
+${TESTJAVA}/bin/java -Dtest.jdk=${TESTJAVA} -cp ${TESTSRCPATH}:. ${MODULES} -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -XX:-Inline -XX:CompileCommand=exclude,java/util/concurrent/locks/AbstractOwnableSynchronizer.setExclusiveOwnerThread -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.version=2 ${NAME}
 checkexit

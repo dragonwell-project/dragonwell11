@@ -38,7 +38,7 @@ if [ "x${gcc_cmd}" = "x" ]; then
 fi
 
 gcc -DLINUX -fPIC -shared -o libtest.so \
-    -I${COMPILEJAVA}/include -I${COMPILEJAVA}/include/linux \
+    -I${TESTJAVA}/include -I${TESTJAVA}/include/linux \
     ${TESTSRC}/testCoroutineBreakpointSwitchTo.c
 
 ${JAVA} -agentpath:libtest.so -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.transparentAsync=true -cp ${TESTCLASSES} TestSimpleWisp

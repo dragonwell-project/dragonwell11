@@ -499,3 +499,6 @@ needs_g1gc = \
   jdk/jfr/event/gc/objectcount/TestObjectCountAfterGCEventWithG1FullCollection.java \
   jdk/jfr/event/gc/objectcount/TestObjectCountAfterGCEventWithG1ConcurrentMark.java \
   jdk/jfr/event/gc/heapsummary/TestHeapSummaryEventG1.java
+
+dragonwell_jdk = \
+  com/alibaba

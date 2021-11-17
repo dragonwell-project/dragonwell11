@@ -179,6 +179,9 @@
   nonstatic_field(JavaThread,                  _pending_failed_speculation,                   long)                                  \
   nonstatic_field(JavaThread,                  _pending_transfer_to_interpreter,              bool)                                  \
   nonstatic_field(JavaThread,                  _jvmci_counters,                               jlong*)                                \
+  nonstatic_field(JavaThread,                  _jvmci_reserved0,                              intptr_t*)                             \
+  nonstatic_field(JavaThread,                  _jvmci_reserved1,                              intptr_t*)                             \
+  nonstatic_field(JavaThread,                  _jvmci_reserved_oop0,                          oop)                                   \
   nonstatic_field(JavaThread,                  _reserved_stack_activation,                    address)                               \
   nonstatic_field(JavaThread,                  _current_coroutine,                            Coroutine*)                            \
   nonstatic_field(Coroutine,                   _wisp_thread,                                  WispThread*)                           \
@@ -634,6 +637,8 @@
   declare_function(JVMCIRuntime::new_multi_array) \
   declare_function(JVMCIRuntime::dynamic_new_array) \
   declare_function(JVMCIRuntime::dynamic_new_instance) \
+  \
+  declare_function(JVMCIRuntime::invoke_static_method_one_arg) \
   \
   declare_function(JVMCIRuntime::thread_is_interrupted) \
   declare_function(JVMCIRuntime::vm_message) \
