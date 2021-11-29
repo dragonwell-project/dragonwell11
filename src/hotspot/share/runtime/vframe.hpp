@@ -335,7 +335,6 @@ class vframeStream : public vframeStreamCommon {
   vframeStream(JavaThread* thread, bool stop_at_java_call_stub = false);
 
   Thread *& thread_ref()    {
-    assert(EnableCoroutine, "EnableCoroutine is off");
     return (Thread *&)_thread;
   }
 

@@ -61,16 +61,16 @@ class JfrStackTraceRepository : public JfrCHeapObj {
   size_t write(JfrChunkWriter& cw, bool clear);
 
   static const JfrStackTrace* lookup_for_leak_profiler(unsigned int hash, traceid id);
-  static void record_for_leak_profiler(JavaThread* thread, int skip, StackWalkMode mode);
+  static void record_for_leak_profiler(JavaThread* thread, int skip);
   static void clear_leak_profiler();
 
   traceid add_trace(const JfrStackTrace& stacktrace);
   static traceid add(JfrStackTraceRepository& repo, const JfrStackTrace& stacktrace);
   static traceid add(const JfrStackTrace& stacktrace);
-  traceid record_for(JavaThread* thread, int skip, StackWalkMode mode, JfrStackFrame* frames, u4 max_frames);
+  traceid record_for(JavaThread* thread, int skip, JfrStackFrame* frames, u4 max_frames);
 
  public:
-  static traceid record(Thread* thread, int skip, StackWalkMode mode);
+  static traceid record(Thread* thread, int skip);
 };
 
 #endif // SHARE_JFR_RECORDER_STACKTRACE_JFRSTACKTRACEREPOSITORY_HPP

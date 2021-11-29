@@ -125,7 +125,7 @@ class RecordStackTrace {
   RecordStackTrace(JavaThread* jt) : _jt(jt),
     _enabled(JfrEventSetting::has_stacktrace(EventOldObjectSample::eventId)) {
     if (_enabled) {
-      JfrStackTraceRepository::record_for_leak_profiler(jt, 0, WALK_BY_DEFAULT);
+      JfrStackTraceRepository::record_for_leak_profiler(jt, 0);
     }
   }
   ~RecordStackTrace() {
