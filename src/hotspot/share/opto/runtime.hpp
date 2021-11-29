@@ -150,6 +150,7 @@ class OptoRuntime : public AllStatic {
 
   static address _slow_arraycopy_Java;
   static address _register_finalizer_Java;
+  static address _jfr_fast_object_alloc_Java;
 
   //
   // Implementation of runtime methods
@@ -181,7 +182,7 @@ public:
   static void monitor_notifyAll_C(oopDesc* obj, JavaThread* thread);
 
   // JFR support
-  static void jfr_fast_object_alloc_C(oopDesc* obj, jint bci, JavaThread* thread);
+  static void jfr_fast_object_alloc_C(oopDesc* obj, JavaThread* thread);
 private:
 
   // Implicit exception support
@@ -232,6 +233,7 @@ private:
 
   static address slow_arraycopy_Java()                   { return _slow_arraycopy_Java; }
   static address register_finalizer_Java()               { return _register_finalizer_Java; }
+  static address jfr_fast_object_alloc_Java()            { return _jfr_fast_object_alloc_Java; }
 
   static ExceptionBlob*    exception_blob()                      { return _exception_blob; }
 

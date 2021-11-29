@@ -146,7 +146,7 @@ size_t JfrStackTraceRepository::clear(JfrStackTraceRepository& repo) {
   return processed;
 }
 
-traceid JfrStackTraceRepository::record(Thread* thread, int skip, StackWalkMode mode) {
+traceid JfrStackTraceRepository::record(Thread* thread, int skip) {
   assert(thread == Thread::current(), "invariant");
   JfrThreadLocal* const tl = thread->jfr_thread_local();
   assert(tl != NULL, "invariant");
@@ -163,13 +163,14 @@ traceid JfrStackTraceRepository::record(Thread* thread, int skip, StackWalkMode 
   }
   assert(frames != NULL, "invariant");
   assert(tl->stackframes() == frames, "invariant");
-  return instance().record_for((JavaThread*)thread, skip, mode, frames, tl->stackdepth());
+  return instance().record_for((JavaThread*)thread, skip, frames, tl->stackdepth());
 }
 
-traceid JfrStackTraceRepository::record_for(JavaThread* thread, int skip, StackWalkMode mode, JfrStackFrame *frames, u4 max_frames) {
+traceid JfrStackTraceRepository::record_for(JavaThread* thread, int skip, JfrStackFrame *frames, u4 max_frames) {
   JfrStackTrace stacktrace(frames, max_frames);
-  return stacktrace.record_safe(thread, skip, mode) ? add(instance(), stacktrace) : 0;
+  return stacktrace.record_safe(thread, skip) ? add(instance(), stacktrace) : 0;
 }
+
 traceid JfrStackTraceRepository::add(JfrStackTraceRepository& repo, const JfrStackTrace& stacktrace) {
   traceid tid = repo.add_trace(stacktrace);
   if (tid == 0) {
@@ -184,13 +185,13 @@ traceid JfrStackTraceRepository::add(const JfrStackTrace& stacktrace) {
   return add(instance(), stacktrace);
 }
 
-void JfrStackTraceRepository::record_for_leak_profiler(JavaThread* thread, int skip, StackWalkMode mode) {
+void JfrStackTraceRepository::record_for_leak_profiler(JavaThread* thread, int skip) {
   assert(thread != NULL, "invariant");
   JfrThreadLocal* const tl = thread->jfr_thread_local();
   assert(tl != NULL, "invariant");
   assert(!tl->has_cached_stack_trace(), "invariant");
   JfrStackTrace stacktrace(tl->stackframes(), tl->stackdepth());
-  stacktrace.record_safe(thread, skip, mode);
+  stacktrace.record_safe(thread, skip);
   const unsigned int hash = stacktrace.hash();
   if (hash != 0) {
     tl->set_cached_stack_trace_id(add(leak_profiler_instance(), stacktrace), hash);
