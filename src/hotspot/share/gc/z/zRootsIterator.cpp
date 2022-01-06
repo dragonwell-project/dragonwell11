@@ -97,10 +97,10 @@ ZParallelOopsDo<T, F>::ZParallelOopsDo(T* iter) :
 
 template <typename T, void (T::*F)(ZRootsIteratorClosure*)>
 void ZParallelOopsDo<T, F>::oops_do(ZRootsIteratorClosure* cl) {
-  if (!_completed) {
+  if (!Atomic::load(&_completed)) {
     (_iter->*F)(cl);
-    if (!_completed) {
-      _completed = true;
+    if (!Atomic::load(&_completed)) {
+      Atomic::store(true, &_completed);
     }
   }
 }
@@ -112,7 +112,7 @@ ZSerialWeakOopsDo<T, F>::ZSerialWeakOopsDo(T* iter) :
 
 template <typename T, void (T::*F)(BoolObjectClosure*, ZRootsIteratorClosure*)>
 void ZSerialWeakOopsDo<T, F>::weak_oops_do(BoolObjectClosure* is_alive, ZRootsIteratorClosure* cl) {
-  if (!_claimed && Atomic::cmpxchg(true, &_claimed, false) == false) {
+  if (!Atomic::load(&_claimed) && Atomic::cmpxchg(true, &_claimed, false) == false) {
     (_iter->*F)(is_alive, cl);
   }
 }
