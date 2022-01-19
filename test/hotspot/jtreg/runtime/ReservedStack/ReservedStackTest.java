@@ -240,7 +240,7 @@ public class ReservedStackTest {
             (Platform.isLinux() &&
              (Platform.isPPC() || Platform.isS390x() || Platform.isX64() ||
               Platform.isX86())) ||
-            Platform.isOSX() ||
+            Platform.isOSX() || Platform.isRiscv64() ||
             Platform.isSolaris();
     }
 
