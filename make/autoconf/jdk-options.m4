@@ -39,6 +39,8 @@ AC_DEFUN_ONCE([JDKOPT_SETUP_JDK_VARIANT],
 
   if test "x$with_jdk_variant" = xnormal || test "x$with_jdk_variant" = x; then
     JDK_VARIANT="normal"
+  elif test "x$with_jdk_variant" = xthead && test "x$OPENJDK_TARGET_CPU" = xriscv64 ; then
+    JDK_VARIANT="thead"
   else
     AC_MSG_ERROR([The available JDK variants are: normal])
   fi

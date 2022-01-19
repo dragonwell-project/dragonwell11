@@ -485,6 +485,7 @@ class Arguments : AllStatic {
   static char*  SharedArchivePath;
 
  public:
+  static void check_arguments_for_riscv64();
   // Parses the arguments, first phase
   static jint parse(const JavaVMInitArgs* args);
   // Parse a string for a unsigned integer.  Returns true if value

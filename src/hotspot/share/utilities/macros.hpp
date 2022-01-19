@@ -599,6 +599,32 @@
 #define NOT_AARCH64(code) code
 #endif
 
+#if defined(RISCV32) || defined(RISCV64)
+#define RISCV
+#define RISCV_ONLY(code) code
+#define NOT_RISCV(code)
+#else
+#undef RISCV
+#define RISCV_ONLY(code)
+#define NOT_RISCV(code) code
+#endif
+
+#ifdef RISCV32
+#define RISCV32_ONLY(code) code
+#define NOT_RISCV32(code)
+#else
+#define RISCV32_ONLY(code)
+#define NOT_RISCV32(code) code
+#endif
+
+#ifdef RISCV64
+#define RISCV64_ONLY(code) code
+#define NOT_RISCV64(code)
+#else
+#define RISCV64_ONLY(code)
+#define NOT_RISCV64(code) code
+#endif
+
 #ifdef VM_LITTLE_ENDIAN
 #define LITTLE_ENDIAN_ONLY(code) code
 #define BIG_ENDIAN_ONLY(code)

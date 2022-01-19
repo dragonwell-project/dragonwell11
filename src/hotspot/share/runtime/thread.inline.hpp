@@ -120,7 +120,7 @@ inline void JavaThread::set_pending_async_exception(oop e) {
   set_has_async_exception();
 }
 
-#if defined(PPC64) || defined (AARCH64)
+#if defined(PPC64) || defined(AARCH64) || defined(RISCV64)
 inline JavaThreadState JavaThread::thread_state() const    {
   return (JavaThreadState) OrderAccess::load_acquire((volatile jint*)&_thread_state);
 }

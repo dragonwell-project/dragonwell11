@@ -56,6 +56,7 @@ public class Main {
         if (c.get() == null) throw new AssertionError();
         System.gc();
         System.gc();
+        Reference.reachabilityFence(loader);
         loader = null;
 
         // Might require multiple calls to System.gc() for weak-references

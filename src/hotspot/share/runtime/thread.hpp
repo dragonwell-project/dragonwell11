@@ -1254,7 +1254,7 @@ class JavaThread: public Thread {
   address last_Java_pc(void)                     { return _anchor.last_Java_pc(); }
 
   // Safepoint support
-#if !(defined(PPC64) || defined(AARCH64))
+#if !(defined(PPC64) || defined(AARCH64) || defined(RISCV64))
   JavaThreadState thread_state() const           { return _thread_state; }
   void set_thread_state(JavaThreadState s)       {
     assert((UseWispMonitor && is_Wisp_thread()) || current_or_null() == NULL || current_or_null() == this,

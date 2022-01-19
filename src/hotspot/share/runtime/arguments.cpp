@@ -3749,6 +3749,19 @@ void Arguments::handle_extra_cms_flags(const char* msg) {
   }
 }
 
+#ifdef RISCV64
+#define UNSUPPORTED_RISCV64_OPTS(opt) \
+   if ((opt)) { \
+      tty->print_cr("Option %s is not supported on RISCV64, VM will exit", #opt); \
+      vm_abort(false); \
+   }
+
+// Some AJDK features are not supported in riscv64
+void Arguments::check_arguments_for_riscv64() {
+  UNSUPPORTED_RISCV64_OPTS(EnableCoroutine || UseWispMonitor);
+}
+#endif //
+
 // Parse entry point called from JNI_CreateJavaVM
 
 jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
@@ -3968,6 +3981,10 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     EnableCoroutine = UseWispMonitor = false;
   }
 #endif
+
+#ifdef RISCV64
+  check_arguments_for_riscv64();
+#endif // RISCV64
 
   if (Wisp2ThreadStop && !UseWisp2) {
     vm_exit_during_initialization("Wisp2ThreadStop only works with UseWisp2");
