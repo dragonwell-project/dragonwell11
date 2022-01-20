@@ -46,17 +46,13 @@
 #endif
 
 //=============================================================================
-//------------------------------is_loop_iv-------------------------------------
-// Determine if a node is Counted loop induction variable.
-// The method is declared in node.hpp.
-const Node* Node::is_loop_iv() const {
-  if (this->is_Phi() && !this->as_Phi()->is_copy() &&
-      this->as_Phi()->region()->is_CountedLoop() &&
-      this->as_Phi()->region()->as_CountedLoop()->phi() == this) {
-    return this;
-  } else {
-    return NULL;
-  }
+//--------------------------is_cloop_ind_var-----------------------------------
+// Determine if a node is a counted loop induction variable.
+// NOTE: The method is declared in "node.hpp".
+bool Node::is_cloop_ind_var() const {
+  return (is_Phi() && !as_Phi()->is_copy() &&
+          as_Phi()->region()->is_CountedLoop() &&
+          as_Phi()->region()->as_CountedLoop()->phi() == this);
 }
 
 //=============================================================================
@@ -978,6 +974,7 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
     Node* sfpt = outer_le->in(0);
     assert(sfpt->Opcode() == Op_SafePoint, "where's the safepoint?");
     Node* inner_out = sfpt->in(0);
+<<<<<<< HEAD
     if (inner_out->outcnt() != 1) {
       ResourceMark rm;
       Unique_Node_List wq;
@@ -1006,6 +1003,8 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
       }
     }
 
+=======
+>>>>>>> upstream/master
     CountedLoopEndNode* cle = inner_out->in(0)->as_CountedLoopEnd();
     assert(cle == inner->loopexit_or_null(), "mismatch");
     bool has_skeleton = outer_le->in(1)->bottom_type()->singleton() && outer_le->in(1)->bottom_type()->is_int()->get_con() == 0;
@@ -3038,10 +3037,10 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
     for (LoopTreeIterator iter(_ltree_root); !iter.done(); iter.next()) {
       IdealLoopTree* lpt = iter.current();
       bool is_counted = lpt->is_counted();
-      if (!is_counted || !lpt->is_inner()) continue;
+      if (!is_counted || !lpt->is_innermost()) continue;
 
       // check for vectorized loops, any reassociation of invariants was already done
-      if (is_counted && lpt->_head->as_CountedLoop()->do_unroll_only()) continue;
+      if (is_counted && lpt->_head->as_CountedLoop()->is_unroll_only()) continue;
 
       lpt->reassociate_invariants(this);
 

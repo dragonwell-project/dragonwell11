@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,8 +26,7 @@
  * @key headful
  * @bug 4506788 7147408
  * @summary  Tests if cursor gets stuck after insertion a character
- * @author Denis Sharypov
- * @run applet bug4506788.html
+ * @run main bug4506788
  */
 
 import java.awt.*;
@@ -37,12 +36,17 @@ import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.text.*;
 
-public class bug4506788 extends JApplet {
+public class bug4506788 {
 
     private volatile boolean passed = false;
     private JEditorPane jep;
 
-    @Override
+    public static void main(final String[] args) {
+        bug4506788 app = new bug4506788();
+        app.init();
+        app.start();
+    }
+
     public void init() {
         try {
             SwingUtilities.invokeAndWait(new Runnable() {
@@ -57,11 +61,11 @@ public class bug4506788 extends JApplet {
         }
     }
 
-    @Override
     public void start() {
         Robot robot;
         try {
             robot = new Robot();
+            robot.setAutoDelay(100);
         } catch (AWTException e) {
             throw new RuntimeException("Robot could not be created");
         }
@@ -75,7 +79,6 @@ public class bug4506788 extends JApplet {
             throw new RuntimeException("Could not get JEditorPane location on screen");
         }
 
-        robot.setAutoDelay(50);
         robot.mouseMove(p.x, p.y);
         robot.mousePress(InputEvent.BUTTON1_MASK);
         robot.mouseRelease(InputEvent.BUTTON1_MASK);
@@ -129,6 +132,7 @@ public class bug4506788 extends JApplet {
 
         f.getContentPane().add(jep);
         f.setSize(100, 100);
+        f.setLocationRelativeTo(null);
         f.setVisible(true);
     }
 }
