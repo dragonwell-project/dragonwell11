@@ -64,9 +64,9 @@
 #include "runtime/os.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/perfMemory.hpp"
+#include "runtime/safefetch.inline.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/statSampler.hpp"
-#include "runtime/stubRoutines.hpp"
 #include "runtime/thread.inline.hpp"
 #include "runtime/threadCritical.hpp"
 #include "runtime/timer.hpp"
@@ -1188,7 +1188,7 @@ void os::abort(bool dump_core, void* siginfo, const void* context) {
     ::abort(); // dump core
   }
 
-  ::exit(1);
+  ::_exit(1);
 }
 
 // Die immediately, no exit hook, no abort hook, no cleanup.

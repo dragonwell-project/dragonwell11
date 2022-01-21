@@ -391,16 +391,6 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS],
   CFLAGS="$CFLAGS_OLD"
   CXXFLAGS="$CXXFLAGS_OLD"
 
-  # Tests are only ever compiled for TARGET
-  CFLAGS_TESTLIB="$CFLAGS_JDKLIB"
-  CXXFLAGS_TESTLIB="$CXXFLAGS_JDKLIB"
-  CFLAGS_TESTEXE="$CFLAGS_JDKEXE"
-  CXXFLAGS_TESTEXE="$CXXFLAGS_JDKEXE"
-
-  AC_SUBST(CFLAGS_TESTLIB)
-  AC_SUBST(CFLAGS_TESTEXE)
-  AC_SUBST(CXXFLAGS_TESTLIB)
-  AC_SUBST(CXXFLAGS_TESTEXE)
 ])
 
 ################################################################################
@@ -710,7 +700,9 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_CPU_DEP],
       $1_DEFINES_CPU_JDK="${$1_DEFINES_CPU_JDK} -DcpuIntel -Di586 -D$FLAGS_CPU_LEGACY_LIB"
     fi
   elif test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
-    if test "x$FLAGS_CPU" = xx86_64; then
+    if test "x$FLAGS_CPU" = xaarch64; then
+      $1_DEFINES_CPU_JDK="${$1_DEFINES_CPU_JDK} -D_ARM64_ -Darm64"
+    elif test "x$FLAGS_CPU" = xx86_64; then
       $1_DEFINES_CPU_JDK="${$1_DEFINES_CPU_JDK} -D_AMD64_ -Damd64"
     else
       $1_DEFINES_CPU_JDK="${$1_DEFINES_CPU_JDK} -D_X86_ -Dx86"
