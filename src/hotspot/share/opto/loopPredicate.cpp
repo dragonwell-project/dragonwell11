@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -438,6 +438,7 @@ class Invariance : public StackObj {
   Node_List _old_new; // map of old to new (clone)
   IdealLoopTree* _lpt;
   PhaseIdealLoop* _phase;
+  Node* _data_dependency_on; // The projection into the loop on which data nodes are dependent or NULL otherwise
 
   // Helper function to set up the invariance for invariance computation
   // If n is a known invariant, set up directly. Otherwise, look up the
@@ -538,7 +539,8 @@ class Invariance : public StackObj {
   Invariance(Arena* area, IdealLoopTree* lpt) :
     _lpt(lpt), _phase(lpt->_phase),
     _visited(area), _invariant(area), _stack(area, 10 /* guess */),
-    _clone_visited(area), _old_new(area)
+    _clone_visited(area), _old_new(area),
+    _data_dependency_on(NULL)
   {
     LoopNode* head = _lpt->_head->as_Loop();
     Node* entry = head->skip_strip_mined()->in(LoopNode::EntryControl);
@@ -546,7 +548,12 @@ class Invariance : public StackObj {
       // If a node is pinned between the predicates and the loop
       // entry, we won't be able to move any node in the loop that
       // depends on it above it in a predicate. Mark all those nodes
-      // as non loop invariatnt.
+      // as non-loop-invariant.
+      // Loop predication could create new nodes for which the below
+      // invariant information is missing. Mark the 'entry' node to
+      // later check again if a node needs to be treated as non-loop-
+      // invariant as well.
+      _data_dependency_on = entry;
       Unique_Node_List wq;
       wq.push(entry);
       for (uint next = 0; next < wq.size(); ++next) {
@@ -563,6 +570,12 @@ class Invariance : public StackObj {
         }
       }
     }
+  }
+
+  // Did we explicitly mark some nodes non-loop-invariant? If so, return the entry node on which some data nodes
+  // are dependent that prevent loop predication. Otherwise, return NULL.
+  Node* data_dependency_on() {
+    return _data_dependency_on;
   }
 
   // Map old to n for invariance computation and clone
@@ -594,7 +607,7 @@ class Invariance : public StackObj {
 // Returns true if the predicate of iff is in "scale*iv + offset u< load_range(ptr)" format
 // Note: this function is particularly designed for loop predication. We require load_range
 //       and offset to be loop invariant computed on the fly by "invar"
-bool IdealLoopTree::is_range_check_if(IfNode *iff, PhaseIdealLoop *phase, Invariance& invar) const {
+bool IdealLoopTree::is_range_check_if(IfNode *iff, PhaseIdealLoop *phase, Invariance& invar DEBUG_ONLY(COMMA ProjNode *predicate_proj)) const {
   if (!is_loop_exit(iff)) {
     return false;
   }
@@ -626,15 +639,44 @@ bool IdealLoopTree::is_range_check_if(IfNode *iff, PhaseIdealLoop *phase, Invari
   if (!invar.is_invariant(range)) {
     return false;
   }
+
+  Compile* C = Compile::current();
+  uint old_unique_idx = C->unique();
   Node *iv     = _head->as_CountedLoop()->phi();
   int   scale  = 0;
   Node *offset = NULL;
   if (!phase->is_scaled_iv_plus_offset(cmp->in(1), iv, &scale, &offset)) {
     return false;
   }
-  if (offset && !invar.is_invariant(offset)) { // offset must be invariant
-    return false;
+  if (offset != NULL) {
+    if (!invar.is_invariant(offset)) { // offset must be invariant
+      return false;
+    }
+    Node* data_dependency_on = invar.data_dependency_on();
+    if (data_dependency_on != NULL && old_unique_idx < C->unique()) {
+      // 'offset' node was newly created by is_scaled_iv_plus_offset(). Check that it does not depend on the entry projection
+      // into the loop. If it does, we cannot perform loop predication (see Invariant::Invariant()).
+      assert(!offset->is_CFG(), "offset must be a data node");
+      if (_phase->get_ctrl(offset) == data_dependency_on) {
+        return false;
+      }
+    }
   }
+#ifdef ASSERT
+  if (offset && phase->has_ctrl(offset)) {
+    Node* offset_ctrl = phase->get_ctrl(offset);
+    if (phase->get_loop(predicate_proj) == phase->get_loop(offset_ctrl) &&
+        phase->is_dominator(predicate_proj, offset_ctrl)) {
+      // If the control of offset is loop predication promoted by previous pass,
+      // then it will lead to cyclic dependency.
+      // Previously promoted loop predication is in the same loop of predication
+      // point.
+      // This situation can occur when pinning nodes too conservatively - can we do better?
+      assert(false, "cyclic dependency prevents range check elimination, idx: offset %d, offset_ctrl %d, predicate_proj %d",
+             offset->_idx, offset_ctrl->_idx, predicate_proj->_idx);
+    }
+  }
+#endif
   return true;
 }
 
@@ -1114,7 +1156,7 @@ bool PhaseIdealLoop::loop_predication_impl_helper(IdealLoopTree *loop, ProjNode*
       loop->dump_head();
     }
 #endif
-  } else if (cl != NULL && loop->is_range_check_if(iff, this, invar)) {
+  } else if (cl != NULL && loop->is_range_check_if(iff, this, invar DEBUG_ONLY(COMMA predicate_proj))) {
     // Range check for counted loops
     const Node*    cmp    = bol->in(1)->as_Cmp();
     Node*          idx    = cmp->in(1);
