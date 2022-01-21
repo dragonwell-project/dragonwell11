@@ -247,18 +247,10 @@ public:
     return *this;
   }
 
-<<<<<<< HEAD
-#if INCLUDE_ZGC
-=======
->>>>>>> upstream/master
   RegSet &operator-=(const RegSet aSet) {
     *this = *this - aSet;
     return *this;
   }
-<<<<<<< HEAD
-#endif
-=======
->>>>>>> upstream/master
 
   static RegSet of(Register r1) {
     return RegSet(r1);
