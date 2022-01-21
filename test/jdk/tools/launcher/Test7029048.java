@@ -170,14 +170,15 @@ public class Test7029048 extends TestHelper {
                     }
 
                     desc = "LD_LIBRARY_PATH should not be set (no libjvm.so)";
-<<<<<<< HEAD
+
                     if (IS_EXPANDED_LD_LIBRARY_PATH) {
                         printSkipMessage(desc);
-=======
+                    }
                     if (TestHelper.isAIX) {
                         System.out.println("Skipping test case \"" + desc +
                                            "\" because the Aix launcher adds the paths in any case.");
->>>>>>> upstream/master
+                    }
+                    if (IS_EXPANDED_LD_LIBRARY_PATH || TestHelper.isAIX) {
                         continue;
                     }
                     break;
@@ -187,14 +188,15 @@ public class Test7029048 extends TestHelper {
                     }
 
                     desc = "LD_LIBRARY_PATH should not be set (no directory)";
-<<<<<<< HEAD
+
                     if (IS_EXPANDED_LD_LIBRARY_PATH) {
                         printSkipMessage(desc);
-=======
+                    }
                     if (TestHelper.isAIX) {
                         System.out.println("Skipping test case \"" + desc +
                                            "\" because the Aix launcher adds the paths in any case.");
->>>>>>> upstream/master
+                    }
+                    if (IS_EXPANDED_LD_LIBRARY_PATH || TestHelper.isAIX) {
                         continue;
                     }
                     break;
