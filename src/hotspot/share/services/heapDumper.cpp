@@ -1570,12 +1570,10 @@ class VM_HeapDumper : public VM_GC_Operation, public AbstractGangTask {
 
   VMOp_Type type() const { return VMOp_HeapDumper; }
   void doit();
-<<<<<<< HEAD
 
   HeapDumper* heap_dumper() { return _heap_dumper; }
-=======
+
   void work(uint worker_id);
->>>>>>> upstream/master
 };
 
 

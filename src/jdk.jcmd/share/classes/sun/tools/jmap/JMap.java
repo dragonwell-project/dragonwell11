@@ -278,15 +278,12 @@ public class JMap {
         System.err.println("                   all objects in the heap are dumped.");
         System.err.println("      format=b     binary format");
         System.err.println("      file=<file>  dump heap to <file>");
-<<<<<<< HEAD
         System.err.println("      mini         use minidump format (Dragonwell only)");
-=======
         System.err.println("      parallel=<number>  parallel threads number for heap iteration:");
         System.err.println("                         parallel=0 default behavior, use predefined number of threads");
         System.err.println("                         parallel=1 disable parallel heap iteration");
         System.err.println("                         parallel=<N> use N threads for parallel heap iteration");
 
->>>>>>> upstream/master
         System.err.println("");
         System.err.println("    Example: jmap -dump:live,format=b,file=heap.bin <pid>");
         System.exit(exit);

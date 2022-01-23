@@ -507,14 +507,11 @@ HeapDumpDCmd::HeapDumpDCmd(outputStream* output, bool heap) :
   _filename("filename","Name of the dump file", "STRING",true),
   _all("-all", "Dump all objects, including unreachable objects",
        "BOOLEAN", false, "false"),
-<<<<<<< HEAD
   _mini_dump("-mini", "Use mini-dump format",
        "BOOLEAN", false, "false"),
-=======
   _gzip("-gz", "If specified, the heap dump is written in gzipped format "
                "using the given compression level. 1 (recommended) is the fastest, "
                "9 the strongest compression.", "INT", false, "1"),
->>>>>>> upstream/master
   _overwrite("-overwrite", "If specified, the dump file will be overwritten if it exists",
            "BOOLEAN", false, "false") {
   _dcmdparser.add_dcmd_option(&_all);
@@ -539,9 +536,8 @@ void HeapDumpDCmd::execute(DCmdSource source, TRAPS) {
   // Request a full GC before heap dump if _all is false
   // This helps reduces the amount of unreachable objects in the dump
   // and makes it easier to browse.
-<<<<<<< HEAD
   HeapDumper dumper(!_all.value() /* request GC if _all is false*/, false, _mini_dump.value());
-  int res = dumper.dump(_filename.value(), output(), _overwrite.value());
+  int res = dumper.dump(_filename.value(), output(), (int) level, _overwrite.value());
   if (res == 0) {
     if (_mini_dump.value()) {
       output()->print_cr("Mini heap dump file created");
@@ -558,10 +554,6 @@ void HeapDumpDCmd::execute(DCmdSource source, TRAPS) {
       output()->print_cr("%s", error);
     }
   }
-=======
-  HeapDumper dumper(!_all.value() /* request GC if _all is false*/);
-  dumper.dump(_filename.value(), output(), (int) level, _overwrite.value());
->>>>>>> upstream/master
 }
 
 int HeapDumpDCmd::num_arguments() {

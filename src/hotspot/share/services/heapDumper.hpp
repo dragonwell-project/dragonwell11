@@ -1,9 +1,5 @@
 /*
-<<<<<<< HEAD
- * Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
-=======
  * Copyright (c) 2005, 2021, Oracle and/or its affiliates. All rights reserved.
->>>>>>> upstream/master
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it

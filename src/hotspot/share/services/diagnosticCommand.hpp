@@ -331,11 +331,8 @@ class HeapDumpDCmd : public DCmdWithParser {
 protected:
   DCmdArgument<char*> _filename;
   DCmdArgument<bool>  _all;
-<<<<<<< HEAD
   DCmdArgument<bool>  _mini_dump;
-=======
   DCmdArgument<jlong> _gzip;
->>>>>>> upstream/master
   DCmdArgument<bool> _overwrite;
 public:
   HeapDumpDCmd(outputStream* output, bool heap);
