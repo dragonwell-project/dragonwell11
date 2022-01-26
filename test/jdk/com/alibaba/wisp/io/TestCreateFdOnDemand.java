@@ -7,9 +7,13 @@
 */
 
 import java.io.File;
+import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.function.Predicate;
 
 import com.alibaba.wisp.engine.WispEngine;
 
@@ -31,7 +35,7 @@ public class TestCreateFdOnDemand {
         ds.close();
 
 
-        final int nfd0 = countFd();
+        final long nfd0 = countFd();
         so = new Socket();
         assertEQ(countFd(), nfd0);
         sso = new ServerSocket();
@@ -54,8 +58,15 @@ public class TestCreateFdOnDemand {
         assertEQ(countFd(), nfd0);
     }
 
-    private static int countFd() {
-        File f = new File("/proc/self/fd");
-        return f.list().length;
+    private static long countFd() throws IOException {
+        File f = new File("/proc/self/fd");;
+        return  Arrays.stream(Objects.requireNonNull(f.listFiles())).filter(file -> {
+            try {
+                return file.getCanonicalPath().contains("/proc/");
+            } catch (IOException e) {
+                //invalid path
+                return false;
+            }
+        }).count();
     }
 }
