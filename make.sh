@@ -6,7 +6,7 @@ if [ $# != 1 ]; then
 fi
 
 # incr by every Dragonwell release
-DRAGONWELL_VERSION=9
+DRAGONWELL_VERSION=10
 LC_ALL=C
 BUILD_MODE=$1
 arch=$(uname -m)
