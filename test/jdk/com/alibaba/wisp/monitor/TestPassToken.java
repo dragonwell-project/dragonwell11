@@ -1,4 +1,25 @@
 /*
+ * Copyright (c) 2022 Alibaba Group Holding Limited. All Rights Reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation. Alibaba designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+/*
  * @test
  * @library /lib/testlibrary
  * @summary Test object lock with coroutine
@@ -9,7 +30,6 @@
  * @run main/othervm  -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.schedule.policy=PUSH TestPassToken
  * @run main/othervm  -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -DcheckStealEnable=true TestPassToken
  */
-
 
 import com.alibaba.wisp.engine.WispEngine;
 import com.alibaba.wisp.engine.WispTask;
@@ -26,6 +46,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static jdk.testlibrary.Asserts.assertTrue;
+import static jdk.testlibrary.Asserts.fail;
 
 public class TestPassToken {
     private final static boolean needCheckStealEnable = Boolean.getBoolean("checkStealEnable");
@@ -114,11 +135,13 @@ public class TestPassToken {
                                 cond.await();
                                 checkStealEnable(task);
                             } catch (InterruptedException e) {
-                                e.printStackTrace();
+                                fail(e.getMessage());
                             }
                         }
-                        if (++current % 10000 == 0) // pass the token
+                        if (++current % 10000 == 0) {// pass the token
                             System.out.println(SharedSecrets.getJavaLangAccess().currentThread0().getName() + "\t" + current);
+                        }
+                        cond.signalAll();
                     } finally {
                         lock.unlock();
                     }
@@ -129,23 +152,12 @@ public class TestPassToken {
                                 lock.wait();
                                 checkStealEnable(task);
                             } catch (InterruptedException e) {
-                                e.printStackTrace();
+                                fail(e.getMessage());
                             }
                         }
-                        if (++current % 10000 == 0) // pass the token
+                        if (++current % 10000 == 0) {// pass the token
                             System.out.println(SharedSecrets.getJavaLangAccess().currentThread0().getName() + "\t" + current);
-                    }
-                }
-
-                if (JUC) {
-                    lock.lock();
-                    try {
-                        cond.signalAll();
-                    } finally {
-                        lock.unlock();
-                    }
-                } else {
-                    synchronized (lock) {
+                        }
                         lock.notifyAll();
                     }
                 }
