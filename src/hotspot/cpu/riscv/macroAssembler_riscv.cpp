@@ -1125,6 +1125,198 @@ int MacroAssembler::pop_fp(unsigned int bitset, Register stack) {
   return count;
 }
 
+// CSky specific ldd/lwd/lwud/swd/sdd to merge 2 load or 2 store instructions
+// Checks whether current and previous load/store can be merged.
+// Returns true if it can be merged, else false.
+bool MacroAssembler::ldst_can_merge(Register rt,
+                                    const Address &adr,
+                                    size_t cur_size_in_bytes,
+                                    bool is_store,
+                                    bool is_unsigned) const {
+  address prev = pc() - NativeInstruction::instruction_size;
+  address last = code()->last_insn();
+
+  assert( !is_unsigned || (!is_store && cur_size_in_bytes == 4), "unsigned load 4 bytes only");
+
+  if (last == NULL || !(NativeInstruction::is_load_at(last) || NativeInstruction::is_store_at(last))) {
+    return false;
+  }
+
+  if (adr.getMode() != Address::base_plus_offset || prev != last) {
+    return false;
+  }
+
+  // x0 base is not supported
+  if (adr.base() == x0) {
+    return false;
+  }
+
+  NativeLdSt* prev_ldst = NativeLdSt_at(prev);
+  size_t prev_size_in_bytes = prev_ldst->size_in_bytes();
+
+  assert(prev_size_in_bytes == 4 || prev_size_in_bytes == 8, "only supports 64/32bit merging.");
+  assert(cur_size_in_bytes == 4 || cur_size_in_bytes == 8, "only supports 64/32bit merging.");
+
+  if (cur_size_in_bytes != prev_size_in_bytes || is_store != prev_ldst->is_store()) {
+    return false;
+  }
+
+  // Only same base can be merged.
+  if (adr.base() != prev_ldst->base()) {
+    return false;
+  }
+
+  int64_t cur_offset = adr.offset();
+  int64_t prev_offset = prev_ldst->offset();
+  size_t diff = abs(cur_offset - prev_offset);
+  if (diff != prev_size_in_bytes) {
+    return false;
+  }
+
+  // Following cases can not be merged:
+  // ld x2, [x2, #16]
+  // ld x3, [x2, #24]
+  // or
+  // ld x3, [x2, #16]
+  // ld x2, [x2, #24]
+  // or:
+  // ld x2, [x3, #0]
+  // ld x2, [x3, #8]
+  if (!is_store &&
+      (adr.base() == prev_ldst->target() ||
+       rt == prev_ldst->target() ||
+       rt == prev_ldst->base())) {
+    return false;
+  }
+
+  int64_t max_offset = 3 * prev_size_in_bytes * 2;
+  int64_t min_offset = 0;
+  int64_t low_offset = prev_offset > cur_offset ? cur_offset : prev_offset;
+  // Offset range must be in ld/st pair instruction's range.
+  if (low_offset > max_offset || low_offset < min_offset) {
+    return false;
+  }
+
+  // alignment check
+  if ( (low_offset % (prev_size_in_bytes*2)) != 0 ) {
+    return false;
+  }
+
+  if ( is_unsigned && !prev_ldst->is_unsigned_load()) {
+    return false;
+  }
+  return true;
+}
+
+// Merge current load/store with previous load/store
+void MacroAssembler::merge_ldst(Register rt,
+                                const Address &adr,
+                                size_t cur_size_in_bytes,
+                                bool is_store,
+                                bool is_unsigned) {
+
+  assert(ldst_can_merge(rt, adr, cur_size_in_bytes, is_store, is_unsigned) == true, "cur and prev must be able to be merged.");
+
+  Register rt_low, rt_high, rt_base;
+  address prev = pc() - NativeInstruction::instruction_size;
+  NativeLdSt* prev_ldst = NativeLdSt_at(prev);
+
+  int32_t offset;
+  if (adr.offset() < prev_ldst->offset()) {
+    offset = adr.offset();
+    rt_low = rt;
+    rt_high = prev_ldst->target();
+  } else {
+    offset = prev_ldst->offset();
+    rt_low = prev_ldst->target();
+    rt_high = rt;
+  }
+  rt_base = prev_ldst->base();
+
+  // Overwrite previous generated binary.
+  code_section()->set_end(prev);
+
+  const size_t sz = prev_ldst->size_in_bytes();
+  assert(sz == 8 || sz == 4, "only supports 64/32bit merging.");
+  assert((offset % (sz*2)) == 0, "unaligned offset");
+  if (!is_store) {
+    if (sz == 8) {
+      BLOCK_COMMENT("merged load pair: ldd");
+      ldd(rt_low, rt_high, rt_base, offset >> 4);
+    } else {
+      if (is_unsigned) {
+        BLOCK_COMMENT("merged load pair: lwd");
+        lwd(rt_low, rt_high, rt_base, offset >> 3);
+      } else {
+        BLOCK_COMMENT("merged load pair: lwud");
+        lwud(rt_low, rt_high, rt_base, offset >> 3);
+      }
+    }
+  } else {
+    if (sz == 8) {
+      BLOCK_COMMENT("merged store pair: sdd");
+      sdd(rt_low, rt_high, rt_base, offset >> 4);
+    } else {
+      BLOCK_COMMENT("merged store pair: swd");
+      swd(rt_low, rt_high, rt_base, offset >> 3);
+    }
+  }
+}
+
+bool MacroAssembler::try_merge_ldst(Register rt, const Address& adr, size_t size_in_bytes, bool is_store, bool is_unsigned) {
+  // it's a CSky specific feature
+  if (!UseCSky) return false;
+
+  if (ldst_can_merge(rt, adr, size_in_bytes, is_store, is_unsigned)) {
+    merge_ldst(rt, adr, size_in_bytes, is_store, is_unsigned);
+    code()->clear_last_insn();
+    return true;
+  } else {
+    assert(size_in_bytes == 8 || size_in_bytes == 4, "only 8 bytes or 4 bytes load/store is supported");
+    const uint64_t mask = size_in_bytes - 1;
+    if (adr.getMode() == Address::base_plus_offset &&
+        (adr.offset() & mask) == 0) { // only supports base_plus_offset
+      code()->set_last_insn(pc());
+    }
+    return false;
+  }
+}
+
+void MacroAssembler::ld(Register Rx, const Address& adr) {
+  if (!try_merge_ldst(Rx, adr, 8,
+                      false /* store */, false /* unsigned */)) {
+    Assembler::ld(Rx, adr);
+  }
+}
+
+void MacroAssembler::sd(Register Rw, const Address& adr) {
+  if (!try_merge_ldst(Rw, adr, 8,
+                      true /* store */, false /* unsigned */)) {
+    Assembler::sd(Rw, adr);
+  }
+}
+
+void MacroAssembler::lw(Register Rx, const Address& adr) {
+  if (!try_merge_ldst(Rx, adr, 4,
+                      false /* store */, false /* unsigned */)) {
+    Assembler::lw(Rx, adr);
+  }
+}
+
+void MacroAssembler::lwu(Register Rx, const Address& adr) {
+  if (!try_merge_ldst(Rx, adr, 4,
+                      false /* store */, true /* unsigned */)) {
+    Assembler::lwu(Rx, adr);
+  }
+}
+
+void MacroAssembler::sw(Register Rw, const Address& adr) {
+  if (!try_merge_ldst(Rw, adr, 4,
+                      true /* store */, false /* unsigned */)) {
+    Assembler::sw(Rw, adr);
+  }
+}
+
 void MacroAssembler::push_call_clobbered_registers_except(RegSet exclude) {
   // Push integer registers x7, x10-x17, x28-x31.
   push_reg(RegSet::of(x7) + RegSet::range(x10, x17) + RegSet::range(x28, x31) - exclude, sp);

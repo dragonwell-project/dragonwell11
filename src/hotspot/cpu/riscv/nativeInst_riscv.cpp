@@ -39,6 +39,43 @@
 #include "c1/c1_Runtime1.hpp"
 #endif
 
+Register NativeInstruction::extract_rs1(address instr) {
+  assert_cond(instr != NULL);
+  return as_Register(Assembler::extract(((unsigned*)instr)[0], 19, 15));
+}
+
+Register NativeInstruction::extract_rs2(address instr) {
+  assert_cond(instr != NULL);
+  return as_Register(Assembler::extract(((unsigned*)instr)[0], 24, 20));
+}
+
+Register NativeInstruction::extract_rd(address instr) {
+  assert_cond(instr != NULL);
+  return as_Register(Assembler::extract(((unsigned*)instr)[0], 11, 7));
+}
+
+uint32_t NativeInstruction::extract_opcode(address instr) {
+  assert_cond(instr != NULL);
+  return Assembler::extract(((unsigned*)instr)[0], 6, 0);
+}
+
+uint32_t NativeInstruction::extract_funct3(address instr) {
+  assert_cond(instr != NULL);
+  return Assembler::extract(((unsigned*)instr)[0], 14, 12);
+}
+
+/*
+uint32_t NativeInstruction::extract_funct7(address instr) {
+  assert_cond(instr != NULL);
+  return Assembler::extract(((unsigned*)instr)[0], 31, 25);
+}
+*/
+
+int32_t NativeInstruction::sextract_funct7(address instr) {
+  assert_cond(instr != NULL);
+  return Assembler::sextract(((unsigned*)instr)[0], 31, 25);
+}
+
 bool NativeInstruction::is_pc_relative_at(address instr) {
   // auipc + jalr
   // auipc + addi

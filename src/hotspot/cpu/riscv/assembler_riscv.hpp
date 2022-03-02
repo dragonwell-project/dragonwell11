@@ -2190,6 +2190,29 @@ enum Nf {
 #undef INSN
 #undef patch_VLdSt
 
+// CSky specific Instruction
+// load into 2 registers, store 2 registers
+#define INSN(NAME, op, funct3, funct5)                                                       \
+  void NAME(Register Rd1, Register Rd2, Register Rs, const int32_t offset) {                 \
+    guarantee(offset >= 0 && offset <= 3, "offset is invalid.");                          \
+    unsigned insn = 0;                                                                             \
+    int32_t val = offset & 0x3;                                                              \
+    patch((address)&insn, 6,  0,  op);                                                             \
+    patch_reg((address)&insn, 7,  Rd1);                                                            \
+    patch((address)&insn, 14, 12, funct3);                                                         \
+    patch_reg((address)&insn, 15, Rs);                                                             \
+    patch_reg((address)&insn, 20, Rd2);                                                            \
+    patch((address)&insn, 26, 25, val);                                                            \
+    patch((address)&insn, 31, 27, funct5);                                                         \
+    emit(insn);                                                                                    \
+  }
+  INSN(ldd,  0b0001011, 0b100, 0b11111);
+  INSN(lwd,  0b0001011, 0b100, 0b11100);
+  INSN(lwud, 0b0001011, 0b100, 0b11110);
+  INSN(sdd,  0b0001011, 0b101, 0b11111);
+  INSN(swd,  0b0001011, 0b101, 0b11100);
+#undef INSN
+
   void bgt(Register Rs, Register Rt, const address &dest);
   void ble(Register Rs, Register Rt, const address &dest);
   void bgtu(Register Rs, Register Rt, const address &dest);
