@@ -523,5 +523,6 @@ vmTestbase_nsk_jdb = \
   vmTestbase/nsk/jdb
 
 dragonwell_hs = \
-  runtime/coroutine
+  runtime/coroutine \
+  gc/z
 # vmTestbase_*_quick groups are defined in TEST.quick-groups

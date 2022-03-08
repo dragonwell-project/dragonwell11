@@ -23,7 +23,9 @@ ${TESTJAVA}/bin/javac ${TESTJAVACOPTS} ${TESTTOOLVMOPTS} TestPremainWithWispMoni
 
 echo "Manifest-Version: 1.0"    >  ${AGENT}.mf
 echo Premain-Class: ${AGENT} >> ${AGENT}.mf
-shift
+if [ $# -gt 0 ]; then
+  shift
+fi
 while [ $# != 0 ] ; do
   echo $1 >> ${AGENT}.mf
   shift

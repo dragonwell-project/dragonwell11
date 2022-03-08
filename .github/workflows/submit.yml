@@ -227,8 +227,8 @@ jobs:
           - hs/tier1 gc
           - hs/tier1 runtime
           - hs/tier1 serviceability
-#          - dragonwell/hs feature
-#          - dragonwell/jdk feature
+          - dragonwell/hs feature
+          - dragonwell/jdk feature
         include:
           - test: jdk/tier1 part 1
             suites: test/jdk/:tier1_part1
@@ -253,10 +253,10 @@ jobs:
           - test: hs/tier1 serviceability
             suites: test/hotspot/jtreg/:tier1_serviceability
             artifact: -debug
-#          - test: dragonwell/hs feature
-#            suites: test/hotspot/jtreg/:dragonwell_hs
-#          - test: dragonwell/jdk feature
-#            suites: test/jdk/:dragonwell_jdk
+          - test: dragonwell/hs feature
+            suites: test/hotspot/jtreg/:dragonwell_hs
+          - test: dragonwell/jdk feature
+            suites: test/jdk/:dragonwell_jdk
     env:
       JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
@@ -328,6 +328,11 @@ jobs:
         run: |
           imageroot=`find ${HOME}/jdk-linux-x64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }} -name release -type f`
           echo "imageroot=`dirname ${imageroot}`" >> $GITHUB_ENV
+
+      - name: Configure bash as default
+        run: |
+          sudo chsh -s /bin/bash $(whoami)
+
 
       - name: Run tests
         run: >

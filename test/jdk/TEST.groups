@@ -505,4 +505,5 @@ needs_g1gc = \
   jdk/jfr/event/gc/heapsummary/TestHeapSummaryEventG1.java
 
 dragonwell_jdk = \
+  :jdk_jfr_sanity \
   com/alibaba

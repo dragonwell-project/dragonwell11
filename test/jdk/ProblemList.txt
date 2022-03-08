@@ -898,3 +898,13 @@ jdk/jfr/event/oldobject/TestLargeRootSet.java                   8205651    gener
  
 ############################################################################
 
+# dragonwell
+
+com/alibaba/wisp/bug/TestThreadStackTrace.sh generic-all
+com/alibaba/wisp2/TestWisp2WorkSteal.java  generic-all
+com/alibaba/cds/TestWispWithAppCDS.java generic-all
+com/alibaba/cds/TestDumpAndLoadClassWithWisp.java generic-all
+com/alibaba/wisp/monitor/TestPassToken.java generic-all
+com/alibaba/wisp/io/TestGlobalPoller.java generic-all
+com/alibaba/wisp/bug/TestWispSocketLeakWhenConnectTimeout.java generic-all
+
