@@ -234,3 +234,8 @@ vmTestbase/nsk/jdb/exclude/exclude001/exclude001.java 8197938 windows-all
 vmTestbase/nsk/jdwp/ThreadReference/ForceEarlyReturn/forceEarlyReturn001/forceEarlyReturn001.java 7199837 generic-all
 
 #############################################################################
+
+dragonwell
+runtime/coroutine/TestPremainWithWispMonitor.java generic-all
+runtime/coroutine/testJniDetachThreadHoldingMonitor.sh generic-all
+runtime/coroutine/testJniMonitorExit.sh generic-all
