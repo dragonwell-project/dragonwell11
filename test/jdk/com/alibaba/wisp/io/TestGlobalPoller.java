@@ -17,14 +17,16 @@ import sun.nio.ch.SelChImpl;
 import sun.nio.ch.WispSocketImpl;
 
 import java.lang.reflect.Field;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.security.PrivilegedAction;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static jdk.testlibrary.Asserts.assertTrue;
-import static jdk.testlibrary.Asserts.assertNotNull;
 
 public class TestGlobalPoller {
     private static final WispEngineAccess access = SharedSecrets.getWispEngineAccess();
@@ -50,14 +52,18 @@ public class TestGlobalPoller {
         // so is readable
         // current task is interested in read event.
         SocketChannel ch = getCh(so);
-        access.registerEvent(ch, SelectionKey.OP_READ);
+
+        ServerSocketChannel ssc = ServerSocketChannel.open();
+        ssc.bind(new InetSocketAddress(11488));
+
+        access.registerEvent(ssc, SelectionKey.OP_READ);
 
         Class<?> clazz = Class.forName("com.alibaba.wisp.engine.WispEventPump$Pool");
         Field pumps = clazz.getDeclaredField("pumps");
         pumps.setAccessible(true);
         Object[] a = (Object[]) pumps.get(clazz.getEnumConstants()[0]);
         WispTask[] fd2TaskLow = null;
-        int fd = ((SelChImpl) ch).getFDVal();
+        int fd = ((SelChImpl) ssc).getFDVal();
         for (Object pump : a) {
             Field f = Class.forName("com.alibaba.wisp.engine.WispEventPump").getDeclaredField("fd2ReadTaskLow");
             f.setAccessible(true);
@@ -66,11 +72,8 @@ public class TestGlobalPoller {
                 fd2TaskLow = map;
             }
         }
-        assertNotNull(fd2TaskLow);
-
-        access.park(-1);
-
-        assertTrue(fd2TaskLow[fd] == null);
+        assertTrue(fd2TaskLow != null);
+        assertTrue(fd2TaskLow[fd] != null);
 
         so.close();
     }
