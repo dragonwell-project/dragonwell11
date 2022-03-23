@@ -1198,13 +1198,14 @@ bool MacroAssembler::ldst_can_merge(Register rt,
   }
 
   // alignment check
-  if ( (low_offset % (prev_size_in_bytes*2)) != 0 ) {
+  if ((low_offset % (prev_size_in_bytes*2)) != 0) {
     return false;
   }
 
-  if ( is_unsigned && !prev_ldst->is_unsigned_load()) {
+  if (!is_store && prev_size_in_bytes == 4 && is_unsigned != prev_ldst->is_unsigned_load()) {
     return false;
   }
+
   return true;
 }
 
@@ -1245,11 +1246,11 @@ void MacroAssembler::merge_ldst(Register rt,
       ldd(rt_low, rt_high, rt_base, offset >> 4);
     } else {
       if (is_unsigned) {
-        BLOCK_COMMENT("merged load pair: lwd");
-        lwd(rt_low, rt_high, rt_base, offset >> 3);
-      } else {
         BLOCK_COMMENT("merged load pair: lwud");
         lwud(rt_low, rt_high, rt_base, offset >> 3);
+      } else {
+        BLOCK_COMMENT("merged load pair: lwd");
+        lwd(rt_low, rt_high, rt_base, offset >> 3);
       }
     }
   } else {
