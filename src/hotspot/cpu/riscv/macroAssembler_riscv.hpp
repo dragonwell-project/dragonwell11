@@ -351,6 +351,32 @@ class MacroAssembler: public Assembler {
     return ((predecessor & 0x3) << 2) | (successor & 0x3);
   }
 
+  // CSky specific mem pair instructions
+  using Assembler::ld;
+  using Assembler::sd;
+  using Assembler::lw;
+  using Assembler::lwu;
+  using Assembler::sw;
+
+  // Check whether two loads/stores can be merged into ldp/stp.
+  bool ldst_can_merge(Register rt, const Address &adr,
+                      size_t cur_size_in_bytes, bool is_store, bool is_unsigned) const;
+
+  // Merge current load/store with previous load/store into ldp/stp.
+  void merge_ldst(Register rx, const Address &adr,
+                  size_t cur_size_in_bytes, bool is_store, bool is_unsigned);
+
+  // Try to merge two loads/stores into ldp/stp. If success, returns true else false.
+  bool try_merge_ldst(Register rt, const Address &adr,
+                      size_t cur_size_in_bytes, bool is_store, bool is_unsigned);
+
+  void ld(Register Rx, const Address &adr);
+  void sd(Register Rw, const Address &adr);
+  void lw(Register Rx, const Address &adr);
+  void lwu(Register Rx, const Address &adr);
+  void sw(Register Rw, const Address &adr);
+  // end of CSky specific instructions
+
   // prints msg, dumps registers and stops execution
   void stop(const char* msg);
 
