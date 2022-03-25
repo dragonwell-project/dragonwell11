@@ -105,6 +105,7 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Avoid generating unaligned memory accesses")                          \
   experimental(bool, UseRVV, false, "Use RVV instructions")                      \
   experimental(bool, UseRVB, false, "Use RVB instructions")                      \
-  experimental(bool, UseRVC, false, "Use RVC instructions")
+  experimental(bool, UseRVC, false, "Use RVC instructions")                      \
+  product(bool, UseCSky, false, "Use CSky specific instructions")                \
 
 #endif // CPU_RISCV_GLOBALS_RISCV_HPP

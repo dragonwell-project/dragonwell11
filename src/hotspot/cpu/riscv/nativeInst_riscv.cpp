@@ -64,6 +64,18 @@ uint32_t NativeInstruction::extract_funct3(address instr) {
   return Assembler::extract(((unsigned*)instr)[0], 14, 12);
 }
 
+/*
+uint32_t NativeInstruction::extract_funct7(address instr) {
+  assert_cond(instr != NULL);
+  return Assembler::extract(((unsigned*)instr)[0], 31, 25);
+}
+*/
+
+int32_t NativeInstruction::sextract_funct7(address instr) {
+  assert_cond(instr != NULL);
+  return Assembler::sextract(((unsigned*)instr)[0], 31, 25);
+}
+
 bool NativeInstruction::is_pc_relative_at(address instr) {
   // auipc + jalr
   // auipc + addi

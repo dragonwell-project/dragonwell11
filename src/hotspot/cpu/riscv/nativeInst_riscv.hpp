@@ -71,6 +71,7 @@ class NativeInstruction {
   static bool is_branch_at(address instr)     { assert_cond(instr != NULL); return extract_opcode(instr) == 0b1100011; }
   static bool is_ld_at(address instr)         { assert_cond(instr != NULL); return is_load_at(instr) && extract_funct3(instr) == 0b011; }
   static bool is_load_at(address instr)       { assert_cond(instr != NULL); return extract_opcode(instr) == 0b0000011; }
+  static bool is_store_at(address instr)      { assert_cond(instr != NULL); return extract_opcode(instr) == 0b0100011; }
   static bool is_float_load_at(address instr) { assert_cond(instr != NULL); return extract_opcode(instr) == 0b0000111; }
   static bool is_auipc_at(address instr)      { assert_cond(instr != NULL); return extract_opcode(instr) == 0b0010111; }
   static bool is_jump_at(address instr)       { assert_cond(instr != NULL); return is_branch_at(instr) || is_jal_at(instr) || is_jalr_at(instr); }
@@ -89,6 +90,7 @@ class NativeInstruction {
   static Register extract_rd(address instr);
   static uint32_t extract_opcode(address instr);
   static uint32_t extract_funct3(address instr);
+  static int32_t  sextract_funct7(address instr);
 
   // the instruction sequence of movptr is as below:
   //     lui
@@ -568,5 +570,44 @@ public:
     return (UseConservativeFence ? 2 : 1) * NativeInstruction::instruction_size;
   }
 };
+
+class NativeLdSt : public NativeInstruction {
+public:
+  bool is_store() {
+    return NativeInstruction::is_store_at(addr_at(0));
+  }
+
+  Register base() {
+    return NativeInstruction::extract_rs1(addr_at(0));
+  }
+
+  int32_t offset() {
+    address addr  = addr_at(0);
+    uint32_t insn = uint_at(0);
+    if (is_store()) {
+      return (sextract_funct7(addr) << 5) | Assembler::extract( insn, 11, 7);
+    } else {
+      return Assembler::sextract(insn, 31, 20);
+    }
+  }
+
+  Register target() {
+    return is_store() ? NativeInstruction::extract_rs2(addr_at(0))
+                      : NativeInstruction::extract_rd(addr_at(0));
+  }
+  size_t size_in_bytes() { return 1ULL << ((NativeInstruction::extract_funct3(addr_at(0))) & 0b11); }
+
+  bool is_unsigned_load() {
+    if (size_in_bytes() == 4 && !is_store()) { // only  4 bytes load has unsigned load
+      return NativeInstruction::extract_funct3(addr_at(0)) == 0b110;
+    }
+    return false;
+  }
+};
+
+inline NativeLdSt* NativeLdSt_at(address addr) {
+  assert(NativeInstruction::is_load_at(addr) || NativeInstruction::is_store_at(addr), "no load/store found");
+  return (NativeLdSt*)addr;
+}
 
 #endif // CPU_RISCV_NATIVEINST_RISCV_HPP
