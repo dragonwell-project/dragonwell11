@@ -232,6 +232,9 @@ class CodeCache : AllStatic {
   static bool needs_cache_clean()                     { return _needs_cache_clean; }
   static void set_needs_cache_clean(bool v)           { _needs_cache_clean = v;    }
 
+  static size_t max_distance_to_non_nmethod();
+  static bool is_non_nmethod(address addr);
+
   static void clear_inline_caches();                  // clear all inline caches
   static void cleanup_inline_caches();                // clean unloaded/zombie nmethods from inline caches
   static void do_unloading_nmethod_caches(bool class_unloading_occurred);  // clean all nmethod caches for unloading, including inline caches
