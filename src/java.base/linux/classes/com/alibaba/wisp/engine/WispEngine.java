@@ -342,6 +342,27 @@ public class WispEngine extends AbstractExecutorService {
             public StackTraceElement[] getStackTrace(WispTask task) {
                 return task.getStackTrace();
             }
+
+            @Override
+            public WispTask getWispTaskById(long id) {
+                return WispTask.getWispTaskById(id);
+            }
+
+            @Override
+            public Thread.State getState(Thread thread) {
+                WispTask task = JLA.getWispTask(thread);
+                if (task == null) {
+                    return Thread.State.NEW;
+                } else if (WispTask.JVM_PARK_UPDATER.get(task) == WispTask.WAITING) {
+                    return Thread.State.BLOCKED;
+                } else if (task.timeOut != null && !task.timeOut.canceled) {
+                    return Thread.State.TIMED_WAITING;
+                } else if (WispTask.JDK_PARK_UPDATER.get(task) == WispTask.WAITING) {
+                    return Thread.State.WAITING;
+                } else {
+                    return task.status == WispTask.Status.CACHED ? Thread.State.TERMINATED : Thread.State.RUNNABLE;
+                }
+            }
         });
     }
 

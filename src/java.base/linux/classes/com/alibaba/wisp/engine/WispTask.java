@@ -67,6 +67,22 @@ public class WispTask implements Comparable<WispTask> {
         }
     }
 
+    static WispTask getWispTaskById(long threadId) {
+        WispCarrier carrier = WispCarrier.current();
+        boolean isInCritical0 = carrier.isInCritical;
+        carrier.isInCritical = true;
+        try {
+            for (WispTask task : id2Task.values()) {
+                if (task.threadWrapper != null && task.threadWrapper.getId() == threadId) {
+                    return task;
+                }
+            }
+        } finally {
+            carrier.isInCritical = isInCritical0;
+        }
+        return null;
+    }
+
     static void cleanExitedTasks(List<WispTask> tasks) {
         if (!tasks.isEmpty()) {
             WispCarrier carrier = tasks.get(0).carrier;
@@ -358,7 +374,7 @@ public class WispTask implements Comparable<WispTask> {
     }
 
 
-    private static final int
+    static final int
             WAITING = -1,   // was blocked
             FREE = 0,       // the Initial Park status
             PERMITTED = 1;  // another task give a permit to make the task not block at next park()
@@ -649,8 +665,8 @@ public class WispTask implements Comparable<WispTask> {
     }
 
     private static final AtomicReferenceFieldUpdater<WispTask, WispCarrier> CARRIER_UPDATER;
-    private static final AtomicIntegerFieldUpdater<WispTask> JVM_PARK_UPDATER;
-    private static final AtomicIntegerFieldUpdater<WispTask> JDK_PARK_UPDATER;
+    static final AtomicIntegerFieldUpdater<WispTask> JVM_PARK_UPDATER;
+    static final AtomicIntegerFieldUpdater<WispTask> JDK_PARK_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> INTERRUPTED_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> NATIVE_INTERRUPTED_UPDATER;
     private static final AtomicIntegerFieldUpdater<WispTask> STEAL_LOCK_UPDATER;

@@ -78,11 +78,6 @@ class WispThreadWrapper extends Thread {
     }
 
     @Override
-    public State getState() {
-        return JLA.getWispTask(this).carrier.thread.getState();
-    }
-
-    @Override
     public UncaughtExceptionHandler getUncaughtExceptionHandler() {
         return JLA.getWispTask(this).carrier.thread.getUncaughtExceptionHandler();
     }
