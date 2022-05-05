@@ -131,7 +131,7 @@ public:
     return _surviving_young_words + 1;
   }
 
-  void flush(size_t* surviving_young_words);
+  size_t flush(size_t* surviving_young_words);
 
 private:
   #define G1_PARTIAL_ARRAY_MASK 0x2
