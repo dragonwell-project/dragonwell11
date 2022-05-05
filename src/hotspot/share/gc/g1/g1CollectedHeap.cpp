@@ -2883,7 +2883,6 @@ G1CollectedHeap::do_collection_pause_at_safepoint(double target_pause_time_ms) {
                                 collector_state()->yc_type() == Mixed /* allMemoryPoolsAffected */);
 
     G1HeapTransition heap_transition(this);
-    size_t heap_used_bytes_before_gc = used();
 
     // Don't dynamically change the number of GC threads this early.  A value of
     // 0 is used to indicate serial work.  When parallel work is done,
@@ -3044,7 +3043,7 @@ G1CollectedHeap::do_collection_pause_at_safepoint(double target_pause_time_ms) {
         double sample_end_time_sec = os::elapsedTime();
         double pause_time_ms = (sample_end_time_sec - sample_start_time_sec) * MILLIUNITS;
         size_t total_cards_scanned = g1_policy()->phase_times()->sum_thread_work_items(G1GCPhaseTimes::ScanRS, G1GCPhaseTimes::ScanRSScannedCards);
-        g1_policy()->record_collection_pause_end(pause_time_ms, total_cards_scanned, heap_used_bytes_before_gc);
+        g1_policy()->record_collection_pause_end(pause_time_ms, total_cards_scanned);
 
         evacuation_info.set_collectionset_used_before(collection_set()->bytes_used_before());
         evacuation_info.set_bytes_copied(g1_policy()->bytes_copied_during_gc());
