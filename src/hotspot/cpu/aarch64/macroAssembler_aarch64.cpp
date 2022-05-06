@@ -1511,7 +1511,7 @@ void MacroAssembler::movptr(Register r, uintptr_t imm64) {
 #ifndef PRODUCT
   {
     char buffer[64];
-    snprintf(buffer, sizeof(buffer), PTR64_FORMAT, imm64);
+    snprintf(buffer, sizeof(buffer), "0x%" PRIX64, (uint64_t)imm64);
     block_comment(buffer);
   }
 #endif
@@ -1574,7 +1574,7 @@ void MacroAssembler::mov_immediate64(Register dst, uint64_t imm64)
 #ifndef PRODUCT
   {
     char buffer[64];
-    snprintf(buffer, sizeof(buffer), PTR64_FORMAT, imm64);
+    snprintf(buffer, sizeof(buffer), "0x%" PRIX64, imm64);
     block_comment(buffer);
   }
 #endif
@@ -1687,7 +1687,7 @@ void MacroAssembler::mov_immediate32(Register dst, uint32_t imm32)
 #ifndef PRODUCT
     {
       char buffer[64];
-      snprintf(buffer, sizeof(buffer), PTR32_FORMAT, imm32);
+      snprintf(buffer, sizeof(buffer), "0x%" PRIX32, imm32);
       block_comment(buffer);
     }
 #endif
@@ -1851,7 +1851,7 @@ bool MacroAssembler::try_merge_ldst(Register rt, const Address &adr, size_t size
     return true;
   } else {
     assert(size_in_bytes == 8 || size_in_bytes == 4, "only 8 bytes or 4 bytes load/store is supported.");
-    const unsigned mask = size_in_bytes - 1;
+    const uint64_t mask = size_in_bytes - 1;
     if (adr.getMode() == Address::base_plus_offset &&
         (adr.offset() & mask) == 0) { // only supports base_plus_offset.
       code()->set_last_insn(pc());
@@ -2059,11 +2059,17 @@ void MacroAssembler::increment(Address dst, int value)
 
 
 void MacroAssembler::pusha() {
-  push(0x7fffffff, sp);
+  push(RegSet::range(r0, r30), sp);
 }
 
 void MacroAssembler::popa() {
-  pop(0x7fffffff, sp);
+  pop(RegSet::range(r0, r17), sp);
+#ifdef R18_RESERVED
+  ldp(zr, r19, Address(post(sp, 2 * wordSize)));
+  pop(RegSet::range(r20, r30), sp);
+#else
+  pop(RegSet::range(r18_tls, r30), sp);
+#endif
 }
 
 // Push lots of registers in the bit set supplied.  Don't push sp.
@@ -2687,7 +2693,7 @@ void MacroAssembler::pop_call_clobbered_registers() {
 
 void MacroAssembler::push_CPU_state(bool save_vectors) {
   int step = (save_vectors ? 8 : 4) * wordSize;
-  push(0x3fffffff, sp);         // integer registers except lr & sp
+  push(RegSet::range(r0, r29), sp);         // integer registers except lr & sp
   mov(rscratch1, -step);
   sub(sp, sp, step);
   for (int i = 28; i >= 4; i -= 4) {
@@ -2702,7 +2708,15 @@ void MacroAssembler::pop_CPU_state(bool restore_vectors) {
   for (int i = 0; i <= 28; i += 4)
     ld1(as_FloatRegister(i), as_FloatRegister(i+1), as_FloatRegister(i+2),
         as_FloatRegister(i+3), restore_vectors ? T2D : T1D, Address(post(sp, step)));
-  pop(0x3fffffff, sp);         // integer registers except lr & sp
+
+  // integer registers except lr & sp
+  pop(RegSet::range(r0, r17), sp);
+#ifdef R18_RESERVED
+  ldp(zr, r19, Address(post(sp, 2 * wordSize)));
+  pop(RegSet::range(r20, r29), sp);
+#else
+  pop(RegSet::range(r18_tls, r29), sp);
+#endif
 }
 
 /**
@@ -2868,7 +2882,7 @@ void MacroAssembler::merge_ldst(Register rt,
   // Overwrite previous generated binary.
   code_section()->set_end(prev);
 
-  const int sz = prev_ldst->size_in_bytes();
+  const size_t sz = prev_ldst->size_in_bytes();
   assert(sz == 8 || sz == 4, "only supports 64/32bit merging.");
   if (!is_store) {
     BLOCK_COMMENT("merged ldr pair");
