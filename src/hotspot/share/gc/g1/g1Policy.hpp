@@ -106,6 +106,8 @@ class G1Policy: public CHeapObj<mtGC> {
 
   size_t _pending_cards;
 
+  size_t _copied_bytes;
+
   G1InitialMarkToMixedTimeTracker _initial_mark_to_mixed;
 
   bool should_update_surv_rate_group_predictors() {
@@ -131,6 +133,10 @@ public:
 
   void record_max_rs_lengths(size_t rs_lengths) {
     _max_rs_lengths = rs_lengths;
+  }
+
+  void record_copied_bytes(size_t copied_bytes) {
+    _copied_bytes = copied_bytes;
   }
 
   double predict_base_elapsed_time_ms(size_t pending_cards) const;
@@ -308,7 +314,7 @@ public:
 
   // Record the start and end of an evacuation pause.
   void record_collection_pause_start(double start_time_sec);
-  void record_collection_pause_end(double pause_time_ms, size_t cards_scanned, size_t heap_used_bytes_before_gc);
+  void record_collection_pause_end(double pause_time_ms, size_t cards_scanned);
 
   // Record the start and end of a full collection.
   void record_full_collection_start();
