@@ -991,7 +991,8 @@ private:
   // Return true if an addres is within the 48-bit Riscv64 address
   // space.
   bool is_valid_riscv64_address(address addr) {
-    return ((uintptr_t)addr >> 48) == 0;
+    // sv48: must have bits 63–48 all equal to bit 47
+    return ((uintptr_t)addr >> 47) == 0;
   }
 
   void ld_constant(Register dest, const Address &const_addr) {
