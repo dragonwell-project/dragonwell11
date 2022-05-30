@@ -277,9 +277,10 @@ void Assembler::movptr_with_offset(Register Rd, address addr, int32_t &offset) {
     block_comment(buffer);
   }
 #endif
-  assert(is_unsigned_imm_in_range(imm64, 47, 0) || (imm64 == (uintptr_t)-1), "48-bit overflow in address constant");
-  // Load upper 32 bits
-  int32_t imm = imm64 >> 16;
+  assert(is_unsigned_imm_in_range(imm64, 47, 0) || (imm64 == (uintptr_t)-1),
+         "bit 47 overflows in address constant");
+  // Load upper 31 bits
+  int32_t imm = imm64 >> 17;
   int64_t upper = imm, lower = imm;
   lower = (lower << 52) >> 52;
   upper -= lower;
@@ -287,13 +288,13 @@ void Assembler::movptr_with_offset(Register Rd, address addr, int32_t &offset) {
   lui(Rd, upper);
   addi(Rd, Rd, lower);
 
-  // Load the rest 16 bits.
+  // Load the rest 17 bits.
   slli(Rd, Rd, 11);
-  addi(Rd, Rd, (imm64 >> 5) & 0x7ff);
-  slli(Rd, Rd, 5);
+  addi(Rd, Rd, (imm64 >> 6) & 0x7ff);
+  slli(Rd, Rd, 6);
 
-  // Here, remove the addi instruct and return the offset directly. This offset will be used by following jalr/ld.
-  offset = imm64 & 0x1f;
+  // This offset will be used by following jalr/ld.
+  offset = imm64 & 0x3f;
 }
 
 void Assembler::movptr(Register Rd, uintptr_t imm64) {
