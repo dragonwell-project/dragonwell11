@@ -33,6 +33,12 @@
  *                   -XX:+ZVerifyViews -XX:ZCollectionInterval=1
  *                   -XX:-CreateCoredumpOnCrash
  *                   -XX:CompileCommand=dontinline,*::mergeImpl* compiler.gcbarriers.UnsafeIntrinsicsTest
+ * @run main/othervm -Xmx256m
+ *                   -XX:+UseZGC
+ *                   -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:+ZUnmapBadViews -XX:ZCollectionInterval=1
+ *                   -XX:-CreateCoredumpOnCrash
+ *                   -XX:CompileCommand=dontinline,*::mergeImpl* compiler.gcbarriers.UnsafeIntrinsicsTest
  */
 
  /*
