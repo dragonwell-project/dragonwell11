@@ -260,7 +260,6 @@ void ClassLoaderExt::finalize_shared_paths_misc_info() {
 // the "source:" in the class list file (see classListParser.cpp), and can be a directory or
 // a JAR file.
 InstanceKlass* ClassLoaderExt::load_class(Symbol* name, const char* path, TRAPS) {
-
   assert(name != NULL, "invariant");
   assert(DumpSharedSpaces, "this function is only used with -Xshare:dump");
   ResourceMark rm(THREAD);
