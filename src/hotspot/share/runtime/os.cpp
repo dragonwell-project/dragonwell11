@@ -1017,8 +1017,14 @@ void os::print_date_and_time(outputStream *st, char* buf, size_t buflen) {
 
   struct tm tz;
   if (localtime_pd(&tloc, &tz) != NULL) {
-    ::strftime(buf, buflen, "%Z", &tz);
-    st->print("Time: %s %s", timestring, buf);
+    wchar_t w_buf[80];
+    size_t n = ::wcsftime(w_buf, 80, L"%Z", &tz);
+    if (n > 0) {
+      ::wcstombs(buf, w_buf, buflen);
+      st->print("Time: %s %s", timestring, buf);
+    } else {
+      st->print("Time: %s", timestring);
+    }
   } else {
     st->print("Time: %s", timestring);
   }
@@ -1741,7 +1747,8 @@ bool os::create_stack_guard_pages(char* addr, size_t bytes) {
   return os::pd_create_stack_guard_pages(addr, bytes);
 }
 
-char* os::reserve_memory(size_t bytes, char* addr, size_t alignment_hint, int file_desc) {
+MACOS_ONLY(char* os::reserve_memory(size_t bytes, char* addr, size_t alignment_hint, int file_desc, bool executable))
+NOT_MACOS(char* os::reserve_memory(size_t bytes, char* addr, size_t alignment_hint, int file_desc)) {
   char* result = NULL;
 
   if (file_desc != -1) {
@@ -1752,7 +1759,8 @@ char* os::reserve_memory(size_t bytes, char* addr, size_t alignment_hint, int fi
       MemTracker::record_virtual_memory_reserve_and_commit((address)result, bytes, CALLER_PC);
     }
   } else {
-    result = pd_reserve_memory(bytes, addr, alignment_hint);
+    result = MACOS_ONLY(pd_reserve_memory(bytes, addr, alignment_hint, executable))
+             NOT_MACOS(pd_reserve_memory(bytes, addr, alignment_hint));
     if (result != NULL) {
       MemTracker::record_virtual_memory_reserve((address)result, bytes, CALLER_PC);
     }
@@ -1822,16 +1830,19 @@ void os::commit_memory_or_exit(char* addr, size_t size, size_t alignment_hint,
   MemTracker::record_virtual_memory_commit((address)addr, size, CALLER_PC);
 }
 
-bool os::uncommit_memory(char* addr, size_t bytes) {
+MACOS_ONLY(bool os::uncommit_memory(char* addr, size_t bytes, bool executable))
+NOT_MACOS(bool os::uncommit_memory(char* addr, size_t bytes)) {
   bool res;
   if (MemTracker::tracking_level() > NMT_minimal) {
     Tracker tkr(Tracker::uncommit);
-    res = pd_uncommit_memory(addr, bytes);
+    res = MACOS_ONLY(pd_uncommit_memory(addr, bytes, executable))
+          NOT_MACOS(pd_uncommit_memory(addr, bytes));
     if (res) {
       tkr.record((address)addr, bytes);
     }
   } else {
-    res = pd_uncommit_memory(addr, bytes);
+    res = MACOS_ONLY(pd_uncommit_memory(addr, bytes, executable))
+          NOT_MACOS(pd_uncommit_memory(addr, bytes));
   }
   return res;
 }

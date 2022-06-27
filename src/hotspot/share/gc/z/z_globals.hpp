@@ -91,6 +91,9 @@
           "Time between statistics print outs (in seconds)")                \
           range(1, (uint)-1)                                                \
                                                                             \
+  diagnostic(bool, ZUnmapBadViews, false,                                   \
+          "Unmap bad (inactive) heap views")                                \
+                                                                            \
   diagnostic(bool, ZVerifyViews, false,                                     \
           "Verify heap view accesses")                                      \
                                                                             \

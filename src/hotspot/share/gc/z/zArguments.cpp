@@ -101,6 +101,12 @@ void ZArguments::initialize() {
   // we need fixup_partial_loads
   DEBUG_ONLY(FLAG_SET_DEFAULT(VerifyStack, false));
 
+  // Support ZUnmapBadView in order to be compatible with Java 11
+  if (FLAG_IS_DEFAULT(ZVerifyViews) && ZUnmapBadViews) {
+    log_warning(gc)("ZUnmapBadViews is deprecated. Will use ZVerifyViews instead.");
+    FLAG_SET_DEFAULT(ZVerifyViews, true);
+  }
+
   // Initialize platform specific arguments
   initialize_platform();
 }

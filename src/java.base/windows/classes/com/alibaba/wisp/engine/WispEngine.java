@@ -167,6 +167,16 @@ public class WispEngine {
             public StackTraceElement[] getStackTrace(WispTask task) {
                 throw new UnsupportedOperationException();
             }
+
+            @Override
+            public WispTask getWispTaskById(long id) {
+                return null;
+            }
+
+            @Override
+            public Thread.State getState(Thread thread) {
+                return null;
+            }
         });
     }
 
