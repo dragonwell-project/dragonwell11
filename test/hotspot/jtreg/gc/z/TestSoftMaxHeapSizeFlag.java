@@ -21,7 +21,7 @@
  * questions.
  */
 
-package gc.arguments;
+package gc.z;
 
 /*
  * @test TestSoftMaxHeapSizeFlag
@@ -29,7 +29,7 @@ package gc.arguments;
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.management
- * @run main/othervm gc.arguments.TestSoftMaxHeapSizeFlag
+ * @run main/othervm gc.z.TestSoftMaxHeapSizeFlag
  */
 
 import jdk.test.lib.process.ProcessTools;
