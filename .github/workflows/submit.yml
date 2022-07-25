@@ -3,7 +3,7 @@ name: Pre-submit tests
 on:
   pull_request:
     branches:
-     - master
+     - VectorAPI_dev
   push:
     branches-ignore:
       - master
