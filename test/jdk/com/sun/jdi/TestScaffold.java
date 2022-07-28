@@ -757,6 +757,7 @@ abstract public class TestScaffold extends TargetAdapter {
         sr.addClassExclusionFilter("oracle.*");
         sr.addClassExclusionFilter("jdk.internal.*");
         sr.addClassExclusionFilter("jdk.jfr.*");
+        sr.addClassExclusionFilter("com.alibaba.*");
         sr.addCountFilter(1);
         sr.enable();
         StepEvent retEvent = (StepEvent)waitForRequestedEvent(sr);
