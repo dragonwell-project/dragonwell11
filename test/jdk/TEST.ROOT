@@ -24,7 +24,8 @@ javax/management com/sun/awt sun/awt sun/java2d javax/xml/jaxp/testng/validation
 # Tests that cannot run concurrently
 exclusiveAccess.dirs=java/rmi/Naming java/util/prefs sun/management/jmxremote sun/tools/jstatd \
 sun/security/mscapi java/util/stream java/util/Arrays/largeMemory java/util/BitSet/stream javax/rmi \
-sanity/client
+sanity/client \
+com/alibaba/wisp/exclusive com/alibaba/wisp2/exclusive
 
 # Group definitions
 groups=TEST.groups
