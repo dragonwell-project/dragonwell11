@@ -270,6 +270,14 @@ public:
   virtual int Opcode() const;
 };
 
+//------------------------------MulAddVS2VINode--------------------------------
+// Vector multiply shorts to int and add adjacent ints.
+class MulAddVS2VINode : public VectorNode {
+  public:
+    MulAddVS2VINode(Node* in1, Node* in2, const TypeVect* vt) : VectorNode(in1, in2, vt) {}
+    virtual int Opcode() const;
+};
+
 //------------------------------FmaVDNode--------------------------------------
 // Vector multiply double
 class FmaVDNode : public VectorNode {
