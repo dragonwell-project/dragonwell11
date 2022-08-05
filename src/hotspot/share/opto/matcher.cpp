@@ -2468,9 +2468,9 @@ bool Matcher::gen_narrow_oop_implicit_null_checks() {
   if (!os::zero_page_read_protected()) {
     return true;
   }
-  return CompressedOops::use_implicit_null_checks() &&
+  return Universe::narrow_oop_use_implicit_null_checks &&
          (narrow_oop_use_complex_address() ||
-          CompressedOops::base() != NULL);
+           Universe::narrow_oop_base()!= NULL);
 }
 
 // Compute RegMask for an ideal register.
@@ -2500,7 +2500,7 @@ const RegMask* Matcher::regmask_for_ideal_register(uint ideal_reg, Node* ret) {
     case Op_VecY: // fall-through
     case Op_VecZ: spill = new LoadVectorNode(NULL, mem, fp, atp, t->is_vect()); break;
 
-    default: ShouldNotReachHere();
+    default: ShouldNotReachHere(); spill = NULL;
   }
   MachNode* mspill = match_tree(spill);
   assert(mspill != NULL, "matching failed: %d", ideal_reg);

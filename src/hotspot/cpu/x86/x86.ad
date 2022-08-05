@@ -9883,56 +9883,6 @@ instruct vmuladd32S16I_reg(vec dst, vec src1, vec src2) %{
   ins_pipe( pipe_slow );
 %}
 
-// --------------------------------- Vector Multiply Add Add ----------------------------------
-
-instruct vmuladdadd4S2I_reg(vec dst, vec src1, vec src2) %{
-  predicate(VM_Version::supports_vnni() && UseAVX > 2 && n->as_Vector()->length() == 2);
-  match(Set dst (AddVI (MulAddVS2VI src1 src2) dst));
-  format %{ "evpdpwssd $dst,$src1,$src2\t! muladdadd packed4Sto2I" %}
-  ins_encode %{
-    int vector_len = 0;
-    __ evpdpwssd($dst$$XMMRegister, $src1$$XMMRegister, $src2$$XMMRegister, vector_len);
-  %}
-  ins_pipe( pipe_slow );
-  ins_cost(10);
-%}
-
-instruct vmuladdadd8S4I_reg(vec dst, vec src1, vec src2) %{
-  predicate(VM_Version::supports_vnni() && UseAVX > 2 && n->as_Vector()->length() == 4);
-  match(Set dst (AddVI (MulAddVS2VI src1 src2) dst));
-  format %{ "evpdpwssd $dst,$src1,$src2\t! muladdadd packed8Sto4I" %}
-  ins_encode %{
-    int vector_len = 0;
-    __ evpdpwssd($dst$$XMMRegister, $src1$$XMMRegister, $src2$$XMMRegister, vector_len);
-  %}
-  ins_pipe( pipe_slow );
-  ins_cost(10);
-%}
-
-instruct vmuladdadd16S8I_reg(vec dst, vec src1, vec src2) %{
-  predicate(VM_Version::supports_vnni() && UseAVX > 2 && n->as_Vector()->length() == 8);
-  match(Set dst (AddVI (MulAddVS2VI src1 src2) dst));
-  format %{ "evpdpwssd $dst,$src1,$src2\t! muladdadd packed16Sto8I" %}
-  ins_encode %{
-    int vector_len = 1;
-    __ evpdpwssd($dst$$XMMRegister, $src1$$XMMRegister, $src2$$XMMRegister, vector_len);
-  %}
-  ins_pipe( pipe_slow );
-  ins_cost(10);
-%}
-
-instruct vmuladdadd32S16I_reg(vec dst, vec src1, vec src2) %{
-  predicate(VM_Version::supports_vnni() && UseAVX > 2 && n->as_Vector()->length() == 16);
-  match(Set dst (AddVI (MulAddVS2VI src1 src2) dst));
-  format %{ "evpdpwssd $dst,$src1,$src2\t! muladdadd packed32Sto16I" %}
-  ins_encode %{
-    int vector_len = 2;
-    __ evpdpwssd($dst$$XMMRegister, $src1$$XMMRegister, $src2$$XMMRegister, vector_len);
-  %}
-  ins_pipe( pipe_slow );
-  ins_cost(10);
-%}
-
 // --------------------------------- PopCount --------------------------------------
 
 instruct vpopcount2I(vec dst, vec src) %{
