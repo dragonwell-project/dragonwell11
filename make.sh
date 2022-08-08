@@ -6,7 +6,7 @@ if [ $# != 1 ]; then
 fi
 
 # incr by every Dragonwell release
-DRAGONWELL_VERSION=11
+DRAGONWELL_VERSION=8
 LC_ALL=C
 BUILD_MODE=$1
 arch=$(uname -m)
@@ -111,3 +111,4 @@ if [ 0 != $? ]; then RET=1; fi
 echo "================= Sanity test end ======================"
 
 exit ${RET}
+
