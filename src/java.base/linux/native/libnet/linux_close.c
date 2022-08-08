@@ -305,7 +305,7 @@ static int closefd(int fd1, int fd2) {
         threadEntry_t *curr = fdEntry->threads;
         while (curr != NULL) {
             curr->intr = 1;
-            pthread_kill( curr->thr, WAKEUP_SIGNAL );
+            pthread_kill( curr->thr, WAKEUP_SIGNAL);
             curr = curr->next;
         }
     }

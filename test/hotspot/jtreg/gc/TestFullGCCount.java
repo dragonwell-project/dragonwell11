@@ -21,6 +21,8 @@
  * questions.
  */
 
+package gc;
+
 /**
  * @test TestFullGCCount.java
  * @bug 7072527
@@ -30,7 +32,7 @@
  * @requires !(vm.gc == "Shenandoah" & vm.opt.ExplicitGCInvokesConcurrent != false)
  * @requires vm.gc != "Z"
  * @modules java.management
- * @run main/othervm -Xlog:gc TestFullGCCount
+ * @run main/othervm -Xlog:gc gc.TestFullGCCount
  */
 
 import java.lang.management.GarbageCollectorMXBean;

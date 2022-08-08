@@ -34,7 +34,18 @@
 
 /**
  * @test
- * @bug 7029048 8217340 8217216
+ * @bug 7029048 8217340
+ * @summary Ensure that the launcher defends against user settings of the
+ *          LD_LIBRARY_PATH environment variable on Unixes
+ * @requires os.family != "windows" & os.family != "mac" & !vm.musl & os.family != "aix"
+ * @library /test/lib
+ * @compile -XDignore.symbol.file ExecutionEnvironment.java Test7029048.java
+ * @run main/othervm -DexpandedLdLibraryPath=false Test7029048
+ */
+
+/**
+ * @test
+ * @bug 7029048 8217340
  * @summary Ensure that the launcher defends against user settings of the
  *          LD_LIBRARY_PATH environment variable on Unixes
  * @requires os.family == "aix" | vm.musl
@@ -52,9 +63,6 @@ import java.util.List;
 import java.util.Map;
 
 public class Test7029048 extends TestHelper {
-
-    static int passes = 0;
-    static int errors = 0;
 
     private static final String LIBJVM = ExecutionEnvironment.LIBJVM;
     private static final String LD_LIBRARY_PATH =
@@ -75,9 +83,7 @@ public class Test7029048 extends TestHelper {
     private static final File dstClientLibjvm = new File(dstClientDir, LIBJVM);
 
     static final boolean IS_EXPANDED_LD_LIBRARY_PATH =
-        Boolean.getBoolean("expandedLdLibraryPath");
-
-    private static final Map<String, String> env = new HashMap<>();
+            Boolean.getBoolean("expandedLdLibraryPath");
 
     static String getValue(String name, List<String> in) {
         for (String x : in) {
@@ -89,8 +95,10 @@ public class Test7029048 extends TestHelper {
         return null;
     }
 
-    static void run(Map<String, String> env,
-            int nLLPComponents, String caseID) {
+    static boolean run(int nLLPComponents, File variantDir, String caseID) {
+
+        Map<String, String> env = new HashMap<>();
+        env.put(LD_LIBRARY_PATH, variantDir.getAbsolutePath());
         env.put(ExecutionEnvironment.JLDEBUG_KEY, "true");
         List<String> cmdsList = new ArrayList<>();
         cmdsList.add(javaCmd);
@@ -100,10 +108,18 @@ public class Test7029048 extends TestHelper {
         String[] cmds = new String[cmdsList.size()];
         TestResult tr = doExec(env, cmdsList.toArray(cmds));
         System.out.println(tr);
-        analyze(tr, nLLPComponents, caseID);
+        int len = getLLPComponents(tr);
+        if (len == nLLPComponents) {
+            System.out.printf("Test7029048 OK %s%n", caseID);
+            return true;
+        } else {
+            System.out.printf("Test7029048 FAIL %s: expected %d but got %d%n",
+                    caseID, nLLPComponents, len);
+            return false;
+        }
     }
 
-    static void analyze(TestResult tr, int nLLPComponents, String caseID) {
+    static int getLLPComponents(TestResult tr) {
         String envValue = getValue(LD_LIBRARY_PATH, tr.testOutput);
        /*
         * the envValue can never be null, since the test code should always
@@ -112,18 +128,12 @@ public class Test7029048 extends TestHelper {
         if (envValue == null) {
             throw new RuntimeException("NPE, likely a program crash ??");
         }
-        int len = (envValue.equals("null")
-                   ? 0 : envValue.split(File.pathSeparator).length);
-        if (len == nLLPComponents) {
-            System.out.println(caseID + ": OK");
-            passes++;
-        } else {
-            System.out.println("FAIL: test7029048, " + caseID);
-            System.out.println(" expected " + nLLPComponents
-                               + " but got " + len);
-            System.out.println(envValue);
-            errors++;
+
+        if (envValue.equals("null")) {
+            return 0;
         }
+
+        return envValue.split(File.pathSeparator).length;
     }
 
     /*
@@ -145,8 +155,9 @@ public class Test7029048 extends TestHelper {
     /*
      * test for 7029048
      */
-    static void test7029048() throws IOException {
+    static boolean runTest() throws IOException {
         String desc = null;
+        boolean pass = true;
         for (TestCase v : TestCase.values()) {
             switch (v) {
                 case LIBJVM:
@@ -173,12 +184,6 @@ public class Test7029048 extends TestHelper {
 
                     if (IS_EXPANDED_LD_LIBRARY_PATH) {
                         printSkipMessage(desc);
-                    }
-                    if (TestHelper.isAIX) {
-                        System.out.println("Skipping test case \"" + desc +
-                                           "\" because the Aix launcher adds the paths in any case.");
-                    }
-                    if (IS_EXPANDED_LD_LIBRARY_PATH || TestHelper.isAIX) {
                         continue;
                     }
                     break;
@@ -191,12 +196,6 @@ public class Test7029048 extends TestHelper {
 
                     if (IS_EXPANDED_LD_LIBRARY_PATH) {
                         printSkipMessage(desc);
-                    }
-                    if (TestHelper.isAIX) {
-                        System.out.println("Skipping test case \"" + desc +
-                                           "\" because the Aix launcher adds the paths in any case.");
-                    }
-                    if (IS_EXPANDED_LD_LIBRARY_PATH || TestHelper.isAIX) {
                         continue;
                     }
                     break;
@@ -204,38 +203,27 @@ public class Test7029048 extends TestHelper {
                     throw new RuntimeException("unknown case");
             }
 
+            // Add one to account for our setting
+            int nLLPComponents = v.value + 1;
+
             /*
              * Case 1: set the server path
              */
-            env.clear();
-            env.put(LD_LIBRARY_PATH, dstServerDir.getAbsolutePath());
-            run(env,
-                v.value + 1,            // Add one to account for our setting
-                "Case 1: " + desc);
+            boolean pass1 = run(nLLPComponents, dstServerDir, "Case 1: " + desc);
 
             /*
              * Case 2: repeat with client path
              */
-            env.clear();
-            env.put(LD_LIBRARY_PATH, dstClientDir.getAbsolutePath());
-            run(env,
-                v.value + 1,            // Add one to account for our setting
-                "Case 2: " + desc);
+            boolean pass2 = run(nLLPComponents, dstClientDir, "Case 2: " + desc);
 
-            if (isSolaris) {
-                /*
-                 * Case 3: set the appropriate LLP_XX flag,
-                 * java64 LLP_64 is relevant, LLP_32 is ignored
-                 */
-                env.clear();
-                env.put(LD_LIBRARY_PATH_64, dstServerDir.getAbsolutePath());
-                run(env,
-                    v.value,            // Do not add one, since we didn't set
-                                        // LD_LIBRARY_PATH here
-                    "Case 3: " + desc);
-            }
+            pass &= pass1 && pass2;
         }
-        return;
+        return pass;
+    }
+
+    private static void printSkipMessage(String description) {
+        System.out.printf("Skipping test case '%s' because the Aix and musl launchers" +
+                          " add the paths in any case.%n", description);
     }
 
     private static void printSkipMessage(String description) {
@@ -251,20 +239,8 @@ public class Test7029048 extends TestHelper {
         // create our test jar first
         ExecutionEnvironment.createTestJar();
 
-        // run the tests
-        test7029048();
-        if (errors > 0) {
-            throw new Exception("Test7029048: FAIL: with "
-                    + errors + " errors and passes " + passes);
-        } else if (isSolaris && passes < 9) {
-            throw new Exception("Test7029048: FAIL: " +
-                    "all tests did not run, expected " + 9 + " got " + passes);
-        } else if (isLinux && passes < 6) {
-             throw new Exception("Test7029048: FAIL: " +
-                    "all tests did not run, expected " + 6 + " got " + passes);
-        } else {
-            System.out.println("Test7029048: PASS " + passes);
+        if (!runTest()) {
+            throw new Exception("Test7029048 fails");
         }
     }
-
 }

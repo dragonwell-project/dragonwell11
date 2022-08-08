@@ -680,8 +680,8 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
 #ifndef PRODUCT
                   _trace_opto_output(directive->TraceOptoOutputOption),
                   _in_dump_cnt(0),
-                  _printer(IdealGraphPrinter::printer()),
 #endif
+                  NOT_PRODUCT(_printer(NULL) COMMA)
                   _congraph(NULL),
                   _comp_arena(mtCompiler),
                   _node_arena(mtCompiler),
@@ -703,11 +703,6 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _max_node_limit(MaxNodeLimit),
                   _has_reserved_stack_access(target->has_reserved_stack_access()) {
   C = this;
-#ifndef PRODUCT
-  if (_printer != NULL) {
-    _printer->set_compile(this);
-  }
-#endif
   CompileWrapper cw(this);
 
   if (CITimeVerbose) {
@@ -866,7 +861,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
   // Drain the list.
   Finish_Warm();
 #ifndef PRODUCT
-  if (_printer && _printer->should_print(1)) {
+  if (should_print(1)) {
     _printer->print_inlining();
   }
 #endif
@@ -999,8 +994,8 @@ Compile::Compile( ciEnv* ci_env,
 #ifndef PRODUCT
     _trace_opto_output(directive->TraceOptoOutputOption),
     _in_dump_cnt(0),
-    _printer(NULL),
 #endif
+    NOT_PRODUCT(_printer(NULL) COMMA)
     _comp_arena(mtCompiler),
     _barrier_set_state(BarrierSet::barrier_set()->barrier_set_c2()->create_barrier_state(comp_arena())),
     _node_arena(mtCompiler),
@@ -3704,7 +3699,7 @@ bool Compile::final_graph_reshaping() {
       // 'fall-thru' path, so expected kids is 1 less.
       if (n->is_PCTable() && n->in(0) && n->in(0)->in(0)) {
         if (n->in(0)->in(0)->is_Call()) {
-          CallNode *call = n->in(0)->in(0)->as_Call();
+          CallNode* call = n->in(0)->in(0)->as_Call();
           if (call->entry_point() == OptoRuntime::rethrow_stub()) {
             required_outcnt--;      // Rethrow always has 1 less kid
           } else if (call->req() > TypeFunc::Parms &&
@@ -3713,22 +3708,25 @@ bool Compile::final_graph_reshaping() {
             // detected that the virtual call will always result in a null
             // pointer exception. The fall-through projection of this CatchNode
             // will not be populated.
-            Node *arg0 = call->in(TypeFunc::Parms);
+            Node* arg0 = call->in(TypeFunc::Parms);
             if (arg0->is_Type() &&
                 arg0->as_Type()->type()->higher_equal(TypePtr::NULL_PTR)) {
               required_outcnt--;
             }
-          } else if (call->entry_point() == OptoRuntime::new_array_Java() &&
-                     call->req() > TypeFunc::Parms+1 &&
-                     call->is_CallStaticJava()) {
-            // Check for negative array length. In such case, the optimizer has
+          } else if (call->entry_point() == OptoRuntime::new_array_Java() ||
+                     call->entry_point() == OptoRuntime::new_array_nozero_Java()) {
+            // Check for illegal array length. In such case, the optimizer has
             // detected that the allocation attempt will always result in an
             // exception. There is no fall-through projection of this CatchNode .
-            Node *arg1 = call->in(TypeFunc::Parms+1);
-            if (arg1->is_Type() &&
-                arg1->as_Type()->type()->join(TypeInt::POS)->empty()) {
+            assert(call->is_CallStaticJava(), "static call expected");
+            assert(call->req() == call->jvms()->endoff() + 1, "missing extra input");
+            Node* valid_length_test = call->in(call->req()-1);
+            call->del_req(call->req()-1);
+            if (valid_length_test->find_int_con(1) == 0) {
               required_outcnt--;
             }
+            assert(n->outcnt() == required_outcnt, "malformed control flow");
+            continue;
           }
         }
       }
@@ -3736,6 +3734,14 @@ bool Compile::final_graph_reshaping() {
       if (n->outcnt() != required_outcnt) {
         record_method_not_compilable("malformed control flow");
         return true;            // Not all targets reachable!
+      }
+    } else if (n->is_PCTable() && n->in(0) && n->in(0)->in(0) && n->in(0)->in(0)->is_Call()) {
+      CallNode* call = n->in(0)->in(0)->as_Call();
+      if (call->entry_point() == OptoRuntime::new_array_Java() ||
+          call->entry_point() == OptoRuntime::new_array_nozero_Java()) {
+        assert(call->is_CallStaticJava(), "static call expected");
+        assert(call->req() == call->jvms()->endoff() + 1, "missing extra input");
+        call->del_req(call->req()-1); // valid length test useless now
       }
     }
     // Check that I actually visited all kids.  Unreached kids
