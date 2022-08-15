@@ -32,6 +32,46 @@
 
 #include OS_HEADER_INLINE(os)
 
+address VM_Version::_checkvext_fault_pc = NULL;
+address VM_Version::_checkvext_continuation_pc = NULL;
+
+static BufferBlob* stub_blob;
+static const int stub_size = 550;
+
+extern "C" {
+typedef int (*getPsrInfo_stub_t)();
+}
+static getPsrInfo_stub_t getPsrInfo_stub = NULL;
+
+
+class VM_Version_StubGenerator: public StubCodeGenerator {
+public:
+
+  VM_Version_StubGenerator(CodeBuffer *c) : StubCodeGenerator(c) {}
+  ~VM_Version_StubGenerator() {}
+
+  address generate_getPsrInfo(address* fault_pc, address* continuation_pc) {
+    StubCodeMark mark(this, "VM_Version", "getPsrInfo_stub");
+#   define __ _masm->
+    address start = __ pc();
+
+    __ enter();
+
+    __ mv(x10, zr);
+    // read vl from CSR_VL, may sigill
+    *fault_pc = __ pc();
+    __ csrr(x10, CSR_VL);
+
+    *continuation_pc = __ pc();
+    __ leave();
+    __ ret();
+
+#   undef __
+
+    return start;
+    }
+};
+
 const char* VM_Version::_uarch = "";
 uint32_t VM_Version::_initial_vector_length = 0;
 
@@ -94,8 +134,26 @@ void VM_Version::initialize() {
 
   if (UseRVV) {
     if (!(_features & CPU_V)) {
-      warning("RVV is not supported on this CPU");
-      FLAG_SET_DEFAULT(UseRVV, false);
+      // test if it has RVV 0.7.1 here:
+      FLAG_SET_DEFAULT(UseRVV071, true);
+      // try to read vector register VLENB, if success, rvv is supported
+      // otherwise, csrr will trigger sigill
+      ResourceMark rm;
+
+      stub_blob = BufferBlob::create("getPsrInfo_stub", stub_size);
+      if (stub_blob == NULL) {
+        vm_exit_during_initialization("Unable to allocate getPsrInfo_stub");
+      }
+
+      CodeBuffer c(stub_blob);
+      VM_Version_StubGenerator g(&c);
+      getPsrInfo_stub = CAST_TO_FN_PTR(getPsrInfo_stub_t,
+                                       g.generate_getPsrInfo(&VM_Version::_checkvext_fault_pc, &VM_Version::_checkvext_continuation_pc));
+      getPsrInfo_stub();
+
+      if (UseRVV071) {
+        warning("RVV 0.7.1 is enabled");
+      }
     } else {
       // read vector length from vector CSR vlenb
       _initial_vector_length = get_current_vector_length();
@@ -176,6 +234,11 @@ void VM_Version::c2_initialize() {
     } else {
       vm_exit_during_initialization(err_msg("Unsupported MaxVectorSize: %d", (int)MaxVectorSize));
     }
+  }
+
+  if (UseRVV) {
+    warning("Support RVV 16-byte vector only: MaxVectorSize = 16");
+    MaxVectorSize = 16;
   }
 
   // disable prefetch

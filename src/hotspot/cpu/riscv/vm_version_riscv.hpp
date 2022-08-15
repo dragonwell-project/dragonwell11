@@ -65,6 +65,24 @@ public:
   };
 
   static void initialize_cpu_information(void);
+
+  static bool is_checkvext_fault(address pc) {
+    return pc != NULL && pc == _checkvext_fault_pc;
+  }
+
+  static address continuation_for_checkvext_fault(address pc) {
+    assert(_checkvext_continuation_pc != NULL, "not initialized");
+    return _checkvext_continuation_pc;
+  }
+
+  static address _checkvext_fault_pc;
+  static address _checkvext_continuation_pc;
+
+
+#ifdef COMPILER2
+private:
+  static void get_c2_processor_features();
+#endif // COMPILER2
 };
 
 #endif // CPU_RISCV_VM_VERSION_RISCV_HPP

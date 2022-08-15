@@ -104,6 +104,7 @@ define_pd_global(intx, InlineSmallCode,          1000);
   product(bool, AvoidUnalignedAccesses, true,                                    \
           "Avoid generating unaligned memory accesses")                          \
   experimental(bool, UseRVV, false, "Use RVV instructions")                      \
+  experimental(bool, UseRVV071, false, "Use RVV 0.7.1 instructions")             \
   experimental(bool, UseRVB, false, "Use RVB instructions")                      \
   experimental(bool, UseRVC, false, "Use RVC instructions")                      \
   product(bool, UseCSky, false, "Use CSky specific instructions")                \
