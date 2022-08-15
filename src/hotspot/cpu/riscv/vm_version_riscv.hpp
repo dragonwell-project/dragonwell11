@@ -38,7 +38,39 @@ public:
   static void initialize();
 
 protected:
+  static const char* _uarch;
+  static uint32_t _initial_vector_length;
   static void get_processor_features();
+  static uint32_t get_current_vector_length();
+  static void get_os_cpu_info();
+
+  enum Feature_Flag {
+#define CPU_FEATURE_FLAGS(decl)             \
+  decl(I,            "i",            8)     \
+  decl(M,            "m",           12)     \
+  decl(A,            "a",            0)     \
+  decl(F,            "f",            5)     \
+  decl(D,            "d",            3)     \
+  decl(C,            "c",            2)     \
+  decl(V,            "v",           21)
+
+#define DECLARE_CPU_FEATURE_FLAG(id, name, bit) CPU_##id = (1 << bit),
+      CPU_FEATURE_FLAGS(DECLARE_CPU_FEATURE_FLAG)
+#undef DECLARE_CPU_FEATURE_FLAG
+  };
+
+public:
+  static bool is_checkvext_fault(address pc) {
+    return pc != NULL && pc == _checkvext_fault_pc;
+  }
+
+  static address continuation_for_checkvext_fault(address pc) {
+    assert(_checkvext_continuation_pc != NULL, "not initialized");
+    return _checkvext_continuation_pc;
+  }
+
+  static address _checkvext_fault_pc;
+  static address _checkvext_continuation_pc;
 
 #ifdef COMPILER2
 private:

@@ -748,7 +748,6 @@ void LIR_Assembler::stack2reg(LIR_Opr src, LIR_Opr dest, BasicType type) {
 }
 
 void LIR_Assembler::klass2reg_with_patching(Register reg, CodeEmitInfo* info) {
-  // TODO: wind: ??? why deopt???
   deoptimize_trap(info);
 }
 

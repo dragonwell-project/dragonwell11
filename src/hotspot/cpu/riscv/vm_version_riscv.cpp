@@ -39,37 +39,131 @@
 #include <sys/auxv.h>
 #include <asm/hwcap.h>
 
-#ifndef COMPAT_HWCAP_ISA_I
-#define COMPAT_HWCAP_ISA_I  (1 << ('I' - 'A'))
+#ifndef HWCAP_ISA_I
+#define HWCAP_ISA_I  (1 << ('I' - 'A'))
 #endif
 
-#ifndef COMPAT_HWCAP_ISA_M
-#define COMPAT_HWCAP_ISA_M  (1 << ('M' - 'A'))
+#ifndef HWCAP_ISA_M
+#define HWCAP_ISA_M  (1 << ('M' - 'A'))
 #endif
 
-#ifndef COMPAT_HWCAP_ISA_A
-#define COMPAT_HWCAP_ISA_A  (1 << ('A' - 'A'))
+#ifndef HWCAP_ISA_A
+#define HWCAP_ISA_A  (1 << ('A' - 'A'))
 #endif
 
-#ifndef COMPAT_HWCAP_ISA_F
-#define COMPAT_HWCAP_ISA_F  (1 << ('F' - 'A'))
+#ifndef HWCAP_ISA_F
+#define HWCAP_ISA_F  (1 << ('F' - 'A'))
 #endif
 
-#ifndef COMPAT_HWCAP_ISA_D
-#define COMPAT_HWCAP_ISA_D  (1 << ('D' - 'A'))
+#ifndef HWCAP_ISA_D
+#define HWCAP_ISA_D  (1 << ('D' - 'A'))
 #endif
 
-#ifndef COMPAT_HWCAP_ISA_C
-#define COMPAT_HWCAP_ISA_C  (1 << ('C' - 'A'))
+#ifndef HWCAP_ISA_C
+#define HWCAP_ISA_C  (1 << ('C' - 'A'))
 #endif
 
-#ifndef COMPAT_HWCAP_ISA_V
-#define COMPAT_HWCAP_ISA_V  (1 << ('V' - 'A'))
+#ifndef HWCAP_ISA_V
+#define HWCAP_ISA_V  (1 << ('V' - 'A'))
 #endif
 
-#ifndef COMPAT_HWCAP_ISA_B
-#define COMPAT_HWCAP_ISA_B  (1 << ('B' - 'A'))
-#endif
+#define read_csr(csr)                                           \
+({                                                              \
+        register unsigned long __v;                             \
+        __asm__ __volatile__ ("csrr %0, %1"                     \
+                              : "=r" (__v)                      \
+                              : "i" (csr)                       \
+                              : "memory");                      \
+        __v;                                                    \
+})
+
+address VM_Version::_checkvext_fault_pc = NULL;
+address VM_Version::_checkvext_continuation_pc = NULL;
+
+static BufferBlob* stub_blob;
+static const int stub_size = 550;
+
+extern "C" {
+typedef int (*getPsrInfo_stub_t)();
+}
+static getPsrInfo_stub_t getPsrInfo_stub = NULL;
+
+
+class VM_Version_StubGenerator: public StubCodeGenerator {
+public:
+
+  VM_Version_StubGenerator(CodeBuffer *c) : StubCodeGenerator(c) {}
+  ~VM_Version_StubGenerator() {}
+
+  address generate_getPsrInfo(address* fault_pc, address* continuation_pc) {
+    StubCodeMark mark(this, "VM_Version", "getPsrInfo_stub");
+#   define __ _masm->
+    address start = __ pc();
+
+    __ enter();
+
+    __ mv(x10, zr);
+    // read vl from CSR_VL, may sigill
+    *fault_pc = __ pc();
+    __ csrr(x10, CSR_VL);
+
+    *continuation_pc = __ pc();
+    __ leave();
+    __ ret();
+
+#   undef __
+
+    return start;
+    }
+};
+
+const char* VM_Version::_uarch = "";
+uint32_t VM_Version::_initial_vector_length = 0;
+
+uint32_t VM_Version::get_current_vector_length() {
+  assert(_features & CPU_V, "should not call this");
+  return (uint32_t)read_csr(CSR_VLENB);
+}
+
+void VM_Version::get_os_cpu_info() {
+
+  uint64_t auxv = getauxval(AT_HWCAP);
+
+  assert(CPU_I == HWCAP_ISA_I, "Flag CPU_I must follow Linux HWCAP");
+  assert(CPU_M == HWCAP_ISA_M, "Flag CPU_M must follow Linux HWCAP");
+  assert(CPU_A == HWCAP_ISA_A, "Flag CPU_A must follow Linux HWCAP");
+  assert(CPU_F == HWCAP_ISA_F, "Flag CPU_F must follow Linux HWCAP");
+  assert(CPU_D == HWCAP_ISA_D, "Flag CPU_D must follow Linux HWCAP");
+  assert(CPU_C == HWCAP_ISA_C, "Flag CPU_C must follow Linux HWCAP");
+  assert(CPU_V == HWCAP_ISA_V, "Flag CPU_V must follow Linux HWCAP");
+
+  // RISC-V has four bit-manipulation ISA-extensions: Zba/Zbb/Zbc/Zbs.
+  // Availability for those extensions could not be queried from HWCAP.
+  // TODO: Add proper detection for those extensions.
+  _features = auxv & (
+          HWCAP_ISA_I |
+          HWCAP_ISA_M |
+          HWCAP_ISA_A |
+          HWCAP_ISA_F |
+          HWCAP_ISA_D |
+          HWCAP_ISA_C |
+          HWCAP_ISA_V);
+
+  if (FILE *f = fopen("/proc/cpuinfo", "r")) {
+    char buf[512], *p;
+    while (fgets(buf, sizeof (buf), f) != NULL) {
+      if ((p = strchr(buf, ':')) != NULL) {
+        if (strncmp(buf, "uarch", sizeof "uarch" - 1) == 0) {
+          char* uarch = os::strdup(p + 2);
+          uarch[strcspn(uarch, "\n")] = '\0';
+          _uarch = uarch;
+          break;
+        }
+      }
+    }
+    fclose(f);
+  }
+}
 
 void VM_Version::get_processor_features() {
   if (FLAG_IS_DEFAULT(UseFMA)) {
@@ -130,6 +224,34 @@ void VM_Version::get_processor_features() {
     FLAG_SET_DEFAULT(UseCRC32CIntrinsics, false);
   }
 
+  if (UseRVV) {
+    if (!(_features & CPU_V)) {
+      // test if it has RVV 0.7.1 here:
+      FLAG_SET_DEFAULT(UseRVV071, true);
+      // try to read vector register VLENB, if success, rvv is supported
+      // otherwise, csrr will trigger sigill
+      ResourceMark rm;
+
+      stub_blob = BufferBlob::create("getPsrInfo_stub", stub_size);
+      if (stub_blob == NULL) {
+        vm_exit_during_initialization("Unable to allocate getPsrInfo_stub");
+      }
+
+      CodeBuffer c(stub_blob);
+      VM_Version_StubGenerator g(&c);
+      getPsrInfo_stub = CAST_TO_FN_PTR(getPsrInfo_stub_t,
+                                       g.generate_getPsrInfo(&VM_Version::_checkvext_fault_pc, &VM_Version::_checkvext_continuation_pc));
+      getPsrInfo_stub();
+
+      if (UseRVV071) {
+        warning("RVV 0.7.1 is enabled");
+      }
+    } else {
+      // read vector length from vector CSR vlenb
+      _initial_vector_length = get_current_vector_length();
+    }
+  }
+
   if (FLAG_IS_DEFAULT(AvoidUnalignedAccesses)) {
     FLAG_SET_DEFAULT(AvoidUnalignedAccesses, true);
   }
@@ -159,6 +281,11 @@ void VM_Version::get_c2_processor_features() {
   if (MaxVectorSize > 0) {
     warning("Vector instructions are not available on this CPU");
     FLAG_SET_DEFAULT(MaxVectorSize, 0);
+  }
+
+  if (UseRVV) {
+    warning("Support RVV 16-byte vector only: MaxVectorSize = 16");
+    MaxVectorSize = 16;
   }
 
   // disable prefetch
