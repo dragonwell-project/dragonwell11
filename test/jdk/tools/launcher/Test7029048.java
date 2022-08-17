@@ -23,17 +23,6 @@
 
 /**
  * @test
- * @bug 7029048 8217340 8217216
- * @summary Ensure that the launcher defends against user settings of the
- *          LD_LIBRARY_PATH environment variable on Unixes
- * @requires os.family != "windows" & os.family != "mac" & !vm.musl & os.family != "aix"
- * @library /test/lib
- * @compile -XDignore.symbol.file ExecutionEnvironment.java Test7029048.java
- * @run main/othervm -DexpandedLdLibraryPath=false Test7029048
- */
-
-/**
- * @test
  * @bug 7029048 8217340
  * @summary Ensure that the launcher defends against user settings of the
  *          LD_LIBRARY_PATH environment variable on Unixes
@@ -41,17 +30,6 @@
  * @library /test/lib
  * @compile -XDignore.symbol.file ExecutionEnvironment.java Test7029048.java
  * @run main/othervm -DexpandedLdLibraryPath=false Test7029048
- */
-
-/**
- * @test
- * @bug 7029048 8217340
- * @summary Ensure that the launcher defends against user settings of the
- *          LD_LIBRARY_PATH environment variable on Unixes
- * @requires os.family == "aix" | vm.musl
- * @library /test/lib
- * @compile -XDignore.symbol.file ExecutionEnvironment.java Test7029048.java
- * @run main/othervm -DexpandedLdLibraryPath=true Test7029048
  */
 
 import java.io.File;
@@ -181,7 +159,6 @@ public class Test7029048 extends TestHelper {
                     }
 
                     desc = "LD_LIBRARY_PATH should not be set (no libjvm.so)";
-
                     if (IS_EXPANDED_LD_LIBRARY_PATH) {
                         printSkipMessage(desc);
                         continue;
@@ -191,9 +168,7 @@ public class Test7029048 extends TestHelper {
                     if (dstLibDir.exists()) {
                         recursiveDelete(dstLibDir);
                     }
-
                     desc = "LD_LIBRARY_PATH should not be set (no directory)";
-
                     if (IS_EXPANDED_LD_LIBRARY_PATH) {
                         printSkipMessage(desc);
                         continue;
@@ -219,11 +194,6 @@ public class Test7029048 extends TestHelper {
             pass &= pass1 && pass2;
         }
         return pass;
-    }
-
-    private static void printSkipMessage(String description) {
-        System.out.printf("Skipping test case '%s' because the Aix and musl launchers" +
-                          " add the paths in any case.%n", description);
     }
 
     private static void printSkipMessage(String description) {
