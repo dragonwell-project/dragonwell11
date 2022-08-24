@@ -3005,6 +3005,9 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
     Coroutine* current = _coroutine_list;
     do {
       current->oops_do(f, cf);
+      if (UseWispMonitor) {
+        current->wisp_thread()->oops_do(f, cf);
+      }
       current = current->next();
     } while (current != _coroutine_list);
   }
