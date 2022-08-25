@@ -95,6 +95,7 @@ gc/metaspace/CompressedClassSpaceSizeInJmapHeap.java 8193639 solaris-all
 gc/stress/gcbasher/TestGCBasherWithCMS.java 8272195 generic-i586
 gc/cms/TestBubbleUpRef.java  8272195 generic-i586
 gc/stress/gcold/TestGCOldWithCMS.java 8272195 generic-i586
+compiler/gcbarriers/UnsafeIntrinsicsTest.java#z https://github.com/alibaba/dragonwell11/issues/267 generic-all
 
 #############################################################################
 
