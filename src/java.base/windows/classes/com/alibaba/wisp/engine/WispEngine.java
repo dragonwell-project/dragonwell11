@@ -177,6 +177,11 @@ public class WispEngine {
             public Thread.State getState(Thread thread) {
                 return null;
             }
+
+            @Override
+            public int poll(SelectableChannel channel, int interestOps, long timeout) throws IOException {
+                throw new UnsupportedOperationException();
+            }
         });
     }
 
