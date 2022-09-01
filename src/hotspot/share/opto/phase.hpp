@@ -82,6 +82,7 @@ public:
       _t_macroExpand,
       _t_graphReshaping,
     _t_matcher,
+      _t_postselect_cleanup,
     _t_scheduler,
     _t_registerAllocation,
       _t_ctorChaitin,

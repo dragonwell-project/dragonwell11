@@ -484,18 +484,7 @@ public:
   // [oop_reg + offset]
   // NullCheck oop_reg
   //
-  inline static bool gen_narrow_oop_implicit_null_checks() {
-    // Advice matcher to perform null checks on the narrow oop side.
-    // Implicit checks are not possible on the uncompressed oop side anyway
-    // (at least not for read accesses).
-    // Performs significantly better (especially on Power 6).
-    if (!os::zero_page_read_protected()) {
-      return true;
-    }
-    return Universe::narrow_oop_use_implicit_null_checks() &&
-           (narrow_oop_use_complex_address() ||
-            Universe::narrow_oop_base() != NULL);
-  }
+  static bool gen_narrow_oop_implicit_null_checks();
 
   // Is it better to copy float constants, or load them directly from memory?
   // Intel can load a float constant from a direct address, requiring no
@@ -514,6 +503,30 @@ public:
   // postalloc expand)?
   static const bool require_postalloc_expand;
 
+  // Does the platform support generic vector operands?
+  // Requires cleanup after selection phase.
+  static const bool supports_generic_vector_operands;
+
+ private:
+  void do_postselect_cleanup();
+
+  void specialize_generic_vector_operands();
+  void specialize_mach_node(MachNode* m);
+  void specialize_temp_node(MachTempNode* tmp, MachNode* use, uint idx);
+  MachOper* specialize_vector_operand(MachNode* m, uint idx);
+  MachOper* specialize_vector_operand_helper(MachNode* m, MachOper* generic_opnd);
+
+  static MachOper* specialize_generic_vector_operand(MachOper* generic_opnd, uint ideal_reg);
+
+  static bool is_generic_reg2reg_move(MachNode* m);
+  static bool is_generic_vector(MachOper* opnd);
+
+  const RegMask* regmask_for_ideal_register(uint ideal_reg, Node* ret);
+
+  // Graph verification code
+  DEBUG_ONLY( bool verify_after_postselect_cleanup(); )
+
+ public:
   // Perform a platform dependent implicit null fixup.  This is needed
   // on windows95 to take care of some unusual register constraints.
   void pd_implicit_null_fixup(MachNode *load, uint idx);
