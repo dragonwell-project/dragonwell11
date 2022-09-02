@@ -115,16 +115,28 @@ class StubGenerator: public StubCodeGenerator {
   // we don't need to save x6-x7 and x28-x31 which both C and Java treat as
   // volatile
   //
-  // we save x18-x27 which Java uses as temporary registers and C
-  // expects to be callee-save
+  // we save x9, x18-x27, f8-f9, and f18-f27 which Java uses as temporary
+  // registers and C expects to be callee-save
   //
   // so the stub frame looks like this when we enter Java code
   //
   //     [ return_from_Java     ] <--- sp
   //     [ argument word n      ]
   //      ...
-  // -20 [ argument word 1      ]
-  // -19 [ saved x27            ] <--- sp_after_call
+  // -32 [ argument word 1      ]
+  // -31 [ saved f27            ] <--- sp_after_call
+  // -30 [ saved f26            ]
+  // -29 [ saved f25            ]
+  // -28 [ saved f24            ]
+  // -27 [ saved f23            ]
+  // -26 [ saved f22            ]
+  // -25 [ saved f21            ]
+  // -24 [ saved f20            ]
+  // -23 [ saved f19            ]
+  // -22 [ saved f18            ]
+  // -21 [ saved f9             ]
+  // -20 [ saved f8             ]
+  // -19 [ saved x27            ]
   // -18 [ saved x26            ]
   // -17 [ saved x25            ]
   // -16 [ saved x24            ]
@@ -148,7 +160,20 @@ class StubGenerator: public StubCodeGenerator {
 
   // Call stub stack layout word offsets from fp
   enum call_stub_layout {
-    sp_after_call_off  = -19,
+    sp_after_call_off  = -31,
+
+    f27_off            = -31,
+    f26_off            = -30,
+    f25_off            = -29,
+    f24_off            = -28,
+    f23_off            = -27,
+    f22_off            = -26,
+    f21_off            = -25,
+    f20_off            = -24,
+    f19_off            = -23,
+    f18_off            = -22,
+    f9_off             = -21,
+    f8_off             = -20,
 
     x27_off            = -19,
     x26_off            = -18,
@@ -193,6 +218,19 @@ class StubGenerator: public StubCodeGenerator {
     const Address parameter_size(fp, parameter_size_off * wordSize);
 
     const Address thread        (fp, thread_off         * wordSize);
+
+    const Address f27_save      (fp, f27_off            * wordSize);
+    const Address f26_save      (fp, f26_off            * wordSize);
+    const Address f25_save      (fp, f25_off            * wordSize);
+    const Address f24_save      (fp, f24_off            * wordSize);
+    const Address f23_save      (fp, f23_off            * wordSize);
+    const Address f22_save      (fp, f22_off            * wordSize);
+    const Address f21_save      (fp, f21_off            * wordSize);
+    const Address f20_save      (fp, f20_off            * wordSize);
+    const Address f19_save      (fp, f19_off            * wordSize);
+    const Address f18_save      (fp, f18_off            * wordSize);
+    const Address f9_save       (fp, f9_off             * wordSize);
+    const Address f8_save       (fp, f8_off             * wordSize);
 
     const Address x27_save      (fp, x27_off            * wordSize);
     const Address x26_save      (fp, x26_off            * wordSize);
@@ -239,6 +277,19 @@ class StubGenerator: public StubCodeGenerator {
     __ sd(x25, x25_save);
     __ sd(x26, x26_save);
     __ sd(x27, x27_save);
+
+    __ fsd(f8,  f8_save);
+    __ fsd(f9,  f9_save);
+    __ fsd(f18, f18_save);
+    __ fsd(f19, f19_save);
+    __ fsd(f20, f20_save);
+    __ fsd(f21, f21_save);
+    __ fsd(f22, f22_save);
+    __ fsd(f23, f23_save);
+    __ fsd(f24, f24_save);
+    __ fsd(f25, f25_save);
+    __ fsd(f26, f26_save);
+    __ fsd(f27, f27_save);
 
     // install Java thread in global register now we have saved
     // whatever value it held
@@ -331,6 +382,19 @@ class StubGenerator: public StubCodeGenerator {
 #endif
 
     // restore callee-save registers
+    __ fld(f27, f27_save);
+    __ fld(f26, f26_save);
+    __ fld(f25, f25_save);
+    __ fld(f24, f24_save);
+    __ fld(f23, f23_save);
+    __ fld(f22, f22_save);
+    __ fld(f21, f21_save);
+    __ fld(f20, f20_save);
+    __ fld(f19, f19_save);
+    __ fld(f18, f18_save);
+    __ fld(f9,  f9_save);
+    __ fld(f8,  f8_save);
+
     __ ld(x27, x27_save);
     __ ld(x26, x26_save);
     __ ld(x25, x25_save);
