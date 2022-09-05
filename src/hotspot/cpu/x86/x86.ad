@@ -1812,16 +1812,6 @@ bool Matcher::clone_address_expressions(AddPNode* m, Matcher::MStack& mstack, Ve
 void Compile::reshape_address(AddPNode* addp) {
 }
 
-static inline uint vector_length(const MachNode* n) {
-  const TypeVect* vt = n->bottom_type()->is_vect();
-  return vt->length();
-}
-
-static inline uint vector_length_in_bytes(const MachNode* n) {
-  const TypeVect* vt = n->bottom_type()->is_vect();
-  return vt->length_in_bytes();
-}
-
 static inline uint vector_length_in_bytes(const MachNode* use, MachOper* opnd) {
   uint def_idx = use->operand_index(opnd);
   Node* def = use->in(def_idx);
