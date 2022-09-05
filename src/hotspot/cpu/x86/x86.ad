@@ -1822,6 +1822,12 @@ static inline uint vector_length_in_bytes(const MachNode* n) {
   return vt->length_in_bytes();
 }
 
+static inline uint vector_length_in_bytes(const MachNode* use, MachOper* opnd) {
+  uint def_idx = use->operand_index(opnd);
+  Node* def = use->in(def_idx);
+  return def->bottom_type()->is_vect()->length_in_bytes();
+}
+
 static inline Assembler::AvxVectorLen vector_length_encoding(const MachNode* n) {
   switch(vector_length_in_bytes(n)) {
     case  4: // fall-through
