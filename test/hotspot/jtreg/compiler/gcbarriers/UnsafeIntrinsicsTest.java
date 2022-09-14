@@ -31,6 +31,7 @@
  * @library /test/lib
  * @run main/othervm -Xmx256m
  *                   -XX:+UseZGC
+ *                   -XX:ParallelGCThreads=5
  *                   -XX:+UnlockDiagnosticVMOptions
  *                   -XX:+ZVerifyViews -XX:ZCollectionInterval=1
  *                   -XX:-CreateCoredumpOnCrash
