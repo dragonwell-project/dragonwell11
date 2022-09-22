@@ -144,7 +144,7 @@ public class WispEngine {
             }
 
             @Override
-            public boolean tryStartThreadAsWisp(Thread thread, Runnable target) {
+            public boolean tryStartThreadAsWisp(Thread thread, Runnable target, long stackSize) {
                 return false;
             }
 

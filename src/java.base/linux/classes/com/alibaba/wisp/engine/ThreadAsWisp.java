@@ -51,7 +51,7 @@ class ThreadAsWisp {
      * @param target thread's target field
      * @return if condition is satisfied and thread is started as wisp
      */
-    static boolean tryStart(Thread thread, Runnable target) {
+    static boolean tryStart(Thread thread, Runnable target, long stackSize) {
         if (WispEngine.isEngineThread(thread)) {
             return false;
         }
@@ -75,7 +75,7 @@ class ThreadAsWisp {
 
         // pthread_create always return before new thread started, so we should not wait here
         WispEngine.JLA.setWispAlive(thread, true); // thread.isAlive() should be true
-        WispEngine.current().startAsThread(thread, thread.getName(), thread);
+        WispEngine.current().startAsThread(thread, thread.getName(), thread, stackSize);
         return true;
     }
 
