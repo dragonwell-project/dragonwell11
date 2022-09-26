@@ -55,6 +55,7 @@ class Location {
     lng,                        // Long held in one register
     float_in_dbl,               // Float held in double register
     dbl,                        // Double held in one register
+    vector,
     addr,                       // JSR return address
     narrowoop                   // Narrow Oop (please GC me!)
   };
