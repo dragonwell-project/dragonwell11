@@ -809,17 +809,6 @@ bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, RegisterMap*
     oop obj = NULL;
 
     if (k->is_instance_klass()) {
-#if INCLUDE_JVMCI || INCLUDE_AOT
-      CompiledMethod* cm = fr->cb()->as_compiled_method_or_null();
-      if (cm->is_compiled_by_jvmci() && sv->is_auto_box()) {
-        AutoBoxObjectValue* abv = (AutoBoxObjectValue*) sv;
-        obj = get_cached_box(abv, fr, reg_map, THREAD);
-        if (obj != NULL) {
-          // Set the flag to indicate the box came from a cache, so that we can skip the field reassignment for it.
-          abv->set_cached(true);
-        }
-      }
-#endif // INCLUDE_JVMCI || INCLUDE_AOT      
       InstanceKlass* ik = InstanceKlass::cast(k);
       if (obj == NULL) {
 #ifdef COMPILER2
