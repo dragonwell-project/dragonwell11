@@ -793,7 +793,7 @@ Deoptimization::DeoptAction Deoptimization::_unloaded_action
   = Deoptimization::Action_reinterpret;
 
 #if COMPILER2_OR_JVMCI
-bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, GrowableArray<ScopeValue*>* objects, TRAPS) {
+bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, RegisterMap* reg_map, GrowableArray<ScopeValue*>* objects, TRAPS) {
   Handle pending_exception(THREAD, thread->pending_exception());
   const char* exception_file = thread->exception_file();
   int exception_line = thread->exception_line();
@@ -809,8 +809,29 @@ bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, GrowableArra
     oop obj = NULL;
 
     if (k->is_instance_klass()) {
+#if INCLUDE_JVMCI || INCLUDE_AOT
+      CompiledMethod* cm = fr->cb()->as_compiled_method_or_null();
+      if (cm->is_compiled_by_jvmci() && sv->is_auto_box()) {
+        AutoBoxObjectValue* abv = (AutoBoxObjectValue*) sv;
+        obj = get_cached_box(abv, fr, reg_map, THREAD);
+        if (obj != NULL) {
+          // Set the flag to indicate the box came from a cache, so that we can skip the field reassignment for it.
+          abv->set_cached(true);
+        }
+      }
+#endif // INCLUDE_JVMCI || INCLUDE_AOT      
       InstanceKlass* ik = InstanceKlass::cast(k);
-      obj = ik->allocate_instance(THREAD);
+      if (obj == NULL) {
+#ifdef COMPILER2
+        if (EnableVectorSupport && VectorSupport::is_vector(ik)) {
+          obj = VectorSupport::allocate_vector(ik, fr, reg_map, sv, THREAD);
+        } else {
+          obj = ik->allocate_instance(THREAD);
+        }
+#else        
+        obj = ik->allocate_instance(THREAD);
+#endif // COMPILER2        
+      }
     } else if (k->is_typeArray_klass()) {
       TypeArrayKlass* ak = TypeArrayKlass::cast(k);
       assert(sv->field_size() % type2size[ak->element_type()] == 0, "non-integral array length");
@@ -1084,6 +1105,11 @@ void Deoptimization::reassign_fields(frame* fr, RegisterMap* reg_map, GrowableAr
       continue;
     }
 
+#ifdef COMPILER2
+    if (EnableVectorSupport && VectorSupport::is_vector(k)) {
+      continue; // skip field reassignment for vectors
+    }
+#endif
     if (k->is_instance_klass()) {
       InstanceKlass* ik = InstanceKlass::cast(k);
       reassign_fields_by_klass(ik, fr, reg_map, sv, 0, obj(), skip_internal);
