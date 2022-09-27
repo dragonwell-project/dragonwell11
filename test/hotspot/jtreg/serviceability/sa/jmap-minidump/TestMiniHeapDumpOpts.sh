@@ -60,8 +60,8 @@ EOF
 ${JAVAC} Loop.java
 if [ $? != 0 ]; then exit 1; fi
 
-${JAVA} -cp . Loop&
-PID=$(${JPS} | grep 'Loop' | awk '{print $1}')
+${JAVA} -cp . Loop &
+PID=$!
 if [ $? != 0 ] || [ -z "${PID}" ]; then exit 1; fi
 ${JMAP} -dump:format=b,mini,file=heap.bin ${PID}
 if [ $? != 0 ] || [ ! -f "${PWD}/heap.bin" ]; then exit 1; fi
