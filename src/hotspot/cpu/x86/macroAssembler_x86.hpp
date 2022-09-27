@@ -1633,12 +1633,6 @@ public:
   void vabsnegf(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register scr);
   void vextendbw(bool sign, XMMRegister dst, XMMRegister src, int vector_len);
   void vextendbw(bool sign, XMMRegister dst, XMMRegister src);
-  void vshiftd(int opcode, XMMRegister dst, XMMRegister src);
-  void vshiftd(int opcode, XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
-  void vshiftw(int opcode, XMMRegister dst, XMMRegister src);
-  void vshiftw(int opcode, XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
-  void vshiftq(int opcode, XMMRegister dst, XMMRegister src);
-  void vshiftq(int opcode, XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);
 
   // Reductions for vectors of ints, longs, floats, and doubles.
 
@@ -1676,8 +1670,6 @@ public:
   void reduce4D(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
   void reduce8D(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
 
-  void reduce_operation_128(int opcode, XMMRegister dst, XMMRegister src);
-  void reduce_operation_256(int opcode, XMMRegister dst, XMMRegister src1, XMMRegister src2);
 #endif
 
  public:

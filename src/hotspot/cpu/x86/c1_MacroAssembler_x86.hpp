@@ -127,4 +127,6 @@
   void restore_live_registers_except_rax(bool restore_fpu_registers);
   void restore_live_registers(bool restore_fpu_registers);
 
+  #include CPU_HEADER(c2_MacroAssembler)
+
 #endif // CPU_X86_VM_C1_MACROASSEMBLER_X86_HPP

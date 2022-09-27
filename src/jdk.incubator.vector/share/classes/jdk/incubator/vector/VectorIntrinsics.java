@@ -139,7 +139,7 @@ import java.util.Objects;
     /*package-private*/
     @ForceInline
     static Object bufferBase(ByteBuffer bb) {
-        return U.getReference(bb, BYTE_BUFFER_HB);
+        return U.getObject(bb, BYTE_BUFFER_HB);
     }
 
     /*package-private*/
