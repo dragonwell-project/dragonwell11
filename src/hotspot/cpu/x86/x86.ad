@@ -1594,11 +1594,6 @@ const bool Matcher::match_rule_supported(int opcode) {
       }
       break;
 #endif
-    case Op_RoundDoubleMode:
-      if (UseSSE < 4) {
-        return false;
-      }
-      break;
     case Op_ExtractB:
     case Op_ExtractL:
     case Op_ExtractI:
@@ -1665,6 +1660,7 @@ const bool Matcher::match_rule_supported_vector(int opcode, int vlen, BasicType 
   //   * implementation limitations
   //   * some 512bit vector operations on FLOAT and DOUBLE types require AVX512DQ
   //   * 128bit vroundpd instruction is present only in AVX1
+  int size_in_bits = vlen * type2aelembytes(bt) * BitsPerByte;
   switch (opcode) {
     case Op_AbsVF:
     case Op_NegVF:
