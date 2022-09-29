@@ -2660,7 +2660,7 @@ Node* SuperWord::vector_opd(Node_List* p, int opd_idx) {
           return NULL;
         }
         // Move non constant shift count into vector register.
-        cnt = VectorNode::shift_count(p0, cnt, vlen, velt_basic_type(p0));
+        cnt = VectorNode::shift_count(p0->Opcode(), cnt, vlen, velt_basic_type(p0));
       }
       if (cnt != opd) {
         _igvn.register_new_node_with_optimizer(cnt);
