@@ -333,9 +333,6 @@ public:
             Matcher::min_vector_size(bt) <= size);
   }
 
-  // Does the CPU supports vector variable shift instructions?
-  static bool supports_vector_variable_shifts(void);
-
   // Vector ideal reg
   static const uint vector_ideal_reg(int len);
   static const uint vector_shift_count_ideal_reg(int len);
