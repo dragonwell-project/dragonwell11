@@ -289,16 +289,16 @@ CallGenerator* CallGenerator::for_virtual_call(ciMethod* m, int vtable_index) {
 // Allow inlining decisions to be delayed
 class LateInlineCallGenerator : public DirectCallGenerator {
  private:
-  // unique id for log compilation
-  jlong _unique_id;
+  jlong _unique_id;   // unique id for log compilation
+  bool _is_pure_call; // a hint that the call doesn't have important side effects to care about
 
  protected:
   CallGenerator* _inline_cg;
   virtual bool do_late_inline_check(JVMState* jvms) { return true; }
 
  public:
-  LateInlineCallGenerator(ciMethod* method, CallGenerator* inline_cg) :
-    DirectCallGenerator(method, true), _inline_cg(inline_cg), _unique_id(0) {}
+  LateInlineCallGenerator(ciMethod* method, CallGenerator* inline_cg, bool is_pure_call = false) :
+    DirectCallGenerator(method, true), _unique_id(0), _is_pure_call(is_pure_call), _inline_cg(inline_cg) {}
 
   virtual bool is_late_inline() const { return true; }
 
@@ -561,6 +561,28 @@ CallGenerator* CallGenerator::for_boxing_late_inline(ciMethod* method, CallGener
   return new LateInlineBoxingCallGenerator(method, inline_cg);
 }
 
+class LateInlineVectorReboxingCallGenerator : public LateInlineCallGenerator {
+
+ public:
+  LateInlineVectorReboxingCallGenerator(ciMethod* method, CallGenerator* inline_cg) :
+    LateInlineCallGenerator(method, inline_cg, /*is_pure=*/true) {}
+
+  virtual JVMState* generate(JVMState* jvms) {
+    Compile *C = Compile::current();
+
+    C->log_inline_id(this);
+
+    C->add_vector_reboxing_late_inline(this);
+
+    JVMState* new_jvms = DirectCallGenerator::generate(jvms);
+    return new_jvms;
+  }
+};
+
+//   static CallGenerator* for_vector_reboxing_late_inline(ciMethod* m, CallGenerator* inline_cg);
+CallGenerator* CallGenerator::for_vector_reboxing_late_inline(ciMethod* method, CallGenerator* inline_cg) {
+  return new LateInlineVectorReboxingCallGenerator(method, inline_cg);
+}
 //---------------------------WarmCallGenerator--------------------------------
 // Internal class which handles initial deferral of inlining decisions.
 class WarmCallGenerator : public CallGenerator {
