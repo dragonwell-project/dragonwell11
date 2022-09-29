@@ -82,6 +82,7 @@
   f(java_lang_StackFrameInfo) \
   f(java_lang_LiveStackFrameInfo) \
   f(java_util_concurrent_locks_AbstractOwnableSynchronizer) \
+  f(vector_VectorPayload) \
   //end
 
 #define BASIC_JAVA_CLASSES_DO_PART_COROUTINE(f) \
@@ -1548,6 +1549,24 @@ class java_util_concurrent_locks_AbstractOwnableSynchronizer : AllStatic {
   static void compute_offsets();
   static oop  get_owner_threadObj(oop obj);
   static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+};
+
+// Interface to jdk.internal.vm.vector.VectorSupport.VectorPayload objects
+
+class vector_VectorPayload : AllStatic {
+ private:
+  static int _payload_offset;
+ public:
+  static void set_payload(oop o, oop val);
+
+  static void compute_offsets();
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+
+  // Testers
+  static bool is_subclass(Klass* klass) {
+    return klass->is_subclass_of(SystemDictionary::vector_VectorPayload_klass());
+  }
+  static bool is_instance(oop obj);
 };
 
 // Use to declare fields that need to be injected into Java classes
