@@ -37,6 +37,7 @@ enum Opcodes {
   macro(RegF)                   // Machine float   register
   macro(RegD)                   // Machine double  register
   macro(RegL)                   // Machine long    register
+  macro(VecA)                   // Machine vectora register     //  8231441
   macro(VecS)                   // Machine vectors register
   macro(VecD)                   // Machine vectord register
   macro(VecX)                   // Machine vectorx register
