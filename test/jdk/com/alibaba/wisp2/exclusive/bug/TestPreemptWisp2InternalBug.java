@@ -27,9 +27,20 @@ public class TestPreemptWisp2InternalBug {
 				        "-XX:+UseWisp2", "-XX:+UnlockDiagnosticVMOptions", "-XX:+VerboseWisp", "-XX:-Inline",
                         "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
 				        TestPreemptWisp2InternalBug.class.getName(), tasks[i]);
-		        OutputAnalyzer output = new OutputAnalyzer(pb.start());
-		        output.shouldContain("[WISP] preempt was blocked, because wisp internal method on the stack");
-	        }
+				int count = 0;
+				for (int j = 0; j < 4; j++) {
+					try {
+						OutputAnalyzer output = new OutputAnalyzer(pb.start());
+						output.shouldContain("[WISP] preempt was blocked, because wisp internal method on the stack");
+						break;
+					} catch (java.lang.RuntimeException e) {
+						count++;
+					}
+				}
+				if(count >= 2) {
+					throw new RuntimeException("Test " + tasks[i] + "run 5 times, failed " + count + " times!");
+				}
+			}
             return;
         }
 
