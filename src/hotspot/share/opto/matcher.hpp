@@ -177,7 +177,7 @@ public:
   static uint mreg2regmask_max;
   static RegMask mreg2regmask[];
   static RegMask STACK_ONLY_mask;
-  static RegMask caller_save_regmask;       //    8251459
+  static RegMask caller_save_regmask;
   static RegMask caller_save_regmask_exclude_soe;
   static RegMask mh_caller_save_regmask;
   static RegMask mh_caller_save_regmask_exclude_soe;
