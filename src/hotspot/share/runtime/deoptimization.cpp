@@ -43,6 +43,7 @@
 #include "oops/typeArrayOop.inline.hpp"
 #include "oops/verifyOopClosure.hpp"
 #include "prims/jvmtiThreadState.hpp"
+#include "prims/vectorSupport.hpp"
 #include "runtime/biasedLocking.hpp"
 #include "runtime/compilationPolicy.hpp"
 #include "runtime/deoptimization.hpp"
