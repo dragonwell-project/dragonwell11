@@ -4644,6 +4644,11 @@ void Assembler::popl(Address dst) {
 }
 #endif
 
+void Assembler::prefetch_prefix(Address src) {
+  prefix(src);
+  emit_int8(0x0F);
+}
+
 void Assembler::prefetchnta(Address src) {
   NOT_LP64(assert(VM_Version::supports_sse(), "must support"));
   InstructionMark im(this);
@@ -4758,6 +4763,14 @@ void Assembler::pshufd(XMMRegister dst, Address src, int mode) {
   emit_int8(0x70);
   emit_operand(dst, src);
   emit_int8(mode & 0xFF);
+}
+
+void Assembler::pshufhw(XMMRegister dst, XMMRegister src, int mode) {
+  assert(isByte(mode), "invalid value");
+  NOT_LP64(assert(VM_Version::supports_sse2(), ""));
+  InstructionAttr attributes(AVX_128bit, /* rex_w */ false, /* legacy_mode */ _legacy_mode_bw, /* no_mask_reg */ true, /* uses_vl */ true);
+  int encode = simd_prefix_and_encode(dst, xnoreg, src, VEX_SIMD_F3, VEX_OPCODE_0F, &attributes);
+  emit_int24(0x70, (0xC0 | encode), mode & 0xFF);
 }
 
 void Assembler::pshuflw(XMMRegister dst, XMMRegister src, int mode) {
@@ -6633,7 +6646,6 @@ void Assembler::vpmullq(XMMRegister dst, XMMRegister nds, XMMRegister src, int v
   emit_int8(0x40);
   emit_int8((unsigned char)(0xC0 | encode));
 }
-
 
 void Assembler::vpmuludq(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len) {
   assert(UseAVX > 0, "requires some form of AVX");

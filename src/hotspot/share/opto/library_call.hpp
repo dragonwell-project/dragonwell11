@@ -141,14 +141,14 @@ class LibraryCallKit : public GraphKit {
                                       int offset);
   Node* load_klass_from_mirror(Node* mirror, bool never_see_null,
                                RegionNode* region, int null_path) {
-    int offset = java_lang_Class::klass_offset();
+    int offset = java_lang_Class::klass_offset_in_bytes();
     return load_klass_from_mirror_common(mirror, never_see_null,
                                          region, null_path,
                                          offset);
   }
   Node* load_array_klass_from_mirror(Node* mirror, bool never_see_null,
                                      RegionNode* region, int null_path) {
-    int offset = java_lang_Class::array_klass_offset();
+    int offset = java_lang_Class::array_klass_offset_in_bytes();
     return load_klass_from_mirror_common(mirror, never_see_null,
                                          region, null_path,
                                          offset);
@@ -190,7 +190,7 @@ class LibraryCallKit : public GraphKit {
   bool inline_string_indexOfI(StrIntrinsicNode::ArgEnc ae);
   Node* make_indexOf_node(Node* src_start, Node* src_count, Node* tgt_start, Node* tgt_count,
                           RegionNode* region, Node* phi, StrIntrinsicNode::ArgEnc ae);
-  bool inline_string_indexOfChar(StrIntrinsicNode::ArgEnc ae);
+  bool inline_string_indexOfChar();
   bool inline_string_equals(StrIntrinsicNode::ArgEnc ae);
   bool inline_string_toBytesU();
   bool inline_string_getCharsU();
@@ -218,7 +218,7 @@ class LibraryCallKit : public GraphKit {
   Node* generate_min_max(vmIntrinsics::ID id, Node* x, Node* y);
   // This returns Type::AnyPtr, RawPtr, or OopPtr.
   int classify_unsafe_addr(Node* &base, Node* &offset, BasicType type);
-  Node* make_unsafe_address(Node*& base, Node* offset, DecoratorSet decorators, BasicType type = T_ILLEGAL, bool can_cast = false);
+  Node* make_unsafe_address(Node*& base, Node* offset, BasicType type = T_ILLEGAL, bool can_cast = false);
 
   typedef enum { Relaxed, Opaque, Volatile, Acquire, Release } AccessKind;
   DecoratorSet mo_decorator_for_access_kind(AccessKind kind);
@@ -230,6 +230,7 @@ class LibraryCallKit : public GraphKit {
   bool inline_unsafe_writebackSync0(bool is_pre);
   bool inline_unsafe_copyMemory();
   bool inline_native_currentThread();
+  bool inline_native_isInterrupted();
 
   bool inline_native_time_funcs(address method, const char* funcName);
 #ifdef JFR_HAVE_INTRINSICS
@@ -276,11 +277,17 @@ class LibraryCallKit : public GraphKit {
   Node* get_original_key_start_from_aescrypt_object(Node* aescrypt_object);
   bool inline_ghash_processBlocks();
   bool inline_base64_encodeBlock();
+  bool inline_sha_implCompress(vmIntrinsics::ID id);
   bool inline_digestBase_implCompress(vmIntrinsics::ID id);
   bool inline_digestBase_implCompressMB(int predicate);
   bool inline_digestBase_implCompressMB(Node* digestBaseObj, ciInstanceKlass* instklass,
                                         bool long_state, address stubAddr, const char *stubName,
                                         Node* src_start, Node* ofs, Node* limit);
+  bool inline_sha_implCompressMB(Node* digestBaseObj, ciInstanceKlass* instklass_SHA,
+                                 bool long_state, address stubAddr, const char *stubName,
+                                 Node* src_start, Node* ofs, Node* limit);
+  Node* get_state_from_sha_object(Node *sha_object);
+  Node* get_state_from_sha5_object(Node *sha_object);
   Node* get_state_from_digest_object(Node *digestBase_object);
   Node* get_long_state_from_digest_object(Node *digestBase_object);
   Node* inline_digestBase_implCompressMB_predicate(int predicate);

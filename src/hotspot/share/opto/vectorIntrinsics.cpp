@@ -578,8 +578,7 @@ bool LibraryCallKit::inline_vector_mem_operation(bool is_store) {
 
   Node* base = argument(3);
   Node* offset = ConvL2X(argument(4));
-  DecoratorSet decorators = C2_UNSAFE_ACCESS;
-  Node* addr = make_unsafe_address(base, offset, decorators, (is_mask ? T_BOOLEAN : elem_bt), true);
+  Node* addr = make_unsafe_address(base, offset, (is_mask ? T_BOOLEAN : elem_bt), true);
 
   // Can base be NULL? Otherwise, always on-heap access.
   bool can_access_non_heap = TypePtr::NULL_PTR->higher_equal(gvn().type(base));
@@ -747,7 +746,7 @@ bool LibraryCallKit::inline_vector_gather_scatter(bool is_scatter) {
 
   Node* base = argument(4);
   Node* offset = ConvL2X(argument(5));
-  Node* addr = make_unsafe_address(base, offset, C2_UNSAFE_ACCESS, elem_bt, true);
+  Node* addr = make_unsafe_address(base, offset, elem_bt, true);
 
   const TypePtr *addr_type = gvn().type(addr)->isa_ptr();
   const TypeAryPtr* arr_type = addr_type->isa_aryptr();
