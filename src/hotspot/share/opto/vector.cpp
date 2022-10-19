@@ -362,7 +362,8 @@ Node* PhaseVector::expand_vbox_alloc_node(VectorBoxAllocateNode* vbox_alloc,
   const TypePtr* vec_adr_type = vec_field->bottom_type()->is_ptr();
 
   // The store should be captured by InitializeNode and turned into initialized store later.
-  Node* field_store = gvn.transform(kit.access_store_at(vec_obj,
+  Node* field_store = gvn.transform(kit.access_store_at(kit.control(),
+                                                            vec_obj,
                                                             vec_field,
                                                             vec_adr_type,
                                                             arr,
@@ -387,7 +388,7 @@ void PhaseVector::expand_vunbox_node(VectorUnboxNode* vec_unbox) {
     ciInstanceKlass* from_kls = tinst->klass()->as_instance_klass();
     BasicType bt = vec_unbox->vect_type()->element_basic_type();
     BasicType masktype = bt;
-    BasicType elem_bt;
+    BasicType elem_bt = T_BOOLEAN;
 
     if (is_vector_mask(from_kls)) {
       bt = T_BOOLEAN;
@@ -450,7 +451,7 @@ void PhaseVector::expand_vunbox_node(VectorUnboxNode* vec_unbox) {
     }
 
     gvn.hash_delete(vec_unbox);
-    vec_unbox->disconnect_inputs(C);
+    vec_unbox->disconnect_inputs(NULL, C);
     C->gvn_replace_by(vec_unbox, vec_val_load);
   }
   C->remove_macro_node(vec_unbox);
