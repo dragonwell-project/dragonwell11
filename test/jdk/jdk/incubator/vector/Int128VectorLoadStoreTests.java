@@ -292,7 +292,7 @@ public class Int128VectorLoadStoreTests extends AbstractVectorTest {
     static int[] bufferToArray(ByteBuffer bb) {
         IntBuffer db = bb.asIntBuffer();
         int[] d = new int[db.capacity()];
-        db.get(0, d);
+        db.get(d);
         return d;
     }
 

@@ -292,7 +292,7 @@ public class Double256VectorLoadStoreTests extends AbstractVectorTest {
     static double[] bufferToArray(ByteBuffer bb) {
         DoubleBuffer db = bb.asDoubleBuffer();
         double[] d = new double[db.capacity()];
-        db.get(0, d);
+        db.get(d);
         return d;
     }
 

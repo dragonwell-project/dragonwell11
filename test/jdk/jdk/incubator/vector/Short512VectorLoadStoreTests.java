@@ -292,7 +292,7 @@ public class Short512VectorLoadStoreTests extends AbstractVectorTest {
     static short[] bufferToArray(ByteBuffer bb) {
         ShortBuffer db = bb.asShortBuffer();
         short[] d = new short[db.capacity()];
-        db.get(0, d);
+        db.get(d);
         return d;
     }
 

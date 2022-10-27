@@ -281,7 +281,7 @@ public class Byte512VectorLoadStoreTests extends AbstractVectorTest {
     static byte[] bufferToArray(ByteBuffer bb) {
         ByteBuffer db = bb;
         byte[] d = new byte[db.capacity()];
-        db.get(0, d);
+        db.get(d);
         return d;
     }
 

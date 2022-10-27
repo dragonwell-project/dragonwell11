@@ -292,7 +292,7 @@ public class Float128VectorLoadStoreTests extends AbstractVectorTest {
     static float[] bufferToArray(ByteBuffer bb) {
         FloatBuffer db = bb.asFloatBuffer();
         float[] d = new float[db.capacity()];
-        db.get(0, d);
+        db.get(d);
         return d;
     }
 

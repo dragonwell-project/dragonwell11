@@ -301,7 +301,7 @@ public class LongMaxVectorLoadStoreTests extends AbstractVectorTest {
     static long[] bufferToArray(ByteBuffer bb) {
         LongBuffer db = bb.asLongBuffer();
         long[] d = new long[db.capacity()];
-        db.get(0, d);
+        db.get(d);
         return d;
     }
 
