@@ -71,8 +71,28 @@ jobs:
         run: "echo '${{ steps.check_deps.outputs.dependencies }}'"
         if: steps.check_submit.outputs.should_run != 'false'
 
+      - name: Determine full JDK versions
+        id: check_jdk_versions
+        shell: bash
+        run: |
+          FEATURE=${{ fromJson(steps.check_deps.outputs.dependencies).DEFAULT_VERSION_FEATURE }}
+          INTERIM=${{ fromJson(steps.check_deps.outputs.dependencies).DEFAULT_VERSION_INTERIM }}
+          UPDATE=${{ fromJson(steps.check_deps.outputs.dependencies).DEFAULT_VERSION_UPDATE }}
+          PATCH=${{ fromJson(steps.check_deps.outputs.dependencies).DEFAULT_VERSION_PATCH }}
+          if [ "x${PATCH}" != "x0" ]; then
+             V=${FEATURE}.${INTERIM}.${UPDATE}.${PATCH}
+          elif [ "x${UPDATE}" != "x0" ]; then
+             V=${FEATURE}.${INTERIM}.${UPDATE}
+          elif [ "x${INTERIM}" != "x0" ]; then
+             V={FEATURE}.${INTERIM}
+          else
+             V=${FEATURE}
+          fi
+          echo "::set-output name=jdk_version::${V}"
+        if: steps.check_submit.outputs.should_run != 'false'
+
       - name: Determine the jtreg ref to checkout
-        run: "echo JTREG_REF=jtreg${{ fromJson(steps.check_deps.outputs.dependencies).JTREG_VERSION }}-${{ fromJson(steps.check_deps.outputs.dependencies).JTREG_BUILD }} >> $GITHUB_ENV"
+        run: "echo JTREG_REF=jtreg-${{ fromJson(steps.check_deps.outputs.dependencies).JTREG_VERSION }}+${{ fromJson(steps.check_deps.outputs.dependencies).JTREG_BUILD }} >> $GITHUB_ENV"
         if: steps.check_submit.outputs.should_run != 'false'
 
       - name: Determine the jtreg version to build
@@ -100,7 +120,7 @@ jobs:
         if: steps.check_submit.outputs.should_run != 'false' && steps.jtreg.outputs.cache-hit != 'true'
 
       - name: Build jtreg
-        run: bash make/build-all.sh ${JAVA_HOME_8_X64}
+        run: bash make/build.sh --jdk ${JAVA_HOME_8_X64}
         working-directory: jtreg
         if: steps.check_submit.outputs.should_run != 'false' && steps.jtreg.outputs.cache-hit != 'true'
 
@@ -134,7 +154,7 @@ jobs:
             artifact: -debug
 
     env:
-      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
       BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_X64_BOOT_JDK_FILENAME }}"
       BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_X64_BOOT_JDK_URL }}"
@@ -264,7 +284,7 @@ jobs:
           - test: dragonwell/jdk feature
             suites: test/jdk/:dragonwell_jdk
     env:
-      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
       BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_X64_BOOT_JDK_FILENAME }}"
       BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_X64_BOOT_JDK_URL }}"
@@ -356,14 +376,102 @@ jobs:
           JTREG_KEYWORDS="!headful"
           JTREG="JAVA_OPTIONS=-XX:-CreateCoredumpOnCrash"
 
-      - name: Check that all tests executed successfully
-        if: steps.run_tests.outcome != 'skipped'
-        run: >
-          if ! grep --include=test-summary.txt -lqr build/*/test-results -e "TEST SUCCESS" ; then
-            cat build/*/test-results/*/text/newfailures.txt ;
-            cat build/*/test-results/*/text/other_errors.txt ;
-            exit 1 ;
+      - name: Generate test failure summary
+        run: |
+          #
+          test_suite_name=$(cat build/run-test-prebuilt/test-support/test-last-ids.txt)
+          results_dir=build/run-test-prebuilt/test-results/$test_suite_name/text
+
+          failures=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/newfailures.txt || true)
+          errors=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/other_errors.txt || true)
+          failure_count=$(echo $failures | wc -w || true)
+          error_count=$(echo $errors | wc -w || true)
+
+          if [[ "$failures" = "" && "$errors" = "" ]]; then
+            # If we have nothing to report, exit this step now
+            exit 0
           fi
+
+          echo "::error:: Test run reported $failure_count test failure(s) and $error_count error(s). See summary for details."
+
+          echo "### :boom: Test failures summary" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$failures" != "" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "These tests reported failure:" >> $GITHUB_STEP_SUMMARY
+            for test in $failures; do
+              anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+              echo "* [$test](#user-content-$anchor)"
+            done >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "$errors" != "" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "These tests reported errors:"  >> $GITHUB_STEP_SUMMARY
+            for test in $errors; do
+              anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+              echo "* [$test](#user-content-$anchor)"
+            done >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Collect failed test output
+        run: |
+          #
+          # This is a separate step, since if the markdown from a step gets bigger than
+          # 1024 kB it is skipped, but then the summary above is still generated
+          test_suite_name=$(cat build/run-test-prebuilt/test-support/test-last-ids.txt)
+          results_dir=build/run-test-prebuilt/test-results/$test_suite_name/text
+          report_dir=build/run-test-prebuilt/test-support/$test_suite_name
+
+          failures=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/newfailures.txt || true)
+          errors=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/other_errors.txt || true)
+
+          if [[ "$failures" = "" && "$errors" = "" ]]; then
+            # If we have nothing to report, exit this step now
+            exit 0
+          fi
+
+          echo "### Test output for failed tests" >> $GITHUB_STEP_SUMMARY
+          for test in $failures $errors; do
+            anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+            base_path="$(echo "$test" | tr '#' '_')"
+            report_file="$report_dir/$base_path.jtr"
+            hs_err_files="$report_dir/$base_path/hs_err*.log"
+            echo "####  <a id="$anchor">$test"
+
+            echo "<details><summary>View test results</summary>"
+            echo ""
+            echo '```'
+            if [[ -f "$report_file" ]]; then
+              cat "$report_file"
+            else
+              echo "Error: Result file $report_file not found"
+            fi
+            echo '```'
+            echo "</details>"
+            echo ""
+
+            if [[ "$hs_err_files" != "" ]]; then
+              echo "<details><summary>View HotSpot error log</summary>"
+              echo ""
+              for hs_err in $hs_err_files; do
+                echo '```'
+                echo "$hs_err:"
+                echo ""
+                cat "$hs_err"
+                echo '```'
+              done
+
+              echo "</details>"
+              echo ""
+            fi
+
+          done >> $GITHUB_STEP_SUMMARY
+
+          echo ":arrow_right: To see the entire test log, click the job in the list to the left"  >> $GITHUB_STEP_SUMMARY
+
+          # This will abort the entire job in GHA, which is what we want
+          exit 1
 
       - name: Create suitable test log artifact name
         if: always()
@@ -423,7 +531,7 @@ jobs:
             gnu-arch: aarch64
 
     env:
-      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
       BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_X64_BOOT_JDK_FILENAME }}"
       BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_X64_BOOT_JDK_URL }}"
@@ -570,7 +678,7 @@ jobs:
             artifact: -debug
 
     env:
-      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
       BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).WINDOWS_X64_BOOT_JDK_FILENAME }}"
       BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).WINDOWS_X64_BOOT_JDK_URL }}"
@@ -706,7 +814,7 @@ jobs:
             artifact: -debug
 
     env:
-      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
       BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).WINDOWS_X64_BOOT_JDK_FILENAME }}"
       BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).WINDOWS_X64_BOOT_JDK_URL }}"
@@ -876,7 +984,7 @@ jobs:
 
   macos_x64_build:
     name: macOS x64
-    runs-on: "macos-10.15"
+    runs-on: "macos-11"
     needs: prerequisites
     if: needs.prerequisites.outputs.should_run != 'false' && needs.prerequisites.outputs.platform_macos_x64 != 'false'
 
@@ -893,7 +1001,7 @@ jobs:
             artifact: -debug
 
     env:
-      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
       BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).MACOS_X64_BOOT_JDK_FILENAME }}"
       BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).MACOS_X64_BOOT_JDK_URL }}"
@@ -943,7 +1051,7 @@ jobs:
         run: brew install make
 
       - name: Select Xcode version
-        run: sudo xcode-select --switch /Applications/Xcode_11.3.1.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_11.7.app/Contents/Developer
 
       - name: Configure
         run: >
@@ -974,7 +1082,7 @@ jobs:
 
   macos_aarch64_build:
     name: macOS aarch64
-    runs-on: "macos-10.15"
+    runs-on: "macos-11"
     needs: prerequisites
     if: needs.prerequisites.outputs.should_run != 'false' && needs.prerequisites.outputs.platform_macos_aarch64 != 'false'
 
@@ -991,7 +1099,7 @@ jobs:
             artifact: -debug
 
     env:
-      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}"
+      JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
       BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).MACOS_X64_BOOT_JDK_FILENAME }}"
       BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).MACOS_X64_BOOT_JDK_URL }}"
@@ -1074,7 +1182,7 @@ jobs:
 
   macos_x64_test:
     name: macOS x64
-    runs-on: "macos-10.15"
+    runs-on: "macos-11"
     needs:
       - prerequisites
       - macos_x64_build
@@ -1099,7 +1207,7 @@ jobs:
             artifact: -debug
 
     env:
-      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
       BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
       BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).MACOS_X64_BOOT_JDK_FILENAME }}"
       BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).MACOS_X64_BOOT_JDK_URL }}"
@@ -1169,7 +1277,7 @@ jobs:
         run: brew install make
 
       - name: Select Xcode version
-        run: sudo xcode-select --switch /Applications/Xcode_11.3.1.app/Contents/Developer
+        run: sudo xcode-select --switch /Applications/Xcode_11.7.app/Contents/Developer
 
       - name: Find root of jdk image dir
         run: |
@@ -1192,14 +1300,102 @@ jobs:
           JTREG_KEYWORDS="!headful"
           JTREG="JAVA_OPTIONS=-XX:-CreateCoredumpOnCrash"
 
-      - name: Check that all tests executed successfully
-        if: steps.run_tests.outcome != 'skipped'
-        run: >
-          if ! grep --include=test-summary.txt -lqr build/*/test-results -e "TEST SUCCESS" ; then
-            cat build/*/test-results/*/text/newfailures.txt ;
-            cat build/*/test-results/*/text/other_errors.txt ;
-            exit 1 ;
+      - name: Generate test failure summary
+        run: |
+          #
+          test_suite_name=$(cat build/run-test-prebuilt/test-support/test-last-ids.txt)
+          results_dir=build/run-test-prebuilt/test-results/$test_suite_name/text
+
+          failures=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/newfailures.txt || true)
+          errors=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/other_errors.txt || true)
+          failure_count=$(echo $failures | wc -w || true)
+          error_count=$(echo $errors | wc -w || true)
+
+          if [[ "$failures" = "" && "$errors" = "" ]]; then
+            # If we have nothing to report, exit this step now
+            exit 0
           fi
+
+          echo "::error:: Test run reported $failure_count test failure(s) and $error_count error(s). See summary for details."
+
+          echo "### :boom: Test failures summary" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$failures" != "" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "These tests reported failure:" >> $GITHUB_STEP_SUMMARY
+            for test in $failures; do
+              anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+              echo "* [$test](#user-content-$anchor)"
+            done >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "$errors" != "" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "These tests reported errors:"  >> $GITHUB_STEP_SUMMARY
+            for test in $errors; do
+              anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+              echo "* [$test](#user-content-$anchor)"
+            done >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Collect failed test output
+        run: |
+          #
+          # This is a separate step, since if the markdown from a step gets bigger than
+          # 1024 kB it is skipped, but then the summary above is still generated
+          test_suite_name=$(cat build/run-test-prebuilt/test-support/test-last-ids.txt)
+          results_dir=build/run-test-prebuilt/test-results/$test_suite_name/text
+          report_dir=build/run-test-prebuilt/test-support/$test_suite_name
+
+          failures=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/newfailures.txt || true)
+          errors=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/other_errors.txt || true)
+
+          if [[ "$failures" = "" && "$errors" = "" ]]; then
+            # If we have nothing to report, exit this step now
+            exit 0
+          fi
+
+          echo "### Test output for failed tests" >> $GITHUB_STEP_SUMMARY
+          for test in $failures $errors; do
+            anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+            base_path="$(echo "$test" | tr '#' '_')"
+            report_file="$report_dir/$base_path.jtr"
+            hs_err_files="$report_dir/$base_path/hs_err*.log"
+            echo "####  <a id="$anchor">$test"
+
+            echo "<details><summary>View test results</summary>"
+            echo ""
+            echo '```'
+            if [[ -f "$report_file" ]]; then
+              cat "$report_file"
+            else
+              echo "Error: Result file $report_file not found"
+            fi
+            echo '```'
+            echo "</details>"
+            echo ""
+
+            if [[ "$hs_err_files" != "" ]]; then
+              echo "<details><summary>View HotSpot error log</summary>"
+              echo ""
+              for hs_err in $hs_err_files; do
+                echo '```'
+                echo "$hs_err:"
+                echo ""
+                cat "$hs_err"
+                echo '```'
+              done
+
+              echo "</details>"
+              echo ""
+            fi
+
+          done >> $GITHUB_STEP_SUMMARY
+
+          echo ":arrow_right: To see the entire test log, click the job in the list to the left"  >> $GITHUB_STEP_SUMMARY
+
+          # This will abort the entire job in GHA, which is what we want
+          exit 1
 
       - name: Create suitable test log artifact name
         if: always()

@@ -658,6 +658,11 @@ public:
 
   void remove_main_post_loops(CountedLoopNode *cl, PhaseIdealLoop *phase);
 
+#ifdef ASSERT
+  // Tell whether the body contains nodes marked as reductions.
+  bool has_reduction_nodes() const;
+#endif // ASSERT
+
 #ifndef PRODUCT
   void dump_head() const;       // Dump loop head only
   void dump() const;            // Dump this loop recursively
@@ -1387,7 +1392,6 @@ SHENANDOAHGC_ONLY(private:)
 
   uint require_nodes(uint require, uint minreq = REQUIRE_MIN) {
     precond(require > 0);
-    _nodes_required += MAX2(100u, require); // Keep requests at minimum 100.
     _nodes_required += MAX2(require, minreq);
     return _nodes_required;
   }

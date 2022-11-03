@@ -940,6 +940,7 @@ class JavaThread: public Thread {
   friend class WispThread;
  private:
   JavaThread*    _next;                          // The next thread in the Threads list
+  bool           _in_asgct;                      // Is set when this JavaThread is handling ASGCT call
   bool           _on_thread_list;                // Is set when this JavaThread is added to the Threads list
   oop            _threadObj;                     // The Java level thread object
 
@@ -2095,6 +2096,10 @@ class JavaThread: public Thread {
 
   bool has_aync_thread_death_exception();
   void clear_aync_thread_death_exception();
+
+  // AsyncGetCallTrace support
+  inline bool in_asgct(void) {return _in_asgct;}
+  inline void set_in_asgct(bool value) {_in_asgct = value;}
 };
 
 // Inline implementation of JavaThread::current
