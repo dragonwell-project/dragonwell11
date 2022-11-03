@@ -31,7 +31,7 @@ import java.util.ListResourceBundle;
   * Also you need to  update the count of messages(MAX_CODE)or
  * the count of warnings(MAX_WARNING) [ Information purpose only]
  * @xsl.usage advanced
- * @LastModified: Jan 2022
+ * @LastModified: Jul 2022
  */
 public class XPATHErrorResources extends ListResourceBundle
 {
@@ -322,8 +322,8 @@ public static final String ER_IGNORABLE_WHITESPACE_NOT_HANDLED =
   public static final String ER_SECUREPROCESSING_FEATURE = "ER_SECUREPROCESSING_FEATURE";
   public static final String ER_NULL_XPATH_FUNCTION_RESOLVER = "ER_NULL_XPATH_FUNCTION_RESOLVER";
   public static final String ER_NULL_XPATH_VARIABLE_RESOLVER = "ER_NULL_XPATH_VARIABLE_RESOLVER";
-  public static final String ER_XPATH_GROUP_LIMIT = "XPATH_GROUP_LIMIT";
-  public static final String ER_XPATH_OPERATOR_LIMIT = "XPATH_OPERATOR_LIMIT";
+  public static final String ER_XPATH_GROUP_LIMIT = "ER_XPATH_GROUP_LIMIT";
+  public static final String ER_XPATH_OPERATOR_LIMIT = "ER_XPATH_OPERATOR_LIMIT";
 
   //END: Keys needed for exception messages of  JAXP 1.3 XPath API implementation
 
@@ -591,7 +591,7 @@ public static final String ER_IGNORABLE_WHITESPACE_NOT_HANDLED =
   { ER_RTF_NOT_SUPPORTED_XRTREEFRAGSELECTWRAPPER,
        "rtf() not supported by XRTreeFragSelectWrapper"},
 
-  { ER_RTF_NOT_SUPPORTED_XRTREEFRAGSELECTWRAPPER,
+  { ER_ASNODEITERATOR_NOT_SUPPORTED_XRTREEFRAGSELECTWRAPPER,
        "asNodeIterator() not supported by XRTreeFragSelectWrapper"},
 
         /**  detach() not supported by XRTreeFragSelectWrapper   */
@@ -780,11 +780,6 @@ public static final String ER_IGNORABLE_WHITESPACE_NOT_HANDLED =
 
   { ER_UNSUPPORTED_RETURN_TYPE,
        "UnSupported Return Type : {0}"},
-
-  /** Field ER_SOURCE_RETURN_TYPE_CANNOT_BE_NULL                       */
-
-  { ER_SOURCE_RETURN_TYPE_CANNOT_BE_NULL,
-       "Source and/or Return Type can not be null"},
 
   /** Field ER_SOURCE_RETURN_TYPE_CANNOT_BE_NULL                       */
 
