@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 import jdk.test.lib.LockFreeLogger;
-import jdk.testlibrary.Utils;
+import jdk.test.lib.Utils;
 
 /**
  * ThreadStateController allows a thread to request this thread to transition
@@ -359,7 +359,16 @@ public class ThreadStateController extends Thread {
      * @throws InterruptedException
      */
     public String getLog() throws InterruptedException {
-        this.join();
+        return getLog(0);
+    }
+
+    /**
+     * Waits at most {@code millis} milliseconds for the controller
+     * to complete the test run and returns the generated log.
+     * A timeout of {@code 0} means to wait forever.
+     */
+    public String getLog(long millis) throws InterruptedException {
+        this.join(millis);
 
         return logger.toString();
     }

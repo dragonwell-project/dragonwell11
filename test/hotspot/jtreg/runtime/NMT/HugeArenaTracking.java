@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019, 2020, Red Hat, Inc. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -23,7 +24,7 @@
 
 /*
  * @test
- * @key nmt jcmd
+ * @key nmt jcmd randomness
  * @library /test/lib
  * @requires vm.bits == 64
  * @modules java.base/jdk.internal.misc
@@ -38,6 +39,7 @@ import java.util.Random;
 import jdk.test.lib.process.ProcessTools;
 import jdk.test.lib.process.OutputAnalyzer;
 import jdk.test.lib.JDKToolFinder;
+import jdk.test.lib.Utils;
 import sun.hotspot.WhiteBox;
 
 public class HugeArenaTracking {
@@ -59,7 +61,7 @@ public class HugeArenaTracking {
     output = new OutputAnalyzer(pb.start());
     output.shouldContain("Test (reserved=2KB, committed=2KB)");
 
-    Random rand = new Random();
+    Random rand = Utils.getRandomInstance();
 
     // Allocate 2GB+ from arena
     long total = 0;

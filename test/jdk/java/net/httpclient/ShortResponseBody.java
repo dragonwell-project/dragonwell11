@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,17 +21,6 @@
  * questions.
  */
 
-/*
- * @test
- * @summary Tests Exception detail message when too few response bytes are
- *          received before a socket exception or eof.
- * @library /lib/testlibrary
- * @build jdk.testlibrary.SimpleSSLContext
- * @run testng/othervm
- *       -Djdk.httpclient.HttpClient.log=headers,errors,channel
- *       ShortResponseBody
- */
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -43,19 +32,24 @@ import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
-import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import jdk.testlibrary.SimpleSSLContext;
+import org.testng.ITestContext;
+import org.testng.ITestResult;
+import org.testng.SkipException;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.DataProvider;
@@ -73,7 +67,7 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
-public class ShortResponseBody {
+public abstract class ShortResponseBody {
 
     Server closeImmediatelyServer;
     Server closeImmediatelyHttpsServer;
@@ -90,10 +84,17 @@ public class ShortResponseBody {
     SSLContext sslContext;
     SSLParameters sslParameters;
 
+    static final long PAUSE_FOR_GC = 5; // 5ms to let gc work
+    static final long PAUSE_FOR_PEER = 5; // 5ms to let server react
+
     static final String EXPECTED_RESPONSE_BODY =
             "<html><body><h1>Heading</h1><p>Some Text</p></body></html>";
 
-    final static AtomicLong ids = new AtomicLong();
+    // A request number used to replace %reqnb% in URLs with a unique
+    // number for better log analysis
+    static final AtomicLong reqnb = new AtomicLong();
+
+    static final AtomicLong ids = new AtomicLong();
     final ThreadFactory factory = new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
@@ -104,6 +105,53 @@ public class ShortResponseBody {
     };
     final ExecutorService service = Executors.newCachedThreadPool(factory);
 
+    final AtomicReference<SkipException> skiptests = new AtomicReference<>();
+    void checkSkip() {
+        var skip = skiptests.get();
+        if (skip != null) throw skip;
+    }
+    static String name(ITestResult result) {
+        var params = result.getParameters();
+        return result.getName()
+                + (params == null ? "()" : Arrays.toString(result.getParameters()));
+    }
+
+    @BeforeMethod
+    void beforeMethod(ITestContext context) {
+        System.gc();
+        try {
+            Thread.sleep(PAUSE_FOR_GC);
+        } catch (InterruptedException x) {
+
+        }
+        if (context.getFailedTests().size() > 0) {
+            if (skiptests.get() == null) {
+                SkipException skip = new SkipException("some tests failed");
+                skip.setStackTrace(new StackTraceElement[0]);
+                skiptests.compareAndSet(null, skip);
+            }
+        }
+    }
+
+    @AfterClass
+    static final void printFailedTests(ITestContext context) {
+        out.println("\n=========================\n");
+        try {
+            var FAILURES = context.getFailedTests().getAllResults().stream()
+                    .collect(Collectors.toMap(r -> name(r), ITestResult::getThrowable));
+
+            if (FAILURES.isEmpty()) return;
+            out.println("Failed tests: ");
+            FAILURES.entrySet().forEach((e) -> {
+                out.printf("\t%s: %s%n", e.getKey(), e.getValue());
+                e.getValue().printStackTrace(out);
+                e.getValue().printStackTrace();
+            });
+         } finally {
+            out.println("\n=========================\n");
+        }
+    }
+
     @DataProvider(name = "sanity")
     public Object[][] sanity() {
         return new Object[][]{
@@ -113,10 +161,16 @@ public class ShortResponseBody {
         };
     }
 
+    public static String uniqueURL(String url) {
+        return url.replace("%reqnb%", String.valueOf(reqnb.incrementAndGet()));
+    }
+
     @Test(dataProvider = "sanity")
     void sanity(String url) throws Exception {
         HttpClient client = newHttpClient();
+        url = uniqueURL(url);
         HttpRequest request = HttpRequest.newBuilder(URI.create(url)).build();
+        out.println("Request: " + request);
         HttpResponse<String> response = client.send(request, ofString());
         String body = response.body();
         assertEquals(body, EXPECTED_RESPONSE_BODY);
@@ -127,7 +181,7 @@ public class ShortResponseBody {
     }
 
     @DataProvider(name = "uris")
-    public Object[][] variants() {
+    public Object[][] variants(ITestContext context) {
         String[][] cases = new String[][] {
             // The length query string is the total number of bytes in the reply,
             // including headers, before the server closes the connection. The
@@ -186,6 +240,13 @@ public class ShortResponseBody {
             { httpsURIClsImed, "no bytes"},
         };
 
+        if (context.getFailedTests().size() > 0) {
+            // Shorten the log output by preventing useless
+            // skip traces to be printed for subsequent methods
+            // if one of the previous @Test method has failed.
+            return new Object[0][];
+        }
+
         List<Object[]> list = new ArrayList<>();
         Arrays.asList(cases).stream()
                 .map(e -> new Object[] {e[0], e[1], true})  // reuse client
@@ -207,59 +268,16 @@ public class ShortResponseBody {
                 .build();
     }
 
-    @Test(dataProvider = "uris")
-    void testSynchronousGET(String url, String expectedMsg, boolean sameClient)
-        throws Exception
-    {
-        out.print("---\n");
-        HttpClient client = null;
-        for (int i=0; i< ITERATION_COUNT; i++) {
-            if (!sameClient || client == null)
-                client = newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url)).build();
-            try {
-                HttpResponse<String> response = client.send(request, ofString());
-                String body = response.body();
-                out.println(response + ": " + body);
-                fail("UNEXPECTED RESPONSE: " + response);
-            } catch (IOException ioe) {
-                out.println("Caught expected exception:" + ioe);
-                String msg = ioe.getMessage();
-                assertTrue(msg.contains(expectedMsg), "exception msg:[" + msg + "]");
-                // synchronous API must have the send method on the stack
-                assertSendMethodOnStack(ioe);
-                assertNoConnectionExpiredException(ioe);
+    HttpClient sharedClient = null;
+    HttpClient newHttpClient(boolean shared) {
+        if (shared) {
+            HttpClient sharedClient = this.sharedClient;
+            if (sharedClient == null) {
+                sharedClient = this.sharedClient = newHttpClient();
             }
+            return sharedClient;
         }
-    }
-
-    @Test(dataProvider = "uris")
-    void testAsynchronousGET(String url, String expectedMsg, boolean sameClient)
-        throws Exception
-    {
-        out.print("---\n");
-        HttpClient client = null;
-        for (int i=0; i< ITERATION_COUNT; i++) {
-            if (!sameClient || client == null)
-                client = newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url)).build();
-            try {
-                HttpResponse<String> response = client.sendAsync(request, ofString()).get();
-                String body = response.body();
-                out.println(response + ": " + body);
-                fail("UNEXPECTED RESPONSE: " + response);
-            } catch (ExecutionException ee) {
-                if (ee.getCause() instanceof IOException) {
-                    IOException ioe = (IOException) ee.getCause();
-                    out.println("Caught expected exception:" + ioe);
-                    String msg = ioe.getMessage();
-                    assertTrue(msg.contains(expectedMsg), "exception msg:[" + msg + "]");
-                    assertNoConnectionExpiredException(ioe);
-                } else {
-                    throw ee;
-                }
-            }
-        }
+        return newHttpClient();
     }
 
     // can be used to prolong request body publication
@@ -275,6 +293,11 @@ public class ShortResponseBody {
                 k16++;
                 System.out.println("... 16K sent.");
                 count = count % (16 * 1024);
+                try {
+                    Thread.sleep(PAUSE_FOR_PEER);
+                } catch (InterruptedException x) {
+                    // ignore
+                }
             }
             if (k16 > 128) {
                 System.out.println("WARNING: InfiniteInputStream: " +
@@ -297,6 +320,11 @@ public class ShortResponseBody {
                 k16++;
                 System.out.println("... 16K sent.");
                 count = count % (16 * 1024);
+                try {
+                    Thread.sleep(PAUSE_FOR_PEER);
+                } catch (InterruptedException x) {
+                    // ignore
+                }
             }
             if (k16 > 128) {
                 System.out.println("WARNING: InfiniteInputStream: " +
@@ -305,87 +333,6 @@ public class ShortResponseBody {
             }
             count += length;
             return length;
-        }
-    }
-
-    // POST tests are racy in what may be received before writing may cause a
-    // broken pipe or reset exception, before all the received data can be read.
-    // Any message up to, and including, the "expected" error message can occur.
-    // Strictly ordered list, in order of possible occurrence.
-    static final List<String> MSGS_ORDER =
-            List.of("no bytes", "status line", "header");
-
-
-    @Test(dataProvider = "uris")
-    void testSynchronousPOST(String url, String expectedMsg, boolean sameClient)
-        throws Exception
-    {
-        out.print("---\n");
-        HttpClient client = null;
-        for (int i=0; i< ITERATION_COUNT; i++) {
-            if (!sameClient || client == null)
-                client = newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .POST(BodyPublishers.ofInputStream(() -> new InfiniteInputStream()))
-                    .build();
-            try {
-                HttpResponse<String> response = client.send(request, ofString());
-                String body = response.body();
-                out.println(response + ": " + body);
-                fail("UNEXPECTED RESPONSE: " + response);
-            } catch (IOException ioe) {
-                out.println("Caught expected exception:" + ioe);
-                String msg = ioe.getMessage();
-
-                List<String> expectedMessages = new ArrayList<>();
-                expectedMessages.add(expectedMsg);
-                MSGS_ORDER.stream().takeWhile(s -> !s.equals(expectedMsg))
-                                   .forEach(expectedMessages::add);
-
-                assertTrue(expectedMessages.stream().anyMatch(s -> msg.indexOf(s) != -1),
-                           "exception msg:[" + msg + "], not in [" + expectedMessages);
-                // synchronous API must have the send method on the stack
-                assertSendMethodOnStack(ioe);
-                assertNoConnectionExpiredException(ioe);
-            }
-        }
-    }
-
-    @Test(dataProvider = "uris")
-    void testAsynchronousPOST(String url, String expectedMsg, boolean sameClient)
-        throws Exception
-    {
-        out.print("---\n");
-        HttpClient client = null;
-        for (int i=0; i< ITERATION_COUNT; i++) {
-            if (!sameClient || client == null)
-                client = newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .POST(BodyPublishers.ofInputStream(() -> new InfiniteInputStream()))
-                    .build();
-            try {
-                HttpResponse<String> response = client.sendAsync(request, ofString()).get();
-                String body = response.body();
-                out.println(response + ": " + body);
-                fail("UNEXPECTED RESPONSE: " + response);
-            } catch (ExecutionException ee) {
-                if (ee.getCause() instanceof IOException) {
-                    IOException ioe = (IOException) ee.getCause();
-                    out.println("Caught expected exception:" + ioe);
-                    String msg = ioe.getMessage();
-
-                    List<String> expectedMessages = new ArrayList<>();
-                    expectedMessages.add(expectedMsg);
-                    MSGS_ORDER.stream().takeWhile(s -> !s.equals(expectedMsg))
-                            .forEach(expectedMessages::add);
-
-                    assertTrue(expectedMessages.stream().anyMatch(s -> msg.indexOf(s) != -1),
-                               "exception msg:[" + msg + "], not in [" + expectedMessages);
-                    assertNoConnectionExpiredException(ioe);
-                } else {
-                    throw ee;
-                }
-            }
         }
     }
 
@@ -447,7 +394,9 @@ public class ShortResponseBody {
             try {
                 ss.close();
             } catch (IOException e) {
-                throw new UncheckedIOException("Unexpected", e);
+                out.println("Unexpected exception while closing server: " + e);
+                e.printStackTrace(out);
+                throw new UncheckedIOException("Unexpected: ", e);
             }
         }
     }
@@ -472,9 +421,12 @@ public class ShortResponseBody {
                         ((SSLSocket)s).startHandshake();
                     }
                     out.println("Server: got connection, closing immediately ");
-                } catch (IOException e) {
-                    if (!closed)
-                        throw new UncheckedIOException("Unexpected", e);
+                } catch (Throwable e) {
+                    if (!closed) {
+                        out.println("Unexpected exception in server: " + e);
+                        e.printStackTrace(out);
+                        throw new RuntimeException("Unexpected: ", e);
+                    }
                 }
             }
         }
@@ -543,9 +495,12 @@ public class ShortResponseBody {
                         os.write(responseBytes[i]);
                         os.flush();
                     }
-                } catch (IOException e) {
-                    if (!closed)
-                        throw new UncheckedIOException("Unexpected", e);
+                } catch (Throwable e) {
+                    if (!closed) {
+                        out.println("Unexpected exception in server: " + e);
+                        e.printStackTrace(out);
+                        throw new RuntimeException("Unexpected: " + e, e);
+                    }
                 }
             }
         }
@@ -672,27 +627,28 @@ public class ShortResponseBody {
 
         closeImmediatelyServer = new PlainCloseImmediatelyServer();
         httpURIClsImed = "http://" + serverAuthority(closeImmediatelyServer)
-                + "/http1/closeImmediately/foo";
+                + "/http1/closeImmediately/req=%reqnb%/foo";
 
         closeImmediatelyHttpsServer = new SSLCloseImmediatelyServer();
         httpsURIClsImed = "https://" + serverAuthority(closeImmediatelyHttpsServer)
-                + "/https1/closeImmediately/foo";
+                + "/https1/closeImmediately/req=%reqnb%/foo";
 
         variableLengthServer = new PlainVariableLengthServer();
         httpURIVarLen = "http://" + serverAuthority(variableLengthServer)
-                + "/http1/variable/bar";
+                + "/http1/variable/req=%reqnb%/bar";
 
         variableLengthHttpsServer = new SSLVariableLengthServer();
         httpsURIVarLen = "https://" + serverAuthority(variableLengthHttpsServer)
-                + "/https1/variable/bar";
+                + "/https1/variable/req=%reqnb%/bar";
 
         fixedLengthServer = new FixedLengthServer();
         httpURIFixLen = "http://" + serverAuthority(fixedLengthServer)
-                + "/http1/fixed/baz";
+                + "/http1/fixed/req=%reqnb%/baz";
     }
 
     @AfterTest
     public void teardown() throws Exception {
+        if (sharedClient != null) sharedClient = null;
         closeImmediatelyServer.close();
         closeImmediatelyHttpsServer.close();
         variableLengthServer.close();

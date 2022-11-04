@@ -22,22 +22,22 @@
  */
 
 /*
-  test
-  @bug       6346690
-  @summary   Tests that key_typed is consumed after mnemonic key_pressed is handled for a menu item.
-  @author    anton.tarasov@sun.com: area=awt-focus
-  @library   ../../../../lib/testlibrary
-  @build jdk.testlibrary.OSInfo
-  @run       applet ConsumeNextMnemonicKeyTypedTest.html
+  @test
+  @key headful
+  @bug        6346690
+  @summary    Tests that key_typed is consumed after mnemonic key_pressed is handled for a menu item.
+  @library    /test/lib
+  @build      jdk.test.lib.Platform
+  @run        main ConsumeNextMnemonicKeyTypedTest
 */
+
+import jdk.test.lib.Platform;
 
 import java.awt.*;
 import javax.swing.*;
 import java.awt.event.*;
-import java.applet.Applet;
 
-
-public class ConsumeNextMnemonicKeyTypedTest extends Applet {
+public class ConsumeNextMnemonicKeyTypedTest {
     Robot robot;
     JFrame frame = new JFrame("Test Frame");
     JTextField text = new JTextField();
@@ -58,10 +58,6 @@ public class ConsumeNextMnemonicKeyTypedTest extends Applet {
         } catch (AWTException e) {
             throw new RuntimeException("Error: unable to create robot", e);
         }
-        // Create instructions for the user here, as well as set up
-        // the environment -- set the layout manager, add buttons,
-        // etc.
-        this.setLayout (new BorderLayout ());
     }
 
     public void start() {
@@ -74,7 +70,7 @@ public class ConsumeNextMnemonicKeyTypedTest extends Applet {
         frame.setJMenuBar(bar);
         frame.pack();
 
-        frame.setLocation(800, 0);
+        frame.setLocationRelativeTo(null);
         frame.setVisible(true);
 
         test();
@@ -116,7 +112,7 @@ public class ConsumeNextMnemonicKeyTypedTest extends Applet {
 
         robot.waitForIdle();
 
-        if (jdk.testlibrary.OSInfo.getOSType() == jdk.testlibrary.OSInfo.OSType.MACOSX) {
+        if (Platform.isOSX()) {
             robot.keyPress(KeyEvent.VK_CONTROL);
         }
         robot.keyPress(KeyEvent.VK_ALT);
@@ -124,7 +120,7 @@ public class ConsumeNextMnemonicKeyTypedTest extends Applet {
         robot.delay(100);
         robot.keyRelease(KeyEvent.VK_F);
         robot.keyRelease(KeyEvent.VK_ALT);
-        if (jdk.testlibrary.OSInfo.getOSType() == jdk.testlibrary.OSInfo.OSType.MACOSX) {
+        if (Platform.isOSX()) {
             robot.keyRelease(KeyEvent.VK_CONTROL);
         }
 

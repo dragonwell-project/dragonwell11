@@ -37,6 +37,7 @@ class CompileTask;
 // Bring the JVMCI compiler thread into the VM state.
 #define JVMCI_VM_ENTRY_MARK                       \
   JavaThread* thread = JavaThread::current(); \
+  MACOS_AARCH64_ONLY(ThreadWXEnable __wx(WXWrite, thread)); \
   ThreadInVMfromNative __tiv(thread);       \
   ResetNoHandleMark rnhm;                   \
   HandleMarkCleaner __hm(thread);           \
@@ -92,11 +93,10 @@ public:
                                     int method_index, Bytecodes::Code bc,
                                     InstanceKlass* loading_klass);
 
-  JVMCIEnv(CompileTask* task, int system_dictionary_modification_counter);
+  JVMCIEnv(CompileTask* task);
 
 private:
   CompileTask*     _task;
-  int              _system_dictionary_modification_counter;
 
   // Compilation result values
   const char*      _failure_reason;

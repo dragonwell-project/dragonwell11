@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,43 +23,41 @@
  * questions.
  */
 
-#include "awt.h"
-#include "awt_Toolkit.h"
-#include "awt_Component.h"
-#include "awt_Robot.h"
 #include "sun_awt_windows_WRobotPeer.h"
 #include "java_awt_event_InputEvent.h"
+#include "awt_Component.h"
 #include <winuser.h>
 
-AwtRobot::AwtRobot( jobject peer )
-{
-    JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
-    m_peerObject = env->NewWeakGlobalRef(peer);
-    JNU_CHECK_EXCEPTION(env);
-    JNI_SET_PDATA(peer, this);
-}
-
-AwtRobot::~AwtRobot()
-{
-}
-
-static int signum(int i) {
-  // special version of signum which returns 1 when value is 0
-  return i >= 0 ? 1 : -1;
-}
-
-void AwtRobot::MouseMove( jint x, jint y)
+static void MouseMove(jint x, jint y)
 {
     INPUT mouseInput = {0};
     mouseInput.type = INPUT_MOUSE;
     mouseInput.mi.time = 0;
-    mouseInput.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
-    mouseInput.mi.dx = (x * 65536 /::GetSystemMetrics(SM_CXSCREEN)) + signum(x);
-    mouseInput.mi.dy = (y * 65536 /::GetSystemMetrics(SM_CYSCREEN)) + signum(y);
+
+    // The following calculations take into account a multi-monitor setup using
+    // a virtual screen for all monitors combined.
+    // More details from Microsoft are here --
+    // https://docs.microsoft.com/en-us/windows/win32/gdi/the-virtual-screen
+
+    x -= ::GetSystemMetrics(SM_XVIRTUALSCREEN);
+    y -= ::GetSystemMetrics(SM_YVIRTUALSCREEN);
+
+    mouseInput.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE |
+                            MOUSEEVENTF_VIRTUALDESK;
+
+    int scW = ::GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    int scH = ::GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+    // The following calculation to deduce mouse coordinates is based on
+    // empirical data
+    mouseInput.mi.dx = (x * 65536 + scW - 1) / scW;
+    mouseInput.mi.dy = (y * 65536 + scH - 1) / scH;
+
     ::SendInput(1, &mouseInput, sizeof(mouseInput));
+
 }
 
-void AwtRobot::MousePress( jint buttonMask )
+static void MousePress(jint buttonMask)
 {
     DWORD dwFlags = 0L;
     // According to MSDN: Software Driving Software
@@ -101,7 +99,7 @@ void AwtRobot::MousePress( jint buttonMask )
     ::SendInput(1, &mouseInput, sizeof(mouseInput));
 }
 
-void AwtRobot::MouseRelease( jint buttonMask )
+static void MouseRelease(jint buttonMask)
 {
     DWORD dwFlags = 0L;
     // According to MSDN: Software Driving Software
@@ -144,11 +142,11 @@ void AwtRobot::MouseRelease( jint buttonMask )
     ::SendInput(1, &mouseInput, sizeof(mouseInput));
 }
 
-void AwtRobot::MouseWheel (jint wheelAmt) {
+static void MouseWheel(jint wheelAmt) {
     mouse_event(MOUSEEVENTF_WHEEL, 0, 0, wheelAmt * -1 * WHEEL_DELTA, 0);
 }
 
-inline jint AwtRobot::WinToJavaPixel(USHORT r, USHORT g, USHORT b)
+inline jint WinToJavaPixel(USHORT r, USHORT g, USHORT b)
 {
     jint value =
             0xFF << 24 | // alpha channel is always turned all the way up
@@ -158,7 +156,7 @@ inline jint AwtRobot::WinToJavaPixel(USHORT r, USHORT g, USHORT b)
     return value;
 }
 
-void AwtRobot::GetRGBPixels(jint x, jint y, jint width, jint height, jintArray pixelArray)
+static void GetRGBPixels(jint x, jint y, jint width, jint height, jintArray pixelArray)
 {
     DASSERT(width > 0 && height > 0);
 
@@ -255,17 +253,7 @@ void AwtRobot::GetRGBPixels(jint x, jint y, jint width, jint height, jintArray p
     ::DeleteDC(hdcScreen);
 }
 
-void AwtRobot::KeyPress( jint jkey )
-{
-    DoKeyEvent(jkey, 0); // no flags means key down
-}
-
-void AwtRobot::KeyRelease( jint jkey )
-{
-    DoKeyEvent(jkey, KEYEVENTF_KEYUP);
-}
-
-void AwtRobot::DoKeyEvent( jint jkey, DWORD dwFlags )
+static void DoKeyEvent(jint jkey, DWORD dwFlags)
 {
     UINT        vkey;
     UINT        modifiers;
@@ -297,48 +285,16 @@ void AwtRobot::DoKeyEvent( jint jkey, DWORD dwFlags )
     }
 }
 
-//
-// utility function to get the C++ object from the Java one
-//
-// (static)
-AwtRobot * AwtRobot::GetRobot( jobject self )
-{
-    JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
-    AwtRobot * robot = (AwtRobot *)JNI_GET_PDATA(self);
-    DASSERT( !::IsBadWritePtr( robot, sizeof(AwtRobot)));
-    return robot;
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // Native method declarations
 //
-
-JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer_create(
-    JNIEnv * env, jobject self)
-{
-    TRY;
-
-    new AwtRobot(self);
-
-    CATCH_BAD_ALLOC;
-}
-
-JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer__1dispose(
-    JNIEnv *env, jobject self)
-{
-    TRY_NO_VERIFY;
-
-    AwtObject::_Dispose(self);
-
-    CATCH_BAD_ALLOC;
-}
 
 JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer_mouseMoveImpl(
     JNIEnv * env, jobject self, jint x, jint y)
 {
     TRY;
 
-    AwtRobot::GetRobot(self)->MouseMove(x, y);
+    MouseMove(x, y);
 
     CATCH_BAD_ALLOC;
 }
@@ -348,7 +304,7 @@ JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer_mousePress(
 {
     TRY;
 
-    AwtRobot::GetRobot(self)->MousePress(buttons);
+    MousePress(buttons);
 
     CATCH_BAD_ALLOC;
 }
@@ -358,7 +314,7 @@ JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer_mouseRelease(
 {
     TRY;
 
-    AwtRobot::GetRobot(self)->MouseRelease(buttons);
+    MouseRelease(buttons);
 
     CATCH_BAD_ALLOC;
 }
@@ -368,7 +324,7 @@ JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer_mouseWheel(
 {
     TRY;
 
-    AwtRobot::GetRobot(self)->MouseWheel(wheelAmt);
+    MouseWheel(wheelAmt);
 
     CATCH_BAD_ALLOC;
 }
@@ -378,7 +334,7 @@ JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer_getRGBPixels(
 {
     TRY;
 
-    AwtRobot::GetRobot(self)->GetRGBPixels(x, y, width, height, pixelArray);
+    GetRGBPixels(x, y, width, height, pixelArray);
 
     CATCH_BAD_ALLOC;
 }
@@ -388,7 +344,7 @@ JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer_keyPress(
 {
     TRY;
 
-    AwtRobot::GetRobot(self)->KeyPress(javakey);
+    DoKeyEvent(javakey, 0); // no flags means key down
 
     CATCH_BAD_ALLOC;
 }
@@ -398,7 +354,7 @@ JNIEXPORT void JNICALL Java_sun_awt_windows_WRobotPeer_keyRelease(
 {
     TRY;
 
-    AwtRobot::GetRobot(self)->KeyRelease(javakey);
+    DoKeyEvent(javakey, KEYEVENTF_KEYUP);
 
     CATCH_BAD_ALLOC;
 }

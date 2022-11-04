@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2017, 2022, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,37 +22,41 @@
  *
  */
 
+package gc.stress.gclocker;
+
 /*
  * @test TestGCLockerWithShenandoah
  * @key gc
+ * @library /
  * @requires vm.gc.Shenandoah & !vm.graal.enabled
  * @summary Stress Shenandoah's JNI handling by calling GetPrimitiveArrayCritical while concurrently filling up old gen.
  *
  * @run main/native/othervm/timeout=200 -Xlog:gc*=info -Xms1500m -Xmx1500m -XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions
  *      -XX:+UseShenandoahGC
  *      -XX:+ShenandoahVerify
- *      TestGCLockerWithShenandoah
+ *      gc.stress.gclocker.TestGCLockerWithShenandoah
  *
  * @run main/native/othervm/timeout=200 -Xlog:gc*=info -Xms1500m -Xmx1500m -XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions
  *      -XX:+UseShenandoahGC
- *      TestGCLockerWithShenandoah
+ *      gc.stress.gclocker.TestGCLockerWithShenandoah
  */
 
 /*
  * @test TestGCLockerWithShenandoah
  * @key gc
+ * @library /
  * @requires vm.gc.Shenandoah & !vm.graal.enabled
  * @summary Stress Shenandoah's JNI handling by calling GetPrimitiveArrayCritical while concurrently filling up old gen.
  *
  * @run main/native/othervm/timeout=200 -Xlog:gc*=info -Xms1500m -Xmx1500m -XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive
  *      -XX:+ShenandoahOOMDuringEvacALot
- *      TestGCLockerWithShenandoah
+ *      gc.stress.gclocker.TestGCLockerWithShenandoah
  *
  * @run main/native/othervm/timeout=200 -Xlog:gc*=info -Xms1500m -Xmx1500m -XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive
  *      -XX:+ShenandoahAllocFailureALot
- *      TestGCLockerWithShenandoah
+ *      gc.stress.gclocker.TestGCLockerWithShenandoah
  */
 public class TestGCLockerWithShenandoah {
     public static void main(String[] args) {

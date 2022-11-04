@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 
+package gc.arguments;
+
 /*
  * @test TestVerifyBeforeAndAfterGCFlags
  * @key gc
@@ -32,7 +34,8 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.management
  * @library /test/lib
- * @run driver TestVerifyBeforeAndAfterGCFlags
+ * @library /
+ * @run driver gc.arguments.TestVerifyBeforeAndAfterGCFlags
  */
 
 import java.util.ArrayList;
@@ -74,7 +77,6 @@ public class TestVerifyBeforeAndAfterGCFlags {
         if (opts != null && (opts.length > 0)) {
             Collections.addAll(vmOpts, opts);
         }
-
         Collections.addAll(vmOpts, new String[] {
                                        "-Xlog:gc+verify=debug",
                                        "-Xmx5m",
@@ -87,8 +89,8 @@ public class TestVerifyBeforeAndAfterGCFlags {
                                                       : "-XX:-VerifyAfterGC"),
                                        GarbageProducer.class.getName() });
         ProcessBuilder procBuilder =
-            ProcessTools.createJavaProcessBuilder(vmOpts.toArray(
-                                                   new String[vmOpts.size()]));
+            GCArguments.createJavaProcessBuilder(vmOpts.toArray(
+                                                     new String[vmOpts.size()]));
         OutputAnalyzer analyzer = new OutputAnalyzer(procBuilder.start());
 
         analyzer.shouldHaveExitValue(0);

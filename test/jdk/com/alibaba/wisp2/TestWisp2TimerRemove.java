@@ -49,7 +49,8 @@ public class TestWisp2TimerRemove {
                         .access("queue")
                         .getInt("size");
             }).get();
-            assertLessThanOrEqual(ql, WORKERS);
+            // ThreadPoolExecutor itself could be waiting on timer
+            assertLessThanOrEqual(ql, WORKERS * 2 - 1);
         }
     }
 

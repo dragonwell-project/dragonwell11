@@ -63,13 +63,12 @@ if [ $? != '0' ]; then
     exit 1
 fi
 
-${JAVA} -cp . -Xmx4g -Xms4g -Xmn2g ${TEST_CLASS}&
-
+${JAVA} -cp . -Xmx4g -Xms4g -Xmn2g ${TEST_CLASS} &
+PID=$!
+if [ $? != 0 ] || [ -z "${PID}" ]; then exit 1; fi
+trap "kill -9 ${PID}" exit
 # wait child java process to allocate memory
 sleep 5
-
-PID=$(${JPS} | grep ${TEST_CLASS} | awk '{print $1}')
-if [ $? != 0 ] || [ -z "${PID}" ]; then exit 1; fi
 
 # full dump must be > 1G
 FULL_DUMP_SIZE_THRESHOLD=$(( 1024 * 1024 * 1024))

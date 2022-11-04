@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 
+package gc.stress;
+
 /*
  * @test TestReclaimStringsLeaksMemory
  * @bug 8180048
@@ -29,12 +31,12 @@
  * @key gc
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
- * @run main/othervm TestReclaimStringsLeaksMemory
- * @run main/othervm TestReclaimStringsLeaksMemory -XX:+UseSerialGC
- * @run main/othervm TestReclaimStringsLeaksMemory -XX:+UseParallelGC
- * @run main/othervm TestReclaimStringsLeaksMemory -XX:+UseParallelGC -XX:-UseParallelOldGC
- * @run main/othervm TestReclaimStringsLeaksMemory -XX:+UseConcMarkSweepGC
- * @run main/othervm TestReclaimStringsLeaksMemory -XX:+UseG1GC
+ * @run main/othervm gc.stress.TestReclaimStringsLeaksMemory
+ * @run main/othervm gc.stress.TestReclaimStringsLeaksMemory -XX:+UseSerialGC
+ * @run main/othervm gc.stress.TestReclaimStringsLeaksMemory -XX:+UseParallelGC
+ * @run main/othervm gc.stress.TestReclaimStringsLeaksMemory -XX:+UseParallelGC -XX:-UseParallelOldGC
+ * @run main/othervm gc.stress.TestReclaimStringsLeaksMemory -XX:+UseConcMarkSweepGC
+ * @run main/othervm gc.stress.TestReclaimStringsLeaksMemory -XX:+UseG1GC
  */
 
 import java.util.Arrays;
@@ -48,17 +50,17 @@ import jdk.test.lib.process.ProcessTools;
 
 public class TestReclaimStringsLeaksMemory {
 
-    // The amount of memory in kB reserved in the "Symbol" category that indicates a memory leak for
+    // The amount of memory in B reserved in the "Symbol" category that indicates a memory leak for
     // this test.
-    public static final int ReservedThreshold = 70000;
+    public static final int ReservedThreshold = 70000000;
 
     public static void main(String[] args) throws Exception {
-        ArrayList<String> baseargs = new ArrayList(Arrays.asList( "-Xms256M",
-                                                                  "-Xmx256M",
-                                                                  "-Xlog:gc*,stringtable*=debug:gc.log",
-                                                                  "-XX:NativeMemoryTracking=summary",
-                                                                  "-XX:+UnlockDiagnosticVMOptions",
-                                                                  "-XX:+PrintNMTStatistics" ));
+        ArrayList<String> baseargs = new ArrayList<>(Arrays.asList("-Xms256M",
+                                                                   "-Xmx256M",
+                                                                   "-Xlog:gc*,stringtable*=debug:gc.log",
+                                                                   "-XX:NativeMemoryTracking=summary",
+                                                                   "-XX:+UnlockDiagnosticVMOptions",
+                                                                   "-XX:+PrintNMTStatistics" ));
         baseargs.addAll(Arrays.asList(args));
         baseargs.add(GCTest.class.getName());
         ProcessBuilder pb_default =
@@ -78,7 +80,7 @@ public class TestReclaimStringsLeaksMemory {
         }
 
         int reserved = Integer.parseInt(m.group(1));
-        Asserts.assertLT(reserved, ReservedThreshold, "Reserved memory size is " + reserved + "KB which is greater than or equal to " + ReservedThreshold + "KB indicating a memory leak");
+        Asserts.assertLT(reserved, ReservedThreshold, "Reserved memory size is " + reserved + "B which is greater than or equal to " + ReservedThreshold + "B indicating a memory leak");
 
         output.shouldHaveExitValue(0);
     }

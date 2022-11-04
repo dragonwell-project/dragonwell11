@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -55,6 +55,9 @@ endif
 # Disabling undef, switch, format-nonliteral and tautological-undefined-compare
 # warnings for clang because of test source.
 
+# Disable MSVC warning C4146 "unary minus operator applied to unsigned type,
+# result still unsigned". This operation is well-defined.
+
 # Solaris: Disable inlining (+d) to workaround Assertion:   (../lnk/vardescr.h, line 109)
 $(eval $(call SetupNativeCompilation, BUILD_GTEST_LIBJVM, \
     NAME := jvm, \
@@ -74,10 +77,11 @@ $(eval $(call SetupNativeCompilation, BUILD_GTEST_LIBJVM, \
     CFLAGS_windows := -EHsc, \
     CFLAGS_solaris := -DGTEST_HAS_EXCEPTIONS=0 -library=stlport4 +d, \
     CFLAGS_macosx := -DGTEST_OS_MAC=1, \
-    DISABLED_WARNINGS_gcc := undef, \
+    DISABLED_WARNINGS_gcc := undef stringop-overflow, \
     DISABLED_WARNINGS_clang := undef switch format-nonliteral \
         tautological-undefined-compare $(BUILD_LIBJVM_DISABLED_WARNINGS_clang), \
     DISABLED_WARNINGS_solstudio := identexpected, \
+    DISABLED_WARNINGS_microsoft := 4146, \
     LDFLAGS := $(JVM_LDFLAGS), \
     LDFLAGS_solaris := -library=stlport4 $(call SET_SHARED_LIBRARY_ORIGIN), \
     LIBS := $(JVM_LIBS), \

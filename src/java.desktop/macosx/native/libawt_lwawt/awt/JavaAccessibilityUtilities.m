@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,17 +50,21 @@ static jclass sjc_CAccessibility = NULL;
 
 NSSize getAxComponentSize(JNIEnv *env, jobject axComponent, jobject component)
 {
+    GET_CACCESSIBILITY_CLASS_RETURN(NSZeroSize);
     DECLARE_CLASS_RETURN(jc_Dimension, "java/awt/Dimension", NSZeroSize);
     DECLARE_FIELD_RETURN(jf_width, jc_Dimension, "width", "I", NSZeroSize);
     DECLARE_FIELD_RETURN(jf_height, jc_Dimension, "height", "I", NSZeroSize);
     DECLARE_STATIC_METHOD_RETURN(jm_getSize, sjc_CAccessibility, "getSize",
            "(Ljavax/accessibility/AccessibleComponent;Ljava/awt/Component;)Ljava/awt/Dimension;", NSZeroSize);
 
-    jobject dimension = (*env)->CallStaticObjectMethod(env, jc_Dimension, jm_getSize, axComponent, component);
+    jobject dimension = (*env)->CallStaticObjectMethod(env, sjc_CAccessibility, jm_getSize, axComponent, component);
     CHECK_EXCEPTION();
 
     if (dimension == NULL) return NSZeroSize;
-    return NSMakeSize((*env)->GetIntField(env, dimension, jf_width), (*env)->GetIntField(env, dimension, jf_height));
+
+    NSSize size = NSMakeSize((*env)->GetIntField(env, dimension, jf_width), (*env)->GetIntField(env, dimension, jf_height));
+    (*env)->DeleteLocalRef(env, dimension);
+    return size;
 }
 
 NSString *getJavaRole(JNIEnv *env, jobject axComponent, jobject component)
@@ -211,7 +215,9 @@ NSPoint getAxComponentLocationOnScreen(JNIEnv *env, jobject axComponent, jobject
                       axComponent, component);
     CHECK_EXCEPTION();
     if (jpoint == NULL) return NSZeroPoint;
-    return NSMakePoint((*env)->GetIntField(env, jpoint, sjf_X), (*env)->GetIntField(env, jpoint, sjf_Y));
+    NSPoint p = NSMakePoint((*env)->GetIntField(env, jpoint, sjf_X), (*env)->GetIntField(env, jpoint, sjf_Y));
+    (*env)->DeleteLocalRef(env, jpoint);
+    return p;
 }
 
 jint getAxTextCharCount(JNIEnv *env, jobject axText, jobject component)
@@ -417,7 +423,7 @@ void initializeRoles()
     [sRoles setObject:NSAccessibilitySplitGroupRole forKey:@"splitpane"];
     [sRoles setObject:NSAccessibilityValueIndicatorRole forKey:@"statusbar"];
     [sRoles setObject:NSAccessibilityGroupRole forKey:@"swingcomponent"];
-    [sRoles setObject:NSAccessibilityTableRole forKey:@"table"];
+    [sRoles setObject:NSAccessibilityGridRole forKey:@"table"];
     [sRoles setObject:NSAccessibilityTextFieldRole forKey:@"text"];
     [sRoles setObject:NSAccessibilityTextAreaRole forKey:@"textarea"]; // supports top/bottom of document notifications: CAccessability.getAccessibleRole()
     [sRoles setObject:NSAccessibilityCheckBoxRole forKey:@"togglebutton"];

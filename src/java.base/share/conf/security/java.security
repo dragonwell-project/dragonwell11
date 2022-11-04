@@ -450,21 +450,22 @@ networkaddress.cache.negative.ttl=10
 # Policy for failed Kerberos KDC lookups:
 #
 # When a KDC is unavailable (network error, service failure, etc), it is
-# put inside a blacklist and accessed less often for future requests. The
+# put inside a secondary list and accessed less often for future requests. The
 # value (case-insensitive) for this policy can be:
 #
 # tryLast
-#    KDCs in the blacklist are always tried after those not on the list.
+#    KDCs in the secondary list are always tried after those not on the list.
 #
 # tryLess[:max_retries,timeout]
-#    KDCs in the blacklist are still tried by their order in the configuration,
-#    but with smaller max_retries and timeout values. max_retries and timeout
-#    are optional numerical parameters (default 1 and 5000, which means once
-#    and 5 seconds). Please notes that if any of the values defined here is
-#    more than what is defined in krb5.conf, it will be ignored.
+#    KDCs in the secondary list are still tried by their order in the
+#    configuration, but with smaller max_retries and timeout values.
+#    max_retries and timeout are optional numerical parameters (default 1 and
+#    5000, which means once and 5 seconds). Please note that if any of the
+#    values defined here are more than what is defined in krb5.conf, it will be
+#    ignored.
 #
-# Whenever a KDC is detected as available, it is removed from the blacklist.
-# The blacklist is reset when krb5.conf is reloaded. You can add
+# Whenever a KDC is detected as available, it is removed from the secondary
+# list. The secondary list is reset when krb5.conf is reloaded. You can add
 # refreshKrb5Config=true to a JAAS configuration file so that krb5.conf is
 # reloaded whenever a JAAS authentication is attempted.
 #
@@ -575,7 +576,7 @@ jdk.disabled.namedCurves = secp112r1, secp112r2, secp128r1, secp128r2, \
 # can be included in the disabledAlgorithms properties.  These properties are
 # to help manage common actions easier across multiple disabledAlgorithm
 # properties.
-# There is one defined security property:  jdk.disabled.NamedCurves
+# There is one defined security property:  jdk.disabled.namedCurves
 # See the property for more specific details.
 #
 #
@@ -652,6 +653,7 @@ jdk.disabled.namedCurves = secp112r1, secp112r2, secp128r1, secp128r2, \
 #
 jdk.certpath.disabledAlgorithms=MD2, MD5, SHA1 jdkCA & usage TLSServer, \
     RSA keySize < 1024, DSA keySize < 1024, EC keySize < 224, \
+    SHA1 usage SignedJAR & denyAfter 2019-01-01, \
     include jdk.disabled.namedCurves
 
 #
@@ -716,7 +718,8 @@ jdk.security.legacyAlgorithms=SHA1, \
 # See "jdk.certpath.disabledAlgorithms" for syntax descriptions.
 #
 jdk.jar.disabledAlgorithms=MD2, MD5, RSA keySize < 1024, \
-      DSA keySize < 1024, include jdk.disabled.namedCurves
+      DSA keySize < 1024, SHA1 denyAfter 2019-01-01, \
+      include jdk.disabled.namedCurves
 
 #
 # Algorithm restrictions for Secure Socket Layer/Transport Layer Security
@@ -1210,12 +1213,12 @@ jceks.key.serialFilter = java.base/java.lang.Enum;java.base/java.security.KeyRep
 # The algorithm used to calculate the optional MacData at the end of a PKCS12
 # file. This can be any HmacPBE algorithm defined in the Mac section of the
 # Java Security Standard Algorithm Names Specification. When set to "NONE",
-# no Mac is generated. The default value is "HmacPBESHA1".
-#keystore.pkcs12.macAlgorithm = HmacPBESHA1
+# no Mac is generated. The default value is "HmacPBESHA256".
+#keystore.pkcs12.macAlgorithm = HmacPBESHA256
 
 # The iteration count used by the MacData algorithm. This value must be a
-# positive integer. The default value is 100000.
-#keystore.pkcs12.macIterationCount = 100000
+# positive integer. The default value is 10000.
+#keystore.pkcs12.macIterationCount = 10000
 
 #
 # Enhanced exception message information

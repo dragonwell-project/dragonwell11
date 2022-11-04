@@ -422,6 +422,14 @@
 #define NOT_LINUX(code) code
 #endif
 
+#ifdef __APPLE__
+#define MACOS_ONLY(code) code
+#define NOT_MACOS(code)
+#else
+#define MACOS_ONLY(code)
+#define NOT_MACOS(code) code
+#endif
+
 #ifdef AIX
 #define AIX_ONLY(code) code
 #define NOT_AIX(code)
@@ -590,6 +598,8 @@
 #define AARCH64_ONLY(code)
 #define NOT_AARCH64(code) code
 #endif
+
+#define MACOS_AARCH64_ONLY(x) MACOS_ONLY(AARCH64_ONLY(x))
 
 #ifdef VM_LITTLE_ENDIAN
 #define LITTLE_ENDIAN_ONLY(code) code

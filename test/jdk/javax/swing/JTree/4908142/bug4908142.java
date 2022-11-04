@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,65 +32,78 @@
  * @build Util
  * @run main bug4908142
  */
-import javax.swing.*;
-import javax.swing.tree.*;
-import java.awt.*;
-import java.awt.event.*;
+import javax.swing.JFrame;
+import javax.swing.JScrollPane;
+import javax.swing.JTree;
+import javax.swing.SwingUtilities;
+import javax.swing.tree.DefaultMutableTreeNode;
+import java.awt.Robot;
+import java.awt.event.KeyEvent;
 import java.util.concurrent.Callable;
 
 public class bug4908142 {
 
-    private static JTree tree;
+    private static JFrame fr = null;
+    private static JTree tree = null;
 
     public static void main(String[] args) throws Exception {
 
         Robot robot = new Robot();
         robot.setAutoDelay(50);
 
-        SwingUtilities.invokeAndWait(new Runnable() {
+        try {
+            SwingUtilities.invokeAndWait(new Runnable() {
 
-            public void run() {
-                createAndShowGUI();
+                public void run() {
+                    createAndShowGUI();
+                }
+            });
+
+            robot.waitForIdle();
+            robot.delay(1000);
+
+            SwingUtilities.invokeAndWait(new Runnable() {
+
+                public void run() {
+                    tree.requestFocus();
+                    tree.setSelectionRow(0);
+                }
+            });
+
+            robot.waitForIdle();
+            robot.delay(500);
+
+            robot.keyPress(KeyEvent.VK_A);
+            robot.keyRelease(KeyEvent.VK_A);
+            robot.waitForIdle();
+            robot.keyPress(KeyEvent.VK_A);
+            robot.keyRelease(KeyEvent.VK_A);
+            robot.waitForIdle();
+            robot.keyPress(KeyEvent.VK_D);
+            robot.keyRelease(KeyEvent.VK_D);
+            robot.waitForIdle();
+
+
+            String sel = Util.invokeOnEDT(new Callable<String>() {
+
+                @Override
+                public String call() throws Exception {
+                    return tree.getLastSelectedPathComponent().toString();
+                }
+            });
+
+            if (!"aad".equals(sel)) {
+                throw new Error("The selected index should be \"aad\", but not " + sel);
             }
-        });
-
-        robot.waitForIdle();
-
-        SwingUtilities.invokeAndWait(new Runnable() {
-
-            public void run() {
-                tree.requestFocus();
-                tree.setSelectionRow(0);
+        } finally {
+            if (fr != null) {
+                SwingUtilities.invokeAndWait(fr::dispose);
             }
-        });
-
-        robot.waitForIdle();
-
-
-        robot.keyPress(KeyEvent.VK_A);
-        robot.keyRelease(KeyEvent.VK_A);
-        robot.keyPress(KeyEvent.VK_A);
-        robot.keyRelease(KeyEvent.VK_A);
-        robot.keyPress(KeyEvent.VK_D);
-        robot.keyRelease(KeyEvent.VK_D);
-        robot.waitForIdle();
-
-
-        String sel = Util.invokeOnEDT(new Callable<String>() {
-
-            @Override
-            public String call() throws Exception {
-                return tree.getLastSelectedPathComponent().toString();
-            }
-        });
-
-        if (!"aad".equals(sel)) {
-            throw new Error("The selected index should be \"aad\", but not " + sel);
         }
     }
 
     private static void createAndShowGUI() {
-        JFrame fr = new JFrame("Test");
+        fr = new JFrame("Test");
         fr.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         String[] data = {"aaa", "aab", "aac", "aad", "ade", "bba"};
@@ -104,6 +117,7 @@ public class bug4908142 {
 
         JScrollPane sp = new JScrollPane(tree);
         fr.getContentPane().add(sp);
+        fr.setLocationRelativeTo(null);
         fr.setSize(200, 200);
         fr.setVisible(true);
     }

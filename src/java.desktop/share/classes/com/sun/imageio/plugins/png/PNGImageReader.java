@@ -1166,8 +1166,7 @@ public class PNGImageReader extends ImageReader {
         // same bit depth as the source data
         boolean adjustBitDepths = false;
         int[] outputSampleSize = imRas.getSampleModel().getSampleSize();
-        int numBands = outputSampleSize.length;
-        for (int b = 0; b < numBands; b++) {
+        for (int b = 0; b < inputBands; b++) {
             if (outputSampleSize[b] != bitDepth) {
                 adjustBitDepths = true;
                 break;
@@ -1180,8 +1179,8 @@ public class PNGImageReader extends ImageReader {
         if (adjustBitDepths) {
             int maxInSample = (1 << bitDepth) - 1;
             int halfMaxInSample = maxInSample/2;
-            scale = new int[numBands][];
-            for (int b = 0; b < numBands; b++) {
+            scale = new int[inputBands][];
+            for (int b = 0; b < inputBands; b++) {
                 int maxOutSample = (1 << outputSampleSize[b]) - 1;
                 scale[b] = new int[maxInSample + 1];
                 for (int s = 0; s <= maxInSample; s++) {
@@ -1307,7 +1306,7 @@ public class PNGImageReader extends ImageReader {
 
                         passRow.getPixel(newSrcX, 0, ps);
                         if (adjustBitDepths) {
-                            for (int b = 0; b < numBands; b++) {
+                            for (int b = 0; b < inputBands; b++) {
                                 ps[b] = scale[b][ps[b]];
                             }
                         }
@@ -1399,6 +1398,13 @@ public class PNGImageReader extends ImageReader {
 
         int width = metadata.IHDR_width;
         int height = metadata.IHDR_height;
+
+        if ((long)width * height > Integer.MAX_VALUE - 2) {
+            // We are not able to properly decode image that has number
+            // of pixels greater than Integer.MAX_VALUE - 2
+            throw new IIOException("Can not read image of the size "
+                    + width + " by " + height);
+        }
 
         // Init default values
         sourceXSubsampling = 1;

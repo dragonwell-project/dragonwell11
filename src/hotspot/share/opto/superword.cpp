@@ -148,7 +148,7 @@ void SuperWord::transform_loop(IdealLoopTree* lpt, bool do_optimization) {
   // Skip any loops already optimized by slp
   if (cl->is_vectorized_loop()) return;
 
-  if (cl->do_unroll_only()) return;
+  if (cl->is_unroll_only()) return;
 
   if (cl->is_main_loop()) {
     // Check for pre-loop ending with CountedLoopEnd(Bool(Cmp(x,Opaque1(limit))))
@@ -2296,6 +2296,11 @@ void SuperWord::output() {
     }
     return;
   }
+
+  // Check that the loop to be vectorized does not have inconsistent reduction
+  // information, which would likely lead to a miscompilation.
+  assert(!lpt()->has_reduction_nodes() || cl->is_reduction_loop(),
+         "non-reduction loop contains reduction nodes");
 
 #ifndef PRODUCT
   if (TraceLoopOpts) {

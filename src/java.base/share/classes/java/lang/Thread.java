@@ -919,7 +919,7 @@ class Thread implements Runnable {
         boolean started = false;
         try {
             if (!(WEA != null && WispEngine.enableThreadAsWisp() &&
-                    WEA.tryStartThreadAsWisp(this, target))) {
+                    WEA.tryStartThreadAsWisp(this, target, this.stackSize))) {
                 start0();
             }
             started = true;
@@ -2024,6 +2024,9 @@ class Thread implements Runnable {
      * @since 1.5
      */
     public State getState() {
+        if (WEA != null) {
+            return WEA.getState(this);
+        }
         // get current thread state
         return jdk.internal.misc.VM.toThreadState(threadStatus);
     }

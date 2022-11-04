@@ -21,13 +21,15 @@
  * questions.
  */
 
+package gc.epsilon;
+
 /**
  * @test TestDieDefault
  * @key gc
  * @requires vm.gc.Epsilon & !vm.graal.enabled
  * @summary Epsilon GC should die on heap exhaustion
  * @library /test/lib
- * @run main TestDieDefault
+ * @run main gc.epsilon.TestDieDefault
  */
 
 import jdk.test.lib.process.OutputAnalyzer;
@@ -52,31 +54,24 @@ public class TestDieDefault {
   }
 
   public static void main(String[] args) throws Exception {
-    passWith("-Xmx128m",
+    passWith("-Xmx64m",
              "-XX:+UnlockExperimentalVMOptions",
              "-XX:+UseEpsilonGC",
              "-Dcount=1",
              TestDieDefault.Workload.class.getName());
 
-    failWith("-Xmx128m",
+    failWith("-Xmx64m",
              "-XX:+UnlockExperimentalVMOptions",
              "-XX:+UseEpsilonGC",
              TestDieDefault.Workload.class.getName());
 
-    failWith("-Xmx128m",
+    failWith("-Xmx64m",
              "-Xint",
              "-XX:+UnlockExperimentalVMOptions",
              "-XX:+UseEpsilonGC",
              TestDieDefault.Workload.class.getName());
 
-    failWith("-Xmx128m",
-             "-Xbatch",
-             "-Xcomp",
-             "-XX:+UnlockExperimentalVMOptions",
-             "-XX:+UseEpsilonGC",
-             TestDieDefault.Workload.class.getName());
-
-    failWith("-Xmx128m",
+    failWith("-Xmx64m",
              "-Xbatch",
              "-Xcomp",
              "-XX:TieredStopAtLevel=1",
@@ -84,7 +79,7 @@ public class TestDieDefault {
              "-XX:+UseEpsilonGC",
              TestDieDefault.Workload.class.getName());
 
-    failWith("-Xmx128m",
+    failWith("-Xmx64m",
              "-Xbatch",
              "-Xcomp",
              "-XX:-TieredCompilation",

@@ -96,14 +96,6 @@ JVMState* ParseGenerator::generate(JVMState* jvms) {
 
   Parse parser(jvms, method(), _expected_uses);
   // Grab signature for matching/allocation
-#ifdef ASSERT
-  if (parser.tf() != (parser.depth() == 1 ? C->tf() : tf())) {
-    MutexLockerEx ml(Compile_lock, Mutex::_no_safepoint_check_flag);
-    assert(C->env()->system_dictionary_modification_counter_changed(),
-           "Must invalidate if TypeFuncs differ");
-  }
-#endif
-
   GraphKit& exits = parser.exits();
 
   if (C->failing()) {
@@ -843,22 +835,30 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
       Node* receiver = kit.argument(0);
       if (receiver->Opcode() == Op_ConP) {
         input_not_const = false;
-        const TypeOopPtr* oop_ptr = receiver->bottom_type()->is_oopptr();
-        ciMethod* target = oop_ptr->const_oop()->as_method_handle()->get_vmtarget();
-        const int vtable_index = Method::invalid_vtable_index;
+        const TypeOopPtr* recv_toop = receiver->bottom_type()->isa_oopptr();
+        if (recv_toop != NULL) {
+          ciMethod* target = recv_toop->const_oop()->as_method_handle()->get_vmtarget();
+          const int vtable_index = Method::invalid_vtable_index;
 
-        if (!ciMethod::is_consistent_info(callee, target)) {
+          if (!ciMethod::is_consistent_info(callee, target)) {
+            print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
+                                   "signatures mismatch");
+            return NULL;
+          }
+
+          CallGenerator *cg = C->call_generator(target, vtable_index,
+                                                false /* call_does_dispatch */,
+                                                jvms,
+                                                true /* allow_inline */,
+                                                PROB_ALWAYS);
+          return cg;
+        } else {
+          assert(receiver->bottom_type() == TypePtr::NULL_PTR, "not a null: %s",
+                 Type::str(receiver->bottom_type()));
           print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
-                                 "signatures mismatch");
-          return NULL;
+                                 "receiver is always null");
         }
 
-        CallGenerator* cg = C->call_generator(target, vtable_index,
-                                              false /* call_does_dispatch */,
-                                              jvms,
-                                              true /* allow_inline */,
-                                              PROB_ALWAYS);
-        return cg;
       } else {
         print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
                                "receiver not constant");

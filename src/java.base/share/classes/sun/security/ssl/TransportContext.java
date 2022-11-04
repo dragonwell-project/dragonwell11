@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,7 @@
 package sun.security.ssl;
 
 import java.io.IOException;
+import java.net.SocketException;
 import java.security.AccessControlContext;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
@@ -262,7 +263,8 @@ class TransportContext implements ConnectionContext {
         } else {
             // Need a lock here so that the user_canceled alert and the
             // close_notify alert can be delivered together.
-            synchronized (outputRecord) {
+            outputRecord.recordLock.lock();
+            try {
                 try {
                     // send a user_canceled alert if needed.
                     if (isUserCanceled) {
@@ -274,6 +276,8 @@ class TransportContext implements ConnectionContext {
                 } finally {
                     outputRecord.close();
                 }
+            } finally {
+                outputRecord.recordLock.unlock();
             }
         }
     }
@@ -362,7 +366,12 @@ class TransportContext implements ConnectionContext {
 
         // invalidate the session
         if (conSession != null) {
-            conSession.invalidate();
+            // In the case of a low-layer transport error, we want to prevent
+            // the session from being invalidated since this is not a TLS-level
+            // error event.
+            if (!(cause instanceof SocketException)) {
+                conSession.invalidate();
+            }
         }
 
         if (handshakeContext != null &&

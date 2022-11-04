@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -98,6 +99,7 @@
 #include "runtime/threadCritical.hpp"
 #include "runtime/threadSMR.inline.hpp"
 #include "runtime/threadStatisticalInfo.hpp"
+#include "runtime/threadWXSetters.inline.hpp"
 #include "runtime/timer.hpp"
 #include "runtime/timerTrace.hpp"
 #include "runtime/vframe.inline.hpp"
@@ -318,6 +320,8 @@ Thread::Thread() {
   if (barrier_set != NULL) {
     barrier_set->on_thread_create(this);
   }
+
+  MACOS_AARCH64_ONLY(DEBUG_ONLY(_wx_init = false));
 }
 
 void Thread::initialize_thread_current() {
@@ -370,6 +374,8 @@ void Thread::call_run() {
   // Thread::current() should be set.
 
   register_thread_stack_with_NMT();
+
+  MACOS_AARCH64_ONLY(this->init_wx());
 
   JFR_ONLY(Jfr::on_thread_start(this);)
 
@@ -1626,6 +1632,7 @@ void JavaThread::initialize() {
   clear_must_deopt_id();
   set_monitor_chunks(NULL);
   set_next(NULL);
+  _in_asgct = false;
   _on_thread_list = false;
   _thread_state = _thread_new;
   _terminated = _not_terminated;
@@ -2040,6 +2047,10 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
     _timer_exit_phase1.stop();
     _timer_exit_phase2.start();
   }
+
+  // Capture daemon status before the thread is marked as terminated.
+  bool daemon = is_daemon(threadObj());
+
   // Notify waiters on thread object. This has to be done after exit() is called
   // on the thread (if the thread is the last thread in a daemon ThreadGroup the
   // group should have the destroyed bit set before waiters are notified).
@@ -2132,7 +2143,7 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
     _timer_exit_phase4.start();
   }
   // Remove from list of active threads list, and notify VM thread if we are the last non-daemon thread
-  Threads::remove(this);
+  Threads::remove(this, daemon);
 
   if (log_is_enabled(Debug, os, thread, timer)) {
     _timer_exit_phase4.stop();
@@ -2150,7 +2161,7 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
   }
 }
 
-void JavaThread::cleanup_failed_attach_current_thread() {
+void JavaThread::cleanup_failed_attach_current_thread(bool is_daemon) {
   if (active_handles() != NULL) {
     JNIHandleBlock* block = active_handles();
     set_active_handles(NULL);
@@ -2172,7 +2183,7 @@ void JavaThread::cleanup_failed_attach_current_thread() {
 
   BarrierSet::barrier_set()->on_thread_detach(this);
 
-  Threads::remove(this);
+  Threads::remove(this, is_daemon);
   this->smr_delete();
 }
 
@@ -2609,6 +2620,9 @@ void JavaThread::check_safepoint_and_suspend_for_native_trans(JavaThread *thread
 // Note only the native==>VM/Java barriers can call this function and when
 // thread state is _thread_in_native_trans.
 void JavaThread::check_special_condition_for_native_trans(JavaThread *thread) {
+  // Enable WXWrite: called directly from interpreter native wrapper.
+  MACOS_AARCH64_ONLY(ThreadWXEnable wx(WXWrite, thread));
+
   check_safepoint_and_suspend_for_native_trans(thread);
 
   if (thread->has_async_exception()) {
@@ -2693,10 +2707,7 @@ void JavaThread::create_stack_guard_pages() {
   } else {
     log_warning(os, thread)("Attempt to protect stack guard pages failed ("
       PTR_FORMAT "-" PTR_FORMAT ").", p2i(low_addr), p2i(low_addr + len));
-    if (os::uncommit_memory((char *) low_addr, len)) {
-      log_warning(os, thread)("Attempt to deallocate stack guard pages failed.");
-    }
-    return;
+    vm_exit_out_of_memory(len, OOM_MPROTECT_ERROR, "memory to guard stack pages");
   }
 
   log_debug(os, thread)("Thread " UINTX_FORMAT " stack guard pages activated: "
@@ -2992,6 +3003,9 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
     Coroutine* current = _coroutine_list;
     do {
       current->oops_do(f, cf);
+      if (UseWispMonitor) {
+        current->wisp_thread()->oops_do(f, cf);
+      }
       current = current->next();
     } while (current != _coroutine_list);
   }
@@ -3206,7 +3220,7 @@ const char* JavaThread::get_thread_name() const {
 }
 
 // Returns a non-NULL representation of this thread's name, or a suitable
-// descriptive string if there is no set name
+// descriptive string if there is no set name.
 const char* JavaThread::get_thread_name_string(char* buf, int buflen) const {
   const char* name_str;
   oop thread_obj = threadObj();
@@ -3266,6 +3280,19 @@ ThreadPriority JavaThread::java_priority() const {
   ThreadPriority priority = java_lang_Thread::priority(thr_oop);
   assert(MinPriority <= priority && priority <= MaxPriority, "sanity check");
   return priority;
+}
+
+// Helper to extract the name from the thread oop for logging.
+const char* JavaThread::name_for(oop thread_obj) {
+  assert(thread_obj != NULL, "precondition");
+  oop name = java_lang_Thread::name(thread_obj);
+  const char* name_str;
+  if (name != NULL) {
+    name_str = java_lang_String::as_utf8_string(name);
+  } else {
+    name_str = "<un-named>";
+  }
+  return name_str;
 }
 
 void JavaThread::prepare(jobject jni_thread, ThreadPriority prio) {
@@ -3810,6 +3837,8 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   // Initialize the os module
   os::init();
 
+  MACOS_AARCH64_ONLY(os::current_thread_enable_wx(WXWrite));
+
   // Record VM creation timing statistics
   TraceVmCreationTime create_vm_timer;
   create_vm_timer.start();
@@ -3917,6 +3946,7 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   }
 
   main_thread->set_active_handles(JNIHandleBlock::allocate_block());
+  MACOS_AARCH64_ONLY(main_thread->init_wx());
 
   if (!main_thread->set_as_starting_thread()) {
     vm_shutdown_during_initialization(
@@ -4576,7 +4606,7 @@ void Threads::add(JavaThread* p, bool force_daemon) {
   Events::log(p, "Thread added: " INTPTR_FORMAT, p2i(p));
 }
 
-void Threads::remove(JavaThread* p) {
+void Threads::remove(JavaThread* p, bool is_daemon) {
 
   // Reclaim the objectmonitors from the omInUseList and omFreeList of the moribund thread.
   ObjectSynchronizer::omFlush(p);
@@ -4605,11 +4635,8 @@ void Threads::remove(JavaThread* p) {
     }
 
     _number_of_threads--;
-    oop threadObj = p->threadObj();
-    bool daemon = true;
-    if (!is_daemon(threadObj)) {
+    if (!is_daemon) {
       _number_of_non_daemon_threads--;
-      daemon = false;
 
       // Only one thread left, do a notify on the Threads_lock so a thread waiting
       // on destroy_vm will wake up.
@@ -4617,7 +4644,7 @@ void Threads::remove(JavaThread* p) {
         Threads_lock->notify_all();
       }
     }
-    ThreadService::remove_thread(p, daemon);
+    ThreadService::remove_thread(p, is_daemon);
 
     // Make sure that safepoint code disregard this thread. This is needed since
     // the thread might mess around with locks after this point. This can cause it
@@ -4943,6 +4970,7 @@ void Threads::print_threads_compiling(outputStream* st, char* buf, int buflen, b
       CompileTask* task = ct->task();
       if (task != NULL) {
         thread->print_name_on_error(st, buf, buflen);
+        st->print("  ");
         task->print(st, NULL, short_form, true);
       }
     }

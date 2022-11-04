@@ -22,6 +22,16 @@
  *
  */
 
+/*
+ * On macOS MAP_JIT cannot be used in conjunction with MAP_FIXED when mapping
+ * a page for codecache. Therefore our traditional technique of doing commit
+ * and uncommit - replacing a mapping with another one at the same address
+ * range but swapped MAP_NORESERVE - does not work.
+ * The "exec" flag basically means "its code cache" and it should be used
+ * consistently for the same mapping (reserve-commit-uncommit etc)
+ * This affects pd_reserve_memory, pd_commit_memory, pd_uncommit_memory functions
+ */
+
 // no precompiled headers
 #include "jvm.h"
 #include "classfile/classLoader.hpp"
@@ -229,6 +239,8 @@ static char cpu_arch[] = "i386";
 static char cpu_arch[] = "amd64";
 #elif defined(ARM)
 static char cpu_arch[] = "arm";
+#elif defined(AARCH64)
+static char cpu_arch[] = "aarch64";
 #elif defined(PPC32)
 static char cpu_arch[] = "ppc";
 #elif defined(SPARC)
@@ -468,7 +480,9 @@ void os::init_system_properties_values() {
       }
     }
     Arguments::set_java_home(buf);
-    set_boot_path('/', ':');
+    if (!set_boot_path('/', ':')) {
+        vm_exit_during_initialization("Failed setting boot class path.", NULL);
+    }
   }
 
   // Where to look for native libraries.
@@ -661,16 +675,6 @@ static uint64_t locate_unique_thread_id(mach_port_t mach_thread_port) {
 static void *thread_native_entry(Thread *thread) {
 
   thread->record_stack_base_and_size();
-
-  // Try to randomize the cache line index of hot stack frames.
-  // This helps when threads of the same stack traces evict each other's
-  // cache lines. The threads can be either from the same JVM instance, or
-  // from different JVM instances. The benefit is especially true for
-  // processors with hyperthreading technology.
-  static int counter = 0;
-  int pid = os::current_process_id();
-  alloca(((pid ^ counter++) & 7) * 128);
-
   thread->initialize_thread_current();
 
   OSThread* osthread = thread->osthread();
@@ -757,16 +761,22 @@ bool os::create_thread(Thread* thread, ThreadType thr_type,
   ThreadState state;
 
   {
+
+    ResourceMark rm;
     pthread_t tid;
-    int ret = pthread_create(&tid, &attr, (void* (*)(void*)) thread_native_entry, thread);
+    int ret = 0;
+    int limit = 3;
+    do {
+      ret = pthread_create(&tid, &attr, (void* (*)(void*)) thread_native_entry, thread);
+    } while (ret == EAGAIN && limit-- > 0);
 
     char buf[64];
     if (ret == 0) {
-      log_info(os, thread)("Thread started (pthread id: " UINTX_FORMAT ", attributes: %s). ",
-        (uintx) tid, os::Posix::describe_pthread_attr(buf, sizeof(buf), &attr));
+      log_info(os, thread)("Thread \"%s\" started (pthread id: " UINTX_FORMAT ", attributes: %s). ",
+                           thread->name(), (uintx) tid, os::Posix::describe_pthread_attr(buf, sizeof(buf), &attr));
     } else {
-      log_warning(os, thread)("Failed to start thread - pthread_create failed (%s) for attributes: %s.",
-        os::errno_name(ret), os::Posix::describe_pthread_attr(buf, sizeof(buf), &attr));
+      log_warning(os, thread)("Failed to start thread \"%s\" - pthread_create failed (%s) for attributes: %s.",
+                              thread->name(), os::errno_name(ret), os::Posix::describe_pthread_attr(buf, sizeof(buf), &attr));
       // Log some OS information which might explain why creating the thread failed.
       log_info(os, thread)("Number of threads approx. running in the VM: %d", Threads::number_of_threads());
       LogStream st(Log(os, thread)::info());
@@ -1092,7 +1102,7 @@ void os::abort(bool dump_core, void* siginfo, const void* context) {
     ::abort(); // dump core
   }
 
-  ::exit(1);
+  ::_exit(1);
 }
 
 // Die immediately, no exit hook, no abort hook, no cleanup.
@@ -2005,11 +2015,24 @@ static void warn_fail_commit_memory(char* addr, size_t size, bool exec,
 //       problem.
 bool os::pd_commit_memory(char* addr, size_t size, bool exec) {
   int prot = exec ? PROT_READ|PROT_WRITE|PROT_EXEC : PROT_READ|PROT_WRITE;
-#ifdef __OpenBSD__
+#if defined(__OpenBSD__)
   // XXX: Work-around mmap/MAP_FIXED bug temporarily on OpenBSD
   Events::log(NULL, "Protecting memory [" INTPTR_FORMAT "," INTPTR_FORMAT "] with protection modes %x", p2i(addr), p2i(addr+size), prot);
   if (::mprotect(addr, size, prot) == 0) {
     return true;
+  }
+#elif defined(__APPLE__)
+  if (exec) {
+    // Do not replace MAP_JIT mappings, see JDK-8234930
+    if (::mprotect(addr, size, prot) == 0) {
+      return true;
+    }
+  } else {
+    uintptr_t res = (uintptr_t) ::mmap(addr, size, prot,
+                                       MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0);
+    if (res != (uintptr_t) MAP_FAILED) {
+      return true;
+    }
   }
 #else
   uintptr_t res = (uintptr_t) ::mmap(addr, size, prot,
@@ -2089,11 +2112,23 @@ char *os::scan_pages(char *start, char* end, page_info* page_expected, page_info
 }
 
 
-bool os::pd_uncommit_memory(char* addr, size_t size) {
-#ifdef __OpenBSD__
+MACOS_ONLY(bool os::pd_uncommit_memory(char* addr, size_t size, bool executable))
+NOT_MACOS(bool os::pd_uncommit_memory(char* addr, size_t size)) {
+#if defined(__OpenBSD__)
   // XXX: Work-around mmap/MAP_FIXED bug temporarily on OpenBSD
   Events::log(NULL, "Protecting memory [" INTPTR_FORMAT "," INTPTR_FORMAT "] with PROT_NONE", p2i(addr), p2i(addr+size));
   return ::mprotect(addr, size, PROT_NONE) == 0;
+#elif defined(__APPLE__)
+  if (executable) {
+    if (::madvise(addr, size, MADV_FREE) != 0) {
+      return false;
+    }
+    return ::mprotect(addr, size, PROT_NONE) == 0;
+  } else {
+    uintptr_t res = (uintptr_t) ::mmap(addr, size, PROT_NONE,
+        MAP_PRIVATE|MAP_FIXED|MAP_NORESERVE|MAP_ANONYMOUS, -1, 0);
+    return res  != (uintptr_t) MAP_FAILED;
+  }
 #else
   uintptr_t res = (uintptr_t) ::mmap(addr, size, PROT_NONE,
                                      MAP_PRIVATE|MAP_FIXED|MAP_NORESERVE|MAP_ANONYMOUS, -1, 0);
@@ -2117,11 +2152,17 @@ bool os::remove_stack_guard_pages(char* addr, size_t size) {
 // 'requested_addr' is only treated as a hint, the return value may or
 // may not start from the requested address. Unlike Bsd mmap(), this
 // function returns NULL to indicate failure.
-static char* anon_mmap(char* requested_addr, size_t bytes, bool fixed) {
+static char* anon_mmap(char* requested_addr, size_t bytes, bool fixed, bool executable = false) {
   char * addr;
   int flags;
 
   flags = MAP_PRIVATE | MAP_NORESERVE | MAP_ANONYMOUS;
+#ifdef __APPLE__
+  if (executable) {
+    guarantee(!fixed, "MAP_JIT (for execute) is incompatible with MAP_FIXED");
+    flags |= MAP_JIT;
+  }
+#endif
   if (fixed) {
     assert((uintptr_t)requested_addr % os::Bsd::page_size() == 0, "unaligned address");
     flags |= MAP_FIXED;
@@ -2140,10 +2181,18 @@ static int anon_munmap(char * addr, size_t size) {
   return ::munmap(addr, size) == 0;
 }
 
+#if defined(__APPLE__)
+char* os::pd_reserve_memory(size_t bytes, char* requested_addr,
+                            size_t alignment_hint,
+                            bool executable) {
+  return anon_mmap(requested_addr, bytes, (requested_addr != NULL), executable);
+}
+#else
 char* os::pd_reserve_memory(size_t bytes, char* requested_addr,
                             size_t alignment_hint) {
   return anon_mmap(requested_addr, bytes, (requested_addr != NULL));
 }
+#endif
 
 bool os::pd_release_memory(char* addr, size_t size) {
   return anon_munmap(addr, size);
@@ -3018,20 +3067,17 @@ void os::Bsd::install_signal_handlers() {
     set_signal_handler(SIGXFSZ, true);
 
 #if defined(__APPLE__)
-    // In Mac OS X 10.4, CrashReporter will write a crash log for all 'fatal' signals, including
-    // signals caught and handled by the JVM. To work around this, we reset the mach task
-    // signal handler that's placed on our process by CrashReporter. This disables
-    // CrashReporter-based reporting.
-    //
-    // This work-around is not necessary for 10.5+, as CrashReporter no longer intercedes
-    // on caught fatal signals.
-    //
-    // Additionally, gdb installs both standard BSD signal handlers, and mach exception
-    // handlers. By replacing the existing task exception handler, we disable gdb's mach
+    // lldb (gdb) installs both standard BSD signal handlers, and mach exception
+    // handlers. By replacing the existing task exception handler, we disable lldb's mach
     // exception handling, while leaving the standard BSD signal handlers functional.
+    //
+    // EXC_MASK_BAD_ACCESS needed by all architectures for NULL ptr checking
+    // EXC_MASK_ARITHMETIC needed by all architectures for div by 0 checking
+    // EXC_MASK_BAD_INSTRUCTION needed by aarch64 to initiate deoptimization
     kern_return_t kr;
     kr = task_set_exception_ports(mach_task_self(),
-                                  EXC_MASK_BAD_ACCESS | EXC_MASK_ARITHMETIC,
+                                  EXC_MASK_BAD_ACCESS | EXC_MASK_ARITHMETIC
+                                    AARCH64_ONLY(| EXC_MASK_BAD_INSTRUCTION),
                                   MACH_PORT_NULL,
                                   EXCEPTION_STATE_IDENTITY,
                                   MACHINE_THREAD_STATE);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -121,6 +121,12 @@ void Dependencies::assert_exclusive_concrete_methods(ciKlass* ctxk, ciMethod* m1
   assert_common_3(exclusive_concrete_methods_2, ctxk, m1, m2);
 }
 
+void Dependencies::assert_unique_implementor(ciInstanceKlass* ctxk, ciInstanceKlass* uniqk) {
+  check_ctxk(ctxk);
+  check_unique_implementor(ctxk, uniqk);
+  assert_common_2(unique_implementor, ctxk, uniqk);
+}
+
 void Dependencies::assert_has_no_finalizable_subclasses(ciKlass* ctxk) {
   check_ctxk(ctxk);
   assert_common_1(no_finalizable_subclasses, ctxk);
@@ -176,6 +182,13 @@ void Dependencies::assert_abstract_with_unique_concrete_subtype(Klass* ctxk, Kla
   DepValue ctxk_dv(_oop_recorder, ctxk);
   DepValue conck_dv(_oop_recorder, conck, &ctxk_dv);
   assert_common_2(abstract_with_unique_concrete_subtype, ctxk_dv, conck_dv);
+}
+
+void Dependencies::assert_unique_implementor(InstanceKlass* ctxk, InstanceKlass* uniqk) {
+  check_ctxk(ctxk);
+  assert(ctxk->is_interface(), "not an interface");
+  assert(ctxk->implementor() == uniqk, "not a unique implementor");
+  assert_common_2(unique_implementor, DepValue(_oop_recorder, ctxk), DepValue(_oop_recorder, uniqk));
 }
 
 void Dependencies::assert_unique_concrete_method(Klass* ctxk, Method* uniqm) {
@@ -593,6 +606,7 @@ const char* Dependencies::_dep_name[TYPE_LIMIT] = {
   "unique_concrete_method",
   "abstract_with_exclusive_concrete_subtypes_2",
   "exclusive_concrete_methods_2",
+  "unique_implementor",
   "no_finalizable_subclasses",
   "call_site_target_value"
 };
@@ -607,6 +621,7 @@ int Dependencies::_dep_args[TYPE_LIMIT] = {
   2, // unique_concrete_method ctxk, m
   3, // unique_concrete_subtypes_2 ctxk, k1, k2
   3, // unique_concrete_methods_2 ctxk, m1, m2
+  2, // unique_implementor ctxk, implementor
   1, // no_finalizable_subclasses ctxk
   2  // call_site_target_value call_site, method_handle
 };
@@ -625,32 +640,10 @@ void Dependencies::check_valid_dependency_type(DepType dept) {
   guarantee(FIRST_TYPE <= dept && dept < TYPE_LIMIT, "invalid dependency type: %d", (int) dept);
 }
 
-Dependencies::DepType Dependencies::validate_dependencies(CompileTask* task, bool counter_changed, char** failure_detail) {
-  // First, check non-klass dependencies as we might return early and
-  // not check klass dependencies if the system dictionary
-  // modification counter hasn't changed (see below).
-  for (Dependencies::DepStream deps(this); deps.next(); ) {
-    if (deps.is_klass_type())  continue;  // skip klass dependencies
-    Klass* witness = deps.check_dependency();
-    if (witness != NULL) {
-      return deps.type();
-    }
-  }
-
-  // Klass dependencies must be checked when the system dictionary
-  // changes.  If logging is enabled all violated dependences will be
-  // recorded in the log.  In debug mode check dependencies even if
-  // the system dictionary hasn't changed to verify that no invalid
-  // dependencies were inserted.  Any violated dependences in this
-  // case are dumped to the tty.
-  if (!counter_changed && !trueInDebug) {
-    return end_marker;
-  }
-
+Dependencies::DepType Dependencies::validate_dependencies(CompileTask* task, char** failure_detail) {
   int klass_violations = 0;
   DepType result = end_marker;
   for (Dependencies::DepStream deps(this); deps.next(); ) {
-    if (!deps.is_klass_type())  continue;  // skip non-klass dependencies
     Klass* witness = deps.check_dependency();
     if (witness != NULL) {
       if (klass_violations == 0) {
@@ -665,12 +658,7 @@ Dependencies::DepType Dependencies::validate_dependencies(CompileTask* task, boo
         }
       }
       klass_violations++;
-      if (!counter_changed) {
-        // Dependence failed but counter didn't change.  Log a message
-        // describing what failed and allow the assert at the end to
-        // trigger.
-        deps.print_dependency(witness);
-      } else if (xtty == NULL) {
+      if (xtty == NULL) {
         // If we're not logging then a single violation is sufficient,
         // otherwise we want to log all the dependences which were
         // violated.
@@ -679,15 +667,6 @@ Dependencies::DepType Dependencies::validate_dependencies(CompileTask* task, boo
     }
   }
 
-  if (klass_violations != 0) {
-#ifdef ASSERT
-    if (task != NULL && !counter_changed && !PrintCompilation) {
-      // Print out the compile task that failed
-      task->print_tty();
-    }
-#endif
-    assert(counter_changed, "failed dependencies, but counter didn't change");
-  }
   return result;
 }
 
@@ -1852,6 +1831,17 @@ Klass* Dependencies::check_unique_concrete_method(Klass* ctxk,
   return NULL;
 }
 
+Klass* Dependencies::check_unique_implementor(Klass* ctxk, Klass* uniqk, KlassDepChange* changes) {
+  InstanceKlass* ctxik = InstanceKlass::cast(ctxk);
+  assert(ctxik->is_interface(), "sanity");
+  assert(ctxik->nof_implementors() > 0, "no implementors");
+  if (ctxik->nof_implementors() == 1) {
+    assert(ctxik->implementor() == uniqk, "sanity");
+    return NULL;
+  }
+  return ctxik; // no unique implementor
+}
+
 // Search for AME.
 // There are two version of checks.
 //   1) Spot checking version(Classload time). Newly added class is checked for AME.
@@ -2020,6 +2010,9 @@ Klass* Dependencies::DepStream::check_klass_dependency(KlassDepChange* changes) 
     break;
   case exclusive_concrete_methods_2:
     witness = check_exclusive_concrete_methods(context_type(), method_argument(1), method_argument(2), changes);
+    break;
+  case unique_implementor:
+    witness = check_unique_implementor(context_type(), type_argument(1), changes);
     break;
   case no_finalizable_subclasses:
     witness = check_has_no_finalizable_subclasses(context_type(), changes);

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -433,7 +433,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJAVAJPEG, \
     OPTIMIZATION := HIGHEST, \
     CFLAGS := $(CFLAGS_JDKLIB), \
     HEADERS_FROM_SRC := $(LIBJPEG_HEADERS_FROM_SRC), \
-    DISABLED_WARNINGS_gcc := clobbered implicit-fallthrough shift-negative-value, \
+    DISABLED_WARNINGS_gcc := clobbered implicit-fallthrough shift-negative-value array-bounds, \
     LDFLAGS := $(LDFLAGS_JDKLIB) \
         $(call SET_SHARED_LIBRARY_ORIGIN), \
     LIBS := $(LIBJPEG_LIBS) $(JDKLIB_LIBS), \
@@ -462,6 +462,7 @@ ifeq ($(findstring $(OPENJDK_TARGET_OS), windows macosx),)
       common/awt/debug \
       common/font \
       common/java2d/opengl \
+      include \
       #
 
   LIBAWT_HEADLESS_CFLAGS := $(CUPS_CFLAGS) $(FONTCONFIG_CFLAGS) $(X_CFLAGS) \
@@ -542,8 +543,9 @@ ifeq ($(USE_EXTERNAL_HARFBUZZ), true)
 else
   LIBFONTMANAGER_EXTRA_SRC = libharfbuzz
   HARFBUZZ_CFLAGS := -DHAVE_OT -DHAVE_FALLBACK -DHAVE_UCDN -DHAVE_ROUND
-
+  # Modern HarfBuzz requires c++11; but VS does not have the flag
   ifneq ($(OPENJDK_TARGET_OS), windows)
+    HARFBUZZ_CXXFLAGS := -std=c++11
     HARFBUZZ_CFLAGS += -DGETPAGESIZE -DHAVE_MPROTECT -DHAVE_PTHREAD \
                        -DHAVE_SYSCONF -DHAVE_SYS_MMAN_H -DHAVE_UNISTD_H \
                        -DHB_NO_PRAGMA_GCC_DIAGNOSTIC
@@ -554,21 +556,15 @@ else
   ifeq ($(OPENJDK_TARGET_OS), solaris)
     HARFBUZZ_CFLAGS += -DHAVE_SOLARIS_ATOMIC_OPS
   endif
-  ifeq ($(OPENJDK_TARGET_OS), macosx)
-    HARFBUZZ_CFLAGS += -DHAVE_CORETEXT
-  endif
-  ifneq ($(OPENJDK_TARGET_OS), macosx)
-    LIBFONTMANAGER_EXCLUDE_FILES += libharfbuzz/hb-coretext.cc
-  endif
   # hb-ft.cc is not presently needed, and requires freetype 2.4.2 or later.
   LIBFONTMANAGER_EXCLUDE_FILES += libharfbuzz/hb-ft.cc
 
   HARFBUZZ_DISABLED_WARNINGS_gcc := type-limits missing-field-initializers strict-aliasing
   HARFBUZZ_DISABLED_WARNINGS_CXX_gcc := reorder delete-non-virtual-dtor strict-overflow \
-       maybe-uninitialized class-memaccess
+       maybe-uninitialized class-memaccess unused-result extra
   HARFBUZZ_DISABLED_WARNINGS_clang := unused-value incompatible-pointer-types \
        tautological-constant-out-of-range-compare int-to-pointer-cast \
-       undef missing-field-initializers
+       undef missing-field-initializers deprecated-declarations c++11-narrowing range-loop-analysis
   HARFBUZZ_DISABLED_WARNINGS_microsoft := 4267 4244 4090 4146 4334 4819 4101 4068 4805 4138
   HARFBUZZ_DISABLED_WARNINGS_C_solstudio := \
         E_INTEGER_OVERFLOW_DETECTED \
@@ -582,7 +578,6 @@ else
 
 endif
 
-
 LIBFONTMANAGER_EXTRA_HEADER_DIRS := \
     libharfbuzz \
     libharfbuzz/hb-ucdn \
@@ -591,12 +586,21 @@ LIBFONTMANAGER_EXTRA_HEADER_DIRS := \
     libawt/java2d \
     libawt/java2d/pipe \
     libawt/java2d/loops \
+    include \
     #
 
 LIBFONTMANAGER_CFLAGS += $(LIBFREETYPE_CFLAGS)
 BUILD_LIBFONTMANAGER_FONTLIB +=  $(LIBFREETYPE_LIBS)
 
 LIBFONTMANAGER_OPTIMIZATION := HIGHEST
+
+ifneq ($(filter $(TOOLCHAIN_TYPE), gcc clang), )
+  # gcc (and to an extent clang) is particularly bad at optimizing these files,
+  # causing a massive spike in compile time. We don't care about these
+  # particular files anyway, so lower optimization level.
+  BUILD_LIBFONTMANAGER_hb-subset.cc_OPTIMIZATION := SIZE
+  BUILD_LIBFONTMANAGER_hb-subset-plan.cc_OPTIMIZATION := SIZE
+endif
 
 ifeq ($(OPENJDK_TARGET_OS), windows)
   LIBFONTMANAGER_EXCLUDE_FILES += X11FontScaler.c \
@@ -630,7 +634,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBFONTMANAGER, \
         AccelGlyphCache.c, \
     TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
     CFLAGS := $(CFLAGS_JDKLIB) $(LIBFONTMANAGER_CFLAGS), \
-    CXXFLAGS := $(CXXFLAGS_JDKLIB) $(LIBFONTMANAGER_CFLAGS), \
+    CXXFLAGS := $(CXXFLAGS_JDKLIB) $(LIBFONTMANAGER_CFLAGS) $(HARFBUZZ_CXXFLAGS), \
     OPTIMIZATION := $(LIBFONTMANAGER_OPTIMIZATION), \
     CFLAGS_windows = -DCC_NOEX, \
     EXTRA_HEADER_DIRS := $(LIBFONTMANAGER_EXTRA_HEADER_DIRS), \
@@ -773,6 +777,8 @@ ifeq ($(ENABLE_HEADLESS_ONLY), false)
       common/awt/systemscale \
       #
 
+  LIBSPLASHSCREEN_HEADER_DIRS += include
+
   ifeq ($(USE_EXTERNAL_LIBGIF), false)
     LIBSPLASHSCREEN_HEADER_DIRS += libsplashscreen/giflib
   else
@@ -808,6 +814,7 @@ ifeq ($(ENABLE_HEADLESS_ONLY), false)
 
   ifeq ($(USE_EXTERNAL_LIBZ), false)
     LIBSPLASHSCREEN_EXTRA_SRC += java.base:libzip/zlib
+    LIBZ_DISABLED_WARNINGS_CLANG := format-nonliteral
   endif
 
   ifeq ($(OPENJDK_TARGET_OS), macosx)
@@ -867,7 +874,8 @@ ifeq ($(ENABLE_HEADLESS_ONLY), false)
       EXTRA_HEADER_DIRS := $(LIBSPLASHSCREEN_HEADER_DIRS), \
       DISABLED_WARNINGS_gcc := sign-compare type-limits unused-result \
           maybe-uninitialized shift-negative-value implicit-fallthrough, \
-      DISABLED_WARNINGS_clang := incompatible-pointer-types, \
+      DISABLED_WARNINGS_clang := incompatible-pointer-types deprecated-declarations \
+          $(LIBZ_DISABLED_WARNINGS_CLANG), \
       DISABLED_WARNINGS_solstudio := E_NEWLINE_NOT_LAST E_DECLARATION_IN_CODE \
           E_STATEMENT_NOT_REACHED, \
       DISABLED_WARNINGS_microsoft := 4018 4244 4267, \

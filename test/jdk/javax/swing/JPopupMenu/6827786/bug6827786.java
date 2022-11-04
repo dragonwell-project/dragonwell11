@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,13 +28,14 @@
  * @summary Tests duplicate mnemonics
  * @author Peter Zhelezniakov
  * @library ../../regtesthelpers
- * @library ../../../../lib/testlibrary
+ * @library /test/lib
  * @modules java.desktop/sun.awt
- * @build jdk.testlibrary.OSInfo
+ * @build jdk.test.lib.Platform
  * @build Util
  * @run main bug6827786
  */
-import jdk.testlibrary.OSInfo;
+
+import jdk.test.lib.Platform;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import javax.swing.*;
@@ -48,9 +49,10 @@ public class bug6827786 {
     public static void main(String[] args) throws Exception {
         try {
             Robot robot = new Robot();
-            robot.setAutoDelay(50);
+            robot.setAutoDelay(100);
             // move mouse outside menu to prevent auto selection
             robot.mouseMove(100,100);
+            robot.waitForIdle();
 
             SwingUtilities.invokeAndWait(new Runnable() {
 
@@ -60,6 +62,7 @@ public class bug6827786 {
             });
 
             robot.waitForIdle();
+            robot.delay(1000);
 
             SwingUtilities.invokeAndWait(new Runnable() {
 
@@ -72,7 +75,7 @@ public class bug6827786 {
             checkfocus();
 
             // select menu
-            if (OSInfo.getOSType() == OSInfo.OSType.MACOSX) {
+            if (Platform.isOSX()) {
                 Util.hitKeys(robot, KeyEvent.VK_CONTROL, KeyEvent.VK_ALT, KeyEvent.VK_F);
             } else {
                 Util.hitKeys(robot, KeyEvent.VK_ALT, KeyEvent.VK_F);

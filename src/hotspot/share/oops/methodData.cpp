@@ -23,6 +23,7 @@
  */
 
 #include "precompiled.hpp"
+#include "ci/ciMethodData.hpp"
 #include "classfile/systemDictionary.hpp"
 #include "compiler/compilerOracle.hpp"
 #include "interpreter/bytecode.hpp"
@@ -709,7 +710,7 @@ MethodData* MethodData::allocate(ClassLoaderData* loader_data, const methodHandl
   int size = MethodData::compute_allocation_size_in_words(method);
 
   return new (loader_data, size, MetaspaceObj::MethodDataType, THREAD)
-    MethodData(method(), size, THREAD);
+    MethodData(method());
 }
 
 int MethodData::bytecode_cell_count(Bytecodes::Code code) {
@@ -1131,11 +1132,11 @@ void MethodData::post_initialize(BytecodeStream* stream) {
 }
 
 // Initialize the MethodData* corresponding to a given method.
-MethodData::MethodData(const methodHandle& method, int size, TRAPS)
-  : _extra_data_lock(Monitor::leaf, "MDO extra data lock"),
+MethodData::MethodData(const methodHandle& method)
+  : _method(method()),
+    _extra_data_lock(Mutex::leaf, "MDO extra data lock"),
+    _compiler_counters(method()),
     _parameters_type_data_di(parameters_uninitialized) {
-  // Set the method back-pointer.
-  _method = method();
   initialize();
 }
 
@@ -1144,7 +1145,6 @@ void MethodData::initialize() {
   ResourceMark rm;
 
   init();
-  set_creation_mileage(mileage_of(method()));
 
   // Go through the bytecodes and allocate and initialize the
   // corresponding data cells.
@@ -1168,7 +1168,9 @@ void MethodData::initialize() {
   int extra_size = extra_data_count * DataLayout::compute_size_in_bytes(0);
 
   // Let's zero the space for the extra data
-  Copy::zero_to_bytes(((address)_data) + data_size, extra_size);
+  if (extra_size > 0) {
+    Copy::zero_to_bytes(((address)_data) + data_size, extra_size);
+  }
 
   // Add a cell to record information about modified arguments.
   // Set up _args_modified array after traps cells so that
@@ -1244,14 +1246,8 @@ void MethodData::init() {
   }
 #endif
 
-  // Initialize flags and trap history.
-  _nof_decompiles = 0;
-  _nof_overflow_recompiles = 0;
-  _nof_overflow_traps = 0;
+  // Initialize escape flags.
   clear_escape_info();
-  assert(sizeof(_trap_hist) % sizeof(HeapWord) == 0, "align");
-  Copy::zero_to_words((HeapWord*) &_trap_hist,
-                      sizeof(_trap_hist) / sizeof(HeapWord));
 }
 
 // Get a measure of how much mileage the method has on it.
@@ -1655,11 +1651,6 @@ void MethodData::clean_extra_data_helper(DataLayout* dp, int shift, bool reset) 
     }
   }
 }
-
-class CleanExtraDataClosure : public StackObj {
-public:
-  virtual bool is_live(Method* m) = 0;
-};
 
 // Check for entries that reference an unloaded method
 class CleanExtraDataKlassClosure : public CleanExtraDataClosure {

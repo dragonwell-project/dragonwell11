@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -103,7 +103,7 @@ public class Config {
 
     private static boolean DEBUG = sun.security.krb5.internal.Krb5.DEBUG;
 
-    // these are used for hexdecimal calculation.
+    // these are used for hexadecimal calculation.
     private static final int BASE16_0 = 1;
     private static final int BASE16_1 = 16;
     private static final int BASE16_2 = 16 * 16;
@@ -273,7 +273,7 @@ public class Config {
     /**
      * Gets the boolean value for the specified keys. Returns TRUE if the
      * string value is "yes", or "true", FALSE if "no", or "false", or null
-     * if otherwise or not defined. The comparision is case-insensitive.
+     * if otherwise or not defined. The comparison is case-insensitive.
      *
      * @param keys the keys, see {@link #get(String...)}
      * @return the boolean value, or null if there is no value defined or the
@@ -1332,7 +1332,7 @@ public class Config {
     /**
      * Locate KDC using DNS
      *
-     * @param realm the realm for which the master KDC is desired
+     * @param realm the realm for which the primary KDC is desired
      * @return the KDC
      */
     private String getKDCFromDNS(String realm) throws KrbException {

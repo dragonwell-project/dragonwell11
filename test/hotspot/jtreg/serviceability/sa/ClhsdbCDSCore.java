@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,6 +54,7 @@ import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 import jdk.internal.misc.Unsafe;
 import java.util.Scanner;
+import jdk.test.lib.Utils;
 import jtreg.SkippedException;
 
 class CrashApp {
@@ -164,7 +165,16 @@ public class ClhsdbCDSCore {
                 throw new SkippedException("The CDS archive is not mapped");
             }
 
-            cmds = List.of("printmdo -a", "printall", "jstack -v");
+            List testJavaOpts = Arrays.asList(Utils.getTestJavaOpts());
+
+            if (testJavaOpts.contains("-Xcomp") && testJavaOpts.contains("-XX:TieredStopAtLevel=1")) {
+                // No MDOs are allocated in -XX:TieredStopAtLevel=1 + -Xcomp mode
+                // The reason is methods being compiled aren't hot enough
+                // Let's not call printmdo in such scenario
+                cmds = List.of("printall", "jstack -v");
+            } else {
+                cmds = List.of("printmdo -a", "printall", "jstack -v");
+            }
 
             Map<String, List<String>> expStrMap = new HashMap<>();
             Map<String, List<String>> unExpStrMap = new HashMap<>();
@@ -179,7 +189,7 @@ public class ClhsdbCDSCore {
                 "_nofast_getfield",
                 "_nofast_putfield",
                 "Constant Pool of",
-                "public static void main(java.lang.String[])",
+                "public static void main\\(java.lang.String\\[\\]\\)",
                 "Bytecode",
                 "invokevirtual",
                 "checkcast",

@@ -1657,6 +1657,43 @@ bool PhiNode::is_unsafe_data_reference(Node *in) const {
   return false; // The phi is not reachable from its inputs
 }
 
+// Is this Phi's region or some inputs to the region enqueued for IGVN
+// and so could cause the region to be optimized out?
+bool PhiNode::wait_for_region_igvn(PhaseGVN* phase) {
+  PhaseIterGVN* igvn = phase->is_IterGVN();
+  Unique_Node_List& worklist = igvn->_worklist;
+  bool delay = false;
+  Node* r = in(0);
+  for (uint j = 1; j < req(); j++) {
+    Node* rc = r->in(j);
+    Node* n = in(j);
+    if (rc != NULL &&
+        rc->is_Proj()) {
+      if (worklist.member(rc)) {
+        delay = true;
+      } else if (rc->in(0) != NULL &&
+                 rc->in(0)->is_If()) {
+        if (worklist.member(rc->in(0))) {
+          delay = true;
+        } else if (rc->in(0)->in(1) != NULL &&
+                   rc->in(0)->in(1)->is_Bool()) {
+          if (worklist.member(rc->in(0)->in(1))) {
+            delay = true;
+          } else if (rc->in(0)->in(1)->in(1) != NULL &&
+                     rc->in(0)->in(1)->in(1)->is_Cmp()) {
+            if (worklist.member(rc->in(0)->in(1)->in(1))) {
+              delay = true;
+            }
+          }
+        }
+      }
+    }
+  }
+  if (delay) {
+    worklist.push(this);
+  }
+  return delay;
+}
 
 //------------------------------Ideal------------------------------------------
 // Return a node which is more "ideal" than the current node.  Must preserve
@@ -1710,7 +1747,10 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
 
   bool uncasted = false;
   Node* uin = unique_input(phase, false);
-  if (uin == NULL && can_reshape) {
+  if (uin == NULL && can_reshape &&
+      // If there is a chance that the region can be optimized out do
+      // not add a cast node that we can't remove yet.
+      !wait_for_region_igvn(phase)) {
     uncasted = true;
     uin = unique_input(phase, true);
   }
@@ -2006,13 +2046,13 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         // Phi(...MergeMem(m0, m1:AT1, m2:AT2)...) into
         //     MergeMem(Phi(...m0...), Phi:AT1(...m1...), Phi:AT2(...m2...))
         PhaseIterGVN* igvn = phase->is_IterGVN();
+        assert(igvn != NULL, "sanity check");
         Node* hook = new Node(1);
         PhiNode* new_base = (PhiNode*) clone();
         // Must eagerly register phis, since they participate in loops.
-        if (igvn) {
-          igvn->register_new_node_with_optimizer(new_base);
-          hook->add_req(new_base);
-        }
+        igvn->register_new_node_with_optimizer(new_base);
+        hook->add_req(new_base);
+
         MergeMemNode* result = MergeMemNode::make(new_base);
         for (uint i = 1; i < req(); ++i) {
           Node *ii = in(i);
@@ -2024,10 +2064,8 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
               if (mms.is_empty()) {
                 Node* new_phi = new_base->slice_memory(mms.adr_type(phase->C));
                 made_new_phi = true;
-                if (igvn) {
-                  igvn->register_new_node_with_optimizer(new_phi);
-                  hook->add_req(new_phi);
-                }
+                igvn->register_new_node_with_optimizer(new_phi);
+                hook->add_req(new_phi);
                 mms.set_memory(new_phi);
               }
               Node* phi = mms.memory();
@@ -2045,6 +2083,13 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
             }
           }
         }
+        // Already replace this phi node to cut it off from the graph to not interfere in dead loop checks during the
+        // transformations of the new phi nodes below. Otherwise, we could wrongly conclude that there is no dead loop
+        // because we are finding this phi node again. Also set the type of the new MergeMem node in case we are also
+        // visiting it in the transformations below.
+        igvn->replace_node(this, result);
+        igvn->set_type(result, result->bottom_type());
+
         // now transform the new nodes, and return the mergemem
         for (MergeMemStream mms(result); mms.next_non_empty(); ) {
           Node* phi = mms.memory();
@@ -2401,7 +2446,7 @@ const Type* NeverBranchNode::Value(PhaseGVN* phase) const {
 //------------------------------Ideal------------------------------------------
 // Check for no longer being part of a loop
 Node *NeverBranchNode::Ideal(PhaseGVN *phase, bool can_reshape) {
-  if (can_reshape && !in(0)->is_Loop()) {
+  if (can_reshape && !in(0)->is_Region()) {
     // Dead code elimination can sometimes delete this projection so
     // if it's not there, there's nothing to do.
     Node* fallthru = proj_out_or_null(0);

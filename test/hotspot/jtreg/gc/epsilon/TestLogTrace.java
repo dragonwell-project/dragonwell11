@@ -21,12 +21,16 @@
  * questions.
  */
 
+package gc.epsilon;
+
 /**
  * @test TestLogTrace
  * @key gc
  * @requires vm.gc.Epsilon & !vm.graal.enabled
  * @summary Test that tracing does not crash Epsilon
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC -Xlog:gc*=trace TestLogTrace
+ * @run main/othervm -Xmx256m -Xlog:gc*=trace
+ *                   -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC
+ *                   gc.epsilon.TestLogTrace
  */
 
 public class TestLogTrace {

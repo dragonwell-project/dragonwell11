@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,7 @@
 
 package jdk.test.lib;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,11 +37,24 @@ import java.util.stream.Stream;
 import jdk.test.lib.process.OutputAnalyzer;
 import jdk.test.lib.process.ProcessTools;
 
+/**
+ * Run security tools (including jarsigner and keytool) in a new process.
+ * The en_US locale is always used so a test can always match output to
+ * English text. {@code /dev/urandom} is used as entropy source so tool will
+ * not block because of entropy scarcity. {@code -Jvm-options} is supported
+ * as an argument.
+ */
 public class SecurityTools {
 
+    /**
+     * The response file name for keytool. Use {@link #setResponse} to
+     * create one. Do NOT manipulate it directly.
+     */
     public static final String RESPONSE_FILE = "security_tools_response.txt";
 
-    private static ProcessBuilder getProcessBuilder(String tool, List<String> args) {
+    private SecurityTools() {}
+
+    public static ProcessBuilder getProcessBuilder(String tool, List<String> args) {
         JDKToolLauncher launcher = JDKToolLauncher.createUsingTestJDK(tool)
                 .addVMArg("-Duser.language=en")
                 .addVMArg("-Duser.country=US");
@@ -50,6 +64,9 @@ public class SecurityTools {
         for (String arg : args) {
             if (arg.startsWith("-J")) {
                 launcher.addVMArg(arg.substring(2));
+            } else if (Platform.isWindows() && arg.isEmpty()) {
+                // JDK-6518827: special handling for empty argument on Windows
+                launcher.addToolArg("\"\"");
             } else {
                 launcher.addToolArg(arg);
             }
@@ -57,8 +74,13 @@ public class SecurityTools {
         return new ProcessBuilder(launcher.getCommand());
     }
 
-    // keytool
-
+    /**
+     * Runs keytool.
+     *
+     * @param args arguments to keytool
+     * @return an {@link OutputAnalyzer} object
+     * @throws Exception if there is an error
+     */
     public static OutputAnalyzer keytool(List<String> args)
             throws Exception {
 
@@ -77,15 +99,45 @@ public class SecurityTools {
         }
     }
 
-    // Only call this if there is no white space in every argument
+    /**
+     * Runs keytool.
+     *
+     * @param args arguments to keytool in a single string. The string is
+     *             converted to be List with makeList.
+     * @return an {@link OutputAnalyzer} object
+     * @throws Exception if there is an error
+     */
     public static OutputAnalyzer keytool(String args) throws Exception {
-        return keytool(args.split("\\s+"));
+        return keytool(makeList(args));
     }
 
+    /**
+     * Runs keytool.
+     *
+     * @param args arguments to keytool
+     * @return an {@link OutputAnalyzer} object
+     * @throws Exception if there is an error
+     */
     public static OutputAnalyzer keytool(String... args) throws Exception {
         return keytool(List.of(args));
     }
 
+
+    /**
+     * Sets the responses (user input) for keytool.
+     * <p>
+     * For example, if keytool requires entering a password twice, call
+     * {@code setResponse("password", "password")}. Do NOT append a newline
+     * character to each response. If there are useless responses at the end,
+     * they will be discarded silently. If there are less responses than
+     * necessary, keytool will read EOF. The responses will be written into
+     * {@linkplain #RESPONSE_FILE a local file} and will only be used by the
+     * next keytool run. After the run, the file is removed. Calling this
+     * method will always overwrite the previous response file (if exists).
+     *
+     * @param responses response to keytool
+     * @throws IOException if there is an error
+     */
     public static void setResponse(String... responses) throws IOException {
         String text;
         if (responses.length > 0) {
@@ -97,8 +149,13 @@ public class SecurityTools {
         Files.write(Paths.get(RESPONSE_FILE), text.getBytes());
     }
 
-    // jarsigner
-
+    /**
+     * Runs jarsigner.
+     *
+     * @param args arguments to jarsigner
+     * @return an {@link OutputAnalyzer} object
+     * @throws Exception if there is an error
+     */
     public static OutputAnalyzer jarsigner(List<String> args)
             throws Exception {
         return execute(getProcessBuilder("jarsigner", args));
@@ -118,14 +175,52 @@ public class SecurityTools {
         }
     }
 
-    // Only call this if there is no white space in every argument
+    /**
+     * Runs jarsigner.
+     *
+     * @param args arguments to jarsigner in a single string. The string is
+     *             converted to be List with makeList.
+     * @return an {@link OutputAnalyzer} object
+     * @throws Exception if there is an error
+     */
     public static OutputAnalyzer jarsigner(String args) throws Exception {
 
-        return jarsigner(args.split("\\s+"));
+        return jarsigner(makeList(args));
     }
 
+    /**
+     * Runs jarsigner.
+     *
+     * @param args arguments to jarsigner
+     * @return an {@link OutputAnalyzer} object
+     * @throws Exception if there is an error
+     */
     public static OutputAnalyzer jarsigner(String... args) throws Exception {
         return jarsigner(List.of(args));
+    }
+
+    /**
+     * Runs ktab.
+     *
+     * @param args arguments to ktab in a single string. The string is
+     *             converted to be List with makeList.
+     * @return an {@link OutputAnalyzer} object
+     * @throws Exception if there is an error
+     */
+    public static OutputAnalyzer ktab(String args) throws Exception {
+        return execute(getProcessBuilder("ktab", makeList(args)));
+    }
+
+    /**
+     * Runs klist.
+     *
+     * @param args arguments to klist in a single string. The string is
+     *             converted to be List with makeList.
+     * @return an {@link OutputAnalyzer} object
+     * @throws Exception if there is an error
+     */
+    public static OutputAnalyzer klist(String args) throws Exception {
+        return execute(getProcessBuilder("klist", makeList(args)));
     }
 
     /**
@@ -180,6 +275,64 @@ public class SecurityTools {
             result.add(sb.toString());
         }
         return result;
+    }
+
+    // Create a temporary keychain in macOS and use it. The original
+    // keychains will be restored when the object is closed.
+    public static class TemporaryKeychain implements Closeable {
+        // name of new keychain
+        private final String newChain;
+        // names of the original keychains
+        private final List<String> oldChains;
+
+        public TemporaryKeychain(String name) {
+            Path p = Path.of(name + ".keychain-db");
+            newChain = p.toAbsolutePath().toString();
+            try {
+                oldChains = ProcessTools.executeProcess("security", "list-keychains")
+                        .shouldHaveExitValue(0)
+                        .getStdout()
+                        .lines()
+                        .map(String::trim)
+                        .map(x -> x.startsWith("\"") ? x.substring(1, x.length() - 1) : x)
+                        .collect(Collectors.toList());
+                if (!Files.exists(p)) {
+                    ProcessTools.executeProcess("security", "create-keychain", "-p", "changeit", newChain)
+                            .shouldHaveExitValue(0);
+                }
+                ProcessTools.executeProcess("security", "unlock-keychain", "-p", "changeit", newChain)
+                        .shouldHaveExitValue(0);
+                ProcessTools.executeProcess("security", "list-keychains", "-s", newChain)
+                        .shouldHaveExitValue(0);
+            } catch (Throwable t) {
+                if (t instanceof RuntimeException) {
+                    throw (RuntimeException)t;
+                } else {
+                    throw new RuntimeException(t);
+                }
+            }
+        }
+
+        public String chain() {
+            return newChain;
+        }
+
+        @Override
+        public void close() throws IOException {
+            List<String> cmds = new ArrayList<>();
+            cmds.addAll(List.of("security", "list-keychains", "-s"));
+            cmds.addAll(oldChains);
+            try {
+                ProcessTools.executeProcess(cmds.toArray(new String[0]))
+                        .shouldHaveExitValue(0);
+            } catch (Throwable t) {
+                if (t instanceof RuntimeException) {
+                    throw (RuntimeException)t;
+                } else {
+                    throw new RuntimeException(t);
+                }
+            }
+        }
     }
 }
 

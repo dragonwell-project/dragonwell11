@@ -331,7 +331,7 @@ final class HttpsClient extends HttpClient
             ret = (HttpsClient) kac.get(url, sf);
             if (ret != null && httpuc != null &&
                 httpuc.streaming() &&
-                httpuc.getRequestMethod() == "POST") {
+                "POST".equals(httpuc.getRequestMethod())) {
                 if (!ret.available())
                     ret = null;
             }
@@ -741,6 +741,13 @@ final class HttpsClient extends HttpClient
             }
         }
         return principal;
+    }
+
+    /**
+     * Returns the {@code SSLSession} in use on this connection.
+     */
+    SSLSession getSSLSession() {
+        return session;
     }
 
     /**

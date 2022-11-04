@@ -37,6 +37,7 @@
 #include "runtime/frame.inline.hpp"
 #include "runtime/init.hpp"
 #include "runtime/os.hpp"
+#include "runtime/safefetch.inline.hpp"
 #include "runtime/thread.inline.hpp"
 #include "runtime/threadSMR.hpp"
 #include "runtime/vmThread.hpp"
@@ -84,7 +85,8 @@ const char *env_list[] = {
   // Env variables that are defined on Solaris/Linux/BSD
   "LD_LIBRARY_PATH", "LD_PRELOAD", "SHELL", "DISPLAY",
   "HOSTTYPE", "OSTYPE", "ARCH", "MACHTYPE",
-  "LANG", "LC_ALL", "LC_CTYPE", "TZ",
+  "LANG", "LC_ALL", "LC_CTYPE", "LC_NUMERIC", "LC_TIME",
+  "TERM", "TMPDIR", "TZ",
 
   // defined on Linux
   "LD_ASSUME_KERNEL", "_JAVA_SR_SIGNUM",
@@ -95,7 +97,7 @@ const char *env_list[] = {
   "DYLD_INSERT_LIBRARIES",
 
   // defined on Windows
-  "OS", "PROCESSOR_IDENTIFIER", "_ALT_JAVA_HOME_DIR",
+  "OS", "PROCESSOR_IDENTIFIER", "_ALT_JAVA_HOME_DIR", "TMP", "TEMP",
 
   (const char *)0
 };
@@ -491,10 +493,12 @@ void VMError::report(outputStream* st, bool _verbose) {
      switch(static_cast<unsigned int>(_id)) {
        case OOM_MALLOC_ERROR:
        case OOM_MMAP_ERROR:
+       case OOM_MPROTECT_ERROR:
          if (_size) {
            st->print("# Native memory allocation ");
            st->print((_id == (int)OOM_MALLOC_ERROR) ? "(malloc) failed to allocate " :
-                                                 "(mmap) failed to map ");
+                     (_id == (int)OOM_MMAP_ERROR)   ? "(mmap) failed to map " :
+                                                      "(mprotect) failed to protect ");
            jio_snprintf(buf, sizeof(buf), SIZE_FORMAT, _size);
            st->print("%s", buf);
            st->print(" bytes");
@@ -1340,12 +1344,13 @@ void VMError::report_and_die(int id, const char* message, const char* detail_fmt
   static bool log_done = false;         // done saving error log
   static bool transmit_report_done = false; // done error reporting
 
-  if (SuppressFatalErrorMessage) {
-      os::abort(CreateCoredumpOnCrash);
-  }
   intptr_t mytid = os::current_thread_id();
   if (first_error_tid == -1 &&
       Atomic::cmpxchg(mytid, &first_error_tid, (intptr_t)-1) == -1) {
+
+    if (SuppressFatalErrorMessage) {
+      os::abort(CreateCoredumpOnCrash);
+    }
 
     // Initialize time stamps to use the same base.
     out.time_stamp().update_to(1);
@@ -1399,19 +1404,31 @@ void VMError::report_and_die(int id, const char* message, const char* detail_fmt
     // This is not the first error, see if it happened in a different thread
     // or in the same thread during error reporting.
     if (first_error_tid != mytid) {
-      char msgbuf[64];
-      jio_snprintf(msgbuf, sizeof(msgbuf),
-                   "[thread " INTX_FORMAT " also had an error]",
-                   mytid);
-      out.print_raw_cr(msgbuf);
+      if (!SuppressFatalErrorMessage) {
+        char msgbuf[64];
+        jio_snprintf(msgbuf, sizeof(msgbuf),
+                     "[thread " INTX_FORMAT " also had an error]",
+                     mytid);
+        out.print_raw_cr(msgbuf);
+      }
 
-      // error reporting is not MT-safe, block current thread
+      // Error reporting is not MT-safe, nor can we let the current thread
+      // proceed, so we block it.
       os::infinite_sleep();
 
     } else {
       if (recursive_error_count++ > 30) {
-        out.print_raw_cr("[Too many errors, abort]");
+        if (!SuppressFatalErrorMessage) {
+          out.print_raw_cr("[Too many errors, abort]");
+        }
         os::die();
+      }
+
+      if (SuppressFatalErrorMessage) {
+        // If we already hit a secondary error during abort, then calling
+        // it again is likely to hit another one. But eventually, if we
+        // don't deadlock somewhere, we will call os::die() above.
+        os::abort(CreateCoredumpOnCrash);
       }
 
       outputStream* const st = log.is_open() ? &log : &out;
@@ -1740,8 +1757,8 @@ static void crash_with_sigfpe() {
 // crash with sigsegv at non-null address.
 static void crash_with_segfault() {
 
-  char* const crash_addr = (char*) VMError::get_segfault_address();
-  *crash_addr = 'X';
+  int* crash_addr = reinterpret_cast<int*>(VMError::get_segfault_address());
+  *crash_addr = 1;
 
 } // end: crash_with_segfault
 
@@ -1782,6 +1799,12 @@ void VMError::controlled_crash(int how) {
   funcPtr = (const void(*)()) &functionDescriptor;
 #else
   funcPtr = (const void(*)()) 0xF;
+#endif
+
+#ifdef __APPLE__
+  // 12 is unreliable on this platform, may just yield us a "Trap" message on stdout
+  // Use 14 instead, which seems to work always
+  if (how == 12) { how = 14; }
 #endif
 
   // Keep this in sync with test/hotspot/jtreg/runtime/ErrorHandling/ErrorHandler.java

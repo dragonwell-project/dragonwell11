@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,7 @@
 
 AC_DEFUN_ONCE([HELP_SETUP_DEPENDENCY_HELP],
 [
-  AC_CHECK_PROGS(PKGHANDLER, apt-get yum brew port pkgutil pkgadd)
+  AC_CHECK_PROGS(PKGHANDLER, apt-get yum brew port pkgutil pkgadd apk)
 ])
 
 AC_DEFUN([HELP_MSG_MISSING_DEPENDENCY],
@@ -54,6 +54,8 @@ AC_DEFUN([HELP_MSG_MISSING_DEPENDENCY],
         pkgutil_help $MISSING_DEPENDENCY ;;
       pkgadd)
         pkgadd_help  $MISSING_DEPENDENCY ;;
+      apk)
+        apk_help     $MISSING_DEPENDENCY ;;
     esac
 
     if test "x$PKGHANDLER_COMMAND" != x; then
@@ -90,7 +92,7 @@ apt_help() {
     devkit)
       PKGHANDLER_COMMAND="sudo apt-get install build-essential" ;;
     openjdk)
-      PKGHANDLER_COMMAND="sudo apt-get install openjdk-8-jdk" ;;
+      PKGHANDLER_COMMAND="sudo apt-get install openjdk-11-jdk" ;;
     alsa)
       PKGHANDLER_COMMAND="sudo apt-get install libasound2-dev" ;;
     cups)
@@ -117,7 +119,7 @@ yum_help() {
     devkit)
       PKGHANDLER_COMMAND="sudo yum groupinstall \"Development Tools\"" ;;
     openjdk)
-      PKGHANDLER_COMMAND="sudo yum install java-1.8.0-openjdk-devel" ;;
+      PKGHANDLER_COMMAND="sudo yum install java-11-openjdk-devel" ;;
     alsa)
       PKGHANDLER_COMMAND="sudo yum install alsa-lib-devel" ;;
     cups)
@@ -156,6 +158,27 @@ pkgutil_help() {
 
 pkgadd_help() {
   PKGHANDLER_COMMAND=""
+}
+
+apk_help() {
+  case $1 in
+    devkit)
+      PKGHANDLER_COMMAND="sudo apk add alpine-sdk linux-headers" ;;
+    alsa)
+      PKGHANDLER_COMMAND="sudo apk add alsa-lib-dev" ;;
+    cups)
+      PKGHANDLER_COMMAND="sudo apk add cups-dev" ;;
+    fontconfig)
+      PKGHANDLER_COMMAND="sudo apk add fontconfig-dev" ;;
+    freetype)
+      PKGHANDLER_COMMAND="sudo apk add freetype-dev" ;;
+    harfbuzz)
+      PKGHANDLER_COMMAND="sudo apk add harfbuzz-dev" ;;
+    x11)
+      PKGHANDLER_COMMAND="sudo apk add libxtst-dev libxt-dev libxrender-dev libxrandr-dev" ;;
+    ccache)
+      PKGHANDLER_COMMAND="sudo apk add ccache" ;;
+  esac
 }
 
 # This function will check if we're called from the "configure" wrapper while

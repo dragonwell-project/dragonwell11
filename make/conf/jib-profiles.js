@@ -242,7 +242,7 @@ var getJibProfilesCommon = function (input, data) {
         dependencies: ["boot_jdk", "gnumake", "jtreg", "jib", "autoconf"],
         default_make_targets: ["product-bundles", "test-bundles", "static-libs-bundles"],
         configure_args: concat(["--enable-jtreg-failure-handler"],
-            "--with-exclude-translations=de,es,fr,it,ko,pt_BR,sv,ca,tr,cs,sk,ja_JP_A,ja_JP_HA,ja_JP_HI,ja_JP_I,zh_TW,zh_HK",
+            "--with-exclude-translations=es,fr,it,ko,pt_BR,sv,ca,tr,cs,sk,ja_JP_A,ja_JP_HA,ja_JP_HI,ja_JP_I,zh_TW,zh_HK",
             "--disable-manpages",
             versionArgs(input, common))
     };
@@ -415,7 +415,7 @@ var getJibProfilesProfiles = function (input, common, data) {
             target_cpu: "x64",
             dependencies: ["devkit", "graalunit_lib"],
             configure_args: concat(common.configure_args_64bit, "--with-zlib=system",
-                "--with-macosx-version-max=10.9.0"),
+                "--with-macosx-version-max=10.12.00"),
         },
 
         "solaris-x64": {
@@ -598,11 +598,7 @@ var getJibProfilesProfiles = function (input, common, data) {
             profiles[bootcyclePrebuiltName].default_make_targets = [ "product-images" ];
         });
 
-    //
     // Define artifacts for profiles
-    //
-    // Macosx bundles are named osx
-    // tar.gz.
     var artifactData = {
         "linux-x64": {
             platform: "linux-x64",
@@ -611,7 +607,7 @@ var getJibProfilesProfiles = function (input, common, data) {
             platform: "linux-x86",
         },
         "macosx-x64": {
-            platform: "osx-x64",
+            platform: "macos-x64",
             jdk_subdir: "jdk-" + data.version +  ".jdk/Contents/Home",
         },
         "solaris-x64": {
@@ -854,7 +850,7 @@ var getJibProfilesDependencies = function (input, common) {
 
     var devkit_platform_revisions = {
         linux_x64: "gcc7.3.0-OEL6.4+1.1",
-        macosx_x64: "Xcode9.4-MacOSX10.13+1.0",
+        macosx_x64: "Xcode11.3.1-MacOSX10.15+1.0",
         solaris_x64: "SS12u4-Solaris11u1+1.0",
         solaris_sparcv9: "SS12u4-Solaris11u1+1.1",
         windows_x64: "VS2017-15.9.16+1.0",
@@ -920,10 +916,9 @@ var getJibProfilesDependencies = function (input, common) {
         jtreg: {
             server: "jpg",
             product: "jtreg",
-            version: "5.1",
-            build_number: "b01",
-            checksum_file: "MD5_VALUES",
-            file: "bundles/jtreg_bin-5.1.zip",
+            version: "6",
+            build_number: "1",
+            file: "bundles/jtreg-6+1.zip",
             environment_name: "JT_HOME",
             environment_path: input.get("jtreg", "install_path") + "/jtreg/bin"
         },
@@ -1187,13 +1182,17 @@ var versionArgs = function(input, common) {
                       "--with-version-pre=" + version_numbers.get("DEFAULT_PROMOTED_VERSION_PRE"),
                       "--without-version-opt");
     } else if (input.build_type == "ci") {
-        var optString = input.build_id_data.ciBuildNumber;
+        var ciBuildNumber = input.build_id_data.ciBuildNumber;
         var preString = input.build_id_data.projectName;
         if (preString == "jdk") {
             preString = version_numbers.get("DEFAULT_PROMOTED_VERSION_PRE");
         }
         args = concat(args, "--with-version-pre=" + preString,
-                     "--with-version-opt=" + optString);
+                      "--with-version-opt=" + ciBuildNumber);
+        if (input.target_os == "macosx") {
+            args = concat(args, "--with-macosx-bundle-build-version="
+                          + common.build_number + "." + ciBuildNumber);
+        }
     } else {
         args = concat(args, "--with-version-opt=" + common.build_id);
     }

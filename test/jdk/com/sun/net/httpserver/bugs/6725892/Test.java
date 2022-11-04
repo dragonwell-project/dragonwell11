@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,8 @@
 /**
  * @test
  * @bug 6725892
- * @run main/othervm -Dsun.net.httpserver.maxReqTime=2 Test
+ * @library /test/lib
+ * @run main/othervm -Dsun.net.httpserver.maxReqTime=2 -Dsun.net.httpserver.clockTick=2000 Test
  * @summary
  */
 
@@ -35,6 +36,8 @@ import java.util.logging.*;
 import java.io.*;
 import java.net.*;
 import javax.net.ssl.*;
+
+import jdk.test.lib.net.URIBuilder;
 
 public class Test {
 
@@ -76,7 +79,13 @@ public class Test {
 
             port = s1.getAddress().getPort();
             System.out.println ("Server on port " + port);
-            url = new URL ("http://127.0.0.1:"+port+"/foo");
+            url = URIBuilder.newBuilder()
+                .scheme("http")
+                .loopback()
+                .port(port)
+                .path("/foo")
+                .toURLUnchecked();
+            System.out.println("URL: " + url);
             test1();
             test2();
             test3();

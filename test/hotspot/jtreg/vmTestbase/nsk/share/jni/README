@@ -1,9 +1,10 @@
 Copyright (c) 2003, 2018, Oracle and/or its affiliates. All rights reserved.
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 
-This code is free software; you can redistribute it and\\\/or modify it
+This code is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License version 2 only, as
 published by the Free Software Foundation.
+
 This code is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
@@ -41,12 +42,12 @@ and checking JNI errors and pending exceptions:
     NSK_JNI_VERIFY(jni, action)
     NSK_JNI_VERIFY_NEGATIVE(jni, action)
 
-Typical example of usage of NSK_JNI_VERIFY and NSK_CPP_STUB macroses
+Typical example of usage of the NSK_JNI_VERIFY macro
 for invokation of JNI functions:
 
     // jni->FindClass(jni, class_name)
     if (!NSK_JNI_VERIFY(jni,
-            NSK_CPP_STUB2(FindClass, jni, class_name) != NULL)) {
+            jni->FindClass(class_name) != NULL)) {
         return JNI_ERR;
     }
 
@@ -54,7 +55,7 @@ or with saving obtained data:
 
     // cls = jni->FindClass(jni, class_name)
     if (!NSK_JNI_VERIFY(jni, (cls =
-            NSK_CPP_STUB2(FindClass, jni, class_name)) != NULL)) {
+            jni->FindClass(class_name)) != NULL)) {
         return JNI_ERR;
     }
 

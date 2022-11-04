@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2012 Red Hat, Inc.
+ * Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -97,7 +98,7 @@
 
 static jint CurrentVersion = JNI_VERSION_10;
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_VECTORED_EXCEPTION_HANDLING)
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 #endif
 
@@ -4055,6 +4056,7 @@ static jint JNI_CreateJavaVM_inner(JavaVM **vm, void **penv, void *args) {
 
     // Since this is not a JVM_ENTRY we have to set the thread state manually before leaving.
     ThreadStateTransition::transition_and_fence(thread, _thread_in_vm, _thread_in_native);
+    MACOS_AARCH64_ONLY(thread->enable_wx(WXExec));
   } else {
     // If create_vm exits because of a pending exception, exit with that
     // exception.  In the future when we figure out how to reclaim memory,
@@ -4093,11 +4095,11 @@ static jint JNI_CreateJavaVM_inner(JavaVM **vm, void **penv, void *args) {
 _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_CreateJavaVM(JavaVM **vm, void **penv, void *args) {
   jint result = JNI_ERR;
   // On Windows, let CreateJavaVM run with SEH protection
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_VECTORED_EXCEPTION_HANDLING)
   __try {
 #endif
     result = JNI_CreateJavaVM_inner(vm, penv, args);
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_VECTORED_EXCEPTION_HANDLING)
   } __except(topLevelExceptionFilter((_EXCEPTION_POINTERS*)_exception_info())) {
     // Nothing to do.
   }
@@ -4149,6 +4151,10 @@ static jint JNICALL jni_DestroyJavaVM_inner(JavaVM *vm) {
 
   // Since this is not a JVM_ENTRY we have to set the thread state manually before entering.
   JavaThread* thread = JavaThread::current();
+
+  // We are going to VM, change W^X state to the expected one.
+  MACOS_AARCH64_ONLY(WXMode oldmode = thread->enable_wx(WXWrite));
+
   ThreadStateTransition::transition_from_native(thread, _thread_in_vm);
   if (Threads::destroy_vm()) {
     // Should not change thread state, VM is gone
@@ -4157,6 +4163,7 @@ static jint JNICALL jni_DestroyJavaVM_inner(JavaVM *vm) {
     return res;
   } else {
     ThreadStateTransition::transition_and_fence(thread, _thread_in_vm, _thread_in_native);
+    MACOS_AARCH64_ONLY(thread->enable_wx(oldmode));
     res = JNI_ERR;
     return res;
   }
@@ -4165,11 +4172,11 @@ static jint JNICALL jni_DestroyJavaVM_inner(JavaVM *vm) {
 jint JNICALL jni_DestroyJavaVM(JavaVM *vm) {
   jint result = JNI_ERR;
   // On Windows, we need SEH protection
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_VECTORED_EXCEPTION_HANDLING)
   __try {
 #endif
     result = jni_DestroyJavaVM_inner(vm);
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_VECTORED_EXCEPTION_HANDLING)
   } __except(topLevelExceptionFilter((_EXCEPTION_POINTERS*)_exception_info())) {
     // Nothing to do.
   }
@@ -4213,6 +4220,7 @@ static jint attach_current_thread(JavaVM *vm, void **penv, void *_args, bool dae
     thread->initialize_coroutine_support();
   }
   thread->initialize_thread_current();
+  MACOS_AARCH64_ONLY(thread->init_wx());
 
   if (!os::create_attached_thread(thread)) {
     thread->smr_delete();
@@ -4259,7 +4267,7 @@ static jint attach_current_thread(JavaVM *vm, void **penv, void *_args, bool dae
 
   if (attach_failed) {
     // Added missing cleanup
-    thread->cleanup_failed_attach_current_thread();
+    thread->cleanup_failed_attach_current_thread(daemon);
     return JNI_ERR;
   }
 
@@ -4291,6 +4299,7 @@ static jint attach_current_thread(JavaVM *vm, void **penv, void *_args, bool dae
   // needed.
 
   ThreadStateTransition::transition_and_fence(thread, _thread_in_vm, _thread_in_native);
+  MACOS_AARCH64_ONLY(thread->enable_wx(WXExec));
 
   // Perform any platform dependent FPU setup
   os::setup_fpu();
@@ -4345,6 +4354,9 @@ jint JNICALL jni_DetachCurrentThread(JavaVM *vm)  {
     return JNI_ERR;
   }
 
+  // We are going to VM, change W^X state to the expected one.
+  MACOS_AARCH64_ONLY(thread->enable_wx(WXWrite));
+
   // Safepoint support. Have to do call-back to safepoint code, if in the
   // middle of a safepoint operation
   ThreadStateTransition::transition_from_native(thread, _thread_in_vm);
@@ -4360,6 +4372,10 @@ jint JNICALL jni_DetachCurrentThread(JavaVM *vm)  {
   // maintenance work?)
   thread->exit(false, JavaThread::jni_detach);
   thread->smr_delete();
+
+  // Go to the execute mode, the initial state of the thread on creation.
+  // Use os interface as the thread is not a JavaThread anymore.
+  MACOS_AARCH64_ONLY(os::current_thread_enable_wx(WXExec));
 
   HOTSPOT_JNI_DETACHCURRENTTHREAD_RETURN(JNI_OK);
   return JNI_OK;

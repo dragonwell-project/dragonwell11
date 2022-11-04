@@ -25,6 +25,10 @@
 
 package sun.management;
 
+import com.alibaba.wisp.engine.WispEngine;
+import jdk.internal.misc.SharedSecrets;
+import jdk.internal.misc.WispEngineAccess;
+
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
@@ -39,6 +43,9 @@ import java.util.Objects;
  */
 
 public class ThreadImpl implements ThreadMXBean {
+    private static WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
+
+
     private final VMManagement jvm;
 
     // default for thread contention monitoring is disabled.
@@ -195,6 +202,13 @@ public class ThreadImpl implements ThreadMXBean {
             getThreadInfo1(ids, -1, infos);
         } else {
             getThreadInfo1(ids, maxDepth, infos);
+        }
+        if (WispEngine.enableThreadAsWisp()) {
+            for (int i = 0; i < infos.length; i++) {
+                if (infos[i] == null) {
+                    infos[i] = ThreadInfo.from(new WispThreadCompositeData(WEA.getWispTaskById(ids[i])));
+                }
+            }
         }
         return infos;
     }

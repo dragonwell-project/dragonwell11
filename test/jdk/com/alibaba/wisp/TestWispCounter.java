@@ -68,11 +68,10 @@ public class TestWispCounter {
     }
 
     private static ServerSocket ss;
-    private static final int PORT = 23000;
     private static final int BUFFER_SIZE = 1024;
 
     private static void startNetServer() throws IOException {
-        ss = new ServerSocket(PORT);
+        ss = new ServerSocket();
         Thread t = new Thread(() -> {
             try {
                 while (true) {
@@ -92,7 +91,7 @@ public class TestWispCounter {
 
     private static void doNetIO() {
         try {
-            Socket so = new Socket("localhost", PORT);
+            Socket so = new Socket("localhost", ss.getLocalPort());
             OutputStream os = so.getOutputStream();
             os.write(new byte[BUFFER_SIZE]);
             os.flush();

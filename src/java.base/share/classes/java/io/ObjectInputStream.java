@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,9 +25,7 @@
 
 package java.io;
 
-import java.io.ObjectStreamClass.WeakClassKey;
 import java.lang.System.Logger;
-import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Modifier;
@@ -40,12 +38,9 @@ import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
-import static java.io.ObjectStreamClass.processQueue;
 
 import jdk.internal.misc.SharedSecrets;
+import jdk.internal.event.DeserializationEvent;
 import jdk.internal.misc.Unsafe;
 import sun.reflect.misc.ReflectUtil;
 import sun.security.action.GetBooleanAction;
@@ -266,12 +261,13 @@ public class ObjectInputStream
 
     private static class Caches {
         /** cache of subclass security audit results */
-        static final ConcurrentMap<WeakClassKey,Boolean> subclassAudits =
-            new ConcurrentHashMap<>();
-
-        /** queue for WeakReferences to audited subclasses */
-        static final ReferenceQueue<Class<?>> subclassAuditsQueue =
-            new ReferenceQueue<>();
+        static final ClassValue<Boolean> subclassAudits =
+            new ClassValue<>() {
+                @Override
+                protected Boolean computeValue(Class<?> type) {
+                    return auditSubclass(type);
+                }
+            };
 
         /**
          * Property to permit setting a filter after objects
@@ -1292,6 +1288,8 @@ public class ObjectInputStream
      *     <li>each object reference previously deserialized from the stream
      *     (class is {@code null}, arrayLength is -1),
      *     <li>each regular class (class is not {@code null}, arrayLength is -1),
+     *     <li>each interface class explicitly referenced in the stream
+     *         (it is not called for interfaces implemented by classes in the stream),
      *     <li>each interface of a dynamic proxy and the dynamic proxy class itself
      *     (class is not {@code null}, arrayLength is -1),
      *     <li>each array is filtered using the array type and length of the array
@@ -1345,8 +1343,11 @@ public class ObjectInputStream
     }
 
     /**
-     * Invoke the serialization filter if non-null.
+     * Invokes the serialization filter if non-null.
+     *
      * If the filter rejects or an exception is thrown, throws InvalidClassException.
+     *
+     * Logs and/or commits a {@code DeserializationEvent}, if configured.
      *
      * @param clazz the class; may be null
      * @param arrayLength the array length requested; use {@code -1} if not creating an array
@@ -1355,11 +1356,12 @@ public class ObjectInputStream
      */
     private void filterCheck(Class<?> clazz, int arrayLength)
             throws InvalidClassException {
+        // Info about the stream is not available if overridden by subclass, return 0
+        long bytesRead = (bin == null) ? 0 : bin.getBytesRead();
+        RuntimeException ex = null;
+        ObjectInputFilter.Status status = null;
+
         if (serialFilter != null) {
-            RuntimeException ex = null;
-            ObjectInputFilter.Status status;
-            // Info about the stream is not available if overridden by subclass, return 0
-            long bytesRead = (bin == null) ? 0 : bin.getBytesRead();
             try {
                 status = serialFilter.checkInput(new FilterValues(clazz, arrayLength,
                         totalObjectRefs, depth, bytesRead));
@@ -1377,12 +1379,24 @@ public class ObjectInputStream
                         status, clazz, arrayLength, totalObjectRefs, depth, bytesRead,
                         Objects.toString(ex, "n/a"));
             }
-            if (status == null ||
-                    status == ObjectInputFilter.Status.REJECTED) {
-                InvalidClassException ice = new InvalidClassException("filter status: " + status);
-                ice.initCause(ex);
-                throw ice;
-            }
+        }
+        DeserializationEvent event = new DeserializationEvent();
+        if (event.shouldCommit()) {
+            event.filterConfigured = serialFilter != null;
+            event.filterStatus = status != null ? status.name() : null;
+            event.type = clazz;
+            event.arrayLength = arrayLength;
+            event.objectReferences = totalObjectRefs;
+            event.depth = depth;
+            event.bytesRead = bytesRead;
+            event.exceptionType = ex != null ? ex.getClass() : null;
+            event.exceptionMessage = ex != null ? ex.getMessage() : null;
+            event.commit();
+        }
+        if (serialFilter != null && (status == null || status == ObjectInputFilter.Status.REJECTED)) {
+            InvalidClassException ice = new InvalidClassException("filter status: " + status);
+            ice.initCause(ex);
+            throw ice;
         }
     }
 
@@ -1580,13 +1594,7 @@ public class ObjectInputStream
         if (sm == null) {
             return;
         }
-        processQueue(Caches.subclassAuditsQueue, Caches.subclassAudits);
-        WeakClassKey key = new WeakClassKey(cl, Caches.subclassAuditsQueue);
-        Boolean result = Caches.subclassAudits.get(key);
-        if (result == null) {
-            result = auditSubclass(cl);
-            Caches.subclassAudits.putIfAbsent(key, result);
-        }
+        boolean result = Caches.subclassAudits.get(cl);
         if (!result) {
             sm.checkPermission(SUBCLASS_IMPLEMENTATION_PERMISSION);
         }
@@ -2038,6 +2046,30 @@ public class ObjectInputStream
             totalObjectRefs++;
             depth++;
             desc.initNonProxy(readDesc, cl, resolveEx, readClassDesc(false));
+
+            if (cl != null) {
+                // Check that serial filtering has been done on the local class descriptor's superclass,
+                // in case it does not appear in the stream.
+
+                // Find the next super descriptor that has a local class descriptor.
+                // Descriptors for which there is no local class are ignored.
+                ObjectStreamClass superLocal = null;
+                for (ObjectStreamClass sDesc = desc.getSuperDesc(); sDesc != null; sDesc = sDesc.getSuperDesc()) {
+                    if ((superLocal = sDesc.getLocalDesc()) != null) {
+                        break;
+                    }
+                }
+
+                // Scan local descriptor superclasses for a match with the local descriptor of the super found above.
+                // For each super descriptor before the match, invoke the serial filter on the class.
+                // The filter is invoked for each class that has not already been filtered
+                // but would be filtered if the instance had been serialized by this Java runtime.
+                for (ObjectStreamClass lDesc = desc.getLocalDesc().getSuperDesc();
+                     lDesc != null && lDesc != superLocal;
+                     lDesc = lDesc.getSuperDesc()) {
+                    filterCheck(lDesc.forClass(), -1);
+                }
+            }
         } finally {
             depth--;
         }
@@ -2542,6 +2574,13 @@ public class ObjectInputStream
             throw new InternalError();
         }
         clear();
+        // Check that an object follows the TC_EXCEPTION typecode
+        byte tc = bin.peekByte();
+        if (tc != TC_OBJECT &&
+            tc != TC_REFERENCE) {
+            throw new StreamCorruptedException(
+                    String.format("invalid type code: %02X", tc));
+        }
         return (IOException) readObject0(Object.class, false);
     }
 

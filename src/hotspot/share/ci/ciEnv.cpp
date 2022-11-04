@@ -95,7 +95,7 @@ static bool firstEnv = true;
 
 // ------------------------------------------------------------------
 // ciEnv::ciEnv
-ciEnv::ciEnv(CompileTask* task, int system_dictionary_modification_counter)
+ciEnv::ciEnv(CompileTask* task)
   : _ciEnv_arena(mtCompiler) {
   VM_ENTRY_MARK;
 
@@ -115,7 +115,6 @@ ciEnv::ciEnv(CompileTask* task, int system_dictionary_modification_counter)
   assert(!firstEnv, "not initialized properly");
 #endif /* !PRODUCT */
 
-  _system_dictionary_modification_counter = system_dictionary_modification_counter;
   _num_inlined_bytecodes = 0;
   assert(task == NULL || thread->task() == task, "sanity");
   if (task != NULL) {
@@ -180,7 +179,6 @@ ciEnv::ciEnv(Arena* arena) : _ciEnv_arena(mtCompiler) {
   firstEnv = false;
 #endif /* !PRODUCT */
 
-  _system_dictionary_modification_counter = 0;
   _num_inlined_bytecodes = 0;
   _task = NULL;
   _log = NULL;
@@ -588,7 +586,6 @@ ciKlass* ciEnv::get_klass_by_index(const constantPoolHandle& cpool,
 ciConstant ciEnv::get_constant_by_index_impl(const constantPoolHandle& cpool,
                                              int pool_index, int cache_index,
                                              ciInstanceKlass* accessor) {
-  bool ignore_will_link;
   EXCEPTION_CONTEXT;
   int index = pool_index;
   if (cache_index >= 0) {
@@ -660,8 +657,8 @@ ciConstant ciEnv::get_constant_by_index_impl(const constantPoolHandle& cpool,
       return ciConstant(T_OBJECT, constant);
     }
   } else if (tag.is_klass() || tag.is_unresolved_klass()) {
-    // 4881222: allow ldc to take a class type
-    ciKlass* klass = get_klass_by_index_impl(cpool, index, ignore_will_link, accessor);
+    bool will_link;
+    ciKlass* klass = get_klass_by_index_impl(cpool, index, will_link, accessor);
     if (HAS_PENDING_EXCEPTION) {
       CLEAR_PENDING_EXCEPTION;
       record_out_of_memory_failure();
@@ -669,7 +666,8 @@ ciConstant ciEnv::get_constant_by_index_impl(const constantPoolHandle& cpool,
     }
     assert (klass->is_instance_klass() || klass->is_array_klass(),
             "must be an instance or array klass ");
-    return ciConstant(T_OBJECT, klass->java_mirror());
+    ciInstance* mirror = (will_link ? klass->java_mirror() : get_unloaded_klass_mirror(klass));
+    return ciConstant(T_OBJECT, mirror);
   } else if (tag.is_method_type()) {
     // must execute Java code to link this CP entry into cache[i].f1
     ciSymbol* signature = get_symbol(cpool->method_type_signature_at(index));
@@ -677,6 +675,7 @@ ciConstant ciEnv::get_constant_by_index_impl(const constantPoolHandle& cpool,
     return ciConstant(T_OBJECT, ciobj);
   } else if (tag.is_method_handle()) {
     // must execute Java code to link this CP entry into cache[i].f1
+    bool ignore_will_link;
     int ref_kind        = cpool->method_handle_ref_kind_at(index);
     int callee_index    = cpool->method_handle_klass_index_at(index);
     ciKlass* callee     = get_klass_by_index_impl(cpool, callee_index, ignore_will_link, accessor);
@@ -923,10 +922,6 @@ bool ciEnv::is_in_vm() {
   return JavaThread::current()->thread_state() == _thread_in_vm;
 }
 
-bool ciEnv::system_dictionary_modification_counter_changed() {
-  return _system_dictionary_modification_counter != SystemDictionary::number_of_modifications();
-}
-
 // ------------------------------------------------------------------
 // ciEnv::validate_compile_task_dependencies
 //
@@ -935,8 +930,7 @@ bool ciEnv::system_dictionary_modification_counter_changed() {
 void ciEnv::validate_compile_task_dependencies(ciMethod* target) {
   if (failing())  return;  // no need for further checks
 
-  bool counter_changed = system_dictionary_modification_counter_changed();
-  Dependencies::DepType result = dependencies()->validate_dependencies(_task, counter_changed);
+  Dependencies::DepType result = dependencies()->validate_dependencies(_task);
   if (result != Dependencies::end_marker) {
     if (result == Dependencies::call_site_target_value) {
       _inc_decompile_count_on_failure = false;

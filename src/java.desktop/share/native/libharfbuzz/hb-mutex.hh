@@ -39,8 +39,7 @@
 
 /* We need external help for these */
 
-#if defined(HB_MUTEX_IMPL_INIT) \
- && defined(hb_mutex_impl_init) \
+#if defined(hb_mutex_impl_init) \
  && defined(hb_mutex_impl_lock) \
  && defined(hb_mutex_impl_unlock) \
  && defined(hb_mutex_impl_finish)
@@ -48,12 +47,20 @@
 /* Defined externally, i.e. in config.h; must have typedef'ed hb_mutex_impl_t as well. */
 
 
-#elif !defined(HB_NO_MT) && defined(_WIN32)
+#elif !defined(HB_NO_MT) && !defined(HB_MUTEX_IMPL_STD_MUTEX) && (defined(HAVE_PTHREAD) || defined(__APPLE__))
 
-#include <windows.h>
+#include <pthread.h>
+typedef pthread_mutex_t hb_mutex_impl_t;
+#define hb_mutex_impl_init(M)   pthread_mutex_init (M, nullptr)
+#define hb_mutex_impl_lock(M)   pthread_mutex_lock (M)
+#define hb_mutex_impl_unlock(M) pthread_mutex_unlock (M)
+#define hb_mutex_impl_finish(M) pthread_mutex_destroy (M)
+
+
+#elif !defined(HB_NO_MT) && !defined(HB_MUTEX_IMPL_STD_MUTEX) && defined(_WIN32)
+
 typedef CRITICAL_SECTION hb_mutex_impl_t;
-#define HB_MUTEX_IMPL_INIT      {0}
-#if defined(WINAPI_FAMILY) && (WINAPI_FAMILY==WINAPI_FAMILY_PC_APP || WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP)
+#if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #define hb_mutex_impl_init(M)   InitializeCriticalSectionEx (M, 0, 0)
 #else
 #define hb_mutex_impl_init(M)   InitializeCriticalSection (M)
@@ -63,57 +70,19 @@ typedef CRITICAL_SECTION hb_mutex_impl_t;
 #define hb_mutex_impl_finish(M) DeleteCriticalSection (M)
 
 
-#elif !defined(HB_NO_MT) && (defined(HAVE_PTHREAD) || defined(__APPLE__))
-
-#include <pthread.h>
-typedef pthread_mutex_t hb_mutex_impl_t;
-#define HB_MUTEX_IMPL_INIT      PTHREAD_MUTEX_INITIALIZER
-#define hb_mutex_impl_init(M)   pthread_mutex_init (M, nullptr)
-#define hb_mutex_impl_lock(M)   pthread_mutex_lock (M)
-#define hb_mutex_impl_unlock(M) pthread_mutex_unlock (M)
-#define hb_mutex_impl_finish(M) pthread_mutex_destroy (M)
-
-
-#elif !defined(HB_NO_MT) && defined(HAVE_INTEL_ATOMIC_PRIMITIVES)
-
-#if defined(HAVE_SCHED_H) && defined(HAVE_SCHED_YIELD)
-# include <sched.h>
-# define HB_SCHED_YIELD() sched_yield ()
-#else
-# define HB_SCHED_YIELD() HB_STMT_START {} HB_STMT_END
-#endif
-
-/* This actually is not a totally awful implementation. */
-typedef volatile int hb_mutex_impl_t;
-#define HB_MUTEX_IMPL_INIT      0
-#define hb_mutex_impl_init(M)   *(M) = 0
-#define hb_mutex_impl_lock(M)   HB_STMT_START { while (__sync_lock_test_and_set((M), 1)) HB_SCHED_YIELD (); } HB_STMT_END
-#define hb_mutex_impl_unlock(M) __sync_lock_release (M)
-#define hb_mutex_impl_finish(M) HB_STMT_START {} HB_STMT_END
-
-
 #elif !defined(HB_NO_MT)
 
-#if defined(HAVE_SCHED_H) && defined(HAVE_SCHED_YIELD)
-# include <sched.h>
-# define HB_SCHED_YIELD() sched_yield ()
-#else
-# define HB_SCHED_YIELD() HB_STMT_START {} HB_STMT_END
-#endif
-
-#define HB_MUTEX_INT_NIL 1 /* Warn that fallback implementation is in use. */
-typedef volatile int hb_mutex_impl_t;
-#define HB_MUTEX_IMPL_INIT      0
-#define hb_mutex_impl_init(M)   *(M) = 0
-#define hb_mutex_impl_lock(M)   HB_STMT_START { while (*(M)) HB_SCHED_YIELD (); (*(M))++; } HB_STMT_END
-#define hb_mutex_impl_unlock(M) (*(M))--;
-#define hb_mutex_impl_finish(M) HB_STMT_START {} HB_STMT_END
+#include <mutex>
+typedef std::mutex              hb_mutex_impl_t;
+#define hb_mutex_impl_init(M)   HB_STMT_START { new (M) hb_mutex_impl_t; } HB_STMT_END
+#define hb_mutex_impl_lock(M)   (M)->lock ()
+#define hb_mutex_impl_unlock(M) (M)->unlock ()
+#define hb_mutex_impl_finish(M) HB_STMT_START { (M)->~hb_mutex_impl_t(); } HB_STMT_END
 
 
-#else /* HB_NO_MT */
+#else /* defined(HB_NO_MT) */
 
 typedef int hb_mutex_impl_t;
-#define HB_MUTEX_IMPL_INIT      0
 #define hb_mutex_impl_init(M)   HB_STMT_START {} HB_STMT_END
 #define hb_mutex_impl_lock(M)   HB_STMT_START {} HB_STMT_END
 #define hb_mutex_impl_unlock(M) HB_STMT_START {} HB_STMT_END
@@ -123,18 +92,18 @@ typedef int hb_mutex_impl_t;
 #endif
 
 
-#define HB_MUTEX_INIT           {HB_MUTEX_IMPL_INIT}
-
 struct hb_mutex_t
 {
-  /* TODO Add tracing. */
+  /* Create space for, but do not initialize m. */
+  alignas(hb_mutex_impl_t) char m[sizeof (hb_mutex_impl_t)];
 
-  hb_mutex_impl_t m;
-
-  void init   () { hb_mutex_impl_init   (&m); }
-  void lock   () { hb_mutex_impl_lock   (&m); }
-  void unlock () { hb_mutex_impl_unlock (&m); }
-  void fini ()   { hb_mutex_impl_finish (&m); }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-align"
+  void init   () { hb_mutex_impl_init   ((hb_mutex_impl_t *) m); }
+  void lock   () { hb_mutex_impl_lock   ((hb_mutex_impl_t *) m); }
+  void unlock () { hb_mutex_impl_unlock ((hb_mutex_impl_t *) m); }
+  void fini   () { hb_mutex_impl_finish ((hb_mutex_impl_t *) m); }
+#pragma GCC diagnostic pop
 };
 
 struct hb_lock_t
