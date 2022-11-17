@@ -25,6 +25,7 @@ package gc.z;
 
 /*
  * @test TestSoftMaxHeapSizeFlag
+ * @requires vm.gc.Z & !vm.graal.enabled
  * @key gc
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
