@@ -335,7 +335,6 @@ public:
 
   // Vector ideal reg
   static const uint vector_ideal_reg(int len);
-  static const uint vector_shift_count_ideal_reg(int len);
 
   // Does the CPU supports vector variable shift instructions?
   static bool supports_vector_variable_shifts(void);
@@ -528,10 +527,8 @@ public:
   void specialize_mach_node(MachNode* m);
   void specialize_temp_node(MachTempNode* tmp, MachNode* use, uint idx);
   MachOper* specialize_vector_operand(MachNode* m, uint opnd_idx);
-  MachOper* specialize_vector_operand_helper(MachNode* m, uint opnd_idx, const Type* t);
 
-  static MachOper* specialize_generic_vector_operand(MachOper* generic_opnd, uint ideal_reg, bool is_temp);
-
+  static MachOper* pd_specialize_generic_vector_operand(MachOper* generic_opnd, uint ideal_reg, bool is_temp);
   static bool is_generic_reg2reg_move(MachNode* m);
   static bool is_generic_vector(MachOper* opnd);
 
