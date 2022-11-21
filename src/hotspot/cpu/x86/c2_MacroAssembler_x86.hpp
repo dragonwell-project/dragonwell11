@@ -81,6 +81,17 @@ public:
   void load_iota_indices(XMMRegister dst, Register scratch, int vlen_in_bytes);
 
   // Reductions for vectors of bytes, shorts, ints, longs, floats, and doubles.
+
+  // dst = src1  reduce(op, src2) using vtmp as temps
+  void reduceI(int opcode, int vlen, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
+#ifdef _LP64
+  void reduceL(int opcode, int vlen, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
+#endif // _LP64
+
+  // dst = reduce(op, src2) using vtmp as temps
+  void reduce_fp(int opcode, int vlen,
+                 XMMRegister dst, XMMRegister src,
+                 XMMRegister vtmp1, XMMRegister vtmp2 = xnoreg);
   void reduceB(int opcode, int vlen, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
   void mulreduceB(int opcode, int vlen, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
   void reduceS(int opcode, int vlen, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
@@ -91,6 +102,14 @@ public:
                           XMMRegister dst, XMMRegister src,
                           XMMRegister tmp, XMMRegister atmp, XMMRegister btmp, XMMRegister xmm_0, XMMRegister xmm_1 = xnoreg);
  private:
+  void reduceF(int opcode, int vlen, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
+  void reduceD(int opcode, int vlen, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
+
+  // Int Reduction
+  void reduce2I (int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
+  void reduce4I (int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
+  void reduce8I (int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
+  void reduce16I(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
 
   // Byte Reduction
   void reduce8B (int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
@@ -108,8 +127,25 @@ public:
   void reduce16S(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
   void reduce32S(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
 
+  // Long Reduction
+#ifdef _LP64
+  void reduce2L(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
+  void reduce4L(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
+  void reduce8L(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
+#endif // _LP64
+
+  // Float Reduction
+  void reduce2F (int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp);
+  void reduce4F (int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp);
+  void reduce8F (int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
+  void reduce16F(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
+
+  // Double Reduction
+  void reduce2D(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp);
+  void reduce4D(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
+  void reduce8D(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
+
   // Base reduction instruction
   void reduce_operation_128(BasicType typ, int opcode, XMMRegister dst, XMMRegister src);
   void reduce_operation_256(BasicType typ, int opcode, XMMRegister dst, XMMRegister src1, XMMRegister src2);
-
 #endif // CPU_X86_C2_MACROASSEMBLER_X86_HPP

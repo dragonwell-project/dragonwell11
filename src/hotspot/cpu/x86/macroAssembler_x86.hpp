@@ -1707,44 +1707,6 @@ public:
   void vabsnegf(int opcode, XMMRegister dst, XMMRegister src, int vector_len, Register scr);
   void vextendbw(bool sign, XMMRegister dst, XMMRegister src, int vector_len);
   void vextendbw(bool sign, XMMRegister dst, XMMRegister src);
-
-  void reduceI(int opcode, int vlen, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-#ifdef _LP64
-  void reduceL(int opcode, int vlen, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-#endif // _LP64
-
-  // dst = reduce(op, src2) using vtmp as temps
-  void reduce_fp(int opcode, int vlen,
-                 XMMRegister dst, XMMRegister src,
-                 XMMRegister vtmp1, XMMRegister vtmp2 = xnoreg);
- private:
-  void reduceF(int opcode, int vlen, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
-  void reduceD(int opcode, int vlen, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
-
-  // Int Reduction
-  void reduce2I (int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-  void reduce4I (int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-  void reduce8I (int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-  void reduce16I(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-
-  // Long Reductio
-#ifdef _LP64
-  void reduce2L(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-  void reduce4L(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-  void reduce8L(int opcode, Register dst, Register src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2);
-#endif // _LP64
-
-  // Float Reduction
-  void reduce2F (int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp);
-  void reduce4F (int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp);
-  void reduce8F (int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
-  void reduce16F(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
-
-  // Double Reduction
-  void reduce2D(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp);
-  void reduce4D(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
-  void reduce8D(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp1, XMMRegister vtmp2);
-
 #endif
 
  public:
@@ -1801,8 +1763,6 @@ public:
   void arrays_equals(bool is_array_equ, Register ary1, Register ary2,
                      Register limit, Register result, Register chr,
                      XMMRegister vec1, XMMRegister vec2, bool is_char);
-
-#include "c2_MacroAssembler_x86.hpp"
 
 public:
 
