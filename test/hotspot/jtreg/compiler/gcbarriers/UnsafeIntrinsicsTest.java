@@ -32,6 +32,7 @@
  * @run main/othervm -Xmx256m
  *                   -XX:+UnlockExperimentalVMOptions
  *                   -XX:+UseZGC
+ *                   -XX:ParallelGCThreads=5
  *                   -XX:+UnlockDiagnosticVMOptions
  *                   -XX:+ZUnmapBadViews -XX:ZCollectionInterval=1
  *                   -XX:-CreateCoredumpOnCrash
