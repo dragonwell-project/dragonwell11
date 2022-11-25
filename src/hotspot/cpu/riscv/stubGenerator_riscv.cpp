@@ -123,19 +123,18 @@ class StubGenerator: public StubCodeGenerator {
   //     [ return_from_Java     ] <--- sp
   //     [ argument word n      ]
   //      ...
-  // -21 [ argument word 1      ]
-  // -20 [ saved x27            ] <--- sp_after_call
-  // -19 [ saved x26            ]
-  // -18 [ saved x25            ]
-  // -17 [ saved x24            ]
-  // -16 [ saved x23            ]
-  // -15 [ saved x22            ]
-  // -14 [ saved x21            ]
-  // -13 [ saved x20            ]
-  // -12 [ saved x19            ]
-  // -11 [ saved x18            ]
-  // -10 [ saved x9             ]
-  //  -9 [ thread pointer (x4)  ]
+  // -20 [ argument word 1      ]
+  // -19 [ saved x27            ] <--- sp_after_call
+  // -18 [ saved x26            ]
+  // -17 [ saved x25            ]
+  // -16 [ saved x24            ]
+  // -15 [ saved x23            ]
+  // -14 [ saved x22            ]
+  // -13 [ saved x21            ]
+  // -12 [ saved x20            ]
+  // -11 [ saved x19            ]
+  // -10 [ saved x18            ]
+  //  -9 [ saved x9             ]
   //  -8 [ call wrapper   (x10) ]
   //  -7 [ result         (x11) ]
   //  -6 [ result type    (x12) ]
@@ -149,21 +148,19 @@ class StubGenerator: public StubCodeGenerator {
 
   // Call stub stack layout word offsets from fp
   enum call_stub_layout {
-    sp_after_call_off  = -20,
+    sp_after_call_off  = -19,
 
-    x27_off            = -20,
-    x26_off            = -19,
-    x25_off            = -18,
-    x24_off            = -17,
-    x23_off            = -16,
-    x22_off            = -15,
-    x21_off            = -14,
-    x20_off            = -13,
-    x19_off            = -12,
-    x18_off            = -11,
-    x9_off             = -10,
-
-    x4_off             =  -9,
+    x27_off            = -19,
+    x26_off            = -18,
+    x25_off            = -17,
+    x24_off            = -16,
+    x23_off            = -15,
+    x22_off            = -14,
+    x21_off            = -13,
+    x20_off            = -12,
+    x19_off            = -11,
+    x18_off            = -10,
+    x9_off             =  -9,
 
     call_wrapper_off   =  -8,
     result_off         =  -7,
@@ -209,7 +206,6 @@ class StubGenerator: public StubCodeGenerator {
     const Address x18_save      (fp, x18_off            * wordSize);
 
     const Address x9_save       (fp, x9_off             * wordSize);
-    const Address x4_save       (fp, x4_off             * wordSize);
 
     // stub code
 
@@ -231,7 +227,6 @@ class StubGenerator: public StubCodeGenerator {
     __ sd(c_rarg1, result);
     __ sd(c_rarg0, call_wrapper);
 
-    __ sd(x4, x4_save);
     __ sd(x9, x9_save);
 
     __ sd(x18, x18_save);
@@ -348,7 +343,6 @@ class StubGenerator: public StubCodeGenerator {
     __ ld(x18, x18_save);
 
     __ ld(x9, x9_save);
-    __ ld(x4, x4_save);
 
     __ ld(c_rarg0, call_wrapper);
     __ ld(c_rarg1, result);
