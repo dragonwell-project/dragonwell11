@@ -26,7 +26,6 @@
 #include "precompiled.hpp"
 #include "c1/c1_LIRAssembler.hpp"
 #include "c1/c1_MacroAssembler.hpp"
-#include "gc/shared/gc_globals.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
 #include "gc/shenandoah/c1/shenandoahBarrierSetC1.hpp"
@@ -51,7 +50,15 @@ void LIR_OpShenandoahCompareAndSwap::emit_code(LIR_Assembler* masm) {
   }
 
   ShenandoahBarrierSet::assembler()->cmpxchg_oop(masm->masm(), addr, cmpval, newval, /* acquire */ Assembler::aq,
-                                                 /* release */ Assembler::rl, /* is_cae */ false, result);
+          /* release */ Assembler::rl, /* is_cae */ false, result);
+  if (UseBarriersForVolatile) {
+    // The membar here is necessary to prevent reordering between the
+    // release store in the CAS above and a subsequent volatile load.
+    // However for !UseBarriersForVolatile, C1 inserts a full barrier before
+    // volatile loads which means we don't need an additional barrier
+    // here (see LIRGenerator::volatile_field_load()).
+    __ membar(MacroAssembler::AnyAny);
+  }
 }
 
 #undef __
@@ -103,7 +110,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
   __ xchg(access.resolved_addr(), value_opr, result, tmp);
 
   if (access.is_oop()) {
-    result = load_reference_barrier(access.gen(), result, LIR_OprFact::addressConst(0), access.decorators());
+    result = load_reference_barrier(access.gen(), result, LIR_OprFact::addressConst(0));
     LIR_Opr tmp_opr = gen->new_register(type);
     __ move(result, tmp_opr);
     result = tmp_opr;
