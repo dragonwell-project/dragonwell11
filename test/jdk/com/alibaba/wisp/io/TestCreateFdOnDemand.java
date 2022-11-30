@@ -58,15 +58,17 @@ public class TestCreateFdOnDemand {
         assertEQ(countFd(), nfd0);
     }
 
-    private static long countFd() throws IOException {
-        File f = new File("/proc/self/fd");;
-        return  Arrays.stream(Objects.requireNonNull(f.listFiles())).filter(file -> {
-            try {
-                return file.getCanonicalPath().contains("/proc/");
-            } catch (IOException e) {
-                //invalid path
-                return false;
-            }
-        }).count();
+
+    public static long countFd() throws IOException {
+        long pid = ProcessHandle.current().pid();
+        java.util.Scanner s = new java.util.Scanner(Runtime.getRuntime().exec("ls -l /proc/" + pid + "/fd").getInputStream()).useDelimiter("\\n");
+        long cnt = 0;
+
+        while (s.hasNext()) {
+            String str = s.next();
+            System.out.println(str);
+            cnt += str.contains("socket") ? 1 : 0;
+        }
+        return cnt;
     }
 }

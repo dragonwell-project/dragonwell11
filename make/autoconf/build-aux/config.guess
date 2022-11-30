@@ -1,6 +1,7 @@
 #!/bin/sh
 #
-# Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -55,6 +56,17 @@ if test $? = 0; then
   # isainfo -n returns either sparc or sparcv9
   REAL_CPU=`isainfo -n`
   OUT=$REAL_CPU`echo $OUT | sed -e 's/[^-]*//'`
+fi
+
+# Detect C library.
+# Use '-gnu'  suffix on systems that use glibc.
+# Use '-musl' suffix on systems that use the musl libc.
+echo $OUT | grep -- -linux- > /dev/null 2> /dev/null
+if test $? = 0; then
+  libc_vendor=`ldd --version 2>&1 | sed -n '1s/.*\(musl\).*/\1/p'`
+  if [ x"${libc_vendor}" = x"musl" ]; then
+    OUT=`echo $OUT | sed 's/-gnu/-musl/'`
+  fi
 fi
 
 # Test and fix cygwin on x86_64
@@ -114,6 +126,14 @@ if [ "x$OUT" = x ]; then
     if [ `uname -m` = loongarch64 ]; then
       OUT=loongarch64-unknown-linux-gnu
     fi
+  fi
+fi
+
+# Test and fix cpu on macos-aarch64, uname -p reports arm, buildsys expects aarch64
+echo $OUT | grep arm-apple-darwin > /dev/null 2> /dev/null
+if test $? = 0; then
+  if [ `uname -m` = arm64 ]; then
+    OUT=aarch64`echo $OUT | sed -e 's/[^-]*//'`
   fi
 fi
 

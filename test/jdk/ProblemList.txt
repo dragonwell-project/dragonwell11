@@ -126,7 +126,6 @@ java/awt/Frame/MaximizedUndecorated/MaximizedUndecorated.java 8022302 generic-al
 java/awt/FileDialog/FileDialogIconTest/FileDialogIconTest.java 8160558 windows-all
 java/awt/event/MouseWheelEvent/InfiniteRecursion/InfiniteRecursion.java 8060176 windows-all,macosx-all
 java/awt/event/MouseWheelEvent/InfiniteRecursion/InfiniteRecursion_1.java 8060176 windows-all,macosx-all
-java/awt/dnd/DropTargetEnterExitTest/MissedDragExitTest.java 8159694 linux-all
 java/awt/dnd/MissingEventsOnModalDialog/MissingEventsOnModalDialogTest.java 8164464 linux-all,macosx-all
 java/awt/dnd/URIListBetweenJVMsTest/URIListBetweenJVMsTest.java 8171510 macosx-all
 javax/swing/dnd/7171812/bug7171812.java 8041447 macosx-all
@@ -172,7 +171,6 @@ java/awt/Focus/6981400/Test1.java 8029675 windows-all,macosx-all
 java/awt/Focus/6981400/Test3.java 8173264 generic-all
 java/awt/event/KeyEvent/ExtendedKeyCode/ExtendedKeyCodeTest.java 8169476 windows-all,macosx-all
 java/awt/event/KeyEvent/KeyChar/KeyCharTest.java 8169474,8224055 macosx-all,windows-all
-java/awt/event/MouseEvent/SpuriousExitEnter/SpuriousExitEnter_3.java 6854300 generic-all
 java/awt/event/KeyEvent/ExtendedModifiersTest/ExtendedModifiersTest.java 8129778 generic-all
 java/awt/event/KeyEvent/KeyMaskTest/KeyMaskTest.java 8129778 generic-all
 java/awt/event/MouseEvent/MouseButtonsAndKeyMasksTest/MouseButtonsAndKeyMasksTest.java 8129778 generic-all
@@ -217,7 +215,6 @@ java/awt/image/DrawImage/IncorrectClipXorModeSW2Surface.java 8196025 windows-all
 java/awt/image/DrawImage/IncorrectClipXorModeSurface2Surface.java 8196025 windows-all
 java/awt/image/DrawImage/IncorrectSourceOffset.java 8196086 windows-all
 java/awt/image/DrawImage/IncorrectUnmanagedImageRotatedClip.java 8196087 windows-all
-java/awt/image/DrawImage/BlitRotateClippedArea.java 8255724 linux-all
 java/awt/image/MultiResolutionImage/MultiResolutionDrawImageWithTransformTest.java 8198390 generic-all
 java/awt/image/multiresolution/MultiresolutionIconTest.java 8169187 macosx-all
 java/awt/print/Headless/HeadlessPrinterJob.java 8196088 windows-all
@@ -463,7 +460,6 @@ java/awt/Focus/WindowUpdateFocusabilityTest/WindowUpdateFocusabilityTest.java 82
 java/awt/datatransfer/ConstructFlavoredObjectTest/ConstructFlavoredObjectTest.java 8202860 linux-all
 java/awt/dnd/DisposeFrameOnDragCrash/DisposeFrameOnDragTest.java 8202790 macosx-all,linux-all
 java/awt/FileDialog/FilenameFilterTest/FilenameFilterTest.java 8202882 linux-all
-java/awt/MenuBar/8007006/bug8007006.java 8202886 macosx-all
 java/awt/Frame/FramesGC/FramesGC.java 8079069 macosx-all
 java/awt/dnd/MissingDragExitEventTest/MissingDragExitEventTest.java 8030121 macosx-all
 java/awt/Choice/ChoicePopupLocation/ChoicePopupLocation.java 8202931 macosx-all,linux-all
@@ -535,6 +531,7 @@ java/lang/management/MemoryMXBean/PendingAllGC.sh               8158837 generic-
 # jdk_io
 
 java/io/pathNames/GeneralWin32.java                             8180264 windows-all
+java/io/File/createTempFile/SpecialTempFile.java                8274122 windows11
 
 ############################################################################
 
@@ -603,6 +600,8 @@ java/rmi/activation/rmidViaInheritedChannel/InheritedChannelNotServerSocket.java
 
 java/rmi/registry/readTest/CodebaseTest.java                    8173324 windows-all
 
+java/nio/channels/DatagramChannel/ManySourcesAndTargets.java    8264385 macosx-aarch64
+
 ############################################################################
 
 # jdk_sctp
@@ -658,6 +657,7 @@ javax/security/auth/kerberos/KerberosTixDateTest.java           8039280 generic-
 sun/security/provider/PolicyFile/GrantAllPermToExtWhenNoPolicy.java 8039280 generic-all
 sun/security/provider/PolicyParser/ExtDirsChange.java           8039280 generic-all
 sun/security/provider/PolicyParser/PrincipalExpansionError.java 8039280 generic-all
+sun/security/ssl/SSLSessionImpl/NoInvalidateSocketException.java 8277970,8280158 generic-all
 
 ############################################################################
 
@@ -681,7 +681,7 @@ javax/sound/midi/Sequencer/MetaCallback.java 8178698 linux-all,solaris-all
 
 # jdk_swing
 
-javax/swing/plaf/basic/BasicTextUI/8001470/bug8001470.java 8233177 linux-all
+javax/swing/plaf/basic/BasicTextUI/8001470/bug8001470.java 8233177 linux-all,windows-all
 
 javax/swing/JComponent/7154030/bug7154030.java 7190978 generic-all
 javax/swing/JComboBox/ConsumedKeyTest/ConsumedKeyTest.java 8067986 generic-all
@@ -697,8 +697,6 @@ javax/swing/JWindow/ShapedAndTranslucentWindows/TranslucentJComboBox.java 802462
 javax/swing/JComboBox/8033069/bug8033069ScrollBar.java 8163367 generic-all
 javax/swing/JColorChooser/Test6827032.java 8197825 windows-all
 javax/swing/JColorChooser/Test7194184.java 8194126 linux-all,macosx-all
-javax/swing/JTable/7124218/SelectEditTableCell.java 8148958 linux-all,macosx-all
-javax/swing/JTable/4235420/bug4235420.java     8079127 generic-all
 javax/swing/JSplitPane/4201995/bug4201995.java 8079127 generic-all
 javax/swing/JTree/DnD/LastNodeLowerHalfDrop.java 8159131 linux-all
 javax/swing/JTree/4633594/JTreeFocusTest.java 8173125 macosx-all
@@ -721,7 +719,6 @@ javax/swing/JTabbedPane/8007563/Test8007563.java 8051591 generic-all
 javax/swing/JTabbedPane/4624207/bug4624207.java 8064922 macosx-all
 javax/swing/JTabbedPane/7024235/Test7024235.java 8028281 macosx-all
 javax/swing/SwingUtilities/TestBadBreak/TestBadBreak.java 8160720 generic-all
-javax/swing/plaf/basic/BasicTextUI/8001470/bug8001470.java 8196098 windows-all
 javax/swing/plaf/basic/Test6984643.java 8198340 windows-all
 javax/swing/text/CSSBorder/6796710/bug6796710.java 8196099 windows-all
 javax/swing/text/DefaultCaret/HidingSelection/HidingSelectionTest.java 8194048 windows-all
@@ -757,7 +754,6 @@ javax/swing/JTabbedPane/TabProb.java 8236635 linux-all
 javax/swing/JTree/8003830/bug8003830.java 8199057 generic-all
 javax/swing/text/GlyphPainter2/6427244/bug6427244.java 8208566 macosx-all
 javax/swing/JRootPane/4670486/bug4670486.java 8042381 macosx-all
-javax/swing/JPopupMenu/4634626/bug4634626.java 8017175 macosx-all
 javax/swing/JMenuItem/6249972/bug6249972.java 8233640 macosx-all
 javax/swing/plaf/synth/7158712/bug7158712.java 8238720 windows-all
 javax/swing/plaf/basic/BasicComboPopup/JComboBoxPopupLocation/JComboBoxPopupLocation.java 8238720 windows-all
@@ -774,7 +770,6 @@ javax/swing/text/html/parser/Parser/HtmlCommentTagParseTest/HtmlCommentTagParseT
 javax/swing/text/StyledEditorKit/8016833/bug8016833.java 8199055 generic-all
 javax/swing/text/Utilities/8134721/bug8134721.java 8199062 generic-all
 javax/swing/tree/DefaultTreeCellRenderer/7142955/bug7142955.java 8199076 generic-all
-javax/swing/UIDefaults/6302464/bug6302464.java 8199079 generic-all
 javax/swing/UIDefaults/8133926/InternalFrameIcon.java 8199075 generic-all
 javax/swing/UIDefaults/8149879/InternalResourceBundle.java 8199054 windows-all
 javax/swing/text/html/parser/Parser/8078268/bug8078268.java 8199092 generic-all
@@ -811,6 +806,8 @@ tools/jlink/JLinkReproducibleTest.java                          8258945 generic-
 com/sun/jdi/RepStep.java                                        8043571 generic-all
 
 com/sun/jdi/NashornPopFrameTest.java                            8187143 generic-all
+
+com/sun/jdi/InvokeHangTest.java                                 8218463 linux-all
 
 ############################################################################
 
@@ -880,17 +877,8 @@ javax/rmi/ssl/SSLSocketParametersTest.sh                        8162906 generic-
 
 ############################################################################
 
-###########################################################################
-#
-# Java EE Module Removal
-#
-com/sun/jdi/RedefineCrossEvent.java                             8194308    generic-all  Java EE Module Removal
-
-############################################################################
-
 # jdk_jfr
 
-jdk/jfr/event/io/TestInstrumentation.java                       8202142    generic-all
 jdk/jfr/event/sampling/TestNative.java                          8202142    generic-all
 jdk/jfr/event/runtime/TestNetworkUtilizationEvent.java          8228990,8229370    generic-all
 jdk/jfr/event/compiler/TestCodeSweeper.java                     8225209    generic-all
@@ -898,3 +886,8 @@ jdk/jfr/event/oldobject/TestLargeRootSet.java                   8205651    gener
  
 ############################################################################
 
+# dragonwell
+com/alibaba/wisp2/TestWisp2WorkSteal.java  generic-all
+com/alibaba/wisp/exclusive/monitor/TestPassToken.java https://github.com/alibaba/dragonwell11/issues/255 generic-all
+com/alibaba/wisp/exclusive/io/TestSocket.java https://github.com/alibaba/dragonwell11/issues/255 generic-all
+com/alibaba/wisp/exclusive/timer/TestSleep.java https://github.com/alibaba/dragonwell11/issues/255 generic-all

@@ -19,7 +19,7 @@
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
-#
+# @test
 # @summary Test jmap options related to mini heap dump
 # @run shell/timeout=300 TestMiniHeapDumpOpts.sh
 #
@@ -60,13 +60,12 @@ EOF
 ${JAVAC} Loop.java
 if [ $? != 0 ]; then exit 1; fi
 
-${JAVA} -cp . Loop&
-PID=$(${JPS} | grep 'Loop' | awk '{print $1}')
+${JAVA} -cp . Loop &
+PID=$!
 if [ $? != 0 ] || [ -z "${PID}" ]; then exit 1; fi
+trap "kill -9 ${PID}" exit
+sleep 5
 ${JMAP} -dump:format=b,mini,file=heap.bin ${PID}
 if [ $? != 0 ] || [ ! -f "${PWD}/heap.bin" ]; then exit 1; fi
-
-kill -9 ${PID}
-if [ $? != 0 ]; then exit 1; fi
 
 exit 0

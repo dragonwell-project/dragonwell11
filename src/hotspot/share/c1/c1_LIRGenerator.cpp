@@ -425,11 +425,15 @@ CodeEmitInfo* LIRGenerator::state_for(Instruction* x, ValueStack* state, bool ig
 
     MethodLivenessResult liveness = method->liveness_at_bci(bci);
     if (bci == SynchronizationEntryBCI) {
-      if (x->as_ExceptionObject() || x->as_Throw()) {
+      // Wisp adds a OopMap by copying a state, which may contains dead oops because when
+      // bci == SynchronizationEntryBCI && x is MonitorExit we can determine it is the implicit
+      // monitorexit for the synchronized keyword of a synchronized method. We need to clear
+      // dead locals for it because no locals are needed at this time.
+      if (x->as_ExceptionObject() || x->as_Throw() || (UseWispMonitor && x->as_MonitorExit())) {
         // all locals are dead on exit from the synthetic unlocker
         liveness.clear();
       } else {
-        assert(x->as_MonitorEnter() || x->as_ProfileInvoke() || (UseWispMonitor && x->as_MonitorExit()), "only other cases are MonitorEnter and ProfileInvoke, or Wisp MonitorExit");
+        assert(x->as_MonitorEnter() || x->as_ProfileInvoke(), "only other cases are MonitorEnter and ProfileInvoke");
       }
     }
     if (!liveness.is_valid()) {
@@ -1013,6 +1017,14 @@ void LIRGenerator::move_to_phi(PhiResolver* resolver, Value cur_val, Value sux_v
   Phi* phi = sux_val->as_Phi();
   // cur_val can be null without phi being null in conjunction with inlining
   if (phi != NULL && cur_val != NULL && cur_val != phi && !phi->is_illegal()) {
+    if (phi->is_local()) {
+      for (int i = 0; i < phi->operand_count(); i++) {
+        Value op = phi->operand_at(i);
+        if (op != NULL && op->type()->is_illegal()) {
+          bailout("illegal phi operand");
+        }
+      }
+    }
     Phi* cur_phi = cur_val->as_Phi();
     if (cur_phi != NULL && cur_phi->is_illegal()) {
       // Phi and local would need to get invalidated

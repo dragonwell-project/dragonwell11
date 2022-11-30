@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -120,6 +120,12 @@ final class DCmdStart extends AbstractDCmd {
             }
         }
 
+        if (hasOptoAllocationEvents(s) && !Options.getSampleObjectAllocations()) {
+            // -XX:FlightRecorderOptions=sampleobjectallocations=true must be set if
+            // related events are enabled
+            throw new DCmdException("Can't enable OptoInstanceObjectAllocation/OptoArrayObjectAllocation Event if -XX:FlightRecorderOptions=sampleobjectallocations=true is not set");
+        }
+
         OldObjectSample.updateSettingPathToGcRoots(s, pathToGcRoots);
 
         if (duration != null) {
@@ -150,14 +156,6 @@ final class DCmdStart extends AbstractDCmd {
         }
         recording.setSettings(s);
         SafePath safePath = null;
-
-        if (recording.isRecorderEnabled(EventNames.OptoInstanceObjectAllocation) ||
-            recording.isRecorderEnabled(EventNames.OptoArrayObjectAllocation)) {
-            if (!Options.getSampleObjectAllocations()) {
-                println("Please add -XX:FlightRecorderOptions=sampleobjectallocations=true in JVM options.");
-                return getResult();
-            }
-        }
 
         if (path != null) {
             try {
@@ -259,6 +257,18 @@ final class DCmdStart extends AbstractDCmd {
         eventNames[6] = "FileForce";
         for (String eventName : eventNames) {
             if ("true".equals(settings.get(Type.EVENT_NAME_PREFIX + eventName + "#enabled"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasOptoAllocationEvents(Map<String, String> settings) {
+        String[] eventNames = new String[2];
+        eventNames[0] = EventNames.OptoInstanceObjectAllocation;
+        eventNames[1] = EventNames.OptoArrayObjectAllocation;
+        for (String eventName : eventNames) {
+            if ("true".equals(settings.get(eventName + "#enabled"))) {
                 return true;
             }
         }

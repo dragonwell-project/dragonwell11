@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,15 +21,18 @@
  * questions.
  */
 
+package gc.arguments;
+
 /*
  * @test TestMaxMinHeapFreeRatioFlags
  * @key gc
  * @summary Verify that heap size changes according to max and min heap free ratios.
  * @requires vm.gc != "Z" & vm.gc != "Shenandoah"
  * @library /test/lib
+ * @library /
  * @modules java.base/jdk.internal.misc
  *          java.management
- * @run driver/timeout=240 TestMaxMinHeapFreeRatioFlags
+ * @run driver/timeout=240 gc.arguments.TestMaxMinHeapFreeRatioFlags
  */
 
 import java.util.LinkedList;
@@ -97,7 +100,7 @@ public class TestMaxMinHeapFreeRatioFlags {
                 Boolean.toString(shrinkHeapInSteps)
         );
 
-        ProcessBuilder procBuilder = ProcessTools.createJavaProcessBuilder(vmOptions.toArray(new String[vmOptions.size()]));
+        ProcessBuilder procBuilder = GCArguments.createJavaProcessBuilder(vmOptions.toArray(new String[vmOptions.size()]));
         OutputAnalyzer analyzer = new OutputAnalyzer(procBuilder.start());
         analyzer.shouldHaveExitValue(0);
     }
@@ -122,7 +125,7 @@ public class TestMaxMinHeapFreeRatioFlags {
                 "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
                 "-version"
         );
-        ProcessBuilder procBuilder = ProcessTools.createJavaProcessBuilder(vmOptions.toArray(new String[vmOptions.size()]));
+        ProcessBuilder procBuilder = GCArguments.createJavaProcessBuilder(vmOptions.toArray(new String[vmOptions.size()]));
         OutputAnalyzer analyzer = new OutputAnalyzer(procBuilder.start());
         analyzer.shouldHaveExitValue(1);
         analyzer.shouldContain("Error: Could not create the Java Virtual Machine.");

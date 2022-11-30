@@ -27,6 +27,9 @@
 # Fake minimalistic spec file for RunTestsPrebuilt.gmk.
 ################################################################################
 
+# Make sure all shell commands are executed with the C locale
+export LC_ALL := C
+
 define VerifyVariable
   ifeq ($$($1), )
     $$(info Error: Variable $1 is missing, needed by RunTestPrebuiltSpec.gmk)
@@ -172,6 +175,7 @@ UNZIP := unzip
 EXPR := expr
 FILE := file
 HG := hg
+ULIMIT := ulimit
 
 # On Solaris gnu versions of some tools are required.
 ifeq ($(OPENJDK_BUILD_OS), solaris)

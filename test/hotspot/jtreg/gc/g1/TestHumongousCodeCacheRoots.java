@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 
+package gc.g1;
+
 /*
  * @test
  * @key regression gc
@@ -33,7 +35,7 @@
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
  *                              sun.hotspot.WhiteBox$WhiteBoxPermission
  * @summary Humongous objects may have references from the code cache
- * @run main TestHumongousCodeCacheRoots
+ * @run main gc.g1.TestHumongousCodeCacheRoots
 */
 
 import jdk.test.lib.process.OutputAnalyzer;
@@ -119,24 +121,8 @@ public class TestHumongousCodeCacheRoots {
 
     ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(finalargs.toArray(new String[0]));
     OutputAnalyzer output = new OutputAnalyzer(pb.start());
-    try {
-        output.shouldHaveExitValue(0);
-    } catch (RuntimeException e) {
-        // It's ok if there is no client vm in the jdk.
-        if (output.firstMatch("Unrecognized option: -client") == null) {
-            throw e;
-        }
-    }
-
+    output.shouldHaveExitValue(0);
     return output;
-  }
-
-  public static void runTest(String compiler, String[] other) throws Exception {
-    ArrayList<String> joined = new ArrayList<String>();
-    joined.add(compiler);
-    joined.addAll(Arrays.asList(other));
-    runWhiteBoxTest(joined.toArray(new String[0]), TestHumongousCodeCacheRootsHelper.class.getName(),
-      new String[] {}, false);
   }
 
   public static void main(String[] args) throws Exception {
@@ -146,8 +132,9 @@ public class TestHumongousCodeCacheRoots {
       "-XX:InitiatingHeapOccupancyPercent=1", // strong code root marking
       "-XX:+G1VerifyHeapRegionCodeRoots", "-XX:+VerifyAfterGC", // make sure that verification is run
     };
-    runTest("-client", baseArguments);
-    runTest("-server", baseArguments);
+
+    runWhiteBoxTest(baseArguments, TestHumongousCodeCacheRootsHelper.class.getName(),
+      new String[] {}, false);
   }
 }
 
