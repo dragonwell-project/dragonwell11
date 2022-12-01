@@ -231,7 +231,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_not_null(MacroAssembl
                                                                     Register dst, Address load_addr) {
   assert(ShenandoahLoadRefBarrier, "Should be enabled");
   assert(dst != t1 && load_addr.base() != t1, "need t1");
-  assert_different_registers(load_addr.base(), t1, t2);
+  assert_different_registers(load_addr.base(), t0, t1);
 
   Label done;
   __ enter();
