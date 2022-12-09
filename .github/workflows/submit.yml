@@ -29,6 +29,7 @@ jobs:
       should_run: ${{ steps.check_submit.outputs.should_run }}
       bundle_id: ${{ steps.check_bundle_id.outputs.bundle_id }}
       #platform_linux_additional: ${{ steps.check_platforms.outputs.platform_linux_additional }}
+      jdk_version: ${{ steps.check_jdk_versions.outputs.jdk_version }}
       platform_linux_additional: false
       platform_linux_x64: ${{ steps.check_platforms.outputs.platform_linux_x64 }}
       platform_windows_x64: ${{ steps.check_platforms.outputs.platform_windows_x64 }}
