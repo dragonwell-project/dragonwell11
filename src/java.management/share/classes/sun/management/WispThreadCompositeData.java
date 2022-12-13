@@ -23,7 +23,7 @@ public class WispThreadCompositeData extends LazyCompositeData {
     protected CompositeData getCompositeData() {
         Map<String, Object> items = new HashMap<>();
         Thread t = task != null ? task.getThreadWrapper() : null;
-        Object parkBlocker = LockSupport.getBlocker(t);
+        Object parkBlocker = t != null ? LockSupport.getBlocker(t) : null;
         items.put(THREAD_ID,        t != null ? t.getId() : 0L);
         items.put(THREAD_NAME,      t != null ? t.getName() : "");
         items.put(THREAD_STATE,     t != null ? t.getState().name() : "");
@@ -40,7 +40,7 @@ public class WispThreadCompositeData extends LazyCompositeData {
         items.put(LOCKED_MONITORS,  new CompositeData[0]);
         items.put(LOCKED_SYNCS,     new CompositeData[0]);
         items.put(LOCK_INFO,        null);
-        items.put(DAEMON,           t == null && t.isDaemon());
+        items.put(DAEMON,           t != null && t.isDaemon());
         items.put(PRIORITY,         t != null ? t.getPriority() : 0);
 
         try {
