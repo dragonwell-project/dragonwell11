@@ -5717,7 +5717,6 @@ operand cmpOpU()
 operand cmpOpEqNe()
 %{
   match(Bool);
-  match(CmpOp);
   op_cost(0);
   predicate(n->as_Bool()->_test._test == BoolTest::ne
             || n->as_Bool()->_test._test == BoolTest::eq);
@@ -5741,7 +5740,6 @@ operand cmpOpEqNe()
 operand cmpOpLtGe()
 %{
   match(Bool);
-  match(CmpOp);
   op_cost(0);
 
   predicate(n->as_Bool()->_test._test == BoolTest::lt
@@ -5766,7 +5764,6 @@ operand cmpOpLtGe()
 operand cmpOpUEqNeLtGe()
 %{
   match(Bool);
-  match(CmpOp);
   op_cost(0);
 
   predicate(n->as_Bool()->_test._test == BoolTest::eq
