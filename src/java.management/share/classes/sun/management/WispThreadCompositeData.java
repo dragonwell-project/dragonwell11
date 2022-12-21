@@ -16,17 +16,18 @@ public class WispThreadCompositeData extends LazyCompositeData {
     private final WispTask task;
 
     public WispThreadCompositeData(WispTask wispTask) {
+        assert wispTask != null : "handled null cases already";
         task = wispTask;
     }
 
     @Override
     protected CompositeData getCompositeData() {
         Map<String, Object> items = new HashMap<>();
-        Thread t = task != null ? task.getThreadWrapper() : null;
+        Thread t = task.getThreadWrapper();
         Object parkBlocker = t != null ? LockSupport.getBlocker(t) : null;
         items.put(THREAD_ID,        t != null ? t.getId() : 0L);
         items.put(THREAD_NAME,      t != null ? t.getName() : "");
-        items.put(THREAD_STATE,     t != null ? t.getState().name() : "");
+        items.put(THREAD_STATE,     t != null ? t.getState().name() : Thread.State.TERMINATED.toString());
         items.put(LOCK_NAME,        parkBlocker == null ? "" : parkBlocker.toString());
         items.put(BLOCKED_TIME,     0L);
         items.put(BLOCKED_COUNT,    0L);
