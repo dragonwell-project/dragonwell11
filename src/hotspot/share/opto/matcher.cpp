@@ -2510,27 +2510,6 @@ void Matcher::do_postselect_cleanup() {
 // Generic machine operands elision.
 //----------------------------------------------------------------------
 
-// Convert (leg)Vec to (leg)Vec[SDXYZ].
-MachOper* Matcher::specialize_vector_operand_helper(MachNode* m, uint opnd_idx, const Type* t) {
-  MachOper* original_opnd = m->_opnds[opnd_idx];
-  uint ideal_reg = t->ideal_reg();
-  // Handle special cases.
-  if (t->isa_vect()) {
-    // LShiftCntV/RShiftCntV report wide vector type, but Matcher::vector_shift_count_ideal_reg() as ideal register (see vectornode.hpp).
-    // Look for shift count use sites as well (at vector shift nodes).
-    int opc = m->ideal_Opcode();
-    if ((VectorNode::is_shift_count(opc)  && opnd_idx == 0) || // DEF operand of LShiftCntV/RShiftCntV
-        (VectorNode::is_vector_shift(opc) && opnd_idx == 2)) { // shift operand of a vector shift node
-      ideal_reg = Matcher::vector_shift_count_ideal_reg(t->is_vect()->length_in_bytes());
-    }
-  } else {
-    // Chain instructions which convert scalar to vector (e.g., vshiftcntimm on x86) don't have vector type.
-    int size_in_bytes = 4 * type2size[t->basic_type()];
-    ideal_reg = Matcher::vector_ideal_reg(size_in_bytes);
-  }
-  return Matcher::specialize_generic_vector_operand(original_opnd, ideal_reg, false);
-}
-
 // Compute concrete vector operand for a generic TEMP vector mach node based on its user info.
 void Matcher::specialize_temp_node(MachTempNode* tmp, MachNode* use, uint idx) {
   assert(use->in(idx) == tmp, "not a user");
@@ -2540,7 +2519,7 @@ void Matcher::specialize_temp_node(MachTempNode* tmp, MachNode* use, uint idx) {
     tmp->_opnds[0] = use->_opnds[0]->clone();
   } else {
     uint ideal_vreg = vector_ideal_reg(C->max_vector_size());
-    tmp->_opnds[0] = specialize_generic_vector_operand(tmp->_opnds[0], ideal_vreg, true);
+    tmp->_opnds[0] = Matcher::pd_specialize_generic_vector_operand(tmp->_opnds[0], ideal_vreg, true /*is_temp*/);
   }
 }
 
@@ -2561,7 +2540,9 @@ MachOper* Matcher::specialize_vector_operand(MachNode* m, uint opnd_idx) {
       }
     }
   }
-  return specialize_vector_operand_helper(m, opnd_idx, def->bottom_type());
+  assert(def->bottom_type()->isa_vect(), "not a vector");
+  uint ideal_vreg = def->bottom_type()->ideal_reg();
+  return Matcher::pd_specialize_generic_vector_operand(m->_opnds[opnd_idx], ideal_vreg, false /*is_temp*/);
 }
 
 void Matcher::specialize_mach_node(MachNode* m) {
