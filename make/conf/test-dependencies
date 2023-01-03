@@ -34,6 +34,10 @@ LINUX_X64_BOOT_JDK_FILENAME=openjdk-11.0.14.1_linux-x64_bin.tar.gz
 LINUX_X64_BOOT_JDK_URL=https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.14.1%2B1/OpenJDK11U-jdk_x64_linux_hotspot_11.0.14.1_1.tar.gz
 LINUX_X64_BOOT_JDK_SHA256=43fb84f8063ad9bf6b6d694a67b8f64c8827552b920ec5ce794dfe5602edffe7
 
+LINUX_AARCH64_BOOT_JDK_FILENAME=openjdk-11.0.14.1_linux-aarch64_bin.tar.gz
+LINUX_AARCH64_BOOT_JDK_URL=https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.14.1%2B1/OpenJDK11U-jdk_aarch64_linux_hotspot_11.0.14.1_1.tar.gz
+LINUX_AARCH64_BOOT_JDK_SHA256=79572f5172c6a040591d34632f98a20ed148702bbce2f57649e8ac01c0d2e3db
+
 WINDOWS_X64_BOOT_JDK_FILENAME=openjdk-11.0.14.1_windows-x64_bin.zip
 WINDOWS_X64_BOOT_JDK_URL=https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.14.1%2B1/OpenJDK11U-jdk_x64_windows_hotspot_11.0.14.1_1.zip
 WINDOWS_X64_BOOT_JDK_SHA256=3e7da701aa92e441418299714f0ed6db10c3bb1e2db625c35a2c2cd9cc619731
