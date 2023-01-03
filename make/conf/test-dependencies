@@ -38,6 +38,10 @@ WINDOWS_X64_BOOT_JDK_FILENAME=openjdk-11_windows-x64_bin.zip
 WINDOWS_X64_BOOT_JDK_URL=https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.12%2B7/OpenJDK11U-jdk_x64_windows_hotspot_11.0.12_7.zip
 WINDOWS_X64_BOOT_JDK_SHA256=c54123dd4b0d6473221539e7003b8ca1c1757c5588c46465565b03bf8781f807
 
+LINUX_AARCH64_BOOT_JDK_FILENAME=openjdk-11.0.14.1_linux-aarch64_bin.tar.gz
+LINUX_AARCH64_BOOT_JDK_URL=https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.14.1%2B1/OpenJDK11U-jdk_aarch64_linux_hotspot_11.0.14.1_1.tar.gz
+LINUX_AARCH64_BOOT_JDK_SHA256=79572f5172c6a040591d34632f98a20ed148702bbce2f57649e8ac01c0d2e3db
+
 MACOS_X64_BOOT_JDK_FILENAME=openjdk-11_osx-x64_bin.tar.gz
 MACOS_X64_BOOT_JDK_URL=https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.12%2B7/OpenJDK11U-jdk_x64_mac_hotspot_11.0.12_7.tar.gz
 MACOS_X64_BOOT_JDK_SHA256=13d056ee9a57bf2d5b3af4504c8f8cf7a246c4dff78f96b70dd05dad98075855

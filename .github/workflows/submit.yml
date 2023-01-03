@@ -28,6 +28,7 @@ jobs:
       jdk_version: ${{ steps.check_jdk_versions.outputs.jdk_version }}
       platform_linux_additional: false
       platform_linux_x64: ${{ steps.check_platforms.outputs.platform_linux_x64 }}
+      platform_linux_aarch64: ${{ steps.check_platforms.outputs.platform_linux_aarch64 }}
       platform_windows_x64: ${{ steps.check_platforms.outputs.platform_windows_x64 }}
       platform_macos_x64: ${{ steps.check_platforms.outputs.platform_macos_x64 }}
       dependencies: ${{ steps.check_deps.outputs.dependencies }}
@@ -41,6 +42,7 @@ jobs:
         id: check_platforms
         run: |
           echo "::set-output name=platform_linux_x64::${{ contains(github.event.inputs.platforms, 'linux x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'linux x64'))) }}"
+          echo "::set-output name=platform_linux_aarch64::${{ contains(github.event.inputs.platforms, 'linux aarch64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'linux aarch64'))) }}"
           echo "::set-output name=platform_windows_x64::${{ contains(github.event.inputs.platforms, 'windows x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'windows x64'))) }}"
           echo "::set-output name=platform_macos_x64::${{ contains(github.event.inputs.platforms, 'macos x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'macos x64'))) }}"
         if: steps.check_submit.outputs.should_run != 'false'
@@ -396,6 +398,362 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           path: ~/linux-x64${{ matrix.artifact }}_testsupport_${{ env.logsuffix }}.zip
+        continue-on-error: true
+
+  linux_aarch64_build:
+    name: Linux aarch64
+    runs-on: [self-hosted , ARM64]
+    needs: prerequisites
+    if: needs.prerequisites.outputs.should_run != 'false' && (needs.prerequisites.outputs.platform_linux_aarch64 != 'false' || needs.prerequisites.outputs.platform_linux_additional == 'true')
+
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor:
+          - build release
+          - build debug
+        include:
+          - flavor: build debug
+            flags: --enable-debug
+            artifact: -debug
+    env:
+      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
+      BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_AARCH64_BOOT_JDK_FILENAME }}"
+      BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_AARCH64_BOOT_JDK_URL }}"
+      BOOT_JDK_SHA256: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_AARCH64_BOOT_JDK_SHA256 }}"
+
+    steps:
+      - name: Checkout the source
+        uses: actions/checkout@v3
+        with:
+          path: jdk
+
+      - name: Restore boot JDK from cache
+        id: bootjdk
+        uses: actions/cache@v3
+        with:
+          path: ~/bootjdk/${{ env.BOOT_JDK_VERSION }}
+          key: bootjdk-${{ runner.os }}-${{ env.BOOT_JDK_VERSION }}-${{ env.BOOT_JDK_SHA256 }}-v1
+
+      - name: Restore jtreg artifact
+        id: jtreg_restore
+        uses: actions/download-artifact@v3
+        with:
+          name: transient_jtreg_${{ needs.prerequisites.outputs.bundle_id }}
+          path: ~/jtreg/
+        continue-on-error: true
+
+      - name: Restore jtreg artifact (retry)
+        uses: actions/download-artifact@v3
+        with:
+          name: transient_jtreg_${{ needs.prerequisites.outputs.bundle_id }}
+          path: ~/jtreg/
+        if: steps.jtreg_restore.outcome == 'failure'
+
+      - name: Fix jtreg permissions
+        run: chmod -R a+rx ${HOME}/jtreg/
+
+      - name: Configure
+        run: >
+          bash configure
+          --with-conf-name=linux-aarch64
+          ${{ matrix.flags }}
+          --with-version-opt=${GITHUB_ACTOR}-${GITHUB_SHA}
+          --with-version-build=0
+          --with-boot-jdk=${HOME}/bootjdk/${BOOT_JDK_VERSION}
+          --with-jtreg=${HOME}/jtreg
+          --with-default-make-target="product-bundles test-bundles"
+          --with-zlib=system
+          --with-jvm-features=shenandoahgc
+          --enable-jtreg-failure-handler
+        working-directory: jdk
+
+      - name: Build
+        run: make CONF_NAME=linux-aarch64
+        working-directory: jdk
+
+      - name: Persist test bundles
+        uses: actions/upload-artifact@v3
+        with:
+          name: transient_jdk-linux-aarch64${{ matrix.artifact }}_${{ needs.prerequisites.outputs.bundle_id }}
+          path: |
+            jdk/build/linux-aarch64/bundles/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin${{ matrix.artifact }}.tar.gz
+            jdk/build/linux-aarch64/bundles/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin-tests${{ matrix.artifact }}.tar.gz
+
+  linux_aarch64_test:
+    name: Linux aarch64
+    runs-on: [self-hosted , ARM64]
+    needs:
+      - prerequisites
+      - linux_aarch64_build
+
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - jdk/tier1 part 1
+          - jdk/tier1 part 2
+          - jdk/tier1 part 3
+          - langtools/tier1
+          - hs/tier1 common
+          - hs/tier1 compiler
+          - hs/tier1 gc
+          - hs/tier1 runtime
+          - hs/tier1 serviceability
+          - dragonwell/hs feature
+          - dragonwell/jdk feature
+        include:
+          - test: jdk/tier1 part 1
+            suites: test/jdk/:tier1_part1
+          - test: jdk/tier1 part 2
+            suites: test/jdk/:tier1_part2
+          - test: jdk/tier1 part 3
+            suites: test/jdk/:tier1_part3
+          - test: langtools/tier1
+            suites: test/langtools/:tier1
+          - test: hs/tier1 common
+            suites: test/hotspot/jtreg/:tier1_common
+            artifact: -debug
+          - test: hs/tier1 compiler
+            suites: test/hotspot/jtreg/:tier1_compiler
+            artifact: -debug
+          - test: hs/tier1 gc
+            suites: test/hotspot/jtreg/:tier1_gc
+            artifact: -debug
+          - test: hs/tier1 runtime
+            suites: test/hotspot/jtreg/:tier1_runtime
+            artifact: -debug
+          - test: hs/tier1 serviceability
+            suites: test/hotspot/jtreg/:tier1_serviceability
+            artifact: -debug
+          - test: dragonwell/hs feature
+            suites: test/hotspot/jtreg/:dragonwell_hs
+          - test: dragonwell/jdk feature
+            suites: test/jdk/:dragonwell_jdk
+    env:
+      JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_FEATURE }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_INTERIM }}.${{ fromJson(needs.prerequisites.outputs.dependencies).DEFAULT_VERSION_UPDATE }}"
+      BOOT_JDK_VERSION: "${{ fromJson(needs.prerequisites.outputs.dependencies).BOOT_JDK_VERSION }}"
+      BOOT_JDK_FILENAME: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_AARCH64_BOOT_JDK_FILENAME }}"
+      BOOT_JDK_URL: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_AARCH64_BOOT_JDK_URL }}"
+      BOOT_JDK_SHA256: "${{ fromJson(needs.prerequisites.outputs.dependencies).LINUX_AARCH64_BOOT_JDK_SHA256 }}"
+
+    steps:
+      - name: Checkout the source
+        uses: actions/checkout@v3
+        with:
+          path: jdk
+
+      - name: Restore boot JDK from cache
+        id: bootjdk
+        uses: actions/cache@v3
+        with:
+          path: ~/bootjdk/${{ env.BOOT_JDK_VERSION }}
+          key: bootjdk-${{ runner.os }}-${{ env.BOOT_JDK_VERSION }}-${{ env.BOOT_JDK_SHA256 }}-v1
+
+      - name: Restore jtreg artifact
+        id: jtreg_restore
+        uses: actions/download-artifact@v3
+        with:
+          name: transient_jtreg_${{ needs.prerequisites.outputs.bundle_id }}
+          path: ~/jtreg/
+        continue-on-error: true
+
+      - name: Restore jtreg artifact (retry)
+        uses: actions/download-artifact@v3
+        with:
+          name: transient_jtreg_${{ needs.prerequisites.outputs.bundle_id }}
+          path: ~/jtreg/
+        if: steps.jtreg_restore.outcome == 'failure'
+
+      - name: Restore build artifacts
+        id: build_restore
+        uses: actions/download-artifact@v3
+        with:
+          name: transient_jdk-linux-aarch64${{ matrix.artifact }}_${{ needs.prerequisites.outputs.bundle_id }}
+          path: ~/jdk-linux-aarch64${{ matrix.artifact }}
+        continue-on-error: true
+
+      - name: Restore build artifacts (retry)
+        uses: actions/download-artifact@v3
+        with:
+          name: transient_jdk-linux-aarch64${{ matrix.artifact }}_${{ needs.prerequisites.outputs.bundle_id }}
+          path: ~/jdk-linux-aarch64${{ matrix.artifact }}
+        if: steps.build_restore.outcome == 'failure'
+
+      - name: Unpack jdk
+        run: |
+          mkdir -p "${HOME}/jdk-linux-aarch64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin${{ matrix.artifact }}"
+          tar -xf "${HOME}/jdk-linux-aarch64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin${{ matrix.artifact }}.tar.gz" -C "${HOME}/jdk-linux-aarch64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin${{ matrix.artifact }}"
+
+      - name: Unpack tests
+        run: |
+          mkdir -p "${HOME}/jdk-linux-aarch64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin-tests${{ matrix.artifact }}"
+          tar -xf "${HOME}/jdk-linux-aarch64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin-tests${{ matrix.artifact }}.tar.gz" -C "${HOME}/jdk-linux-aarch64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin-tests${{ matrix.artifact }}"
+
+      - name: Find root of jdk image dir
+        run: |
+          imageroot=`find ${HOME}/jdk-linux-aarch64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin${{ matrix.artifact }} -name release -type f`
+          echo "imageroot=`dirname ${imageroot}`" >> $GITHUB_ENV
+
+      - name: Configure bash as default
+        run: |
+          sudo chsh -s /bin/bash $(whoami)
+
+
+      - name: Run tests
+        id: run_tests
+        run: >
+          JDK_IMAGE_DIR=${{ env.imageroot }}
+          TEST_IMAGE_DIR=${HOME}/jdk-linux-aarch64${{ matrix.artifact }}/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin-tests${{ matrix.artifact }}
+          BOOT_JDK=${HOME}/bootjdk/${BOOT_JDK_VERSION}
+          JT_HOME=${HOME}/jtreg
+          make run-test-prebuilt
+          CONF_NAME=run-test-prebuilt
+          LOG_CMDLINES=true
+          JTREG_VERBOSE=fail,error,time
+          TEST="${{ matrix.suites }}"
+          TEST_OPTS_JAVA_OPTIONS=
+          JTREG_KEYWORDS="!headful"
+          JTREG="JAVA_OPTIONS=-XX:-CreateCoredumpOnCrash"
+        working-directory: jdk
+
+      - name: Generate test failure summary
+        run: |
+          #
+          test_suite_name=$(cat build/run-test-prebuilt/test-support/test-last-ids.txt)
+          results_dir=build/run-test-prebuilt/test-results/$test_suite_name/text
+
+          failures=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/newfailures.txt || true)
+          errors=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/other_errors.txt || true)
+          failure_count=$(echo $failures | wc -w || true)
+          error_count=$(echo $errors | wc -w || true)
+
+          if [[ "$failures" = "" && "$errors" = "" ]]; then
+            # If we have nothing to report, exit this step now
+            exit 0
+          fi
+
+          echo "::error:: Test run reported $failure_count test failure(s) and $error_count error(s). See summary for details."
+
+          echo "### :boom: Test failures summary" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$failures" != "" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "These tests reported failure:" >> $GITHUB_STEP_SUMMARY
+            for test in $failures; do
+              anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+              echo "* [$test](#user-content-$anchor)"
+            done >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "$errors" != "" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "These tests reported errors:"  >> $GITHUB_STEP_SUMMARY
+            for test in $errors; do
+              anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+              echo "* [$test](#user-content-$anchor)"
+            done >> $GITHUB_STEP_SUMMARY
+          fi
+        working-directory: jdk
+
+      - name: Collect failed test output
+        run: |
+          #
+          # This is a separate step, since if the markdown from a step gets bigger than
+          # 1024 kB it is skipped, but then the summary above is still generated
+          test_suite_name=$(cat build/run-test-prebuilt/test-support/test-last-ids.txt)
+          results_dir=build/run-test-prebuilt/test-results/$test_suite_name/text
+          report_dir=build/run-test-prebuilt/test-support/$test_suite_name
+
+          failures=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/newfailures.txt || true)
+          errors=$(sed -e 's!\(.*\)\.java!\1!' -e '/^#/d' $results_dir/other_errors.txt || true)
+
+          if [[ "$failures" = "" && "$errors" = "" ]]; then
+            # If we have nothing to report, exit this step now
+            exit 0
+          fi
+
+          echo "### Test output for failed tests" >> $GITHUB_STEP_SUMMARY
+          for test in $failures $errors; do
+            anchor="$(echo "$test" | tr [A-Z/] [a-z_])"
+            base_path="$(echo "$test" | tr '#' '_')"
+            report_file="$report_dir/$base_path.jtr"
+            hs_err_files="$report_dir/$base_path/hs_err*.log"
+            echo "####  <a id="$anchor">$test"
+
+            echo "<details><summary>View test results</summary>"
+            echo ""
+            echo '```'
+            if [[ -f "$report_file" ]]; then
+              cat "$report_file"
+            else
+              echo "Error: Result file $report_file not found"
+            fi
+            echo '```'
+            echo "</details>"
+            echo ""
+
+            if [[ "$hs_err_files" != "" ]]; then
+              echo "<details><summary>View HotSpot error log</summary>"
+              echo ""
+              for hs_err in $hs_err_files; do
+                echo '```'
+                echo "$hs_err:"
+                echo ""
+                cat "$hs_err"
+                echo '```'
+              done
+
+              echo "</details>"
+              echo ""
+            fi
+
+          done >> $GITHUB_STEP_SUMMARY
+
+          echo ":arrow_right: To see the entire test log, click the job in the list to the left"  >> $GITHUB_STEP_SUMMARY
+
+          # This will abort the entire job in GHA, which is what we want
+          exit 1
+        working-directory: jdk
+
+      - name: Create suitable test log artifact name
+        if: always()
+        run: echo "logsuffix=`echo ${{ matrix.test }} | sed -e 's!/!_!'g -e 's! !_!'g`" >> $GITHUB_ENV
+
+      - name: Package test results
+        if: always()
+        working-directory: build/run-test-prebuilt/test-results/
+        run: >
+          zip -r9
+          "$HOME/linux-aarch64${{ matrix.artifact }}_testresults_${{ env.logsuffix }}.zip"
+          .
+        continue-on-error: true
+
+      - name: Package test support
+        if: always()
+        working-directory: build/run-test-prebuilt/test-support/
+        run: >
+          zip -r9
+          "$HOME/linux-aarch64${{ matrix.artifact }}_testsupport_${{ env.logsuffix }}.zip"
+          .
+          -i *.jtr
+          -i */hs_err*.log
+          -i */replay*.log
+        continue-on-error: true
+
+      - name: Persist test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          path: ~/linux-aarch64${{ matrix.artifact }}_testresults_${{ env.logsuffix }}.zip
+        continue-on-error: true
+
+      - name: Persist test outputs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          path: ~/linux-aarch64${{ matrix.artifact }}_testsupport_${{ env.logsuffix }}.zip
         continue-on-error: true
 
   linux_additional_build:
@@ -1119,6 +1477,7 @@ jobs:
       - prerequisites
       - linux_additional_build
       - linux_x64_test
+      - linux_aarch64_test
       - windows_x64_test
       - macos_x64_test
 
