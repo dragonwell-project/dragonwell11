@@ -238,3 +238,4 @@ vmTestbase/nsk/jdwp/ThreadReference/ForceEarlyReturn/forceEarlyReturn001/forceEa
 dragonwell
 runtime/coroutine/testJniDetachThreadHoldingMonitor.sh generic-all
 runtime/coroutine/testJniMonitorExit.sh generic-all
+gc/z/unloading/TestUnloadGarbageCollectorMXBean.java linux-aarch64
