@@ -233,7 +233,7 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
       }
       if (objects != NULL) {
         JRT_BLOCK
-          realloc_failures = realloc_objects(thread, &deoptee, objects, THREAD);
+          realloc_failures = realloc_objects(thread, &deoptee, &map, objects, THREAD);
         JRT_END
         bool skip_internal = (cm != NULL) && !cm->is_compiled_by_jvmci();
         reassign_fields(&deoptee, &map, objects, realloc_failures, skip_internal);
@@ -793,7 +793,7 @@ Deoptimization::DeoptAction Deoptimization::_unloaded_action
   = Deoptimization::Action_reinterpret;
 
 #if COMPILER2_OR_JVMCI
-bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, GrowableArray<ScopeValue*>* objects, TRAPS) {
+bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, RegisterMap* reg_map, GrowableArray<ScopeValue*>* objects, TRAPS) {
   Handle pending_exception(THREAD, thread->pending_exception());
   const char* exception_file = thread->exception_file();
   int exception_line = thread->exception_line();
