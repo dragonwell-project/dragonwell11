@@ -85,6 +85,7 @@ class TypeInt;
 class TypePtr;
 class TypeOopPtr;
 class TypeFunc;
+class TypeVect;
 class Unique_Node_List;
 class nmethod;
 class WarmCallInfo;
@@ -1365,6 +1366,15 @@ class Compile : public Phase {
   void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc);
   void final_graph_reshaping_walk( Node_Stack &nstack, Node *root, Final_Reshape_Counts &frc );
   void eliminate_redundant_card_marks(Node* n);
+
+  // Logic cone optimization.
+  void optimize_logic_cones(PhaseIterGVN &igvn);
+  void collect_logic_cone_roots(Unique_Node_List& list);
+  void process_logic_cone_root(PhaseIterGVN &igvn, Node* n, VectorSet& visited);
+  bool compute_logic_cone(Node* n, Unique_Node_List& partition, Unique_Node_List& inputs);
+  uint compute_truth_table(Unique_Node_List& partition, Unique_Node_List& inputs);
+  uint eval_macro_logic_op(uint func, uint op1, uint op2, uint op3);
+  Node* xform_to_MacroLogicV(PhaseIterGVN &igvn, const TypeVect* vt, Unique_Node_List& partitions, Unique_Node_List& inputs);
 
  public:
 
