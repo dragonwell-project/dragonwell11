@@ -2131,6 +2131,7 @@ void Matcher::find_shared( Node *n ) {
       case Op_FmaF:
       case Op_FmaVD:
       case Op_FmaVF:
+      case Op_MacroLogicV:
       case Op_ThreadRefetch:      // This must be added, otherwise we couldn't match the ThreadRefetchNode.
         set_shared(n); // Force result into register (it will be anyways)
         break;
@@ -2285,6 +2286,15 @@ void Matcher::find_shared( Node *n ) {
         n->set_req(1,pair1);
         Node *pair2 = new BinaryNode(n->in(2),n->in(3));
         n->set_req(2,pair2);
+        n->del_req(3);
+        break;
+      }
+      case Op_MacroLogicV: {
+        Node* pair1 = new BinaryNode(n->in(1), n->in(2));
+        Node* pair2 = new BinaryNode(n->in(3), n->in(4));
+        n->set_req(1, pair1);
+        n->set_req(2, pair2);
+        n->del_req(4);
         n->del_req(3);
         break;
       }

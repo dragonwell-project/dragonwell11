@@ -1853,6 +1853,7 @@ public:
   void byte_array_inflate(Register src, Register dst, Register len,
                           XMMRegister tmp1, Register tmp2);
 
+  void vallones(XMMRegister dst, int vector_len);
 };
 
 /**

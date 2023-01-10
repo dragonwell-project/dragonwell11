@@ -2138,6 +2138,8 @@ private:
 
    // Ternary logic instruction.
   void vpternlogq(XMMRegister dst, int imm8, XMMRegister src2, XMMRegister src3, int vector_len);
+  void vpternlogd(XMMRegister dst, int imm8, XMMRegister src2, XMMRegister src3, int vector_len);
+  void vpternlogd(XMMRegister dst, int imm8, XMMRegister src2, Address     src3, int vector_len);
 
   // vinserti forms
   void vinserti128(XMMRegister dst, XMMRegister nds, XMMRegister src, uint8_t imm8);
