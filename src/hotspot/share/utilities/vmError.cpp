@@ -80,7 +80,7 @@ void* VMError::get_segfault_address() {
 const char *env_list[] = {
   // All platforms
   "JAVA_HOME", "JRE_HOME", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "CLASSPATH",
-  "JAVA_COMPILER", "PATH", "USERNAME",
+  "JAVA_COMPILER", "PATH", "USERNAME", "DRAGONWELL_JAVA_TOOL_OPTIONS", "DRAGONWELL_JAVA_TOOL_OPTIONS_JDK_ONLY",
 
   // Env variables that are defined on Solaris/Linux/BSD
   "LD_LIBRARY_PATH", "LD_PRELOAD", "SHELL", "DISPLAY",
