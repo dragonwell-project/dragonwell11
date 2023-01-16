@@ -2189,7 +2189,8 @@ Arguments::ArgsRange Arguments::parse_memory_size(const char* s,
 jint Arguments::parse_vm_init_args(const JavaVMInitArgs *vm_options_args,
                                    const JavaVMInitArgs *java_tool_options_args,
                                    const JavaVMInitArgs *java_options_args,
-                                   const JavaVMInitArgs *cmd_line_args) {
+                                   const JavaVMInitArgs *cmd_line_args,
+                                   const JavaVMInitArgs *dragonwell_java_tool_options_args) {
   bool patch_mod_javabase = false;
 
   // Save default settings for some mode flags
@@ -2214,6 +2215,13 @@ jint Arguments::parse_vm_init_args(const JavaVMInitArgs *vm_options_args,
   // Parse args structure generated from JAVA_TOOL_OPTIONS environment
   // variable (if present).
   result = parse_each_vm_init_arg(java_tool_options_args, &patch_mod_javabase, JVMFlag::ENVIRON_VAR);
+  if (result != JNI_OK) {
+    return result;
+  }
+
+  // Parse args structure generated from DRAGONWELL_JAVA_TOOL_OPTIONS environment
+  // variable (if present).
+  result = parse_each_vm_init_arg(dragonwell_java_tool_options_args, &patch_mod_javabase, JVMFlag::ENVIRON_VAR);
   if (result != JNI_OK) {
     return result;
   }
@@ -3306,12 +3314,47 @@ class ScopedVMInitArgs : public StackObj {
   }
 };
 
+bool Arguments::is_enable_tool_options(const JavaVMInitArgs *args) {
+  bool enable = true;
+  const char* sun_tool_package = "jdk.jcmd/sun.tools.";
+
+  char *buffer = ::getenv("DRAGONWELL_JAVA_TOOL_OPTIONS_JDK_ONLY");
+  if (buffer != NULL && strcmp(buffer,"true") == 0) {
+    int index;
+    const char* tail = NULL;
+    for (index = 0; index < args->nOptions; index++) {
+      const JavaVMOption *option = args->options + index;
+      if (match_option(option, "-Dsun.java.command=", &tail)) {
+        break;
+      }
+    }
+    //if no -Dsun.java.command like :java -version
+    //or JDK builtin tools
+    if (NULL == tail || strncmp(sun_tool_package, tail, strlen(sun_tool_package)) == 0) {
+      enable = false;
+    }
+  }
+  return enable;
+}
+
 jint Arguments::parse_java_options_environment_variable(ScopedVMInitArgs* args) {
   return parse_options_environment_variable("_JAVA_OPTIONS", args);
 }
 
-jint Arguments::parse_java_tool_options_environment_variable(ScopedVMInitArgs* args) {
-  return parse_options_environment_variable("JAVA_TOOL_OPTIONS", args);
+jint Arguments::parse_java_tool_options_environment_variable(ScopedVMInitArgs* args, bool enable_tool_options) {
+  if (enable_tool_options) {
+    return parse_options_environment_variable("JAVA_TOOL_OPTIONS", args);
+  } else {
+    return JNI_OK;
+  }
+}
+
+jint Arguments::parse_dragonwell_options_environment_variable(ScopedVMInitArgs* args, bool enable_tool_options) {
+  if (enable_tool_options) {
+    return parse_options_environment_variable("DRAGONWELL_JAVA_TOOL_OPTIONS", args);
+  } else {
+    return JNI_OK;
+  }
 }
 
 jint Arguments::parse_options_environment_variable(const char* name,
@@ -3779,22 +3822,32 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
   ScopedVMInitArgs initial_vm_options_args("");
   ScopedVMInitArgs initial_java_tool_options_args("env_var='JAVA_TOOL_OPTIONS'");
   ScopedVMInitArgs initial_java_options_args("env_var='_JAVA_OPTIONS'");
+  ScopedVMInitArgs initial_dragonwell_java_tool_options_args("env_var='DRAGONWELL_JAVA_TOOL_OPTIONS'");
 
   // Pointers to current working set of containers
   JavaVMInitArgs* cur_cmd_args;
   JavaVMInitArgs* cur_vm_options_args;
   JavaVMInitArgs* cur_java_options_args;
   JavaVMInitArgs* cur_java_tool_options_args;
+  JavaVMInitArgs* cur_dragonwell_java_tool_options_args;
 
   // Containers for modified/expanded options
   ScopedVMInitArgs mod_cmd_args("cmd_line_args");
   ScopedVMInitArgs mod_vm_options_args("vm_options_args");
   ScopedVMInitArgs mod_java_tool_options_args("env_var='JAVA_TOOL_OPTIONS'");
   ScopedVMInitArgs mod_java_options_args("env_var='_JAVA_OPTIONS'");
+  ScopedVMInitArgs mod_dragonwell_java_tool_options_args("env_var='DRAGONWELL_JAVA_TOOL_OPTIONS'");
 
+  bool enable_tool_options = is_enable_tool_options(initial_cmd_args);
 
   jint code =
-      parse_java_tool_options_environment_variable(&initial_java_tool_options_args);
+      parse_java_tool_options_environment_variable(&initial_java_tool_options_args, enable_tool_options);
+  if (code != JNI_OK) {
+    return code;
+  }
+
+  // Parse DRAGONWELL_JAVA_TOOL_OPTIONS environment variable (if present)
+  code = parse_dragonwell_options_environment_variable(&initial_dragonwell_java_tool_options_args, enable_tool_options);
   if (code != JNI_OK) {
     return code;
   }
@@ -3820,6 +3873,14 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
   if (code != JNI_OK) {
     return code;
   }
+
+  code = expand_vm_options_as_needed(initial_dragonwell_java_tool_options_args.get(),
+                                     &mod_dragonwell_java_tool_options_args,
+                                     &cur_dragonwell_java_tool_options_args);
+  if (code != JNI_OK) {
+    return code;
+  }
+
 
   code = expand_vm_options_as_needed(initial_cmd_args,
                                      &mod_cmd_args,
@@ -3849,6 +3910,7 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     cur_cmd_args->ignoreUnrecognized = true;
     cur_java_tool_options_args->ignoreUnrecognized = true;
     cur_java_options_args->ignoreUnrecognized = true;
+    cur_dragonwell_java_tool_options_args->ignoreUnrecognized = true;
   }
 
   // Parse specified settings file
@@ -3876,13 +3938,15 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     print_options(cur_java_tool_options_args);
     print_options(cur_cmd_args);
     print_options(cur_java_options_args);
+    print_options(cur_dragonwell_java_tool_options_args);
   }
 
   // Parse JavaVMInitArgs structure passed in, as well as JAVA_TOOL_OPTIONS and _JAVA_OPTIONS
   jint result = parse_vm_init_args(cur_vm_options_args,
                                    cur_java_tool_options_args,
                                    cur_java_options_args,
-                                   cur_cmd_args);
+                                   cur_cmd_args,
+                                   cur_dragonwell_java_tool_options_args);
 
   if (result != JNI_OK) {
     return result;
