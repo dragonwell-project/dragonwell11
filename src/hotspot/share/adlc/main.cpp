@@ -220,6 +220,7 @@ int main(int argc, char *argv[])
   AD.addInclude(AD._CPP_file, "oops/markOop.hpp");
   AD.addInclude(AD._CPP_file, "oops/method.hpp");
   AD.addInclude(AD._CPP_file, "oops/oop.inline.hpp");
+  AD.addInclude(AD._CPP_file, "opto/c2_MacroAssembler.hpp");
   AD.addInclude(AD._CPP_file, "opto/cfgnode.hpp");
   AD.addInclude(AD._CPP_file, "opto/intrinsicnode.hpp");
   AD.addInclude(AD._CPP_file, "opto/locknode.hpp");
