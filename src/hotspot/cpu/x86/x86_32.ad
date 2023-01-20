@@ -3355,7 +3355,7 @@ operand immI() %{
 %}
 
 // Constant for test vs zero
-operand immI0() %{
+operand immI_0() %{
   predicate(n->get_int() == 0);
   match(ConI);
 
@@ -3365,7 +3365,7 @@ operand immI0() %{
 %}
 
 // Constant for increment
-operand immI1() %{
+operand immI_1() %{
   predicate(n->get_int() == 1);
   match(ConI);
 
@@ -3459,15 +3459,6 @@ operand immI_32_63() %{
   interface(CONST_INTER);
 %}
 
-operand immI_1() %{
-  predicate( n->get_int() == 1 );
-  match(ConI);
-
-  op_cost(0);
-  format %{ %}
-  interface(CONST_INTER);
-%}
-
 operand immI_2() %{
   predicate( n->get_int() == 2 );
   match(ConI);
@@ -3479,6 +3470,26 @@ operand immI_2() %{
 
 operand immI_3() %{
   predicate( n->get_int() == 3 );
+  match(ConI);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+operand immI_4()
+%{
+  predicate(n->get_int() == 4);
+  match(ConI);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+operand immI_8()
+%{
+  predicate(n->get_int() == 8);
   match(ConI);
 
   op_cost(0);
@@ -3988,6 +3999,15 @@ operand eADXRegL_low_only() %{
 %}
 
 // Flags register, used as output of compare instructions
+operand rFlagsReg() %{
+  constraint(ALLOC_IN_RC(int_flags));
+  match(RegFlags);
+
+  format %{ "EFLAGS" %}
+  interface(REG_INTER);
+%}
+
+// Flags register, used as output of compare instructions
 operand eFlagsReg() %{
   constraint(ALLOC_IN_RC(int_flags));
   match(RegFlags);
@@ -4117,6 +4137,14 @@ operand regF() %{
   interface(REG_INTER);
 %}
 
+operand legRegF() %{
+  predicate( UseSSE>=1 );
+  constraint(ALLOC_IN_RC(float_reg_legacy));
+  match(RegF);
+  format %{ %}
+  interface(REG_INTER);
+%}
+
 // Float register operands
 operand vlRegF() %{
    constraint(ALLOC_IN_RC(float_reg_vl));
@@ -4136,6 +4164,14 @@ operand regD() %{
 %}
 
 // Double register operands
+operand legRegD() %{
+  predicate( UseSSE>=2 );
+  constraint(ALLOC_IN_RC(double_reg_legacy));
+  match(RegD);
+  format %{ %}
+  interface(REG_INTER);
+%}
+
 operand vlRegD() %{
    constraint(ALLOC_IN_RC(double_reg_vl));
    match(RegD);
