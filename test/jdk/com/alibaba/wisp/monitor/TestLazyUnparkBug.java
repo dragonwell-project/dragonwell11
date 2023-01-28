@@ -3,6 +3,7 @@
  * @summary T12212948
  * @library /lib/testlibrary
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestLazyUnparkBug
 */
  

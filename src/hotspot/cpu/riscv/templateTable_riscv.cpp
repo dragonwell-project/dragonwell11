@@ -413,7 +413,6 @@ void TemplateTable::fast_aldc(bool wide)
     int32_t offset = 0;
     __ movptr_with_offset(rarg, Universe::the_null_sentinel_addr(), offset);
     __ ld(tmp, Address(rarg, offset));
-    __ resolve_oop_handle(tmp);
     __ oop_bne(result, tmp, notNull);
     __ mv(result, zr);  // NULL object reference
     __ bind(notNull);

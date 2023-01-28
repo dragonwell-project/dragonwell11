@@ -5,6 +5,7 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.rcm.internal:+open
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=5 JStackWispContainerIdTest
  */
 

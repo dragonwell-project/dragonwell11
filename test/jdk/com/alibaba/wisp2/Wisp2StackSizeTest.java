@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary test wisp2 stack_size
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 Wisp2StackSizeTest
  */
 

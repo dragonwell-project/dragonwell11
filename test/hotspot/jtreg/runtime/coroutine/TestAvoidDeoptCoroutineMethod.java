@@ -2,6 +2,7 @@
  * @test TestAvoidDeoptCoroutineMethod
  * @library /test/lib
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
  * @build TestAvoidDeoptCoroutineMethod

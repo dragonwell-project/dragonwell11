@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary test blocking accept
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -Dcom.alibaba.wisp.carrierEngines=1 -XX:+UseWisp2 TestBlockingAccept2
  */
 
