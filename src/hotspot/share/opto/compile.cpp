@@ -2525,6 +2525,7 @@ bool Compile::has_vbox_nodes() {
 
 static bool is_vector_unary_bitwise_op(Node* n) {
   return n->Opcode() == Op_XorV &&
+         n->req() == 2 &&
          VectorNode::is_vector_bitwise_not_pattern(n);
 }
 
@@ -2532,7 +2533,7 @@ static bool is_vector_binary_bitwise_op(Node* n) {
   switch (n->Opcode()) {
     case Op_AndV:
     case Op_OrV:
-      return true;
+      return n->req() == 2;
 
     case Op_XorV:
       return !is_vector_unary_bitwise_op(n);
