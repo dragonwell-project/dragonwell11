@@ -64,6 +64,8 @@ import jdk.internal.loader.BuiltinClassLoader;
 import jdk.internal.perf.PerfCounter;
 import jdk.internal.loader.BootLoader;
 import jdk.internal.loader.ClassLoaders;
+import jdk.internal.misc.JavaLangClassLoaderAccess;
+import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.Unsafe;
 import jdk.internal.misc.VM;
 import jdk.internal.ref.CleanerFactory;
@@ -234,6 +236,17 @@ public abstract class ClassLoader {
 
     private static native void registerNatives();
     static {
+        SharedSecrets.setJavaLangClassLoaderAccess(new JavaLangClassLoaderAccess() {
+            @Override
+            public int getSignature(ClassLoader cl) {
+                return cl.signature;
+            }
+
+            @Override
+            public void setSignature(ClassLoader cl, int value) {
+                cl.signature = value;
+            }
+        });
         registerNatives();
     }
 
@@ -250,6 +263,9 @@ public abstract class ClassLoader {
 
     // a string for exception message printing
     private final String nameAndId;
+
+    // class loader signature information
+    private int signature;
 
     /**
      * Encapsulates the set of parallel capable loader types.

@@ -130,6 +130,7 @@ module java.base {
     exports javax.security.cert;
     exports com.alibaba.rcm;
     exports com.alibaba.wisp.engine;
+    exports com.alibaba.util;
 
 
     // additional qualified exports may be inserted at build time
