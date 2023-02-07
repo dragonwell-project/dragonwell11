@@ -2,6 +2,7 @@
  * @test
  * @summary Test unpark in a finalizer  thread.
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm   -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestFinalizer
 */
 

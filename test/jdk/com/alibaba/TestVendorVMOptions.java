@@ -30,6 +30,7 @@ import java.util.List;
  * @test
  * @summary Test the environment config
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @library /test/lib
  * @run main TestVendorVMOptions
  */

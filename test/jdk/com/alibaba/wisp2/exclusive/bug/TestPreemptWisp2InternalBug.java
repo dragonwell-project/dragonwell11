@@ -4,6 +4,7 @@
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main TestPreemptWisp2InternalBug
  */
 

@@ -2,6 +2,7 @@
  * @test
  * @library /test/lib
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @summary Test jstack steal counter
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @modules java.base/java.dyn:+open

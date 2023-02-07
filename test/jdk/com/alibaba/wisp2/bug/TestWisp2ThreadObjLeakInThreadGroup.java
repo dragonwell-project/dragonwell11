@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary test bug fix of thread object leak in thread group
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestWisp2ThreadObjLeakInThreadGroup
  */
 

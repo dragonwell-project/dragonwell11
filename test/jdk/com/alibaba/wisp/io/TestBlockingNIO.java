@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary test blocking nio
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestBlockingNIO
  */
 

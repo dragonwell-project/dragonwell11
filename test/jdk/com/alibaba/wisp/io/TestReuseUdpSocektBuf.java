@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary test reuse WispUdpSocket buffer
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestReuseUdpSocektBuf
  */
 

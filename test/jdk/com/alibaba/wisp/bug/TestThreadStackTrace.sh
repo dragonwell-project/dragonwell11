@@ -5,6 +5,7 @@
 # @modules java.base/jdk.internal.misc
 # @modules java.base/com.alibaba.wisp.engine:+open
 # @requires os.family == "linux"
+# @requires os.arch != "riscv64"
 # @run shell TestThreadStackTrace.sh
 #
 

@@ -2,6 +2,7 @@
  * @test
  * @summary test obj.wait() could be interrupted
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @library /test/lib
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestInterruptedWait
  */

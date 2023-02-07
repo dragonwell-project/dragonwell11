@@ -4,6 +4,7 @@
  * @summary Test Wisp engine park / unpark
  * @modules java.base/jdk.internal.misc
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestPark
 */
 
