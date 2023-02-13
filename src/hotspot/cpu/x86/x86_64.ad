@@ -3095,16 +3095,6 @@ operand immI2()
   interface(CONST_INTER);
 %}
 
-operand immU7()
-%{
-  predicate((0 <= n->get_int()) && (n->get_int() <= 0x7F));
-  match(ConI);
-
-  op_cost(5);
-  format %{ %}
-  interface(CONST_INTER);
-%}
-
 operand immI8()
 %{
   predicate((-0x80 <= n->get_int()) && (n->get_int() < 0x80));
@@ -12138,7 +12128,7 @@ instruct compB_mem_imm(rFlagsReg cr, memory mem, immI8 imm)
   ins_pipe(ialu_cr_reg_mem);
 %}
 
-instruct testUB_mem_imm(rFlagsReg cr, memory mem, immU7 imm, immI_0 zero)
+instruct testUB_mem_imm(rFlagsReg cr, memory mem, immU8 imm, immI_0 zero)
 %{
   match(Set cr (CmpI (AndI (LoadUB mem) imm) zero));
 
