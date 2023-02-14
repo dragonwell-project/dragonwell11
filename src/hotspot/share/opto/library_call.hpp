@@ -157,7 +157,6 @@ class LibraryCallKit : public GraphKit {
                                     int modifier_mask, int modifier_bits,
                                     RegionNode* region);
   Node* generate_interface_guard(Node* kls, RegionNode* region);
-  Node* generate_hidden_class_guard(Node* kls, RegionNode* region);
   Node* generate_array_guard(Node* kls, RegionNode* region) {
     return generate_array_guard_common(kls, region, false, false);
   }
@@ -226,17 +225,15 @@ class LibraryCallKit : public GraphKit {
   static bool klass_needs_init_guard(Node* kls);
   bool inline_unsafe_allocate();
   bool inline_unsafe_newArray(bool uninitialized);
-  bool inline_unsafe_writeback0();
-  bool inline_unsafe_writebackSync0(bool is_pre);
   bool inline_unsafe_copyMemory();
   bool inline_native_currentThread();
-  bool inline_native_isInterrupted();
 
   bool inline_native_time_funcs(address method, const char* funcName);
 #ifdef JFR_HAVE_INTRINSICS
   bool inline_native_classID();
   bool inline_native_getEventWriter();
 #endif
+  bool inline_native_isInterrupted();
   bool inline_native_Class_query(vmIntrinsics::ID id);
   bool inline_native_subtype_check();
   bool inline_native_getLength();
@@ -278,18 +275,12 @@ class LibraryCallKit : public GraphKit {
   bool inline_ghash_processBlocks();
   bool inline_base64_encodeBlock();
   bool inline_sha_implCompress(vmIntrinsics::ID id);
-  bool inline_digestBase_implCompress(vmIntrinsics::ID id);
   bool inline_digestBase_implCompressMB(int predicate);
-  bool inline_digestBase_implCompressMB(Node* digestBaseObj, ciInstanceKlass* instklass,
-                                        bool long_state, address stubAddr, const char *stubName,
-                                        Node* src_start, Node* ofs, Node* limit);
   bool inline_sha_implCompressMB(Node* digestBaseObj, ciInstanceKlass* instklass_SHA,
                                  bool long_state, address stubAddr, const char *stubName,
                                  Node* src_start, Node* ofs, Node* limit);
   Node* get_state_from_sha_object(Node *sha_object);
   Node* get_state_from_sha5_object(Node *sha_object);
-  Node* get_state_from_digest_object(Node *digestBase_object);
-  Node* get_long_state_from_digest_object(Node *digestBase_object);
   Node* inline_digestBase_implCompressMB_predicate(int predicate);
   bool inline_encodeISOArray();
   bool inline_updateCRC32();
@@ -306,7 +297,6 @@ class LibraryCallKit : public GraphKit {
   bool inline_mulAdd();
   bool inline_montgomeryMultiply();
   bool inline_montgomerySquare();
-  bool inline_bigIntegerShift(bool isRightShift);
   bool inline_vectorizedMismatch();
   bool inline_fma(vmIntrinsics::ID id);
   bool inline_character_compare(vmIntrinsics::ID id);

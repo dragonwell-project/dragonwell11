@@ -56,6 +56,7 @@
 #include "runtime/sharedRuntime.hpp"
 #include "utilities/macros.hpp"
 
+
 //---------------------------make_vm_intrinsic----------------------------
 CallGenerator* Compile::make_vm_intrinsic(ciMethod* m, bool is_virtual) {
   vmIntrinsics::ID id = m->intrinsic_id();
@@ -164,6 +165,7 @@ JVMState* LibraryIntrinsic::generate(JVMState* jvms) {
   }
   C->gather_intrinsic_statistics(intrinsic_id(), is_virtual(), Compile::_intrinsic_failed);
   C->print_inlining_update(this);
+
   return NULL;
 }
 
@@ -1991,7 +1993,7 @@ LibraryCallKit::classify_unsafe_addr(Node* &base, Node* &offset, BasicType type)
   }
 }
 
-Node* LibraryCallKit::make_unsafe_address(Node*& base, Node* offset, BasicType type, bool can_cast) {
+inline Node* LibraryCallKit::make_unsafe_address(Node*& base, Node* offset, BasicType type, bool can_cast) {
   Node* uncasted_base = base;
   int kind = classify_unsafe_addr(uncasted_base, offset, type);
   if (kind == Type::RawPtr) {
