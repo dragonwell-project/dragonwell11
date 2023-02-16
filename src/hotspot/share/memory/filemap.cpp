@@ -196,6 +196,8 @@ void FileMapHeader::populate(FileMapInfo* mapinfo, size_t alignment) {
   _narrow_oop_mode = Universe::narrow_oop_mode();
   _narrow_oop_base = Universe::narrow_oop_base();
   _narrow_oop_shift = Universe::narrow_oop_shift();
+  _compressed_oops = UseCompressedOops;
+  _compressed_class_ptrs = UseCompressedClassPointers;
   _max_heap_size = MaxHeapSize;
   _narrow_klass_base = Universe::narrow_klass_base();
   _narrow_klass_shift = Universe::narrow_klass_shift();
@@ -1386,6 +1388,14 @@ bool FileMapHeader::validate() {
        (!_verify_remote && BytecodeVerificationRemote))) {
     FileMapInfo::fail_continue("The shared archive file was created with less restrictive "
                   "verification setting than the current setting.");
+    return false;
+  }
+
+  log_info(cds)("Archive was created with UseCompressedOops = %d, UseCompressedClassPointers = %d",
+                          compressed_oops(), compressed_class_pointers());
+  if (compressed_oops() != UseCompressedOops || compressed_class_pointers() != UseCompressedClassPointers) {
+    FileMapInfo::fail_continue("Unable to use shared archive.\nThe saved state of UseCompressedOops and UseCompressedClassPointers is "
+                               "different from runtime, CDS will be disabled.");
     return false;
   }
 

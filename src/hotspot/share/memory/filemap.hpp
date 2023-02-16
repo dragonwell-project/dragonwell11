@@ -110,6 +110,8 @@ struct FileMapHeader : public CDSFileMapHeaderBase {
   size_t  _core_spaces_size;        // number of bytes allocated by the core spaces
                                     // (mc, md, ro, rw and od).
   MemRegion _heap_reserved;         // reserved region for the entire heap at dump time.
+  bool    _compressed_oops;         // save the flag UseCompressedOops
+  bool    _compressed_class_ptrs;   // save the flag UseCompressedClassPointers
 
   // The following fields are all sanity checks for whether this archive
   // will function correctly with this JVM and the bootclasspath it's
@@ -157,6 +159,9 @@ struct FileMapHeader : public CDSFileMapHeaderBase {
   bool has_platform_or_app_classes() { return _has_platform_or_app_classes; }
   jshort max_used_path_index()       { return _max_used_path_index; }
   jshort app_module_paths_start_index() { return _app_module_paths_start_index; }
+
+  bool compressed_oops()           const { return _compressed_oops; }
+  bool compressed_class_pointers() const { return _compressed_class_ptrs; }
 
   bool validate();
   void populate(FileMapInfo* info, size_t alignment);
