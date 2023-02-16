@@ -2269,11 +2269,6 @@ void Matcher::find_shared( Node *n ) {
           continue;
         }
 
-        if (is_vshift_con_pattern(n, m)) {
-          mstack.push(m, Visit);
-          continue;
-        }
-
         // Clone addressing expressions as they are "free" in memory access instructions
         if (mem_op && i == mem_addr_idx && mop == Op_AddP &&
             // When there are other uses besides address expressions
@@ -2426,29 +2421,29 @@ void Matcher::find_shared( Node *n ) {
         n->del_req(3);
         break;
       }
-    case Op_VectorBlend:
-    case Op_VectorInsert: {
-      Node* pair = new BinaryNode(n->in(1), n->in(2));
-      n->set_req(1, pair);
-      n->set_req(2, n->in(3));
-      n->del_req(3);
-      break;
-    }
-    case Op_StoreVectorScatter: {
-      Node* pair = new BinaryNode(n->in(MemNode::ValueIn), n->in(MemNode::ValueIn+1));
-      n->set_req(MemNode::ValueIn, pair);
-      n->del_req(MemNode::ValueIn+1);
-      break;
-    }
-    case Op_VectorMaskCmp: {
-      n->set_req(1, new BinaryNode(n->in(1), n->in(2)));
-      n->set_req(2, n->in(3));
-      n->del_req(3);
-      break;
-    }
-    default:
-      break;
-    }
+      case Op_VectorBlend:
+      case Op_VectorInsert: {
+        Node* pair = new BinaryNode(n->in(1), n->in(2));
+        n->set_req(1, pair);
+        n->set_req(2, n->in(3));
+        n->del_req(3);
+        break;
+      }
+      case Op_StoreVectorScatter: {
+        Node* pair = new BinaryNode(n->in(MemNode::ValueIn), n->in(MemNode::ValueIn+1));
+        n->set_req(MemNode::ValueIn, pair);
+        n->del_req(MemNode::ValueIn+1);
+        break;
+      }
+      case Op_VectorMaskCmp: {
+        n->set_req(1, new BinaryNode(n->in(1), n->in(2)));
+        n->set_req(2, n->in(3));
+        n->del_req(3);
+        break;
+      }
+      default:
+        break;
+      }
     }
     else {
       ShouldNotReachHere();

@@ -2314,9 +2314,6 @@ private:
   void vpsravd(XMMRegister dst, XMMRegister src, XMMRegister shift, int vector_len);
   void evpsravq(XMMRegister dst, XMMRegister src, XMMRegister shift, int vector_len);
 
-  void vpshldvd(XMMRegister dst, XMMRegister src, XMMRegister shift, int vector_len);
-  void vpshrdvd(XMMRegister dst, XMMRegister src, XMMRegister shift, int vector_len);
-
   // And packed integers
   void pand(XMMRegister dst, XMMRegister src);
   void vpand(XMMRegister dst, XMMRegister nds, XMMRegister src, int vector_len);

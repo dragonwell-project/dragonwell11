@@ -66,7 +66,7 @@ class ScopeValue: public ResourceObj {
     return (ObjectValue*)this;
   }
 
-   LocationValue* as_LocationValue() {
+  LocationValue* as_LocationValue() {
     assert(is_location(), "must be");
     return (LocationValue*)this;
   }

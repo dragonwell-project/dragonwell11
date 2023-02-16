@@ -5383,7 +5383,7 @@ void Compile::print_method(CompilerPhaseType cpt, const char *name, int level, i
       event.commit();
   }
 #ifndef PRODUCT
-  if (should_print(level)) {
+  if (_printer && _printer->should_print(level)) {
     _printer->print_method(name, level);
   }
 #endif

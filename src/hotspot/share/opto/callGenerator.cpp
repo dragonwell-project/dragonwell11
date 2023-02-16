@@ -289,16 +289,16 @@ CallGenerator* CallGenerator::for_virtual_call(ciMethod* m, int vtable_index) {
 // Allow inlining decisions to be delayed
 class LateInlineCallGenerator : public DirectCallGenerator {
  private:
-  jlong _unique_id;   // unique id for log compilation
-  bool _is_pure_call; // a hint that the call doesn't have important side effects to care about
+  // unique id for log compilation
+  jlong _unique_id;
 
  protected:
   CallGenerator* _inline_cg;
   virtual bool do_late_inline_check(JVMState* jvms) { return true; }
 
  public:
-  LateInlineCallGenerator(ciMethod* method, CallGenerator* inline_cg, bool is_pure_call = false) :
-    DirectCallGenerator(method, true), _unique_id(0), _is_pure_call(is_pure_call), _inline_cg(inline_cg) {}
+ LateInlineCallGenerator(ciMethod* method, CallGenerator* inline_cg) :
+    DirectCallGenerator(method, true), _inline_cg(inline_cg), _unique_id(0) {}
 
   virtual bool is_late_inline() const { return true; }
 
@@ -565,7 +565,7 @@ class LateInlineVectorReboxingCallGenerator : public LateInlineCallGenerator {
 
  public:
   LateInlineVectorReboxingCallGenerator(ciMethod* method, CallGenerator* inline_cg) :
-    LateInlineCallGenerator(method, inline_cg, /*is_pure=*/true) {}
+    LateInlineCallGenerator(method, inline_cg) {}
 
   virtual JVMState* generate(JVMState* jvms) {
     Compile *C = Compile::current();

@@ -339,7 +339,6 @@ protected:
 #define CPU_VAES ((uint64_t)UCONST64(0x8000000000))    // Vector AES instructions
 #define CPU_AVX512_VBMI2 ((uint64_t)UCONST64(0x100000000000)) // VBMI2 shift left double instructions
 #define CPU_AVX512_VBMI ((uint64_t)UCONST64(0x200000000000)) // Vector BMI instructions
-
 #define CPU_HV_PRESENT ((uint64_t)UCONST64(0x400000000000)) // for hypervisor detection
 
   enum Extended_Family {

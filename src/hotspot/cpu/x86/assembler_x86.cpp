@@ -1991,9 +1991,9 @@ void Assembler::pabsd(XMMRegister dst, XMMRegister src) {
 }
 
 void Assembler::vpabsb(XMMRegister dst, XMMRegister src, int vector_len) {
-  assert(vector_len == AVX_128bit? VM_Version::supports_avx() :
-  vector_len == AVX_256bit? VM_Version::supports_avx2() :
-  vector_len == AVX_512bit? VM_Version::supports_avx512bw() : 0, "");
+  assert(vector_len == AVX_128bit ? VM_Version::supports_avx()      :
+         vector_len == AVX_256bit ? VM_Version::supports_avx2()     :
+         vector_len == AVX_512bit ? VM_Version::supports_avx512bw() : false, "not supported");
   InstructionAttr attributes(vector_len, /* rex_w */ false, /* legacy_mode */ _legacy_mode_bw, /* no_mask_reg */ true, /* uses_vl */ true);
   int encode = vex_prefix_and_encode(dst->encoding(), 0, src->encoding(), VEX_SIMD_66, VEX_OPCODE_0F_38, &attributes);
   emit_int8((unsigned char)0x1C);
@@ -3657,6 +3657,11 @@ void Assembler::notl(Register dst) {
   int encode = prefix_and_encode(dst->encoding());
   emit_int8((unsigned char)0xF7);
   emit_int8((unsigned char)(0xD0 | encode));
+}
+
+void Assembler::orw(Register dst, Register src) {
+  (void)prefix_and_encode(dst->encoding(), src->encoding());
+  emit_arith(0x0B, 0xC0, dst, src);
 }
 
 void Assembler::orl(Address dst, int32_t imm32) {

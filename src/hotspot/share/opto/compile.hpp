@@ -756,24 +756,6 @@ class Compile : public Phase {
     C->_latest_stage_start_counter.stamp();
   }
 
-  bool should_print(int level = 1) {
-#ifndef PRODUCT
-    if (PrintIdealGraphLevel < 0) { // disabled by the user
-      return false;
-    }
-
-    bool need = directive()->IGVPrintLevelOption >= level;
-    if (need && !_printer) {
-      _printer = IdealGraphPrinter::printer();
-      assert(_printer != NULL, "_printer is NULL when we need it!");
-      _printer->set_compile(this);
-    }
-    return need;
-#else
-    return false;
-#endif
-  }
-
   void print_method(CompilerPhaseType cpt, int level = 1) {
     EventCompilerPhase event;
     if (event.should_commit()) {
