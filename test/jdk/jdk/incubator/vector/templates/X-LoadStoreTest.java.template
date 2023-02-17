@@ -320,7 +320,7 @@ public class $vectorteststype$ extends AbstractVectorTest {
     static $type$[] bufferToArray(ByteBuffer bb) {
         $Type$Buffer db = bb{#if[byte]?;:.as$Type$Buffer();}
         $type$[] d = new $type$[db.capacity()];
-        db.get(0, d);
+        db.get(d);
         return d;
     }
 
