@@ -2525,7 +2525,6 @@ bool Compile::has_vbox_nodes() {
 
 static bool is_vector_unary_bitwise_op(Node* n) {
   return n->Opcode() == Op_XorV &&
-         n->req() == 2 &&
          VectorNode::is_vector_bitwise_not_pattern(n);
 }
 
@@ -2533,7 +2532,7 @@ static bool is_vector_binary_bitwise_op(Node* n) {
   switch (n->Opcode()) {
     case Op_AndV:
     case Op_OrV:
-      return n->req() == 2;
+      return true;
 
     case Op_XorV:
       return !is_vector_unary_bitwise_op(n);
@@ -2756,7 +2755,9 @@ uint Compile::compute_truth_table(Unique_Node_List& partition, Unique_Node_List&
 bool Compile::compute_logic_cone(Node* n, Unique_Node_List& partition, Unique_Node_List& inputs) {
   assert(partition.size() == 0, "not empty");
   assert(inputs.size() == 0, "not empty");
-  assert(!is_vector_ternary_bitwise_op(n), "not supported");
+  if (is_vector_ternary_bitwise_op(n)) {
+    return false;
+  }
 
   bool is_unary_op = is_vector_unary_bitwise_op(n);
   if (is_unary_op) {
