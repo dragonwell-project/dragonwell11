@@ -336,6 +336,8 @@ protected:
 #define CPU_AVX512_VPOPCNTDQ ((uint64_t)UCONST64(0x2000000000)) // Vector popcount
 #define CPU_AVX512_VPCLMULQDQ ((uint64_t)UCONST64(0x4000000000)) //Vector carryless multiplication
 #define CPU_VAES ((uint64_t)UCONST64(0x8000000000))    // Vector AES instructions
+#define CPU_AVX512_VBMI2 ((uint64_t)UCONST64(0x100000000000)) // VBMI2 shift left double instructions
+#define CPU_AVX512_VBMI ((uint64_t)UCONST64(0x200000000000)) // Vector BMI instructions
 #define CPU_HV_PRESENT ((uint64_t)UCONST64(0x400000000000)) // for hypervisor detection
 
   enum Extended_Family {
@@ -547,6 +549,10 @@ protected:
           result |= CPU_AVX512_VPOPCNTDQ;
         if (_cpuid_info.sef_cpuid7_ecx.bits.avx512_vpclmulqdq != 0)
           result |= CPU_AVX512_VPCLMULQDQ;
+        if (_cpuid_info.sef_cpuid7_ecx.bits.avx512_vbmi != 0)
+          result |= CPU_AVX512_VBMI;
+        if (_cpuid_info.sef_cpuid7_ecx.bits.avx512_vbmi2 != 0)
+          result |= CPU_AVX512_VBMI2;
         if (_cpuid_info.sef_cpuid7_ecx.bits.vaes != 0)
           result |= CPU_VAES;
       }
@@ -838,6 +844,8 @@ public:
   static bool supports_vpopcntdq()  { return (_features & CPU_AVX512_VPOPCNTDQ) != 0; }
   static bool supports_avx512_vpclmulqdq() { return (_features & CPU_AVX512_VPCLMULQDQ) != 0; }
   static bool supports_vaes()       { return (_features & CPU_VAES) != 0; }
+  static bool supports_avx512_vbmi()  { return (_features & CPU_AVX512_VBMI) != 0; }
+  static bool supports_avx512_vbmi2() { return (_features & CPU_AVX512_VBMI2) != 0; }
   static bool supports_hv()         { return (_features & CPU_HV_PRESENT) != 0; }
 
   // Intel features

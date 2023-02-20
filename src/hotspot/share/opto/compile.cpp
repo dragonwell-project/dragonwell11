@@ -67,6 +67,7 @@
 #include "opto/runtime.hpp"
 #include "opto/stringopts.hpp"
 #include "opto/type.hpp"
+#include "opto/vector.hpp"
 #include "opto/vectornode.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -428,6 +429,7 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
   remove_useless_late_inlines(&_string_late_inlines, useful);
   remove_useless_late_inlines(&_boxing_late_inlines, useful);
   remove_useless_late_inlines(&_late_inlines, useful);
+  remove_useless_late_inlines(&_vector_reboxing_late_inlines, useful);
   debug_only(verify_graph_edges(true/*check for no_dead_code*/);)
 }
 
@@ -692,6 +694,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _late_inlines(comp_arena(), 2, 0, NULL),
                   _string_late_inlines(comp_arena(), 2, 0, NULL),
                   _boxing_late_inlines(comp_arena(), 2, 0, NULL),
+                  _vector_reboxing_late_inlines(comp_arena(), 2, 0, NULL),
                   _late_inlines_pos(0),
                   _number_of_mh_late_inlines(0),
                   _inlining_progress(false),
@@ -2147,6 +2150,8 @@ void Compile::inline_incrementally(PhaseIterGVN& igvn) {
       igvn.optimize();
     }
 
+    print_method(PHASE_INCREMENTAL_INLINE_STEP, 3);
+
     if (failing())  return;
   }
 
@@ -2286,6 +2291,16 @@ void Compile::Optimize() {
   // No more new expensive nodes will be added to the list from here
   // so keep only the actual candidates for optimizations.
   cleanup_expensive_nodes(igvn);
+
+  assert(EnableVectorSupport || !has_vbox_nodes(), "sanity");
+  if (EnableVectorSupport && has_vbox_nodes()) {
+    TracePhase tp("", &timers[_t_vector]);
+    PhaseVector pv(igvn);
+    pv.optimize_vector_boxes();
+
+    print_method(PHASE_ITER_GVN_AFTER_VECTOR, 2);
+  }
+  assert(!has_vbox_nodes(), "sanity");
 
   if (!failing() && RenumberLiveNodes && live_nodes() + NodeLimitFudgeFactor < unique()) {
     Compile::TracePhase tp("", &timers[_t_renumberLive]);
@@ -2470,10 +2485,40 @@ void Compile::Optimize() {
  print_method(PHASE_OPTIMIZE_FINISHED, 2);
 }
 
+void Compile::inline_vector_reboxing_calls() {
+  if (C->_vector_reboxing_late_inlines.length() > 0) {
+    PhaseGVN* gvn = C->initial_gvn();
+
+    _late_inlines_pos = C->_late_inlines.length();
+    while (_vector_reboxing_late_inlines.length() > 0) {
+      CallGenerator* cg = _vector_reboxing_late_inlines.pop();
+      cg->do_late_inline();
+      if (failing())  return;
+      print_method(PHASE_INLINE_VECTOR_REBOX, cg->call_node());
+    }
+    _vector_reboxing_late_inlines.trunc_to(0);
+  }
+}
+
+bool Compile::has_vbox_nodes() {
+  if (C->_vector_reboxing_late_inlines.length() > 0) {
+    return true;
+  }
+  for (int macro_idx = C->macro_count() - 1; macro_idx >= 0; macro_idx--) {
+    Node * n = C->macro_node(macro_idx);
+    assert(n->is_macro(), "only macro nodes expected here");
+    if (n->Opcode() == Op_VectorUnbox || n->Opcode() == Op_VectorBox || n->Opcode() == Op_VectorBoxAllocate) {
+      return true;
+    }
+  }
+  return false;
+}
+
 //---------------------------- Bitwise operation packing optimization ---------------------------
 
 static bool is_vector_unary_bitwise_op(Node* n) {
   return n->Opcode() == Op_XorV &&
+         n->req() == 2 &&
          VectorNode::is_vector_bitwise_not_pattern(n);
 }
 
@@ -2481,7 +2526,7 @@ static bool is_vector_binary_bitwise_op(Node* n) {
   switch (n->Opcode()) {
     case Op_AndV:
     case Op_OrV:
-      return true;
+      return n->req() == 2;
 
     case Op_XorV:
       return !is_vector_unary_bitwise_op(n);
@@ -2807,6 +2852,7 @@ void Compile::Code_Gen() {
     if (failing()) {
       return;
     }
+    print_method(PHASE_AFTER_MATCHING, 3);
   }
 
   // In debug mode can dump m._nodes.dump() for mapping of ideal to machine
@@ -3117,7 +3163,8 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
     // Check for commutative opcode
     switch( nop ) {
     case Op_AddI:  case Op_AddF:  case Op_AddD:  case Op_AddL:
-    case Op_MaxI:  case Op_MinI:
+    case Op_MaxI:  case Op_MaxL:  case Op_MaxF:  case Op_MaxD:
+    case Op_MinI:  case Op_MinL:  case Op_MinF:  case Op_MinD:
     case Op_MulI:  case Op_MulF:  case Op_MulD:  case Op_MulL:
     case Op_AndL:  case Op_XorL:  case Op_OrL:
     case Op_AndI:  case Op_XorI:  case Op_OrI: {
@@ -3687,6 +3734,8 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
 
   case Op_LoadVector:
   case Op_StoreVector:
+  case Op_LoadVectorGather:
+  case Op_StoreVectorScatter:
     break;
 
   case Op_AddReductionVI:
@@ -5315,4 +5364,33 @@ void CloneMap::dump(node_idx_t key) const {
     NodeCloneInfo ni(val);
     ni.dump();
   }
+}
+
+void Compile::print_method(CompilerPhaseType cpt, const char *name, int level, int idx) {
+  EventCompilerPhase event;
+  if (event.should_commit()) {
+      event.set_starttime(C->_latest_stage_start_counter);
+      event.set_phase((u1) cpt);
+      event.set_compileId(C->_compile_id);
+      event.set_phaseLevel(level);
+      event.commit();
+  }
+#ifndef PRODUCT
+  if (_printer && _printer->should_print(level)) {
+    _printer->print_method(name, level);
+  }
+#endif
+  C->_latest_stage_start_counter.stamp();
+}
+
+void Compile::print_method(CompilerPhaseType cpt, Node* n, int level) {
+  ResourceMark rm;
+  stringStream ss;
+  ss.print_raw(CompilerPhaseTypeHelper::to_string(cpt));
+  if (n != NULL) {
+    ss.print(": %d %s ", n->_idx, NodeClassNames[n->Opcode()]);
+  } else {
+    ss.print_raw(": NULL");
+  }
+  C->print_method(cpt, ss.as_string(), level);
 }

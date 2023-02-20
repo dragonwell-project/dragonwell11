@@ -1554,6 +1554,8 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(MaxNode, AddNode)                                       \
   declare_c2_type(MaxINode, MaxNode)                                      \
   declare_c2_type(MinINode, MaxNode)                                      \
+  declare_c2_type(MaxLNode, MaxNode)                                      \
+  declare_c2_type(MinLNode, MaxNode)                                      \
   declare_c2_type(MaxFNode, MaxNode)                                      \
   declare_c2_type(MinFNode, MaxNode)                                      \
   declare_c2_type(MaxDNode, MaxNode)                                      \
@@ -1788,6 +1790,8 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(AbsDNode, AbsNode)                                      \
   declare_c2_type(CmpLTMaskNode, Node)                                    \
   declare_c2_type(NegNode, Node)                                          \
+  declare_c2_type(NegINode, NegNode)                                      \
+  declare_c2_type(NegLNode, NegNode)                                      \
   declare_c2_type(NegFNode, NegNode)                                      \
   declare_c2_type(NegDNode, NegNode)                                      \
   declare_c2_type(AtanDNode, Node)                                        \
@@ -1797,6 +1801,8 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(ReverseBytesLNode, Node)                                \
   declare_c2_type(ReductionNode, Node)                                    \
   declare_c2_type(VectorNode, Node)                                       \
+  declare_c2_type(AbsVFNode, VectorNode)                                  \
+  declare_c2_type(AbsVDNode, VectorNode)                                  \
   declare_c2_type(AbsVBNode, VectorNode)                                   \
   declare_c2_type(AbsVSNode, VectorNode)                                   \
   declare_c2_type(AbsVINode, VectorNode)                                   \
@@ -1826,6 +1832,7 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(MulVFNode, VectorNode)                                  \
   declare_c2_type(MulReductionVFNode, ReductionNode)                      \
   declare_c2_type(MulVDNode, VectorNode)                                  \
+  declare_c2_type(NegVINode, VectorNode)                                  \
   declare_c2_type(NegVFNode, VectorNode)                                  \
   declare_c2_type(NegVDNode, VectorNode)                                  \
   declare_c2_type(FmaVDNode, VectorNode)                                  \
@@ -1848,6 +1855,8 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(URShiftVSNode, VectorNode)                              \
   declare_c2_type(URShiftVINode, VectorNode)                              \
   declare_c2_type(URShiftVLNode, VectorNode)                              \
+  declare_c2_type(MinReductionVNode, ReductionNode)                       \
+  declare_c2_type(MaxReductionVNode, ReductionNode)                       \
   declare_c2_type(AndVNode, VectorNode)                                   \
   declare_c2_type(AndReductionVNode, ReductionNode)                       \
   declare_c2_type(OrVNode, VectorNode)                                    \
@@ -1856,8 +1865,6 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(XorReductionVNode, ReductionNode)                       \
   declare_c2_type(MaxVNode, VectorNode)                                   \
   declare_c2_type(MinVNode, VectorNode)                                   \
-  declare_c2_type(MaxReductionVNode, ReductionNode)                       \
-  declare_c2_type(MinReductionVNode, ReductionNode)                       \
   declare_c2_type(LoadVectorNode, LoadNode)                               \
   declare_c2_type(StoreVectorNode, StoreNode)                             \
   declare_c2_type(ReplicateBNode, VectorNode)                             \
@@ -1899,6 +1906,27 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_c2_type(CopySignFNode, Node)                                    \
   declare_c2_type(SignumDNode, Node)                                      \
   declare_c2_type(SignumFNode, Node)                                      \
+  declare_c2_type(LoadVectorGatherNode, LoadVectorNode)                   \
+  declare_c2_type(StoreVectorScatterNode, StoreVectorNode)                \
+  declare_c2_type(VectorLoadMaskNode, VectorNode)                         \
+  declare_c2_type(VectorLoadShuffleNode, VectorNode)                      \
+  declare_c2_type(VectorStoreMaskNode, VectorNode)                        \
+  declare_c2_type(VectorBlendNode, VectorNode)                            \
+  declare_c2_type(VectorRearrangeNode, VectorNode)                        \
+  declare_c2_type(VectorMaskWrapperNode, VectorNode)                      \
+  declare_c2_type(VectorMaskCmpNode, VectorNode)                          \
+  declare_c2_type(VectorCastB2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastS2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastI2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastL2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastF2XNode, VectorNode)                          \
+  declare_c2_type(VectorCastD2XNode, VectorNode)                          \
+  declare_c2_type(VectorInsertNode, VectorNode)                           \
+  declare_c2_type(VectorUnboxNode, VectorNode)                            \
+  declare_c2_type(VectorReinterpretNode, VectorNode)                      \
+  declare_c2_type(VectorBoxNode, Node)                                    \
+  declare_c2_type(VectorBoxAllocateNode, CallStaticJavaNode)              \
+  declare_c2_type(VectorTestNode, Node)                                   \
                                                                           \
   /*********************/                                                 \
   /* Adapter Blob Entries */                                              \
