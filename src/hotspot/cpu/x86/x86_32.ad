@@ -3866,6 +3866,18 @@ operand eRegP() %{
   interface(REG_INTER);
 %}
 
+operand rRegP() %{
+  constraint(ALLOC_IN_RC(int_reg));
+  match(RegP);
+  match(eAXRegP);
+  match(eBXRegP);
+  match(eCXRegP);
+  match(eDIRegP);
+
+  format %{ %}
+  interface(REG_INTER);
+%}
+
 // On windows95, EBP is not safe to use for implicit null tests.
 operand eRegP_no_EBP() %{
   constraint(ALLOC_IN_RC(int_reg_no_ebp));
@@ -5920,6 +5932,46 @@ instruct loadKlass(eRegP dst, memory mem) %{
   opcode(0x8B);
   ins_encode( OpcP, RegMem(dst,mem));
   ins_pipe( ialu_reg_mem );
+%}
+
+// Load Float
+instruct MoveF2LEG(legRegF dst, regF src) %{
+  match(Set dst src);
+  format %{ "movss $dst,$src\t# if src != dst load float (4 bytes)" %}
+  ins_encode %{
+    __ movflt($dst$$XMMRegister, $src$$XMMRegister);
+  %}
+  ins_pipe( fpu_reg_reg );
+%}
+
+// Load Float
+instruct MoveLEG2F(regF dst, legRegF src) %{
+  match(Set dst src);
+  format %{ "movss $dst,$src\t# if src != dst load float (4 bytes)" %}
+  ins_encode %{
+    __ movflt($dst$$XMMRegister, $src$$XMMRegister);
+  %}
+  ins_pipe( fpu_reg_reg );
+%}
+
+// Load Double
+instruct MoveD2LEG(legRegD dst, regD src) %{
+  match(Set dst src);
+  format %{ "movsd $dst,$src\t# if src != dst load double (8 bytes)" %}
+  ins_encode %{
+    __ movdbl($dst$$XMMRegister, $src$$XMMRegister);
+  %}
+  ins_pipe( fpu_reg_reg );
+%}
+
+// Load Double
+instruct MoveLEG2D(regD dst, legRegD src) %{
+  match(Set dst src);
+  format %{ "movsd $dst,$src\t# if src != dst load double (8 bytes)" %}
+  ins_encode %{
+    __ movdbl($dst$$XMMRegister, $src$$XMMRegister);
+  %}
+  ins_pipe( fpu_reg_reg );
 %}
 
 // Load Double
