@@ -151,8 +151,12 @@ StackValue* StackValue::create_stack_value(const frame* fr, const RegisterMap* r
       value.ji = *(jint*)value_addr;
       return new StackValue(value.p);
     }
-    case Location::invalid:
+    case Location::invalid: {
       return new StackValue();
+    }
+    case Location::vector: {
+      ShouldNotReachHere(); // should be handled by Deoptimization::realloc_objects()
+    }
     default:
       ShouldNotReachHere();
     }
@@ -217,7 +221,7 @@ void StackValue::print_on(outputStream* st) const {
     case T_OBJECT:
       _handle_value()->print_value_on(st);
       st->print(" <" INTPTR_FORMAT ">", p2i((address)_handle_value()));
-     break;
+      break;
 
     case T_CONFLICT:
      st->print("conflict");

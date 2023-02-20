@@ -3023,7 +3023,7 @@ operand immI()
 %}
 
 // Constant for test vs zero
-operand immI0()
+operand immI_0()
 %{
   predicate(n->get_int() == 0);
   match(ConI);
@@ -3034,7 +3034,7 @@ operand immI0()
 %}
 
 // Constant for increment
-operand immI1()
+operand immI_1()
 %{
   predicate(n->get_int() == 1);
   match(ConI);
@@ -3048,6 +3048,36 @@ operand immI1()
 operand immI_M1()
 %{
   predicate(n->get_int() == -1);
+  match(ConI);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+operand immI_2()
+%{
+  predicate(n->get_int() == 2);
+  match(ConI);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+operand immI_4()
+%{
+  predicate(n->get_int() == 4);
+  match(ConI);
+
+  op_cost(0);
+  format %{ %}
+  interface(CONST_INTER);
+%}
+
+operand immI_8()
+%{
+  predicate(n->get_int() == 8);
   match(ConI);
 
   op_cost(0);
@@ -4329,136 +4359,6 @@ operand cmpOpUCF2() %{
   %}
 %}
 
-// Operands for bound floating pointer register arguments
-operand rxmm0() %{
-  constraint(ALLOC_IN_RC(xmm0_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX<= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm1() %{
-  constraint(ALLOC_IN_RC(xmm1_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm2() %{
-  constraint(ALLOC_IN_RC(xmm2_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm3() %{
-  constraint(ALLOC_IN_RC(xmm3_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm4() %{
-  constraint(ALLOC_IN_RC(xmm4_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm5() %{
-  constraint(ALLOC_IN_RC(xmm5_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm6() %{
-  constraint(ALLOC_IN_RC(xmm6_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm7() %{
-  constraint(ALLOC_IN_RC(xmm7_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm8() %{
-  constraint(ALLOC_IN_RC(xmm8_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm9() %{
-  constraint(ALLOC_IN_RC(xmm9_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm10() %{
-  constraint(ALLOC_IN_RC(xmm10_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm11() %{
-  constraint(ALLOC_IN_RC(xmm11_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm12() %{
-  constraint(ALLOC_IN_RC(xmm12_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm13() %{
-  constraint(ALLOC_IN_RC(xmm13_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm14() %{
-  constraint(ALLOC_IN_RC(xmm14_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm15() %{
-  constraint(ALLOC_IN_RC(xmm15_reg));  match(VecX);
-  predicate((UseSSE > 0) && (UseAVX <= 2));  format%{%}  interface(REG_INTER);
-%}
-operand rxmm16() %{
-  constraint(ALLOC_IN_RC(xmm16_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm17() %{
-  constraint(ALLOC_IN_RC(xmm17_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm18() %{
-  constraint(ALLOC_IN_RC(xmm18_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm19() %{
-  constraint(ALLOC_IN_RC(xmm19_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm20() %{
-  constraint(ALLOC_IN_RC(xmm20_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm21() %{
-  constraint(ALLOC_IN_RC(xmm21_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm22() %{
-  constraint(ALLOC_IN_RC(xmm22_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm23() %{
-  constraint(ALLOC_IN_RC(xmm23_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm24() %{
-  constraint(ALLOC_IN_RC(xmm24_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm25() %{
-  constraint(ALLOC_IN_RC(xmm25_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm26() %{
-  constraint(ALLOC_IN_RC(xmm26_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm27() %{
-  constraint(ALLOC_IN_RC(xmm27_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm28() %{
-  constraint(ALLOC_IN_RC(xmm28_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm29() %{
-  constraint(ALLOC_IN_RC(xmm29_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm30() %{
-  constraint(ALLOC_IN_RC(xmm30_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-operand rxmm31() %{
-  constraint(ALLOC_IN_RC(xmm31_reg));  match(VecX);
-  predicate(UseAVX == 3);  format%{%}  interface(REG_INTER);
-%}
-
 //----------OPERAND CLASSES----------------------------------------------------
 // Operand Classes are groups of operands that are used as to simplify
 // instruction definitions by not requiring the AD writer to specify separate
@@ -5532,19 +5432,19 @@ instruct maxF_reg(legRegF dst, legRegF a, legRegF b, legRegF tmp, legRegF atmp, 
   match(Set dst (MaxF a b));
   effect(USE a, USE b, TEMP tmp, TEMP atmp, TEMP btmp);
   format %{
-     "blendvps         $btmp,$b,$a,$b           \n\t"
-     "blendvps         $atmp,$a,$b,$b           \n\t"
+     "vblendvps        $btmp,$b,$a,$b           \n\t"
+     "vblendvps        $atmp,$a,$b,$b           \n\t"
      "vmaxss           $tmp,$atmp,$btmp         \n\t"
-     "cmpps.unordered  $btmp,$atmp,$atmp        \n\t"
-     "blendvps         $dst,$tmp,$atmp,$btmp    \n\t"
+     "vcmpps.unordered $btmp,$atmp,$atmp        \n\t"
+     "vblendvps        $dst,$tmp,$atmp,$btmp    \n\t"
   %}
   ins_encode %{
     int vector_len = Assembler::AVX_128bit;
-    __ blendvps($btmp$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, vector_len);
-    __ blendvps($atmp$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, $b$$XMMRegister, vector_len);
+    __ vblendvps($btmp$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, vector_len);
+    __ vblendvps($atmp$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, $b$$XMMRegister, vector_len);
     __ vmaxss($tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister);
-    __ cmpps($btmp$$XMMRegister, $atmp$$XMMRegister, $atmp$$XMMRegister, Assembler::_false, vector_len);
-    __ blendvps($dst$$XMMRegister, $tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister, vector_len);
+    __ vcmpps($btmp$$XMMRegister, $atmp$$XMMRegister, $atmp$$XMMRegister, Assembler::_false, vector_len);
+    __ vblendvps($dst$$XMMRegister, $tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister, vector_len);
  %}
   ins_pipe( pipe_slow );
 %}
@@ -5568,19 +5468,19 @@ instruct maxD_reg(legRegD dst, legRegD a, legRegD b, legRegD tmp, legRegD atmp, 
   match(Set dst (MaxD a b));
   effect(USE a, USE b, TEMP atmp, TEMP btmp, TEMP tmp);
   format %{
-     "blendvpd         $btmp,$b,$a,$b            \n\t"
-     "blendvpd         $atmp,$a,$b,$b            \n\t"
+     "vblendvpd        $btmp,$b,$a,$b            \n\t"
+     "vblendvpd        $atmp,$a,$b,$b            \n\t"
      "vmaxsd           $tmp,$atmp,$btmp          \n\t"
-     "cmppd.unordered  $btmp,$atmp,$atmp         \n\t"
-     "blendvpd         $dst,$tmp,$atmp,$btmp     \n\t"
+     "vcmppd.unordered $btmp,$atmp,$atmp         \n\t"
+     "vblendvpd        $dst,$tmp,$atmp,$btmp     \n\t"
   %}
   ins_encode %{
     int vector_len = Assembler::AVX_128bit;
-    __ blendvpd($btmp$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, vector_len);
-    __ blendvpd($atmp$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, $b$$XMMRegister, vector_len);
+    __ vblendvpd($btmp$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, vector_len);
+    __ vblendvpd($atmp$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, $b$$XMMRegister, vector_len);
     __ vmaxsd($tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister);
-    __ cmppd($btmp$$XMMRegister, $atmp$$XMMRegister, $atmp$$XMMRegister, Assembler::_false, vector_len);
-    __ blendvpd($dst$$XMMRegister, $tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister, vector_len);
+    __ vcmppd($btmp$$XMMRegister, $atmp$$XMMRegister, $atmp$$XMMRegister, Assembler::_false, vector_len);
+    __ vblendvpd($dst$$XMMRegister, $tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister, vector_len);
   %}
   ins_pipe( pipe_slow );
 %}
@@ -5604,19 +5504,19 @@ instruct minF_reg(legRegF dst, legRegF a, legRegF b, legRegF tmp, legRegF atmp, 
   match(Set dst (MinF a b));
   effect(USE a, USE b, TEMP tmp, TEMP atmp, TEMP btmp);
   format %{
-     "blendvps         $atmp,$a,$b,$a             \n\t"
-     "blendvps         $btmp,$b,$a,$a             \n\t"
+     "vblendvps        $atmp,$a,$b,$a             \n\t"
+     "vblendvps        $btmp,$b,$a,$a             \n\t"
      "vminss           $tmp,$atmp,$btmp           \n\t"
-     "cmpps.unordered  $btmp,$atmp,$atmp          \n\t"
-     "blendvps         $dst,$tmp,$atmp,$btmp      \n\t"
+     "vcmpps.unordered $btmp,$atmp,$atmp          \n\t"
+     "vblendvps        $dst,$tmp,$atmp,$btmp      \n\t"
   %}
   ins_encode %{
     int vector_len = Assembler::AVX_128bit;
-    __ blendvps($atmp$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, vector_len);
-    __ blendvps($btmp$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, $a$$XMMRegister, vector_len);
+    __ vblendvps($atmp$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, vector_len);
+    __ vblendvps($btmp$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, $a$$XMMRegister, vector_len);
     __ vminss($tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister);
-    __ cmpps($btmp$$XMMRegister, $atmp$$XMMRegister, $atmp$$XMMRegister, Assembler::_false, vector_len);
-    __ blendvps($dst$$XMMRegister, $tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister, vector_len);
+    __ vcmpps($btmp$$XMMRegister, $atmp$$XMMRegister, $atmp$$XMMRegister, Assembler::_false, vector_len);
+    __ vblendvps($dst$$XMMRegister, $tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister, vector_len);
   %}
   ins_pipe( pipe_slow );
 %}
@@ -5640,19 +5540,19 @@ instruct minD_reg(legRegD dst, legRegD a, legRegD b, legRegD tmp, legRegD atmp, 
   match(Set dst (MinD a b));
   effect(USE a, USE b, TEMP tmp, TEMP atmp, TEMP btmp);
   format %{
-     "blendvpd         $atmp,$a,$b,$a           \n\t"
-     "blendvpd         $btmp,$b,$a,$a           \n\t"
+     "vblendvpd        $atmp,$a,$b,$a           \n\t"
+     "vblendvpd        $btmp,$b,$a,$a           \n\t"
      "vminsd           $tmp,$atmp,$btmp         \n\t"
-     "cmppd.unordered  $btmp,$atmp,$atmp        \n\t"
-     "blendvpd         $dst,$tmp,$atmp,$btmp    \n\t"
+     "vcmppd.unordered $btmp,$atmp,$atmp        \n\t"
+     "vblendvpd        $dst,$tmp,$atmp,$btmp    \n\t"
   %}
   ins_encode %{
     int vector_len = Assembler::AVX_128bit;
-    __ blendvpd($atmp$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, vector_len);
-    __ blendvpd($btmp$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, $a$$XMMRegister, vector_len);
+    __ vblendvpd($atmp$$XMMRegister, $a$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, vector_len);
+    __ vblendvpd($btmp$$XMMRegister, $b$$XMMRegister, $a$$XMMRegister, $a$$XMMRegister, vector_len);
     __ vminsd($tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister);
-    __ cmppd($btmp$$XMMRegister, $atmp$$XMMRegister, $atmp$$XMMRegister, Assembler::_false, vector_len);
-    __ blendvpd($dst$$XMMRegister, $tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister, vector_len);
+    __ vcmppd($btmp$$XMMRegister, $atmp$$XMMRegister, $atmp$$XMMRegister, Assembler::_false, vector_len);
+    __ vblendvpd($dst$$XMMRegister, $tmp$$XMMRegister, $atmp$$XMMRegister, $btmp$$XMMRegister, vector_len);
   %}
   ins_pipe( pipe_slow );
 %}
@@ -5876,7 +5776,7 @@ instruct loadConI(rRegI dst, immI src)
   ins_pipe(ialu_reg_fat); // XXX
 %}
 
-instruct loadConI0(rRegI dst, immI0 src, rFlagsReg cr)
+instruct loadConI0(rRegI dst, immI_0 src, rFlagsReg cr)
 %{
   match(Set dst src);
   effect(KILL cr);
@@ -6312,7 +6212,7 @@ instruct storeImmNKlass(memory mem, immNKlass src)
 %}
 
 // Store Integer Immediate
-instruct storeImmI0(memory mem, immI0 zero)
+instruct storeImmI0(memory mem, immI_0 zero)
 %{
   predicate(UseCompressedOops && (Universe::narrow_oop_base() == NULL) && (Universe::narrow_klass_base() == NULL));
   match(Set mem (StoreI mem zero));
@@ -6362,7 +6262,7 @@ instruct storeImmL(memory mem, immL32 src)
 %}
 
 // Store Short/Char Immediate
-instruct storeImmC0(memory mem, immI0 zero)
+instruct storeImmC0(memory mem, immI_0 zero)
 %{
   predicate(UseCompressedOops && (Universe::narrow_oop_base() == NULL) && (Universe::narrow_klass_base() == NULL));
   match(Set mem (StoreC mem zero));
@@ -6388,7 +6288,7 @@ instruct storeImmI16(memory mem, immI16 src)
 %}
 
 // Store Byte Immediate
-instruct storeImmB0(memory mem, immI0 zero)
+instruct storeImmB0(memory mem, immI_0 zero)
 %{
   predicate(UseCompressedOops && (Universe::narrow_oop_base() == NULL) && (Universe::narrow_klass_base() == NULL));
   match(Set mem (StoreB mem zero));
@@ -6413,7 +6313,7 @@ instruct storeImmB(memory mem, immI8 src)
 %}
 
 // Store CMS card-mark Immediate
-instruct storeImmCM0_reg(memory mem, immI0 zero)
+instruct storeImmCM0_reg(memory mem, immI_0 zero)
 %{
   predicate(UseCompressedOops && (Universe::narrow_oop_base() == NULL) && (Universe::narrow_klass_base() == NULL));
   match(Set mem (StoreCM mem zero));
@@ -6426,7 +6326,7 @@ instruct storeImmCM0_reg(memory mem, immI0 zero)
   ins_pipe(ialu_mem_reg);
 %}
 
-instruct storeImmCM0(memory mem, immI0 src)
+instruct storeImmCM0(memory mem, immI_0 src)
 %{
   match(Set mem (StoreCM mem src));
 
@@ -7481,7 +7381,7 @@ instruct addI_mem_imm(memory dst, immI src, rFlagsReg cr)
   ins_pipe(ialu_mem_imm);
 %}
 
-instruct incI_rReg(rRegI dst, immI1 src, rFlagsReg cr)
+instruct incI_rReg(rRegI dst, immI_1 src, rFlagsReg cr)
 %{
   predicate(UseIncDec);
   match(Set dst (AddI dst src));
@@ -7493,7 +7393,7 @@ instruct incI_rReg(rRegI dst, immI1 src, rFlagsReg cr)
   ins_pipe(ialu_reg);
 %}
 
-instruct incI_mem(memory dst, immI1 src, rFlagsReg cr)
+instruct incI_mem(memory dst, immI_1 src, rFlagsReg cr)
 %{
   predicate(UseIncDec);
   match(Set dst (StoreI dst (AddI (LoadI dst) src)));
@@ -8376,7 +8276,7 @@ instruct subL_mem_imm(memory dst, immL32 src, rFlagsReg cr)
 
 // Subtract from a pointer
 // XXX hmpf???
-instruct subP_rReg(rRegP dst, rRegI src, immI0 zero, rFlagsReg cr)
+instruct subP_rReg(rRegP dst, rRegI src, immI_0 zero, rFlagsReg cr)
 %{
   match(Set dst (AddP dst (SubI zero src)));
   effect(KILL cr);
@@ -8387,7 +8287,7 @@ instruct subP_rReg(rRegP dst, rRegI src, immI0 zero, rFlagsReg cr)
   ins_pipe(ialu_reg_reg);
 %}
 
-instruct negI_rReg(rRegI dst, immI0 zero, rFlagsReg cr)
+instruct negI_rReg(rRegI dst, immI_0 zero, rFlagsReg cr)
 %{
   match(Set dst (SubI zero dst));
   effect(KILL cr);
@@ -8398,7 +8298,19 @@ instruct negI_rReg(rRegI dst, immI0 zero, rFlagsReg cr)
   ins_pipe(ialu_reg);
 %}
 
-instruct negI_mem(memory dst, immI0 zero, rFlagsReg cr)
+instruct negI_rReg_2(rRegI dst, rFlagsReg cr)
+%{
+  match(Set dst (NegI dst));
+  effect(KILL cr);
+
+  format %{ "negl    $dst\t# int" %}
+  ins_encode %{
+    __ negl($dst$$Register);
+  %}
+  ins_pipe(ialu_reg);
+%}
+
+instruct negI_mem(memory dst, immI_0 zero, rFlagsReg cr)
 %{
   match(Set dst (StoreI dst (SubI zero (LoadI dst))));
   effect(KILL cr);
@@ -8417,6 +8329,18 @@ instruct negL_rReg(rRegL dst, immL0 zero, rFlagsReg cr)
   format %{ "negq    $dst\t# long" %}
   opcode(0xF7, 0x03);  // Opcode F7 /3
   ins_encode(REX_reg_wide(dst), OpcP, reg_opc(dst));
+  ins_pipe(ialu_reg);
+%}
+
+instruct negL_rReg_2(rRegL dst, rFlagsReg cr)
+%{
+  match(Set dst (NegL dst));
+  effect(KILL cr);
+
+  format %{ "negq    $dst\t# int" %}
+  ins_encode %{
+    __ negq($dst$$Register);
+  %}
   ins_pipe(ialu_reg);
 %}
 
@@ -8735,7 +8659,7 @@ instruct modL_rReg(rdx_RegL rdx, rax_RegL rax, no_rax_rdx_RegL div,
 
 // Integer Shift Instructions
 // Shift Left by one
-instruct salI_rReg_1(rRegI dst, immI1 shift, rFlagsReg cr)
+instruct salI_rReg_1(rRegI dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (LShiftI dst shift));
   effect(KILL cr);
@@ -8747,7 +8671,7 @@ instruct salI_rReg_1(rRegI dst, immI1 shift, rFlagsReg cr)
 %}
 
 // Shift Left by one
-instruct salI_mem_1(memory dst, immI1 shift, rFlagsReg cr)
+instruct salI_mem_1(memory dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (StoreI dst (LShiftI (LoadI dst) shift)));
   effect(KILL cr);
@@ -8807,7 +8731,7 @@ instruct salI_mem_CL(memory dst, rcx_RegI shift, rFlagsReg cr)
 %}
 
 // Arithmetic shift right by one
-instruct sarI_rReg_1(rRegI dst, immI1 shift, rFlagsReg cr)
+instruct sarI_rReg_1(rRegI dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (RShiftI dst shift));
   effect(KILL cr);
@@ -8819,7 +8743,7 @@ instruct sarI_rReg_1(rRegI dst, immI1 shift, rFlagsReg cr)
 %}
 
 // Arithmetic shift right by one
-instruct sarI_mem_1(memory dst, immI1 shift, rFlagsReg cr)
+instruct sarI_mem_1(memory dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (StoreI dst (RShiftI (LoadI dst) shift)));
   effect(KILL cr);
@@ -8879,7 +8803,7 @@ instruct sarI_mem_CL(memory dst, rcx_RegI shift, rFlagsReg cr)
 %}
 
 // Logical shift right by one
-instruct shrI_rReg_1(rRegI dst, immI1 shift, rFlagsReg cr)
+instruct shrI_rReg_1(rRegI dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (URShiftI dst shift));
   effect(KILL cr);
@@ -8891,7 +8815,7 @@ instruct shrI_rReg_1(rRegI dst, immI1 shift, rFlagsReg cr)
 %}
 
 // Logical shift right by one
-instruct shrI_mem_1(memory dst, immI1 shift, rFlagsReg cr)
+instruct shrI_mem_1(memory dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (StoreI dst (URShiftI (LoadI dst) shift)));
   effect(KILL cr);
@@ -8952,7 +8876,7 @@ instruct shrI_mem_CL(memory dst, rcx_RegI shift, rFlagsReg cr)
 
 // Long Shift Instructions
 // Shift Left by one
-instruct salL_rReg_1(rRegL dst, immI1 shift, rFlagsReg cr)
+instruct salL_rReg_1(rRegL dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (LShiftL dst shift));
   effect(KILL cr);
@@ -8964,7 +8888,7 @@ instruct salL_rReg_1(rRegL dst, immI1 shift, rFlagsReg cr)
 %}
 
 // Shift Left by one
-instruct salL_mem_1(memory dst, immI1 shift, rFlagsReg cr)
+instruct salL_mem_1(memory dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (StoreL dst (LShiftL (LoadL dst) shift)));
   effect(KILL cr);
@@ -9025,7 +8949,7 @@ instruct salL_mem_CL(memory dst, rcx_RegI shift, rFlagsReg cr)
 %}
 
 // Arithmetic shift right by one
-instruct sarL_rReg_1(rRegL dst, immI1 shift, rFlagsReg cr)
+instruct sarL_rReg_1(rRegL dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (RShiftL dst shift));
   effect(KILL cr);
@@ -9037,7 +8961,7 @@ instruct sarL_rReg_1(rRegL dst, immI1 shift, rFlagsReg cr)
 %}
 
 // Arithmetic shift right by one
-instruct sarL_mem_1(memory dst, immI1 shift, rFlagsReg cr)
+instruct sarL_mem_1(memory dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (StoreL dst (RShiftL (LoadL dst) shift)));
   effect(KILL cr);
@@ -9098,7 +9022,7 @@ instruct sarL_mem_CL(memory dst, rcx_RegI shift, rFlagsReg cr)
 %}
 
 // Logical shift right by one
-instruct shrL_rReg_1(rRegL dst, immI1 shift, rFlagsReg cr)
+instruct shrL_rReg_1(rRegL dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (URShiftL dst shift));
   effect(KILL cr);
@@ -9110,7 +9034,7 @@ instruct shrL_rReg_1(rRegL dst, immI1 shift, rFlagsReg cr)
 %}
 
 // Logical shift right by one
-instruct shrL_mem_1(memory dst, immI1 shift, rFlagsReg cr)
+instruct shrL_mem_1(memory dst, immI_1 shift, rFlagsReg cr)
 %{
   match(Set dst (StoreL dst (URShiftL (LoadL dst) shift)));
   effect(KILL cr);
@@ -9228,7 +9152,7 @@ instruct rolI_rReg_CL(no_rcx_RegI dst, rcx_RegI shift, rFlagsReg cr)
 // end of ROL expand
 
 // Rotate Left by one
-instruct rolI_rReg_i1(rRegI dst, immI1 lshift, immI_M1 rshift, rFlagsReg cr)
+instruct rolI_rReg_i1(rRegI dst, immI_1 lshift, immI_M1 rshift, rFlagsReg cr)
 %{
   match(Set dst (OrI (LShiftI dst lshift) (URShiftI dst rshift)));
 
@@ -9249,7 +9173,7 @@ instruct rolI_rReg_i8(rRegI dst, immI8 lshift, immI8 rshift, rFlagsReg cr)
 %}
 
 // Rotate Left by variable
-instruct rolI_rReg_Var_C0(no_rcx_RegI dst, rcx_RegI shift, immI0 zero, rFlagsReg cr)
+instruct rolI_rReg_Var_C0(no_rcx_RegI dst, rcx_RegI shift, immI_0 zero, rFlagsReg cr)
 %{
   match(Set dst (OrI (LShiftI dst shift) (URShiftI dst (SubI zero shift))));
 
@@ -9301,7 +9225,7 @@ instruct rorI_rReg_CL(no_rcx_RegI dst, rcx_RegI shift, rFlagsReg cr)
 // end of ROR expand
 
 // Rotate Right by one
-instruct rorI_rReg_i1(rRegI dst, immI1 rshift, immI_M1 lshift, rFlagsReg cr)
+instruct rorI_rReg_i1(rRegI dst, immI_1 rshift, immI_M1 lshift, rFlagsReg cr)
 %{
   match(Set dst (OrI (URShiftI dst rshift) (LShiftI dst lshift)));
 
@@ -9322,7 +9246,7 @@ instruct rorI_rReg_i8(rRegI dst, immI8 rshift, immI8 lshift, rFlagsReg cr)
 %}
 
 // Rotate Right by variable
-instruct rorI_rReg_Var_C0(no_rcx_RegI dst, rcx_RegI shift, immI0 zero, rFlagsReg cr)
+instruct rorI_rReg_Var_C0(no_rcx_RegI dst, rcx_RegI shift, immI_0 zero, rFlagsReg cr)
 %{
   match(Set dst (OrI (URShiftI dst shift) (LShiftI dst (SubI zero shift))));
 
@@ -9373,7 +9297,7 @@ instruct rolL_rReg_CL(no_rcx_RegL dst, rcx_RegI shift, rFlagsReg cr)
 // end of ROL expand
 
 // Rotate Left by one
-instruct rolL_rReg_i1(rRegL dst, immI1 lshift, immI_M1 rshift, rFlagsReg cr)
+instruct rolL_rReg_i1(rRegL dst, immI_1 lshift, immI_M1 rshift, rFlagsReg cr)
 %{
   match(Set dst (OrL (LShiftL dst lshift) (URShiftL dst rshift)));
 
@@ -9394,7 +9318,7 @@ instruct rolL_rReg_i8(rRegL dst, immI8 lshift, immI8 rshift, rFlagsReg cr)
 %}
 
 // Rotate Left by variable
-instruct rolL_rReg_Var_C0(no_rcx_RegL dst, rcx_RegI shift, immI0 zero, rFlagsReg cr)
+instruct rolL_rReg_Var_C0(no_rcx_RegL dst, rcx_RegI shift, immI_0 zero, rFlagsReg cr)
 %{
   match(Set dst (OrL (LShiftL dst shift) (URShiftL dst (SubI zero shift))));
 
@@ -9446,7 +9370,7 @@ instruct rorL_rReg_CL(no_rcx_RegL dst, rcx_RegI shift, rFlagsReg cr)
 // end of ROR expand
 
 // Rotate Right by one
-instruct rorL_rReg_i1(rRegL dst, immI1 rshift, immI_M1 lshift, rFlagsReg cr)
+instruct rorL_rReg_i1(rRegL dst, immI_1 rshift, immI_M1 lshift, rFlagsReg cr)
 %{
   match(Set dst (OrL (URShiftL dst rshift) (LShiftL dst lshift)));
 
@@ -9467,7 +9391,7 @@ instruct rorL_rReg_i8(rRegL dst, immI8 rshift, immI8 lshift, rFlagsReg cr)
 %}
 
 // Rotate Right by variable
-instruct rorL_rReg_Var_C0(no_rcx_RegL dst, rcx_RegI shift, immI0 zero, rFlagsReg cr)
+instruct rorL_rReg_Var_C0(no_rcx_RegL dst, rcx_RegI shift, immI_0 zero, rFlagsReg cr)
 %{
   match(Set dst (OrL (URShiftL dst shift) (LShiftL dst (SubI zero shift))));
 
@@ -9627,7 +9551,7 @@ instruct andnI_rReg_rReg_rReg(rRegI dst, rRegI src1, rRegI src2, immI_M1 minus_1
   ins_pipe(ialu_reg);
 %}
 
-instruct blsiI_rReg_rReg(rRegI dst, rRegI src, immI0 imm_zero, rFlagsReg cr) %{
+instruct blsiI_rReg_rReg(rRegI dst, rRegI src, immI_0 imm_zero, rFlagsReg cr) %{
   match(Set dst (AndI (SubI imm_zero src) src));
   predicate(UseBMI1Instructions);
   effect(KILL cr);
@@ -9640,7 +9564,7 @@ instruct blsiI_rReg_rReg(rRegI dst, rRegI src, immI0 imm_zero, rFlagsReg cr) %{
   ins_pipe(ialu_reg);
 %}
 
-instruct blsiI_rReg_mem(rRegI dst, memory src, immI0 imm_zero, rFlagsReg cr) %{
+instruct blsiI_rReg_mem(rRegI dst, memory src, immI_0 imm_zero, rFlagsReg cr) %{
   match(Set dst (AndI (SubI imm_zero (LoadI src) ) (LoadI src) ));
   predicate(UseBMI1Instructions);
   effect(KILL cr);
@@ -10265,7 +10189,7 @@ instruct cmpLTMask(rRegI dst, rRegI p, rRegI q, rFlagsReg cr)
   ins_pipe(pipe_slow);
 %}
 
-instruct cmpLTMask0(rRegI dst, immI0 zero, rFlagsReg cr)
+instruct cmpLTMask0(rRegI dst, immI_0 zero, rFlagsReg cr)
 %{
   match(Set dst (CmpLTMask dst zero));
   effect(KILL cr);
@@ -11682,7 +11606,7 @@ instruct overflowSubL_rReg_imm(rFlagsReg cr, rRegL op1, immL32 op2)
   ins_pipe(ialu_reg_reg);
 %}
 
-instruct overflowNegI_rReg(rFlagsReg cr, immI0 zero, rax_RegI op2)
+instruct overflowNegI_rReg(rFlagsReg cr, immI_0 zero, rax_RegI op2)
 %{
   match(Set cr (OverflowSubI zero op2));
   effect(DEF cr, USE_KILL op2);
@@ -11791,7 +11715,7 @@ instruct compI_rReg_mem(rFlagsReg cr, rRegI op1, memory op2)
   ins_pipe(ialu_cr_reg_mem);
 %}
 
-instruct testI_reg(rFlagsReg cr, rRegI src, immI0 zero)
+instruct testI_reg(rFlagsReg cr, rRegI src, immI_0 zero)
 %{
   match(Set cr (CmpI src zero));
 
@@ -11801,7 +11725,7 @@ instruct testI_reg(rFlagsReg cr, rRegI src, immI0 zero)
   ins_pipe(ialu_cr_reg_imm);
 %}
 
-instruct testI_reg_imm(rFlagsReg cr, rRegI src, immI con, immI0 zero)
+instruct testI_reg_imm(rFlagsReg cr, rRegI src, immI con, immI_0 zero)
 %{
   match(Set cr (CmpI (AndI src con) zero));
 
@@ -11811,7 +11735,7 @@ instruct testI_reg_imm(rFlagsReg cr, rRegI src, immI con, immI0 zero)
   ins_pipe(ialu_cr_reg_imm);
 %}
 
-instruct testI_reg_mem(rFlagsReg cr, rRegI src, memory mem, immI0 zero)
+instruct testI_reg_mem(rFlagsReg cr, rRegI src, memory mem, immI_0 zero)
 %{
   match(Set cr (CmpI (AndI src (LoadI mem)) zero));
 
@@ -11865,7 +11789,7 @@ instruct compU_rReg_mem(rFlagsRegU cr, rRegI op1, memory op2)
 // //  ins_encode( OpcP, reg_mem( op1, op2) );
 // //%}
 
-instruct testU_reg(rFlagsRegU cr, rRegI src, immI0 zero)
+instruct testU_reg(rFlagsRegU cr, rRegI src, immI_0 zero)
 %{
   match(Set cr (CmpU src zero));
 
@@ -12203,7 +12127,7 @@ instruct compB_mem_imm(rFlagsReg cr, memory mem, immI8 imm)
   ins_pipe(ialu_cr_reg_mem);
 %}
 
-instruct testB_mem_imm(rFlagsReg cr, memory mem, immI8 imm, immI0 zero)
+instruct testB_mem_imm(rFlagsReg cr, memory mem, immI8 imm, immI_0 zero)
 %{
   match(Set cr (CmpI (AndI (LoadB mem) imm) zero));
 
@@ -12974,7 +12898,7 @@ instruct tlsRefetchP(r15_RegP dst, any_RegP src) %{
 //   match(Set dst (CopyI src));
 // %}
 //
-// instruct incI_rReg(rRegI dst, immI1 src, rFlagsReg cr)
+// instruct incI_rReg(rRegI dst, immI_1 src, rFlagsReg cr)
 // %{
 //   match(Set dst (AddI dst src));
 //   effect(KILL cr);
