@@ -25,7 +25,7 @@
 
 /* @test
  * @summary unit tests for coroutines
- * @run junit/othervm -XX:+EnableCoroutine test.java.dyn.TestCoroutine
+ * @run junit/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine test.java.dyn.TestCoroutine
  */
 
 package test.java.dyn;

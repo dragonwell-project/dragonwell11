@@ -5,7 +5,7 @@
  * @modules java.base/jdk.internal.misc
  * @requires os.family == "linux"
  * @requires os.arch != "riscv64"
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.enableAsyncFileIO=true WispFileIOTest
+ * @run main/othervm/timeout=2000 -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.enableAsyncFileIO=true WispFileIOTest
  */
 
 import jdk.internal.misc.SharedSecrets;
