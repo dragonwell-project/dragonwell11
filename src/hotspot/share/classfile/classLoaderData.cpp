@@ -1041,7 +1041,7 @@ bool ClassLoaderDataGraph::_metaspace_oom = false;
 
 // Add a new class loader data node to the list.  Assign the newly created
 // ClassLoaderData into the java/lang/ClassLoader object as a hidden field
-ClassLoaderData* ClassLoaderDataGraph::add_to_graph(Handle loader, bool is_anonymous) {
+ClassLoaderData* ClassLoaderDataGraph::add_to_graph(Handle loader, bool is_anonymous, bool& is_created) {
   ClassLoaderData* cld;
 
   if (!is_anonymous) {
@@ -1050,6 +1050,7 @@ ClassLoaderData* ClassLoaderDataGraph::add_to_graph(Handle loader, bool is_anony
     if (cld != NULL) {
       return cld;
     }
+    is_created = true;
     cld = new ClassLoaderData(loader, is_anonymous);
     java_lang_ClassLoader::release_set_loader_data(loader(), cld);
   } else {
@@ -1084,11 +1085,20 @@ ClassLoaderData* ClassLoaderDataGraph::add_to_graph(Handle loader, bool is_anony
 }
 
 ClassLoaderData* ClassLoaderDataGraph::add(Handle loader, bool is_anonymous) {
-  ClassLoaderData* loader_data = add_to_graph(loader, is_anonymous);
+  bool is_created = false;
+  ClassLoaderData* loader_data = add_to_graph(loader, is_anonymous, is_created);
   // Initialize _name and _name_and_id after the loader data is added to the
   // CLDG because adding the Symbol for _name and _name_and_id might safepoint.
   if (loader.not_null()) {
     loader_data->initialize_name(loader);
+  }
+  // post_first_class_load_prepare isn't applied on anonymous class loader,
+  // built-in class loader, reflection class loader
+  if (is_created && JvmtiExport::should_post_first_class_load_prepare() &&
+      !loader_data->is_builtin_class_loader_data() &&
+      !java_lang_ClassLoader::is_reflection_class_loader(loader())) {
+    Thread* thread = Thread::current();
+    JvmtiExport::post_first_class_load_prepare((JavaThread *) thread, loader);
   }
   return loader_data;
 }

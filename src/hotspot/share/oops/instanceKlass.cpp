@@ -417,7 +417,8 @@ InstanceKlass::InstanceKlass(const ClassFileParser& parser, unsigned kind, Klass
   _reference_type(parser.reference_type()),
   _nest_members(NULL),
   _nest_host_index(0),
-  _nest_host(NULL) {
+  _nest_host(NULL),
+  _source_file_path(NULL) {
     set_vtable_length(parser.vtable_size());
     set_kind(kind);
     set_access_flags(parser.access_flags());
@@ -2258,6 +2259,10 @@ void InstanceKlass::metaspace_pointers_do(MetaspaceClosure* it) {
   // _fields might be written into by Rewriter::scan_method() -> fd.set_has_initialized_final_update()
   it->push(&_fields, MetaspaceClosure::_writable);
 
+  if (EagerAppCDS) {
+    it->push(&_source_file_path);
+  }
+
   if (itable_length() > 0) {
     itableOffsetEntry* ioe = (itableOffsetEntry*)start_of_itable();
     int method_table_offset_in_words = ioe->offset()/wordSize;
@@ -4009,6 +4014,21 @@ jint InstanceKlass::get_cached_class_file_len() {
 unsigned char * InstanceKlass::get_cached_class_file_bytes() {
   return VM_RedefineClasses::get_cached_class_file_bytes(_cached_class_file);
 }
+
+#if INCLUDE_CDS
+JvmtiCachedClassFileData* InstanceKlass::get_archived_class_data() {
+  if (DumpSharedSpaces) {
+    return _cached_class_file;
+  } else {
+    assert(this->is_shared(), "class should be shared");
+    if (MetaspaceShared::is_in_shared_metaspace(_cached_class_file)) {
+      return _cached_class_file;
+    } else {
+      return NULL;
+    }
+  }
+}
+#endif
 #endif
 
 bool InstanceKlass::is_reentrant_initialization(Thread *thread)  {

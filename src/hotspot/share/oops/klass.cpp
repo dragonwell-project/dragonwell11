@@ -197,6 +197,9 @@ void* Klass::operator new(size_t size, ClassLoaderData* loader_data, size_t word
 Klass::Klass(KlassID id) : _id(id),
                            _prototype_header(markOopDesc::prototype()),
                            _shared_class_path_index(-1),
+#if INCLUDE_JVMTI
+                           _shared_unregistered_class_path_index(-1),
+#endif
                            _java_mirror(NULL) {
   CDS_ONLY(_shared_class_flags = 0;)
   CDS_JAVA_HEAP_ONLY(_archived_mirror = 0;)

@@ -70,7 +70,6 @@ class MetaspaceShared : AllStatic {
     ro = 2,  // read-only shared space in the heap
     md = 3,  // miscellaneous data for initializing tables, etc.
     num_core_spaces = 4, // number of non-string regions
-
     num_non_heap_spaces = 4,
 
     // mapped java heap regions

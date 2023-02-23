@@ -51,6 +51,7 @@ JVM_CountStackFrames
 JVM_CurrentThread
 JVM_CurrentTimeMillis
 JVM_DefineClass
+JVM_DefineClassFromCDS
 JVM_DefineClassWithSource
 JVM_DesiredAssertionStatus
 JVM_DoPrivileged

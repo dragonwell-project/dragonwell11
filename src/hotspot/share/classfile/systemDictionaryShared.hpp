@@ -105,6 +105,8 @@
 
 ===============================================================================*/
 #define UNREGISTERED_INDEX -9999
+#define NOT_FOUND_CLASS "not.found.class"
+#define LOAD_CLASS_DETAIL_TAG "Load Class Detail Info"
 
 class ClassFileStream;
 
@@ -127,6 +129,8 @@ public:
   int             _id;
   int             _clsfile_size;
   int             _clsfile_crc32;
+  int             _defining_loader_hash;
+  int             _initiating_loader_hash;
   void*           _verifier_constraints; // FIXME - use a union here to avoid type casting??
   void*           _verifier_constraint_flags;
 
@@ -152,6 +156,10 @@ public:
     return loader_type() == LT_UNREGISTERED;
   }
 
+  int initiating_loader_hash() {
+    return _initiating_loader_hash;
+  }
+
   void add_verification_constraint(Symbol* name,
          Symbol* from_name, bool from_field_is_protected, bool from_is_array, bool from_is_object);
   int finalize_verification_constraints();
@@ -160,22 +168,22 @@ public:
 };
 
 class SharedDictionary : public Dictionary {
-  SharedDictionaryEntry* get_entry_for_builtin_loader(const Symbol* name) const;
-  SharedDictionaryEntry* get_entry_for_unregistered_loader(const Symbol* name,
-                                                           int clsfile_size,
-                                                           int clsfile_crc32) const;
-
   // Convenience functions
   SharedDictionaryEntry* bucket(int index) const {
     return (SharedDictionaryEntry*)(Dictionary::bucket(index));
   }
 
 public:
+  SharedDictionaryEntry* get_entry_for_builtin_loader(const Symbol* name) const;
+  SharedDictionaryEntry* get_entry_for_unregistered_loader(const Symbol* name,
+                                                           int clsfile_size,
+                                                           int clsfile_crc32) const;
   SharedDictionaryEntry* find_entry_for(Klass* klass);
 
-  bool add_non_builtin_klass(const Symbol* class_name,
+  void add_non_builtin_klass(const Symbol* class_name,
                              ClassLoaderData* loader_data,
-                             InstanceKlass* obj);
+                             InstanceKlass* obj,
+                             int initiating_loader_hash);
 
   void update_entry(Klass* klass, int id);
 
@@ -261,6 +269,8 @@ private:
     // result is used by all threads, and all future queries.
     array->atomic_compare_exchange_oop(index, o, NULL);
   }
+  static bool check_not_found_class(Symbol *class_name, int hash_value);
+  static InstanceKlass* load_class_from_cds(const Symbol* class_name, Handle class_loader, InstanceKlass* ik, int hash, TRAPS);
 
   static oop shared_protection_domain(int index);
   static void atomic_set_shared_protection_domain(int index, oop pd) {
@@ -290,6 +300,9 @@ public:
                                                Handle class_loader,
                                                TRAPS);
 
+  static InstanceKlass* load_shared_class_for_registered_loader(Symbol* class_name,
+                                                                Handle class_loader,
+                                                                TRAPS);
 
   static void allocate_shared_data_arrays(int size, TRAPS);
   static void oops_do(OopClosure* f);
@@ -315,8 +328,10 @@ public:
     return NULL;
   }
 
-  static bool add_non_builtin_klass(Symbol* class_name, ClassLoaderData* loader_data,
-                                    InstanceKlass* k, TRAPS);
+  static void add_non_builtin_klass(Symbol* class_name, ClassLoaderData* loader_data,
+                                    InstanceKlass* k, int initiating_loader_hash, TRAPS);
+
+  static void record_not_found_class(Symbol* class_name, int hash_value);
   static Klass* dump_time_resolve_super_or_fail(Symbol* child_name,
                                                 Symbol* class_name,
                                                 Handle class_loader,
@@ -335,6 +350,8 @@ public:
     return entry->is_builtin();
   }
 
+  static bool is_dumping_class_with_source();
+
   // For convenient access to the SharedDictionaryEntry's of the archived classes.
   static SharedDictionary* shared_dictionary() {
     assert(!DumpSharedSpaces, "not for dumping");
@@ -351,13 +368,30 @@ public:
     ((SharedDictionary*)(klass->class_loader_data()->dictionary()))->update_entry(klass, id);
   }
 
-  static void set_shared_class_misc_info(Klass* k, ClassFileStream* cfs);
+  static void set_shared_class_misc_info(Klass* k, ClassFileStream* cfs, int defining_loader_hash, int initiating_loader_hash);
+
+  static void log_not_found_klass(Symbol* name, Handle class_loader, TRAPS);
 
   static InstanceKlass* lookup_from_stream(const Symbol* class_name,
                                            Handle class_loader,
                                            Handle protection_domain,
                                            const ClassFileStream* st,
                                            TRAPS);
+
+  static InstanceKlass* lookup_from_stream_for_system_class_loader(const Symbol* class_name,
+                                                                   Handle class_loader,
+                                                                   Handle protection_domain,
+                                                                   const ClassFileStream* st,
+                                                                   TRAPS);
+
+  static InstanceKlass* lookup_shared(Symbol* class_name, Handle class_loader,
+                                      bool& not_found, bool check_not_found, TRAPS);
+
+  static InstanceKlass* define_class_from_cds(InstanceKlass *ik,
+                                              Handle class_loader,
+                                              Handle protection_domain,
+                                              TRAPS);
+
   // "verification_constraints" are a set of checks performed by
   // VerificationType::is_reference_assignable_from when verifying a shared class during
   // dump time.

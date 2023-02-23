@@ -65,9 +65,16 @@ class ClassListParser : public StackObj {
   int                 _super;
   GrowableArray<int>* _interfaces;
   bool                _interfaces_specified;
+  int                 _defining_loader_hash;
+  int                 _initiating_loader_hash;
   const char*         _source;
+  const char*         _original_source;
+  uint64_t            _fingerprint;
+  int                 _dependence_not_loaded;
 
   bool parse_int_option(const char* option_name, int* value);
+  bool parse_hex_option(const char* option_name, int* value);
+  bool parse_uint64_option(const char* option_name, uint64_t* value);
   InstanceKlass* load_class_from_source(Symbol* class_name, TRAPS);
   ID2KlassTable *table() {
     return &_id2klass_table;
@@ -108,10 +115,18 @@ public:
     assert(is_super_specified(), "do not query unspecified super");
     return _super;
   }
-  void check_already_loaded(const char* which, int id) {
+  bool check_already_loaded(const char* which, int id) {
     if (_id2klass_table.lookup(id) == NULL) {
-      error("%s id %d is not yet loaded", which, id);
+      if (DumpAppCDSWithKlassId) {
+        // In Classes4CDS flow, if the super class is not loaded, we don't error out.
+        _dependence_not_loaded = 1;
+        tty->print_cr("Preload Warning: %s id %d is not yet loaded", which, id);
+      } else {
+        error("%s id %d is not yet loaded", which, id);
+      }
+      return false;
     }
+    return true;
   }
 
   const char* current_class_name() {
@@ -126,5 +141,6 @@ public:
   // (in this->load_current_class()).
   InstanceKlass* lookup_super_for_current_class(Symbol* super_name);
   InstanceKlass* lookup_interface_for_current_class(Symbol* interface_name);
+  bool dependence_not_loaded() const { return _dependence_not_loaded == 1; }
 };
 #endif

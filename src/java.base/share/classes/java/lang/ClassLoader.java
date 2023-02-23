@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.File;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
@@ -73,6 +74,8 @@ import jdk.internal.reflect.CallerSensitive;
 import jdk.internal.reflect.Reflection;
 import sun.reflect.misc.ReflectUtil;
 import sun.security.util.SecurityConstants;
+
+import com.alibaba.util.Utils;
 
 /**
  * A class loader is an object that is responsible for loading classes. The
@@ -658,6 +661,82 @@ public abstract class ClassLoader {
     }
 
     /**
+     * load class from Class Data Sharing
+     * 1. use definingLoaderHash to get the defining class loader
+     * 2. use the lock to take care of parallel class loading which is the same as loadClass
+     * 3. use defining class loader to find and define class
+     *
+     * @param  className
+     *         The <a href="#binary-name">binary name</a> of the class
+     *
+     * @param  sourcePath
+     *         the path to load the class
+     *
+     * @param  ik
+     *         instance klass
+     *
+     * @param  definingLoaderHash
+     *         the signature of defining class loader
+     *
+     * @return  The resulting {@code Class} object
+     *
+     * @throws  ClassNotFoundException
+     *          If the class could not be found
+     *
+     */
+    private Class<?> loadClassFromCDS(String className, String sourcePath, long ik,
+                                      int definingLoaderHash) throws ClassNotFoundException {
+        if (signature == 0 || definingLoaderHash == 0) {
+            throw new IllegalArgumentException("[CDS exception]: initialing or defining loader not registered");
+        }
+        ClassLoader definingLoader = this;
+        if (definingLoaderHash != signature) {
+            WeakReference<ClassLoader> loaderRef = Utils.getClassLoader(definingLoaderHash);
+            if (loaderRef == null || loaderRef.get() == null) {
+                throw new IllegalStateException("[CDS exception]: definingLoader " + definingLoaderHash +
+                        " not found, initialing loader is " + this);
+            }
+            definingLoader = loaderRef.get();
+        }
+
+        synchronized (getClassLoadingLock(className)) {
+            synchronized (definingLoader.getClassLoadingLock(className)) {
+                // First, check if the class has already been loaded
+                Class<?> c;
+                if ((c = definingLoader.findLoadedClass0(className, true)) == null) {
+                    long t1 = System.nanoTime();
+                    c = definingLoader.findClassFromCDS(className, sourcePath, ik);
+                    // this is the defining class loader; record the stats
+                    PerfCounter.getFindClassTime().addElapsedTimeFrom(t1);
+                    PerfCounter.getFindClasses().increment();
+                }
+                return c;
+            }
+        }
+    }
+
+    /**
+     * find class in EagerAppCDS flow
+     *
+     * @param  className
+     *         The <a href="#binary-name">binary name</a> of the class
+     *
+     * @param  sourcePath
+     *         The path to load the class
+     *
+     * @param  ik
+     *         instance klass
+     *
+     * @return  The resulting {@code Class} object
+     *
+     * @throws  ClassNotFoundException
+     *          If the class could not be found
+     */
+    protected Class<?> findClassFromCDS(String className, String sourcePath, long ik) throws ClassNotFoundException {
+        return defineClassFromCDS(className, ik, null);
+    }
+
+    /**
      * Returns the lock object for class loading operations.
      * For backward compatibility, the default implementation of this method
      * behaves as follows. If this ClassLoader object is registered as
@@ -1127,12 +1206,51 @@ public abstract class ClassLoader {
         return c;
     }
 
+    /**
+     * define class for CDS flow
+     * @param  name
+     *         The expected <a href="#binary-name">binary name</a>. of the class, or
+     *         {@code null} if not known
+     *
+     * @param  protectionDomain
+     *         The {@code ProtectionDomain} of the class, or {@code null}.
+     *
+     * @param  ik
+     *         instance class
+     * @return  The {@code Class} object created from the data,
+     *
+     * @throws  ClassFormatError
+     *          If the data did not contain a valid class.
+     * @throws  NoClassDefFoundError
+     *          If the ik's super/interfaces are transformed.
+     *
+     */
+    protected final Class<?> defineClassFromCDS(String name, long ik, ProtectionDomain protectionDomain)
+            throws ClassFormatError, NoClassDefFoundError
+    {
+        protectionDomain = preDefineClass(name, protectionDomain);
+        // ignore the code to get source in CDS flow
+        // String source = defineClassSourceLocation(protectionDomain);
+        Class<?> c = defineClassFromCDS0(this, protectionDomain, ik);
+        if (c == null) {
+            // This is because:
+            // [1] some agent transformed the ik's super/interfaces, so the ik in the jsa cannot be successfully loaded, so a null is returned.
+            // [2] check_shared_class_file_load_hook() failed for the ik is inside some fat jars when some jvmti agents enabled. Use -XX:+PrintEagerAppCDSExceptions to see exception details.
+            // Note: this Exception will be eaten in Hotspot.
+            throw new NoClassDefFoundError("CDS Super/Interfaces got overwritten, or check_shared_class_file_load_hook() failed");
+        }
+        postDefineClass(c, protectionDomain);
+        return c;
+    }
+
     static native Class<?> defineClass1(ClassLoader loader, String name, byte[] b, int off, int len,
                                         ProtectionDomain pd, String source);
 
     static native Class<?> defineClass2(ClassLoader loader, String name, java.nio.ByteBuffer b,
                                         int off, int len, ProtectionDomain pd,
                                         String source);
+
+    static native Class<?> defineClassFromCDS0(ClassLoader loader, ProtectionDomain pd, long iklass);
 
     // true if the name is null or has the potential to be a valid binary name
     private boolean checkName(String name) {
@@ -1294,10 +1412,13 @@ public abstract class ClassLoader {
     protected final Class<?> findLoadedClass(String name) {
         if (!checkName(name))
             return null;
-        return findLoadedClass0(name);
+        return findLoadedClass0(name, false);
     }
 
-    private final native Class<?> findLoadedClass0(String name);
+    /**
+     * @param onlyFind set the parameter to avoid nested call
+     */
+    private final native Class<?> findLoadedClass0(String name, boolean onlyFind);
 
     /**
      * Sets the signers of a class.  This should be invoked after defining a

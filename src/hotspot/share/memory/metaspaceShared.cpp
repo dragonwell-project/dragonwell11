@@ -1262,6 +1262,14 @@ public:
     }
     FileMapInfo::metaspace_pointers_do(it);
     SystemDictionary::classes_do(it);
+    if (NotFoundClassOpt && SystemDictionary::not_found_class_table()) {
+      SystemDictionary::not_found_class_table()->metaspace_pointers_do(it);
+    }
+#if INCLUDE_JVMTI
+    if (EagerAppCDS && SystemDictionary::unregistered_classpath_id_table()) {
+      SystemDictionary::unregistered_classpath_id_table()->metaspace_pointers_do(it);
+    }
+#endif
     Universe::metaspace_pointers_do(it);
     SymbolTable::metaspace_pointers_do(it);
     vmSymbols::metaspace_pointers_do(it);
@@ -1298,6 +1306,14 @@ char* VM_PopulateDumpSharedSpace::dump_read_only_tables() {
   // Reorder the system dictionary. Moving the symbols affects
   // how the hash table indices are calculated.
   SystemDictionary::reorder_dictionary_for_sharing();
+  if (NotFoundClassOpt) {
+    SystemDictionary::reorder_not_found_class_table_for_sharing();
+  }
+#if INCLUDE_JVMTI
+  if (EagerAppCDS) {
+    SystemDictionary::reorder_unregistered_classpath_id_table_for_sharing();
+  }
+#endif
 
   tty->print("Removing java_mirror ... ");
   if (!MetaspaceShared::is_heap_object_archiving_allowed()) {
@@ -1314,6 +1330,36 @@ char* VM_PopulateDumpSharedSpace::dump_read_only_tables() {
   size_t table_bytes = SystemDictionary::count_bytes_for_table();
   char* table_top = _ro_region.allocate(table_bytes, sizeof(intptr_t));
   SystemDictionary::copy_table(table_top, _ro_region.top());
+
+  size_t not_found_class_buckets_bytes = SystemDictionary::count_bytes_for_not_found_class_buckets();
+  if (not_found_class_buckets_bytes != 0) {
+    char* not_found_class_buckets_top = _ro_region.allocate(not_found_class_buckets_bytes, sizeof(intptr_t));
+    SystemDictionary::copy_not_found_class_buckets(not_found_class_buckets_top, _ro_region.top());
+    size_t not_found_class_table_bytes = SystemDictionary::count_bytes_for_not_found_class_table();
+    char* not_found_class_table_top = _ro_region.allocate(not_found_class_table_bytes, sizeof(intptr_t));
+    SystemDictionary::copy_not_found_class_table(not_found_class_table_top, _ro_region.top());
+  } else {
+    char* not_found_class_buckets_top = _ro_region.allocate(2 * sizeof(intptr_t), sizeof(intptr_t));
+    *(intptr_t*)(not_found_class_buckets_top) = 0;
+    not_found_class_buckets_top += sizeof(intptr_t);
+    *(intptr_t*)(not_found_class_buckets_top) = 0;
+  }
+
+#if INCLUDE_JVMTI
+  size_t unregistered_classpath_id_buckets_bytes = SystemDictionary::count_bytes_for_unregistered_classpath_id_buckets();
+  if (unregistered_classpath_id_buckets_bytes != 0) {
+    char* unregistered_classpath_id_buckets_top = _ro_region.allocate(unregistered_classpath_id_buckets_bytes, sizeof(intptr_t));
+    SystemDictionary::copy_unregistered_classpath_id_buckets(unregistered_classpath_id_buckets_top, _ro_region.top());
+    size_t unregistered_classpath_id_table_bytes = SystemDictionary::count_bytes_for_unregistered_classpath_id_table();
+    char* unregistered_classpath_id_table_top = _ro_region.allocate(unregistered_classpath_id_table_bytes, sizeof(intptr_t));
+    SystemDictionary::copy_unregistered_classpath_id_table(unregistered_classpath_id_table_top, _ro_region.top());
+  } else {
+    char* unregistered_classpath_id_buckets_top = _ro_region.allocate(2 * sizeof(intptr_t), sizeof(intptr_t));
+    *(intptr_t*)(unregistered_classpath_id_buckets_top) = 0;
+    unregistered_classpath_id_buckets_top += sizeof(intptr_t);
+    *(intptr_t*)(unregistered_classpath_id_buckets_top) = 0;
+  }
+#endif
 
   // Write the archived object sub-graph infos. For each klass with sub-graphs,
   // the info includes the static fields (sub-graph entry points) and Klasses
@@ -1424,7 +1470,7 @@ void VM_PopulateDumpSharedSpace::doit() {
   MetaspaceShared::allocate_cpp_vtable_clones();
   _md_region.pack();
 
-  // The 4 core spaces are allocated consecutively mc->rw->ro->md->od, so there total size
+  // The 4 core spaces are allocated consecutively mc->rw->ro->md, so there total size
   // is just the spaces between the two ends.
   size_t core_spaces_size = _md_region.end() - _mc_region.base();
   assert(core_spaces_size == (size_t)align_up(core_spaces_size, Metaspace::reserve_alignment()),
@@ -2130,6 +2176,41 @@ void MetaspaceShared::initialize_shared_spaces() {
   int len = *(intptr_t*)buffer;     // skip over shared dictionary entries
   buffer += sizeof(intptr_t);
   buffer += len;
+
+  int notFoundTableLen = *(intptr_t*)buffer;
+  buffer += sizeof(intptr_t);
+  number_of_entries = *(intptr_t*)buffer;
+  buffer += sizeof(intptr_t);
+  if (notFoundTableLen != 0) {
+    SystemDictionary::set_not_found_class_table((HashtableBucket<mtSymbol>*)buffer,
+                                                sharedDictionaryLen,
+                                                number_of_entries);
+    buffer += notFoundTableLen;
+    // The following data are the linked list elements
+    // (HashtableEntry objects) for the not found table.
+
+    int len = *(intptr_t*)buffer;     // skip over shared dictionary entries
+    buffer += sizeof(intptr_t);
+    buffer += len;
+  }
+
+#if INCLUDE_JVMTI
+  int unregisteredClassPathTableLen = *(intptr_t*)buffer;
+  buffer += sizeof(intptr_t);
+  number_of_entries = *(intptr_t*)buffer;
+  buffer += sizeof(intptr_t);
+  if (unregisteredClassPathTableLen != 0) {
+    FileMapInfo::init_unregistered_classpath_entry_for_jvmti(number_of_entries);
+    SystemDictionary::set_unregistered_classpath_id_table((HashtableBucket<mtClass>*)buffer, number_of_entries);
+    buffer += unregisteredClassPathTableLen;
+    // The following data are the linked list elements
+    // (HashtableEntry objects) for the not found table.
+
+    int len = *(intptr_t*)buffer;     // skip over shared dictionary entries
+    buffer += sizeof(intptr_t);
+    buffer += len;
+  }
+#endif
 
   // The table of archived java heap object sub-graph infos
   buffer = HeapShared::read_archived_subgraph_infos(buffer);

@@ -381,7 +381,7 @@ JVM_FindClassFromClass(JNIEnv *env, const char *name, jboolean init,
 
 /* Find a loaded class cached by the VM */
 JNIEXPORT jclass JNICALL
-JVM_FindLoadedClass(JNIEnv *env, jobject loader, jstring name);
+JVM_FindLoadedClass(JNIEnv *env, jobject loader, jstring name, jboolean onlyFind);
 
 /* Define a class */
 JNIEXPORT jclass JNICALL
@@ -1347,6 +1347,9 @@ JVM_GetProxyUnpark(JNIEnv* env, jclass clz, jintArray res);
 
 JNIEXPORT void JNICALL
 JVM_MarkPreempted(JNIEnv* env, jclass clz, jobject thread);
+
+JNIEXPORT jclass JNICALL
+JVM_DefineClassFromCDS(JNIEnv *env, jclass clz, jobject loader, jobject pd, jlong iklass);
 #ifdef __cplusplus
 } /* extern "C" */
 
