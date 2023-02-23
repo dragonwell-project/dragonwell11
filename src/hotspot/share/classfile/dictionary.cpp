@@ -622,3 +622,116 @@ void Dictionary::verify() {
   tempst.print("System Dictionary for %s class loader", cld->loader_name_and_id());
   verify_table<DictionaryEntry>(tempst.as_string());
 }
+
+NotFoundClassTable::NotFoundClassTable(int table_size)
+        : Hashtable<Symbol*, mtSymbol>(table_size, sizeof(NotFoundClassEntry))
+{
+}
+NotFoundClassTable::NotFoundClassTable(int table_size, HashtableBucket<mtSymbol>* t,
+                                       int number_of_entries)
+        : Hashtable<Symbol*, mtSymbol>(table_size, sizeof(NotFoundClassEntry), t, number_of_entries)
+{
+}
+
+NotFoundClassEntry* NotFoundClassTable::find_entry(int index, unsigned int hash,
+                                                   Symbol* sym,
+                                                   int initiating_loader_hash) {
+  for (NotFoundClassEntry* p = bucket(index); p != NULL; p = p->next()) {
+    if (p->hash() == hash && p->symbol() == sym && p->initiating_loader_hash() == initiating_loader_hash) {
+      return p;
+    }
+  }
+  return NULL;
+}
+
+
+NotFoundClassEntry* NotFoundClassTable::add_entry(int index, unsigned int hash,
+                                                  Symbol* sym, int initiating_loader_hash) {
+  NotFoundClassEntry* p = new_entry(hash, sym, initiating_loader_hash);
+  Hashtable<Symbol*, mtSymbol>::add_entry(index, p);
+  return p;
+}
+
+void NotFoundClassTable::metaspace_pointers_do(MetaspaceClosure* it) {
+  assert(DumpSharedSpaces, "must be in dump phase");
+  for (int index = 0; index < table_size(); index++) {
+    for (NotFoundClassEntry* probe = bucket(index);
+         probe != NULL;
+         probe = probe->next()) {
+      it->push(probe->literal_addr());
+    }
+  }
+}
+
+void NotFoundClassTable::reorder_not_found_class_table_for_sharing() {
+  // Copy all the dictionary entries into a single master list.
+  assert(DumpSharedSpaces, "must be in dump phase");
+
+  NotFoundClassEntry* master_list = NULL;
+  for (int i = 0; i < table_size(); ++i) {
+    NotFoundClassEntry* p = bucket(i);
+    while (p != NULL) {
+      NotFoundClassEntry* next = p->next();
+      p->set_next(master_list);
+      master_list = p;
+      p = next;
+    }
+    set_entry(i, NULL);
+  }
+
+  // Add the entries back to the list in the correct buckets.
+  while (master_list != NULL) {
+    NotFoundClassEntry* p = master_list;
+    master_list = master_list->next();
+    p->set_next(NULL);
+    Symbol* class_name = p->symbol();
+    unsigned int hash = compute_hash(class_name);
+    int index = hash_to_index(hash);
+    p->set_hash(hash);
+    p->set_next(bucket(index));
+    set_entry(index, p);
+  }
+}
+
+#if INCLUDE_JVMTI
+void UnregisteredClasspath2IDTable::metaspace_pointers_do(MetaspaceClosure* it) {
+  assert(DumpSharedSpaces, "must be in dump phase");
+  for (int index = 0; index < table_size(); index++) {
+    for (UnregisteredClasspath2IDEntry* probe = bucket(index);
+         probe != NULL;
+         probe = probe->next()) {
+      it->push(probe->literal_addr());
+    }
+  }
+}
+
+void UnregisteredClasspath2IDTable::reorder_unregistered_classpath_id_table_for_sharing() {
+  // Copy all the dictionary entries into a single master list.
+  assert(DumpSharedSpaces, "must be in dump phase");
+
+  UnregisteredClasspath2IDEntry* master_list = NULL;
+  for (int i = 0; i < table_size(); ++i) {
+    UnregisteredClasspath2IDEntry* p = bucket(i);
+    while (p != NULL) {
+      UnregisteredClasspath2IDEntry* next = p->next();
+      p->set_next(master_list);
+      master_list = p;
+      p = next;
+    }
+    set_entry(i, NULL);
+  }
+
+  // Add the entries back to the list in the correct buckets.
+  while (master_list != NULL) {
+    UnregisteredClasspath2IDEntry* p = master_list;
+    master_list = master_list->next();
+    p->set_next(NULL);
+    Symbol* source_file_path = p->literal();
+    unsigned int hash = source_file_path->identity_hash();
+    int index = hash_to_index(hash);
+    p->set_hash(hash);
+    p->set_next(bucket(index));
+    set_entry(index, p);
+  }
+}
+#endif

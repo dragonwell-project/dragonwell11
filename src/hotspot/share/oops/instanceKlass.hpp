@@ -186,6 +186,9 @@ class InstanceKlass: public Klass {
   // if this class is unloaded.
   Symbol*         _array_name;
 
+  // source file path, e.g. /home/xxx/liba.jar
+  Symbol*         _source_file_path;
+
   // Number of heapOopSize words used by non-static fields in this klass
   // (including inherited fields but after header_size()).
   int             _nonstatic_field_size;
@@ -723,6 +726,9 @@ public:
   Symbol* array_name()                     { return _array_name; }
   void set_array_name(Symbol* name)        { assert(_array_name == NULL  || name == NULL, "name already created"); _array_name = name; }
 
+  Symbol* source_file_path()               { return _source_file_path; }
+  void set_source_file_path(Symbol* value) { _source_file_path = value; }
+
   // nonstatic oop-map blocks
   static int nonstatic_oop_map_size(unsigned int oop_map_count) {
     return oop_map_count * OopMapBlock::size_in_words();
@@ -861,6 +867,14 @@ public:
   JvmtiCachedClassFieldMap* jvmti_cached_class_field_map() const {
     return _jvmti_cached_class_field_map;
   }
+
+#if INCLUDE_CDS
+  void set_archived_class_data(JvmtiCachedClassFileData* data) {
+    _cached_class_file = data;
+  }
+
+  JvmtiCachedClassFileData * get_archived_class_data();
+#endif // INCLUDE_CDS
 #else // INCLUDE_JVMTI
 
   static void purge_previous_versions(InstanceKlass* ik) { return; };

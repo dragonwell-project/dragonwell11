@@ -368,6 +368,8 @@
   template(run_finalization_name,                     "runFinalization")                          \
   template(dispatchUncaughtException_name,            "dispatchUncaughtException")                \
   template(loadClass_name,                            "loadClass")                                \
+  template(loadClassFromCDS_name,                     "loadClassFromCDS")                         \
+  template(loadClassFromCDS_signature,                "(Ljava/lang/String;Ljava/lang/String;JI)Ljava/lang/Class;") \
   template(get_name,                                  "get")                                      \
   template(put_name,                                  "put")                                      \
   template(type_name,                                 "type")                                     \

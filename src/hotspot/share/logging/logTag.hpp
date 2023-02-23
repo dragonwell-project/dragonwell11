@@ -65,7 +65,8 @@
   LOG_TAG(decoder) \
   LOG_TAG(defaultmethods) \
   LOG_TAG(director) \
-  LOG_TAG(dump) \
+  LOG_TAG(dump)      \
+  LOG_TAG(eagerappcds) \
   LOG_TAG(ergo) \
   LOG_TAG(event) \
   LOG_TAG(exceptions) \

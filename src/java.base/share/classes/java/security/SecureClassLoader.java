@@ -207,6 +207,24 @@ public class SecureClassLoader extends ClassLoader {
     }
 
     /**
+     * Define a class for CDS flow
+     *
+     * @param       name the expected name of the class
+     *
+     * @param       cs   the associated CodeSource, or {@code null} if none
+     *
+     * @param       ik   instance class
+     *
+     * @return the {@code Class} object created from the data
+     *
+     * @throws NoClassDefFoundError
+     *         If the ik's super/interfaces are transformed.
+     */
+    protected final Class<?> defineClassFromCDS(String name, long ik, CodeSource cs) {
+        return defineClassFromCDS(name, ik, getProtectionDomain(cs));
+    }
+
+    /**
      * Returns the permissions for the given CodeSource object.
      * <p>
      * This method is invoked by the defineClass method which takes

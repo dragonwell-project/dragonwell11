@@ -356,8 +356,14 @@ public:
   address decode_start_address(CDSFileMapRegion* spc, bool with_current_oop_encoding_mode);
 
 #if INCLUDE_JVMTI
+  // builtin classloaders' classpath entries
   static ClassPathEntry** _classpath_entries_for_jvmti;
-  static ClassPathEntry* get_classpath_entry_for_jvmti(int i, TRAPS);
+  static ClassPathEntry* get_classpath_entry_for_jvmti(int i, InstanceKlass *klass, TRAPS);
+  // custom classloaders' classpath entries
+  static ClassPathEntry** _unregistered_classpath_entries_for_jvmti;
+  static ClassPathEntry* get_unregistered_classpath_entry_for_jvmti(InstanceKlass *klass, TRAPS);  // called by 'get_classpath_entry_for_jvmti()'
+public:
+  static void init_unregistered_classpath_entry_for_jvmti(int entry_len);
 #endif
 };
 
