@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,13 +46,13 @@ public class NonBootLoaderClasses {
             CDSTestUtils.makeClassList(classes).getPath();
         String archiveName = "NonBootLoaderClasses.jsa";
         CDSOptions opts = (new CDSOptions())
-            .addPrefix("-XX:ExtraSharedClassListFile=" + classList, "-cp", "\"\"")
+            .addPrefix("-XX:ExtraSharedClassListFile=" + classList, "-Djava.class.path=")
             .setArchiveName(archiveName);
         CDSTestUtils.createArchiveAndCheck(opts);
 
         // Print the shared dictionary and inspect the output
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
-                "-cp", "\"\"",
+                "-Djava.class.path=",
                 "-XX:+UnlockDiagnosticVMOptions", "-XX:SharedArchiveFile=./" + archiveName,
                 "-XX:+PrintSharedArchiveAndExit", "-XX:+PrintSharedDictionary");
         OutputAnalyzer out = CDSTestUtils.executeAndLog(pb, "print-shared-archive");
