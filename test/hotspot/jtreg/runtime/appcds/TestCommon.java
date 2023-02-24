@@ -136,6 +136,7 @@ public class TestCommon extends CDSTestUtils {
         }
 
         cmd.add("-Xshare:dump");
+        cmd.add("-Xlog:cds,cds+hashtables");
 
         if (opts.archiveName == null)
             opts.archiveName = getCurrentArchiveName();
