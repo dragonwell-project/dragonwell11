@@ -62,9 +62,9 @@ public class IncompatibleOptions {
         appJar = JarBuilder.build("IncompatibleOptions", "HelloString");
 
         // Uncompressed OOPs
-        testDump(1, "-XX:+UseG1GC", "-XX:-UseCompressedOops", null, true);
+        testDump(1, "-XX:+UseG1GC", "-XX:-UseCompressedOops", null, false);
         if (GC.Z.isSupported()) { // ZGC is included in build.
-            testDump(1, "-XX:+UnlockExperimentalVMOptions", "-XX:+UseZGC", null, true);
+            testDump(1, "-XX:+UnlockExperimentalVMOptions", "-XX:+UseZGC", null, false);
         }
 
         // incompatible GCs
