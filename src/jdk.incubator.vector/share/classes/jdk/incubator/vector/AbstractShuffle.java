@@ -120,6 +120,9 @@ abstract class AbstractShuffle<E> extends VectorShuffle<E> {
 
     @ForceInline
     public final VectorShuffle<E> checkIndexes() {
+        if (VectorIntrinsics.VECTOR_ACCESS_OOB_CHECK == 0) {
+            return this;
+        }
         // FIXME: vectorize this
         for (int index : reorder()) {
             if (index < 0) {
