@@ -126,6 +126,7 @@
   LOG_TAG(promotion) \
   LOG_TAG(preorder) /* Trace all classes loaded in order referenced (not loaded) */ \
   LOG_TAG(protectiondomain) /* "Trace protection domain verification" */ \
+  LOG_TAG(quickstart) \
   LOG_TAG(ref) \
   LOG_TAG(redefine) \
   LOG_TAG(refine) \

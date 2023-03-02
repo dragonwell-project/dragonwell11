@@ -718,6 +718,14 @@
   template(jdk_internal_reflect_NativeConstructorAccessorImpl,  "jdk/internal/reflect/NativeConstructorAccessorImpl")               \
   template(newInstance0_signature,                     "(Ljava/lang/reflect/Constructor;[Ljava/lang/Object;)Ljava/lang/Object;")  \
                                                                                                                  \
+  /* QuickStart support */                                                                                       \
+  template(com_alibaba_util_QuickStart,                "com/alibaba/util/QuickStart")                            \
+  template(com_alibaba_util_CDSDumpHook,               "com/alibaba/util/CDSDumpHook")                           \
+  template(notifyDump_name,                            "notifyDump")                                             \
+  template(string_string_string_string_bool_void_signature,   "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V") \
+  template(initialize_name,                           "initialize")                                              \
+  template(int_string_bool_stringarray_string_void_signature,             "(ILjava/lang/String;Z[Ljava/lang/String;Ljava/lang/String;)V")  \
+                                                                                                                 \
   /* forEachRemaining support */                                                                                  \
   template(java_util_stream_StreamsRangeIntSpliterator,          "java/util/stream/Streams$RangeIntSpliterator")  \
                                                                                                                   \

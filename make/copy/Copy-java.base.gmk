@@ -193,6 +193,15 @@ TARGETS += $(COPY_NET_PROPERTIES)
 
 ################################################################################
 
+$(eval $(call SetupCopyFiles, COPY_QUICKSTART_PROPERTIES, \
+    FILES := $(TOPDIR)/src/java.base/share/conf/quickstart.properties, \
+    DEST := $(CONF_DST_DIR), \
+))
+
+TARGETS += $(COPY_QUICKSTART_PROPERTIES)
+
+################################################################################
+
 $(eval $(call SetupCopyFiles, COPY_WISP_PROPERTIES, \
     FILES := $(TOPDIR)/src/java.base/share/conf/wisp.properties, \
     DEST := $(CONF_DST_DIR), \
