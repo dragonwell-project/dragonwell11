@@ -40,6 +40,7 @@
 #include "runtime/handles.inline.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/javaCalls.hpp"
+#include "runtime/quickStart.hpp"
 #include "runtime/os.hpp"
 #include "services/diagnosticArgument.hpp"
 #include "services/diagnosticCommand.hpp"
@@ -53,6 +54,9 @@
 #ifdef LINUX
 #include "trimCHeapDCmd.hpp"
 #endif
+#include "jfr/jni/jfrJavaCall.hpp"
+#include "jfr/jni/jfrJavaSupport.hpp"
+
 
 static void loadAgentModule(TRAPS) {
   ResourceMark rm(THREAD);
@@ -88,6 +92,7 @@ void DCmdRegistrant::register_dcmds(){
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<RunFinalizationDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<HeapInfoDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<FinalizerInfoDCmd>(full_export, true, false));
+  DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<QuickStartDumpDCMD>(full_export, true, false));
 #if INCLUDE_SERVICES
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<HeapDumpDCmd>(DCmd_Source_Internal | DCmd_Source_AttachAPI, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<ClassHistogramDCmd>(full_export, true, false));
@@ -1140,3 +1145,20 @@ void DebugOnCmdStartDCmd::execute(DCmdSource source, TRAPS) {
   }
 }
 #endif // INCLUDE_JVMTI
+
+void QuickStartDumpDCMD::execute(DCmdSource source, TRAPS) {
+  Ticks start_time = Ticks::now();
+  if (QuickStart::is_tracer() || QuickStart::is_profiler()) {
+    Klass* klass = SystemDictionary::com_alibaba_util_QuickStart_klass();
+    JavaValue result(T_VOID);
+    JavaCallArguments args(0);
+
+    JavaCalls::call_static(&result, klass, vmSymbols::notifyDump_name(),
+                           vmSymbols::void_method_signature(), &args, CHECK);
+  }
+  Ticks end_time = Ticks::now();
+
+  Tickspan duration = end_time - start_time;
+  long ms = TimeHelper::counter_to_millis(duration.value());
+  output()->print_cr("It took %lu ms to execute Quickstart.dump .", ms);
+}

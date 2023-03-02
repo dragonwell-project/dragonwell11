@@ -108,6 +108,7 @@
 #include "runtime/vmThread.hpp"
 #include "runtime/vmOperations.hpp"
 #include "runtime/vm_version.hpp"
+#include "runtime/quickStart.hpp"
 #include "services/attachListener.hpp"
 #include "services/management.hpp"
 #include "services/memTracker.hpp"
@@ -3743,6 +3744,13 @@ static void call_initPhase3(TRAPS) {
   if (EnableCoroutine) {
     call_initializeWispClass(CHECK);
     call_startWispDaemons(THREAD);
+    if (HAS_PENDING_EXCEPTION) {
+      vm_exit_during_initialization(Handle(THREAD, PENDING_EXCEPTION));
+    }
+  }
+
+  if (!QuickStart::is_normal()) {
+    QuickStart::initialize(THREAD);
     if (HAS_PENDING_EXCEPTION) {
       vm_exit_during_initialization(Handle(THREAD, PENDING_EXCEPTION));
     }

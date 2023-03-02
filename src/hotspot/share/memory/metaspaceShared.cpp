@@ -55,6 +55,7 @@
 #include "prims/jvmtiRedefineClasses.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/os.hpp"
+#include "runtime/quickStart.hpp"
 #include "runtime/safepointVerifiers.hpp"
 #include "runtime/signature.hpp"
 #include "runtime/timerTrace.hpp"
@@ -240,6 +241,14 @@ void MetaspaceShared::initialize_runtime_shared_and_meta_spaces() {
       // with the archived ones, so it must be done after all encodings are determined.
       mapinfo->map_heap_regions();
       Universe::set_narrow_klass_range(CompressedClassSpaceSize);
+    }
+    if (QuickStart::is_enabled()) {
+      if (QuickStart::is_appcds_enabled()) {
+        QuickStart::set_opt_passed(QuickStart::_appcds);
+      }
+      if (QuickStart::is_eagerappcds_enabled()) {
+        QuickStart::set_opt_passed(QuickStart::_eagerappcds);
+      }
     }
 #endif // _LP64
   } else {

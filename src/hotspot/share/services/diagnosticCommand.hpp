@@ -892,4 +892,19 @@ public:
 };
 #endif // INCLUDE_JVMTI
 
+class QuickStartDumpDCMD : public DCmd {
+public:
+  QuickStartDumpDCMD(outputStream* output, bool heap) : DCmd(output, heap) { }
+  static const char* name() { return "QuickStart.dump"; }
+  static const char* description() {
+    return "Use `jcmd <pid> QuickStart.dump` to dump shared archive etc. things in the "
+           "tracer process which enables `-Xquickstart` option. "
+           "Call `com.alibaba.util.QuickStart.notifyDump()` to dump files.";
+  }
+  static const char* impact() { return "Low"; }
+  static int num_arguments() { return 0; }
+  virtual void execute(DCmdSource source, TRAPS);
+};
+
+
 #endif // SHARE_VM_SERVICES_DIAGNOSTICCOMMAND_HPP
