@@ -421,7 +421,7 @@ void PhaseVector::expand_vunbox_node(VectorUnboxNode* vec_unbox) {
       MergeMemNode* local_mem = MergeMemNode::make(mem);
       gvn.record_for_igvn(local_mem);
       BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-      C2Access access(&kit, decorators, bt, ctrl, addr);
+      C2Access access(&kit, decorators, T_OBJECT, obj, addr);
       const Type* type = TypeOopPtr::make_from_klass(field->type()->as_klass());
       vec_field_ld = bs->load_at(access, type);
     }
