@@ -209,6 +209,21 @@ jobs:
           sudo apt-get install gcc-9=9.4.0-1ubuntu1~20.04.1 g++-9=9.4.0-1ubuntu1~20.04.1 libxrandr-dev libxtst-dev libcups2-dev libasound2-dev
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 100 --slave /usr/bin/g++ g++ /usr/bin/g++-9
 
+      - name: Download serverless-adapter source code
+        uses: actions/checkout@v3
+        with:
+          repository: alibaba/serverless-adapter
+          ref: main
+          path: serverless-adapter
+
+      - name: Build serverless-adapter
+        run: |
+          cd serverless-adapter
+          mvn package
+          mkdir -p ${HOME}/bootjdk/${BOOT_JDK_VERSION}/lib/serverless
+          cp -f target/serverless-adapter-0.1-jar-with-dependencies.jar ${HOME}/bootjdk/${BOOT_JDK_VERSION}/lib/serverless/serverless-adapter.jar
+          cp -f output/libloadclassagent.so ${HOME}/bootjdk/${BOOT_JDK_VERSION}/lib/serverless/
+
       - name: Configure
         run: >
           bash configure
