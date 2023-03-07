@@ -21,17 +21,16 @@
 # questions.
 #
 
-#!/bin/bash
-
+#!/usr/bin/env bash
 #
 # @test
-# @summary test JVMTI API for preparation of class loader
+# @summary test JVMTI API for preparation of Delegating class loader
 # @library /lib/testlibrary /test/lib
 # @modules jdk.compiler
 # @modules java.base/jdk.internal.misc
 # @build jdk.test.lib.compiler.CompilerUtils
 # @requires os.arch=="amd64"
-# @run shell testClassLoaderJVMTI.sh
+# @run shell testDelegatingClassLoaderJVMTI.sh
 #
 
 if [ "${TESTSRC}" = "" ]
@@ -52,7 +51,7 @@ case ${OS} in
     ;;
 esac
 
-if [ "x$(uname -m)" = "xaarch64" ];
+if [[ "x$(uname -m)" = "xaarch64" ]];
 then
   echo "Test only valid for x86"
   exit 0
@@ -63,16 +62,16 @@ JAVAC=${TESTJAVA}${FS}bin${FS}javac
 TEST_CLASS2=ThrowException
 TEST_SOURCE2=${TEST_CLASS2}.java
 
-TEST_CLASS=TestClassLoader
+TEST_CLASS=TestDelegatingClassLoader
 TEST_SOURCE=${TEST_CLASS}.java
 
 cat > ${TESTCLASSES}${FS}$TEST_SOURCE2 << EOF
 import java.lang.StackWalker.StackFrame;
 
 public class ThrowException {
-        public static void throwError() {
-                    throw new Error("testing");
-                        }
+    public static void throwError() {
+        throw new Error("testing");
+    }
 }
 EOF
 
@@ -89,7 +88,7 @@ import jdk.internal.misc.JavaLangClassLoaderAccess;
 import jdk.internal.misc.SharedSecrets;
 
 
-public class TestClassLoader {
+public class TestDelegatingClassLoader {
     private static final String TEST_SRC = System.getProperty("test.src");
 
     private static final Path SRC_DIR = Paths.get(TEST_SRC, "src");
@@ -98,6 +97,7 @@ public class TestClassLoader {
 
     public static void main(String... args) throws Exception {
         testURLClassLoader("myloader");
+        testDelegatingClassLoader();
     }
 
     public static void testURLClassLoader(String loaderName) throws Exception {
@@ -115,18 +115,33 @@ public class TestClassLoader {
         } catch (InvocationTargetException x) {
         }
     }
+
+    private static void testDelegatingClassLoader() throws Exception {
+        new Thread(() -> {
+            try {
+                Method m = Thread.class.getDeclaredMethod("nextThreadNum");
+                for (int i = 0; i < 100; i++) {
+                    m.setAccessible(true);
+                    m.invoke(null);
+                }
+            } catch (ReflectiveOperationException e) {
+                throw new Error(e);
+            }
+        }, "waiter").start();
+        Thread.sleep(100);
+    }
 }
 EOF
 
 # Do compilation
-${JAVAC} -cp ${TESTCLASSES} -d ${TESTCLASSES} ${TESTCLASSES}${FS}$TEST_SOURCE2 >> /dev/null 2>&1
+${JAVAC} --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -cp ${TESTCLASSES} -d ${TESTCLASSES} ${TESTCLASSES}${FS}$TEST_SOURCE2 >> /dev/null 2>&1
 if [ $? != '0' ]
 then
 	printf "Failed to compile ${TESTCLASSES}${FS}${TEST_SOURCE2}"
 	exit 1
 fi
 
-${JAVAC} --add-modules jdk.compiler,java.base --add-exports java.base/jdk.internal.misc=ALL-UNNAMED -cp ${TESTCLASSES} -d ${TESTCLASSES} ${TESTCLASSES}${FS}$TEST_SOURCE >> /dev/null 2>&1
+${JAVAC} --add-modules jdk.compiler,java.base --add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -cp ${TESTCLASSES} -d ${TESTCLASSES} ${TESTCLASSES}${FS}$TEST_SOURCE >> /dev/null 2>&1
 if [ $? != '0' ]
 then
 	printf "Failed to compile ${TESTCLASSES}${FS}${TEST_SOURCE}"

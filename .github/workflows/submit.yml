@@ -155,6 +155,7 @@ jobs:
           - flavor: build debug
             flags: --enable-debug
             artifact: -debug
+            artifact-path: fastdebug/
 
     env:
       JDK_VERSION: "${{ needs.prerequisites.outputs.jdk_version }}"
@@ -209,21 +210,6 @@ jobs:
           sudo apt-get install gcc-9=9.4.0-1ubuntu1~20.04.1 g++-9=9.4.0-1ubuntu1~20.04.1 libxrandr-dev libxtst-dev libcups2-dev libasound2-dev
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 100 --slave /usr/bin/g++ g++ /usr/bin/g++-9
 
-      - name: Download serverless-adapter source code
-        uses: actions/checkout@v3
-        with:
-          repository: alibaba/serverless-adapter
-          ref: main
-          path: serverless-adapter
-
-      - name: Build serverless-adapter
-        run: |
-          cd serverless-adapter
-          mvn package
-          mkdir -p ${HOME}/bootjdk/${BOOT_JDK_VERSION}/lib/serverless
-          cp -f target/serverless-adapter-0.1-jar-with-dependencies.jar ${HOME}/bootjdk/${BOOT_JDK_VERSION}/lib/serverless/serverless-adapter.jar
-          cp -f output/libloadclassagent.so ${HOME}/bootjdk/${BOOT_JDK_VERSION}/lib/serverless/
-
       - name: Configure
         run: >
           bash configure
@@ -242,6 +228,32 @@ jobs:
       - name: Build
         run: make CONF_NAME=linux-x64
         working-directory: jdk
+
+      - name: Download serverless-adapter source code
+        uses: actions/checkout@v3
+        with:
+          repository: alibaba/serverless-adapter
+          ref: main
+          path: serverless-adapter
+
+      - name: Build serverless-adapter
+        run: mvn package
+        working-directory: serverless-adapter
+
+      - name: Copy serverless-adapter into bundles
+        run: |
+          mkdir -p tmp
+          cd tmp
+          cp ../jdk/build/linux-x64/bundles/jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz ./
+          tar xf jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz
+          rm -rf jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz
+          mkdir -p jdk-${{ env.JDK_VERSION }}/${{ matrix.artifact-path }}lib/serverless
+          cp -f ../serverless-adapter/target/serverless-adapter-0.1-jar-with-dependencies.jar jdk-${{ env.JDK_VERSION }}/${{ matrix.artifact-path }}lib/serverless/serverless-adapter.jar
+          cp -f ../serverless-adapter/output/libloadclassagent.so jdk-${{ env.JDK_VERSION }}/${{ matrix.artifact-path }}lib/serverless/
+          tar zcf jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz *
+          cp -f jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz ../jdk/build/linux-x64/bundles/
+          cd ..
+          rm -rf tmp
 
       - name: Persist test bundles
         uses: actions/upload-artifact@v3
@@ -1814,7 +1826,7 @@ jobs:
     name: Post-process artifacts
     runs-on: "ubuntu-20.04"
     if: always()
-    continue-on-error: true
+    # continue-on-error: true
     needs:
       - prerequisites
       - linux_additional_build
