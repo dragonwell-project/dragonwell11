@@ -394,10 +394,16 @@ void stringStream::reset() {
   zero_terminate();
 }
 
-char* stringStream::as_string() const {
-  char* copy = NEW_RESOURCE_ARRAY(char, _written + 1);
+char* stringStream::as_string(bool c_heap) const {
+  char* copy = c_heap ?
+    NEW_C_HEAP_ARRAY(char, _written + 1, mtInternal) : NEW_RESOURCE_ARRAY(char, _written + 1);
   ::memcpy(copy, _buffer, _written);
   copy[_written] = 0;  // terminating null
+  if (c_heap) {
+    // Need to ensure our content is written to memory before we return
+    // the pointer to it.
+    OrderAccess::storestore();
+  }
   return copy;
 }
 

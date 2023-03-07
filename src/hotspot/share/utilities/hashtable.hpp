@@ -372,6 +372,44 @@ public:
     }
     return NULL;
   }
+
+  // Look up the key.
+  // If an entry for the key exists, leave map unchanged and return a pointer to its value.
+  // If no entry for the key exists, create a new entry from key and value and return a
+  //  pointer to the value.
+  // *p_created is true if entry was created, false if entry pre-existed.
+  V* add_if_absent(K key, V value, bool* p_created) {
+    unsigned int hash = HASH(key);
+    int index = BasicHashtable<F>::hash_to_index(hash);
+    for (KVHashtableEntry* e = bucket(index); e != NULL; e = e->next()) {
+      if (e->hash() == hash && EQUALS(e->_key, key)) {
+        *p_created = false;
+        return &(e->_value);
+      }
+    }
+
+    KVHashtableEntry* entry = new_entry(hash, key, value);
+    BasicHashtable<F>::add_entry(BasicHashtable<F>::hash_to_index(hash), entry);
+    *p_created = true;
+    return &(entry->_value);
+  }
+
+  int table_size() const {
+    return BasicHashtable<F>::table_size();
+  }
+
+  // ITER contains bool do_entry(K, V const&), which will be
+  // called for each entry in the table.  If do_entry() returns false,
+  // the iteration is cancelled.
+  template<class ITER>
+  void iterate(ITER* iter) const {
+    for (int index = 0; index < table_size(); index++) {
+      for (KVHashtableEntry* e = bucket(index); e != NULL; e = e->next()) {
+        bool cont = iter->do_entry(e->_key, &e->_value);
+        if (!cont) { return; }
+      }
+    }
+  }
 };
 
 

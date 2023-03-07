@@ -45,6 +45,7 @@ LogTestFixture::LogTestFixture() : _configuration_snapshot(NULL), _n_snapshots(0
 }
 
 LogTestFixture::~LogTestFixture() {
+  AsyncLogWriter::flush();
   restore_config();
   clear_snapshot();
   delete_file(TestLogFileName);
