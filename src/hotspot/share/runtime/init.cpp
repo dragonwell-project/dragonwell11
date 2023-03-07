@@ -28,6 +28,9 @@
 #include "code/icBuffer.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "interpreter/bytecodes.hpp"
+#include "logging/log.hpp"
+#include "logging/logAsyncWriter.hpp"
+#include "logging/logTag.hpp"
 #include "memory/universe.hpp"
 #include "prims/methodHandles.hpp"
 #include "runtime/flags/jvmFlag.hpp"
@@ -113,6 +116,7 @@ jint init_globals() {
   if (status != JNI_OK)
     return status;
 
+  AsyncLogWriter::initialize();
   gc_barrier_stubs_init();   // depends on universe_init, must be before interpreter_init
   interpreter_init();        // before any methods loaded
   invocationCounter_init();  // before any methods loaded

@@ -2632,6 +2632,11 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
              "Use the FP register for holding the frame pointer "           \
              "and not as a general purpose register.")                      \
                                                                             \
+  product(size_t, AsyncLogBufferSize, 2*M,                                  \
+          "Memory budget (in bytes) for the buffer of Asynchronous "        \
+          "Logging (-Xlog:async).")                                         \
+          range(100*K, 50*M)                                                \
+                                                                            \
   diagnostic(bool, CheckIntrinsics, true,                                   \
              "When a class C is loaded, check that "                        \
              "(1) all intrinsics defined by the VM for class C are present "\
