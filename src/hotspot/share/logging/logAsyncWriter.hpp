@@ -153,7 +153,6 @@ class AsyncLogWriter : public NonJavaThread {
   void write();
   void run();
   char* name() const { return (char*)"AsyncLog Thread"; }
-  bool is_Named_thread() const { return true; }
 
  public:
   void print_on(outputStream* st) const {
