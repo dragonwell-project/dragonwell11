@@ -152,4 +152,31 @@ static void mt_test_doer() {
   vmt_done.wait();
 }
 
+// Base class for test runnable. Override runUnitTest() to specify what to run.
+class TestRunnable {
+public:
+  virtual void runUnitTest() const = 0;
+};
+
+// This class represents a thread for a unit test.
+class UnitTestThread : public JavaTestThread {
+public:
+  // runnableArg - what to run
+  // doneArg - a semaphore to notify when the thread is done running
+  // testDurationArg - how long to run (in milliseconds)
+  UnitTestThread(TestRunnable* const runnableArg, Semaphore* doneArg, const long testDurationArg) :
+    JavaTestThread(doneArg), runnable(runnableArg), testDuration(testDurationArg) {}
+
+  // from JavaTestThread
+  void main_run() {
+    long stopTime = os::javaTimeMillis() + testDuration;
+    while (os::javaTimeMillis() < stopTime) {
+      runnable->runUnitTest();
+    }
+  }
+private:
+  TestRunnable* const runnable;
+  const long testDuration;
+};
+
 #endif // include guard
