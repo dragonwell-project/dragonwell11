@@ -53,11 +53,14 @@ class LogFileStreamOutput : public LogOutput {
   }
 
   int write_decorations(const LogDecorations& decorations);
+  int write_internal(const LogDecorations& decorations, const char* msg);
   bool flush();
 
  public:
   virtual int write(const LogDecorations& decorations, const char* msg);
   virtual int write(LogMessageBuffer::Iterator msg_iterator);
+  // Write API used by AsyncLogWriter
+  virtual int write_blocking(const LogDecorations& decorations, const char* msg);
 };
 
 class LogStdoutOutput : public LogFileStreamOutput {
