@@ -219,7 +219,6 @@ class PlatformParker : public CHeapObj<mtSynchronizer> {
   PlatformParker();
 };
 
-#if INCLUDE_ZGC
 // Platform specific implementation that underpins VM Monitor/Mutex class
 class PlatformMonitor : public CHeapObj<mtInternal> {
  private:
@@ -236,7 +235,6 @@ class PlatformMonitor : public CHeapObj<mtInternal> {
   void notify();
   void notify_all();
 };
-#endif // INCLUDE_ZGC
 
 #endif // !SOLARIS
 

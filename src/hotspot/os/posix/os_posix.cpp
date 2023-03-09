@@ -2272,8 +2272,6 @@ void Parker::unpark() {
   }
 }
 
-#if INCLUDE_ZGC
-
 // Platform Monitor implementation
 
 os::PlatformMonitor::PlatformMonitor() {
@@ -2343,8 +2341,6 @@ void os::PlatformMonitor::notify_all() {
   int status = pthread_cond_broadcast(&_cond);
   assert_status(status == 0, status, "cond_broadcast");
 }
-
-#endif // INCLUDE_ZGC
 
 
 #endif // !SOLARIS
