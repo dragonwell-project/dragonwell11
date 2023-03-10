@@ -204,7 +204,7 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
   // relock objects if synchronization on them was eliminated.
 #if !INCLUDE_JVMCI
   if (DoEscapeAnalysis || EliminateNestedLocks) {
-    if (EliminateAllocations) {
+    if (EliminateAllocations || EliminateAutoBox || EnableVectorAggressiveReboxing) {
 #endif // INCLUDE_JVMCI
       assert (chunk->at(0)->scope() != NULL,"expect only compiled java frames");
       GrowableArray<ScopeValue*>* objects = chunk->at(0)->scope()->objects();
@@ -1103,16 +1103,35 @@ void Deoptimization::reassign_fields(frame* fr, RegisterMap* reg_map, GrowableAr
     Klass* k = java_lang_Class::as_Klass(sv->klass()->as_ConstantOopReadValue()->value()());
     Handle obj = sv->value();
     assert(obj.not_null() || realloc_failures, "reallocation was missed");
+#ifndef PRODUCT
     if (PrintDeoptimizationDetails) {
       tty->print_cr("reassign fields for object of type %s!", k->name()->as_C_string());
     }
+#endif // !PRODUCT
+
     if (obj.is_null()) {
       continue;
     }
 
 #ifdef COMPILER2
     if (EnableVectorSupport && VectorSupport::is_vector(k)) {
-      continue; // skip field reassignment for vectors
+      assert(sv->field_size() == 1, "%s not a vector", k->name()->as_C_string());
+      ScopeValue* payload = sv->field_at(0);
+      if (payload->is_location() &&
+          payload->as_LocationValue()->location().type() == Location::vector) {
+#ifndef PRODUCT
+        if (PrintDeoptimizationDetails) {
+          tty->print_cr("skip field reassignment for this vector - it should be assigned already");
+          if (Verbose) {
+            Handle obj = sv->value();
+            k->oop_print_on(obj(), tty);
+          }
+        }
+#endif // !PRODUCT
+        continue; // Such vector's value was already restored in VectorSupport::allocate_vector().
+      }
+      // Else fall-through to do assignment for scalar-replaced boxed vector representation
+      // which could be restored after vector object allocation.
     }
 #endif
     if (k->is_instance_klass()) {
