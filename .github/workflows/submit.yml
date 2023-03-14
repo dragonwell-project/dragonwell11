@@ -232,7 +232,7 @@ jobs:
       - name: Download serverless-adapter source code
         uses: actions/checkout@v3
         with:
-          repository: alibaba/serverless-adapter
+          repository: dragonwell-project/serverless-adapter
           ref: main
           path: serverless-adapter
 

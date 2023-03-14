@@ -864,34 +864,34 @@ jdk/jfr/event/oldobject/TestLargeRootSet.java                   8205651    gener
 
 # dragonwell
 com/alibaba/wisp2/TestWisp2WorkSteal.java  generic-all
-com/alibaba/wisp/exclusive/monitor/TestPassToken.java https://github.com/alibaba/dragonwell11/issues/255 generic-all
-com/alibaba/wisp/exclusive/io/TestSocket.java https://github.com/alibaba/dragonwell11/issues/255 generic-all
-com/alibaba/wisp/exclusive/timer/TestSleep.java https://github.com/alibaba/dragonwell11/issues/255 generic-all
+com/alibaba/wisp/exclusive/monitor/TestPassToken.java https://github.com/dragonwell-project/dragonwell11/issues/255 generic-all
+com/alibaba/wisp/exclusive/io/TestSocket.java https://github.com/dragonwell-project/dragonwell11/issues/255 generic-all
+com/alibaba/wisp/exclusive/timer/TestSleep.java https://github.com/dragonwell-project/dragonwell11/issues/255 generic-all
 
-java/lang/ProcessHandle/InfoTest.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/lang/ProcessHandle/OnExitTest.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/B6425815.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/SetGetNetworkInterfaceTest.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/B6427403.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/SetLoopbackMode.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/JoinLeave.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/SetLoopbackModeIPv4.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/MultiDead.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/SetOutgoingIf.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/MulticastAddresses.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/SetTTLAndGetTTL.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/MulticastTTL.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/SetTTLTo0.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/NetworkInterfaceEmptyGetInetAddressesTest.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/Test.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/NoLoopbackPackets.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/TestDefaults.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/Promiscuous.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/TestInterfaces.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/PromiscuousIPv6.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/TimeToLive.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/Reuse.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/net/MulticastSocket/UnreferencedMulticastSockets.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
+java/lang/ProcessHandle/InfoTest.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/lang/ProcessHandle/OnExitTest.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/B6425815.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/SetGetNetworkInterfaceTest.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/B6427403.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/SetLoopbackMode.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/JoinLeave.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/SetLoopbackModeIPv4.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/MultiDead.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/SetOutgoingIf.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/MulticastAddresses.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/SetTTLAndGetTTL.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/MulticastTTL.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/SetTTLTo0.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/NetworkInterfaceEmptyGetInetAddressesTest.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/Test.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/NoLoopbackPackets.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/TestDefaults.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/Promiscuous.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/TestInterfaces.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/PromiscuousIPv6.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/TimeToLive.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/Reuse.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/net/MulticastSocket/UnreferencedMulticastSockets.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
 
-java/net/SocketOption/OptionsTest.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
-java/nio/MappedByteBuffer/Truncate.java https://github.com/alibaba/dragonwell11/issues/209 linux-riscv64
+java/net/SocketOption/OptionsTest.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+java/nio/MappedByteBuffer/Truncate.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
