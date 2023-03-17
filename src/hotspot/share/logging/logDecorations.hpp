@@ -27,27 +27,34 @@
 #include "logging/logDecorators.hpp"
 #include "logging/logTagSet.hpp"
 
-// Temporary object containing the necessary data for a log call's decorations (timestamps, etc).
+class outputStream;
+
+// LogDecorations keeps resolved values for decorators, as well as the
+// printing code to print them. The values are resolved at the log site (in the
+// constructor of LogDecorations); the printing happens when the log message is
+// printed. That may happen delayed, and the object may be stored for some time,
+// in the context of asynchronous logging. Therefore size of this object matters.
 class LogDecorations {
- public:
-  static const int DecorationsBufferSize = 256;
- private:
-  char _decorations_buffer[DecorationsBufferSize];
-  char* _decoration_offset[LogDecorators::Count];
-  LogLevelType _level;
-  const LogTagSet& _tagset;
-  jlong _millis;
-  static jlong _vm_start_time_millis;
+  const jlong _millis;            // for "time", "utctime", "timemillis"
+  const jlong _nanos;             // for "timenanos"
+  const double _elapsed_seconds;  // for "uptime", "uptimemillis", "uptimenanos"
+  const intx _tid;                // for "tid"
+  LogLevelType _level;            // for "level" (needs to be nonconst)
+  const LogTagSet& _tagset;       // for "tags"
+  // In debug mode we keep the decorators around for sanity checking when printing
+  DEBUG_ONLY(const LogDecorators& _decorators;)
+
   static const char* _host_name;
+  static const int _pid;
 
-  jlong java_millis();
-  void create_decorations(const LogDecorators& decorators);
-
-#define DECORATOR(name, abbr) char* create_##name##_decoration(char* pos);
+#define DECORATOR(name, abbr) void print_##name##_decoration(outputStream* st) const;
   DECORATOR_LIST
 #undef DECORATOR
 
  public:
+  // max size of a single decoration.
+  static const size_t max_decoration_size = 255;
+
   static void initialize(jlong vm_start_time);
 
   LogDecorations(LogLevelType level, const LogTagSet& tagset, const LogDecorators& decorators);
@@ -56,12 +63,9 @@ class LogDecorations {
     _level = level;
   }
 
-  const char* decoration(LogDecorators::Decorator decorator) const {
-    if (decorator == LogDecorators::level_decorator) {
-      return LogLevel::name(_level);
-    }
-    return _decoration_offset[decorator];
-  }
+  void print_decoration(LogDecorators::Decorator decorator, outputStream* st) const;
+  const char* decoration(LogDecorators::Decorator decorator, char* buf, size_t buflen) const;
+
 };
 
 #endif // SHARE_VM_LOGGING_LOGDECORATIONS_HPP
