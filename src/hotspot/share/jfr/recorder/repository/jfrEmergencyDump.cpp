@@ -44,7 +44,7 @@ static const char vm_error_filename_fmt[] = "hs_err_pid%p.jfr";
 static const char vm_oom_filename_fmt[] = "hs_oom_pid%p.jfr";
 static const char vm_soe_filename_fmt[] = "hs_soe_pid%p.jfr";
 static const char chunk_file_jfr_ext[] = ".jfr";
-static const size_t iso8601_len = 19; // "YYYY-MM-DDTHH:MM:SS"
+static const size_t iso8601_len = 19; // "YYYY-MM-DDTHH:MM:SS" (note: we just use a subset of the full timestamp)
 
 static fio_fd open_exclusivly(const char* path) {
   return os::open(path, O_CREAT | O_RDWR, S_IREAD | S_IWRITE);
