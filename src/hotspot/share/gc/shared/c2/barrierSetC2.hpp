@@ -193,7 +193,12 @@ public:
   virtual Node* identity_node(PhaseGVN* phase, Node* n) const { return n; }
 
   // These are general helper methods used by C2
-  virtual bool array_copy_requires_gc_barriers(BasicType type) const { return false; }
+  enum ArrayCopyPhase {
+    Parsing,
+    Optimization,
+    Expansion
+  };
+  virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const { return false; }
   virtual void clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac) const;
 
   // Support for GC barriers emitted during parsing
