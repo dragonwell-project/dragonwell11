@@ -425,3 +425,7 @@ void ZBarrierSetC2::compute_liveness_at_stubs() const {
     }
   }
 }
+
+bool ZBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const {
+  return type == T_OBJECT || type == T_ARRAY;
+}

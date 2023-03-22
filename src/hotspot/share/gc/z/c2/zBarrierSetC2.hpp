@@ -78,7 +78,7 @@ protected:
 
 public:
   virtual void* create_barrier_state(Arena* comp_arena) const;
-  virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const { return true; }
+  virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const;
 
   virtual void late_barrier_analysis() const;
   virtual int estimate_stub_size() const;
