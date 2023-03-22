@@ -574,6 +574,7 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
   return load;
 }
 
+/*
 static void pin_atomic_op(C2AtomicAccess& access) {
   if (!access.needs_pinning()) {
     return;
@@ -587,6 +588,7 @@ static void pin_atomic_op(C2AtomicAccess& access) {
   Node* proj = kit->gvn().transform(new SCMemProjNode(load_store));
   kit->set_memory(proj, access.alias_idx());
 }
+*/
 
 Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicAccess& access, Node* expected_val,
                                                    Node* new_val, const Type* value_type) const {
