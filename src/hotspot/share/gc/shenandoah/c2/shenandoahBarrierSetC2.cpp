@@ -503,15 +503,23 @@ Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue&
     return BarrierSetC2::store_at_resolved(access, val);
   }
 
-  GraphKit* kit = access.kit();
+  GraphKit* kit = NULL;
+  if (access.is_parse_access()) {
+    C2ParseAccess& parse_access = static_cast<C2ParseAccess&>(access);
 
-  uint adr_idx = kit->C->get_alias_index(adr_type);
-  assert(adr_idx != Compile::AliasIdxTop, "use other store_to_memory factory" );
-  Node* value = val.node();
-  value = shenandoah_iu_barrier(kit, value);
-  val.set_node(value);
-  shenandoah_write_barrier_pre(kit, true /* do_load */, /*kit->control(),*/ access.base(), adr, adr_idx, val.node(),
+    kit = parse_access.kit();
+  
+
+    uint adr_idx = kit->C->get_alias_index(adr_type);
+    assert(adr_idx != Compile::AliasIdxTop, "use other store_to_memory factory" );
+    Node* value = val.node();
+    value = shenandoah_iu_barrier(kit, value);
+    val.set_node(value);
+    shenandoah_write_barrier_pre(kit, true /* do_load */, /*kit->control(),*/ access.base(), adr, adr_idx, val.node(),
                                static_cast<const TypeOopPtr*>(val.type()), NULL /* pre_val */, access.type());
+  } else {
+     // TBD
+  }
   return BarrierSetC2::store_at_resolved(access, val);
 }
 
@@ -528,7 +536,9 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
   // 2: apply LRB if needed
   if (ShenandoahBarrierSet::need_load_reference_barrier(decorators, type)) {
     load = new ShenandoahLoadReferenceBarrierNode(NULL, load);
-    load = access.kit()->gvn().transform(load);
+    assert(access.is_parse_access(), "entry not supported at optimization time");
+    C2ParseAccess& parse_access = static_cast<C2ParseAccess&>(access);
+    load = parse_access.kit()->gvn().transform(load);
   }
 
   // 3: apply keep-alive barrier if needed
@@ -551,23 +561,30 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
     if (!on_weak_ref || (unknown && (offset == top || obj == top)) || !keep_alive) {
       return load;
     }
-    GraphKit* kit = access.kit();
-    bool mismatched = (decorators & C2_MISMATCHED) != 0;
-    bool is_unordered = (decorators & MO_UNORDERED) != 0;
-    bool need_cpu_mem_bar = !is_unordered || mismatched;
 
-    if (on_weak_ref) {
-      // Use the pre-barrier to record the value in the referent field
-      satb_write_barrier_pre(kit, false /* do_load */,
+    GraphKit* kit = NULL;
+    if (access.is_parse_access()) {
+      C2ParseAccess& parse_access = static_cast<C2ParseAccess&>(access);
+
+      kit = parse_access.kit();
+
+      bool mismatched = (decorators & C2_MISMATCHED) != 0;
+      bool is_unordered = (decorators & MO_UNORDERED) != 0;
+      bool need_cpu_mem_bar = !is_unordered || mismatched;
+
+      if (on_weak_ref) {
+        // Use the pre-barrier to record the value in the referent field
+        satb_write_barrier_pre(kit, false /* do_load */,
                              NULL /* obj */, NULL /* adr */, max_juint /* alias_idx */, NULL /* val */, NULL /* val_type */,
                              load /* pre_val */, T_OBJECT);
-      // Add memory barrier to prevent commoning reads from this field
-      // across safepoint since GC can change its value.
-      kit->insert_mem_bar(Op_MemBarCPUOrder);
-    } else if (unknown) {
-      // We do not require a mem bar inside pre_barrier if need_mem_bar
-      // is set: the barriers would be emitted by us.
-      insert_pre_barrier(kit, obj, offset, load, !need_cpu_mem_bar);
+        // Add memory barrier to prevent commoning reads from this field
+        // across safepoint since GC can change its value.
+        kit->insert_mem_bar(Op_MemBarCPUOrder);
+      } else if (unknown) {
+        // We do not require a mem bar inside pre_barrier if need_mem_bar
+        // is set: the barriers would be emitted by us.
+        insert_pre_barrier(kit, obj, offset, load, !need_cpu_mem_bar);
+      }
     }
   }
 
@@ -590,7 +607,7 @@ static void pin_atomic_op(C2AtomicAccess& access) {
 }
 */
 
-Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicAccess& access, Node* expected_val,
+Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                    Node* new_val, const Type* value_type) const {
   GraphKit* kit = access.kit();
   if (access.is_oop()) {
@@ -638,7 +655,7 @@ Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicAccess& acc
   return BarrierSetC2::atomic_cmpxchg_val_at_resolved(access, expected_val, new_val, value_type);
 }
 
-Node* ShenandoahBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicAccess& access, Node* expected_val,
+Node* ShenandoahBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                               Node* new_val, const Type* value_type) const {
   GraphKit* kit = access.kit();
   if (access.is_oop()) {
@@ -693,7 +710,7 @@ Node* ShenandoahBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicAccess& ac
   return BarrierSetC2::atomic_cmpxchg_bool_at_resolved(access, expected_val, new_val, value_type);
 }
 
-Node* ShenandoahBarrierSetC2::atomic_xchg_at_resolved(C2AtomicAccess& access, Node* val, const Type* value_type) const {
+Node* ShenandoahBarrierSetC2::atomic_xchg_at_resolved(C2AtomicParseAccess& access, Node* val, const Type* value_type) const {
   GraphKit* kit = access.kit();
   if (access.is_oop()) {
     val = shenandoah_iu_barrier(kit, val);
@@ -755,7 +772,7 @@ bool ShenandoahBarrierSetC2::optimize_loops(PhaseIdealLoop* phase, LoopOptsMode 
   return false;
 }
 
-bool ShenandoahBarrierSetC2::array_copy_requires_gc_barriers(BasicType type) const {
+bool ShenandoahBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const {
   return false;
 }
 
