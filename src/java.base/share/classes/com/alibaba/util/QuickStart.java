@@ -31,8 +31,10 @@ import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
@@ -125,6 +127,49 @@ public class QuickStart {
         if (role == QuickStartRole.TRACER || role == QuickStartRole.PROFILER) {
             Runtime.getRuntime().addShutdownHook(new Thread(QuickStart::notifyDump));
         }
+        if (role == QuickStartRole.PROFILER) {
+            String startupProbe = System.getenv("DRAGONWELL_QUICKSTART_STARTUP_PROBE");
+            if (startupProbe != null && !startupProbe.equals("")) {
+                Thread t = new Thread( new Runnable() {
+                    @Override
+                    public void run() {
+                        runStartupProbe(startupProbe);
+                    }
+                },"Startup-Probe");
+                t.setDaemon(true);
+                t.start();
+            }
+        }
+    }
+
+    private static void runStartupProbe(String startupProbe) {
+        List<String> arguments = Collections.emptyList();
+        try {
+            String jdkHome = Utils.getJDKHome();
+            arguments = List.of(Paths.get(jdkHome, "bin", "java").toString(),
+                    buildPropertyParam("com.alibaba.quickstart.pid", String.valueOf(ProcessHandle.current().pid())),
+                    buildPropertyParam("com.alibaba.quickstart.javaHome", jdkHome),
+                    buildPropertyParam("com.alibaba.quickstart.cacheDir", cachePath),
+                    "-cp",
+                    Paths.get(jdkHome, "lib", QuickStart.getServerlessAdapter()).toString(),
+                    "com.alibaba.jvm.probe.StartupProbe");
+            Utils.runProcess(arguments, verbose, (pb) -> {
+                        //remove Alibaba Dragonwell specific java tool options avoid enter quickstart endless loop.
+                        //If DRAGONWELL_JAVA_TOOL_OPTIONS set to "-Xquickstart:profile", then create a subprocess StartupProbe,
+                        //the StartupProbe inherit DRAGONWELL_JAVA_TOOL_OPTIONS from parent process, then StartupProbe process
+                        //enable quickstart again.It will enter a endless loop.
+                        pb.environment().remove("DRAGONWELL_JAVA_TOOL_OPTIONS");
+                        pb.environment().remove("DRAGONWELL_ENABLE_QUICKSTART_ENTRY");
+                    }
+            );
+        } catch (Throwable e) {
+            System.err.println("runStartupProbe with startupProbe=\"" + startupProbe + "\",arguments=\"" + String.join(" ", arguments) + "\" exception!");
+            e.printStackTrace();
+        }
+    }
+
+    private static String buildPropertyParam(String key, String value) {
+        return "-D" + key + "=" + value;
     }
 
     /**

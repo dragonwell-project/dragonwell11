@@ -116,6 +116,7 @@ private:
   static void add_dump_hook(TRAPS);
   static void trim_tail_newline(char* str);
   static Handle jvm_option_handle(TRAPS);
+  static bool enable_by_env(const JavaVMInitArgs* options_args);
 
 public:
   static void set_opt_passed(opt feature);

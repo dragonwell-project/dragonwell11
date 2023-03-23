@@ -380,6 +380,12 @@ Handle QuickStart::jvm_option_handle(TRAPS) {
 }
 
 void QuickStart::post_process_arguments(JavaVMInitArgs* options_args) {
+  if (!enable_by_env(options_args)) {
+    _role = Normal;
+    _is_enabled = false;
+    setenv_for_roles();
+    return;
+  }
   // Prepare environment
   calculate_cache_path();
   // destroy the cache directory
@@ -1003,3 +1009,25 @@ bool QuickStart::dump_cached_info(JavaVMInitArgs* options_args) {
   return true;
 }
 
+bool QuickStart::enable_by_env(const JavaVMInitArgs *options_args) {
+  const char *entry= ::getenv("DRAGONWELL_ENABLE_QUICKSTART_ENTRY");
+  if (entry == NULL || strlen(entry) == 0) {
+    return true;
+  }
+
+  const char *tail = NULL;
+  for (int index = 0; index < options_args->nOptions; index++) {
+    const JavaVMOption *option = options_args->options + index;
+    if (match_option(option->optionString, "-Dsun.java.command=", &tail) && strstr(tail, entry)) {
+      if (verbose()) {
+        log_info(quickstart)("Env DRAGONWELL_ENABLE_QUICKSTART_ENTRY=%s, match main class: %s", entry, tail);
+      }
+      return true;
+    }
+  }
+
+  if (verbose()) {
+    log_info(quickstart)("Env DRAGONWELL_ENABLE_QUICKSTART_ENTRY=%s, not match main class.", entry);
+  }
+  return false;
+}
