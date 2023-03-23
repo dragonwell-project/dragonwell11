@@ -175,7 +175,7 @@ int ZBarrierSetC2::estimate_stub_size() const {
   return size;
 }
 
-static bool barrier_needed(C2Access access) {
+static bool barrier_needed(C2Access& access) {
   return ZBarrierSet::barrier_needed(access.decorators(), access.type());
 }
 
@@ -192,7 +192,7 @@ Node* ZBarrierSetC2::load_at_resolved(C2Access& access, const Type* val_type) co
   return result;
 }
 
-Node* ZBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicAccess& access, Node* expected_val,
+Node* ZBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                     Node* new_val, const Type* val_type) const {
   Node* result = BarrierSetC2::atomic_cmpxchg_val_at_resolved(access, expected_val, new_val, val_type);
   if (barrier_needed(access)) {
@@ -201,7 +201,7 @@ Node* ZBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicAccess& access, Node
   return result;
 }
 
-Node* ZBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicAccess& access, Node* expected_val,
+Node* ZBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                      Node* new_val, const Type* value_type) const {
   Node* result = BarrierSetC2::atomic_cmpxchg_bool_at_resolved(access, expected_val, new_val, value_type);
   if (barrier_needed(access)) {
@@ -210,7 +210,7 @@ Node* ZBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicAccess& access, Nod
   return result;
 }
 
-Node* ZBarrierSetC2::atomic_xchg_at_resolved(C2AtomicAccess& access, Node* new_val, const Type* val_type) const {
+Node* ZBarrierSetC2::atomic_xchg_at_resolved(C2AtomicParseAccess& access, Node* new_val, const Type* val_type) const {
   Node* result = BarrierSetC2::atomic_xchg_at_resolved(access, new_val, val_type);
 
   if (barrier_needed(access)) {
