@@ -503,12 +503,9 @@ Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue&
     return BarrierSetC2::store_at_resolved(access, val);
   }
 
-  GraphKit* kit = NULL;
   if (access.is_parse_access()) {
     C2ParseAccess& parse_access = static_cast<C2ParseAccess&>(access);
-
-    kit = parse_access.kit();
-  
+    GraphKit* kit = parse_access.kit();
 
     uint adr_idx = kit->C->get_alias_index(adr_type);
     assert(adr_idx != Compile::AliasIdxTop, "use other store_to_memory factory" );
@@ -518,7 +515,15 @@ Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue&
     shenandoah_write_barrier_pre(kit, true /* do_load */, /*kit->control(),*/ access.base(), adr, adr_idx, val.node(),
                                static_cast<const TypeOopPtr*>(val.type()), NULL /* pre_val */, access.type());
   } else {
-     // TBD
+    assert(access.is_opt_access(), "only for optimization passes");
+    assert(((decorators & C2_TIGHTLY_COUPLED_ALLOC) != 0 || !ShenandoahSATBBarrier) && (decorators & C2_ARRAY_COPY) != 0, "unexpected caller of this code");
+    C2OptAccess& opt_access = static_cast<C2OptAccess&>(access);
+    PhaseGVN& gvn =  opt_access.gvn();
+
+    if (ShenandoahIUBarrier) {
+      Node* enqueue = gvn.transform(new ShenandoahIUBarrierNode(val.node()));
+      val.set_node(enqueue);
+    }
   }
   return BarrierSetC2::store_at_resolved(access, val);
 }
@@ -536,9 +541,11 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
   // 2: apply LRB if needed
   if (ShenandoahBarrierSet::need_load_reference_barrier(decorators, type)) {
     load = new ShenandoahLoadReferenceBarrierNode(NULL, load);
-    assert(access.is_parse_access(), "entry not supported at optimization time");
-    C2ParseAccess& parse_access = static_cast<C2ParseAccess&>(access);
-    load = parse_access.kit()->gvn().transform(load);
+    if (access.is_parse_access()) {
+      load = static_cast<C2ParseAccess &>(access).kit()->gvn().transform(load);
+    } else {
+      load = static_cast<C2OptAccess &>(access).gvn().transform(load);
+    }
   }
 
   // 3: apply keep-alive barrier if needed
@@ -562,29 +569,26 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
       return load;
     }
 
-    GraphKit* kit = NULL;
-    if (access.is_parse_access()) {
-      C2ParseAccess& parse_access = static_cast<C2ParseAccess&>(access);
+    assert(access.is_parse_access(), "entry not supported at optimization time");
+    C2ParseAccess& parse_access = static_cast<C2ParseAccess&>(access);
+    GraphKit* kit = parse_access.kit();
+    bool mismatched = (decorators & C2_MISMATCHED) != 0;
+    bool is_unordered = (decorators & MO_UNORDERED) != 0;
+    bool in_native = (decorators & IN_NATIVE) != 0;
+    bool need_cpu_mem_bar = !is_unordered || mismatched || in_native;
 
-      kit = parse_access.kit();
-
-      bool mismatched = (decorators & C2_MISMATCHED) != 0;
-      bool is_unordered = (decorators & MO_UNORDERED) != 0;
-      bool need_cpu_mem_bar = !is_unordered || mismatched;
-
-      if (on_weak_ref) {
-        // Use the pre-barrier to record the value in the referent field
-        satb_write_barrier_pre(kit, false /* do_load */,
+    if (on_weak_ref) {
+      // Use the pre-barrier to record the value in the referent field
+      satb_write_barrier_pre(kit, false /* do_load */,
                              NULL /* obj */, NULL /* adr */, max_juint /* alias_idx */, NULL /* val */, NULL /* val_type */,
                              load /* pre_val */, T_OBJECT);
-        // Add memory barrier to prevent commoning reads from this field
-        // across safepoint since GC can change its value.
-        kit->insert_mem_bar(Op_MemBarCPUOrder);
-      } else if (unknown) {
-        // We do not require a mem bar inside pre_barrier if need_mem_bar
-        // is set: the barriers would be emitted by us.
-        insert_pre_barrier(kit, obj, offset, load, !need_cpu_mem_bar);
-      }
+      // Add memory barrier to prevent commoning reads from this field
+      // across safepoint since GC can change its value.
+      kit->insert_mem_bar(Op_MemBarCPUOrder);
+    } else if (unknown) {
+      // We do not require a mem bar inside pre_barrier if need_mem_bar
+      // is set: the barriers would be emitted by us.
+      insert_pre_barrier(kit, obj, offset, load, !need_cpu_mem_bar);
     }
   }
 
