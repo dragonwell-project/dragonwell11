@@ -68,6 +68,9 @@ public class CDSDumperHelper {
                     String toolOp = Utils.removeAgentOp();
                     if (toolOp != null) {
                         pb.environment().put(Utils.JAVA_TOOL_OPTIONS, toolOp);
+                        //remove Alibaba Dragonwell specific java tool options avoid enter quickstart endless loop.
+                        pb.environment().remove("DRAGONWELL_JAVA_TOOL_OPTIONS");
+                        pb.environment().remove("DRAGONWELL_ENABLE_QUICKSTART_ENTRY");
                     }
                 },
                 Path.of(jdkHome, "bin", "java").toString(),
