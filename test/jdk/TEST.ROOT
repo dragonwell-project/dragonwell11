@@ -48,6 +48,7 @@ requires.extraPropDefns.vmOpts = -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
 requires.properties= \
     sun.arch.data.model \
     java.runtime.name \
+    vm.gc.G1 \
     vm.gc.Z \
     vm.gc.Shenandoah \
     vm.graal.enabled \
