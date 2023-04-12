@@ -3511,7 +3511,7 @@ int MatchNode::needs_ideal_memory_edge(FormDict &globals) const {
     "StoreB","StoreC","Store" ,"StoreFP",
     "LoadI", "LoadL", "LoadP" ,"LoadN", "LoadD" ,"LoadF"  ,
     "LoadB" , "LoadUB", "LoadUS" ,"LoadS" ,"Load" ,
-    "StoreVector", "LoadVector",
+    "StoreVector", "LoadVector", "LoadVectorGather", "StoreVectorScatter",
     "LoadRange", "LoadKlass", "LoadNKlass", "LoadL_unaligned", "LoadD_unaligned",
     "LoadPLocked",
     "StorePConditional", "StoreIConditional", "StoreLConditional",
@@ -3822,6 +3822,7 @@ void MatchNode::count_commutative_op(int& count) {
     "MaxV", "MinV",
     "MulI","MulL","MulF","MulD",
     "MulVB","MulVS","MulVI","MulVL","MulVF","MulVD",
+    "MinV","MaxV",
     "OrI","OrL",
     "OrV",
     "XorI","XorL",
@@ -4072,6 +4073,11 @@ int MatchRule::is_expensive() const {
         strcmp(opType,"MulReductionVL")==0 ||
         strcmp(opType,"MulReductionVF")==0 ||
         strcmp(opType,"MulReductionVD")==0 ||
+        strcmp(opType,"MinReductionV")==0 ||
+        strcmp(opType,"MaxReductionV")==0 ||
+        strcmp(opType,"AndReductionV")==0 ||
+        strcmp(opType,"OrReductionV")==0 ||
+        strcmp(opType,"XorReductionV")==0 ||
         0 /* 0 to line up columns nicely */ )
       return 1;
   }
@@ -4165,8 +4171,9 @@ bool MatchRule::is_vector() const {
     "MulVB","MulVS","MulVI","MulVL","MulVF","MulVD",
     "CMoveVD", "CMoveVF",
     "DivVF","DivVD",
+    "MinV","MaxV",
     "AbsVB","AbsVS","AbsVI","AbsVL","AbsVF","AbsVD",
-    "NegVF","NegVD",
+    "NegVF","NegVD","NegVI",
     "SqrtVD","SqrtVF",
     "AndV" ,"XorV" ,"OrV",
     "MaxV", "MinV",
@@ -4174,13 +4181,21 @@ bool MatchRule::is_vector() const {
     "AddReductionVF", "AddReductionVD",
     "MulReductionVI", "MulReductionVL",
     "MulReductionVF", "MulReductionVD",
+    "MaxReductionV", "MinReductionV",
+    "AndReductionV", "OrReductionV", "XorReductionV",
+    "MacroLogicV",
     "LShiftCntV","RShiftCntV",
     "LShiftVB","LShiftVS","LShiftVI","LShiftVL",
     "RShiftVB","RShiftVS","RShiftVI","RShiftVL",
     "URShiftVB","URShiftVS","URShiftVI","URShiftVL",
-    "MaxReductionV", "MinReductionV",
     "ReplicateB","ReplicateS","ReplicateI","ReplicateL","ReplicateF","ReplicateD",
     "RoundDoubleModeV","LoadVector","StoreVector",
+    "LoadVectorGather", "StoreVectorScatter",
+    "VectorTest", "VectorLoadMask", "VectorStoreMask", "VectorBlend", "VectorInsert",
+    "VectorRearrange","VectorLoadShuffle", "VectorLoadConst",
+    "VectorCastB2X", "VectorCastS2X", "VectorCastI2X",
+    "VectorCastL2X", "VectorCastF2X", "VectorCastD2X",
+    "VectorMaskWrapper", "VectorMaskCmp", "VectorReinterpret",
     "FmaVD", "FmaVF","PopCountVI",
     // Next are not supported currently.
     "PackB","PackS","PackI","PackL","PackF","PackD","Pack2L","Pack2D",

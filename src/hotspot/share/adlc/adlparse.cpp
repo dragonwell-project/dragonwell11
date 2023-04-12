@@ -123,6 +123,7 @@ void ADLParser::parse() {
     parse_err(SEMERR, "Did not declare 'register' definitions");
   }
   regBlock->addSpillRegClass();
+  regBlock->addDynamicRegClass();
 
   // Done with parsing, check consistency.
 
@@ -2880,7 +2881,7 @@ void ADLParser::ins_encode_parse_block(InstructForm& inst) {
     // name is chosen to match the __ idiom used for assembly in other
     // parts of hotspot and assumes the existence of the standard
     // #define __ _masm.
-    encoding->add_code("    MacroAssembler _masm(&cbuf);\n");
+    encoding->add_code("    C2_MacroAssembler _masm(&cbuf);\n");
   }
 
   // Parse the following %{ }% block

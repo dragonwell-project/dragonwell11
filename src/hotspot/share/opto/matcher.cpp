@@ -389,10 +389,16 @@ void Matcher::match( ) {
   NOT_DEBUG( old->destruct_contents() );
 
   // ------------------------
-  // Set up save-on-entry registers
+  // Set up save-on-entry registers.
   Fixup_Save_On_Entry( );
-}
 
+  { // Cleanup mach IR after selection phase is over.
+    Compile::TracePhase tp("postselect_cleanup", &timers[_t_postselect_cleanup]);
+    do_postselect_cleanup();
+    if (C->failing())  return;
+    assert(verify_after_postselect_cleanup(), "");
+  }
+}
 
 //------------------------------Fixup_Save_On_Entry----------------------------
 // The stated purpose of this routine is to take care of save-on-entry
@@ -421,7 +427,7 @@ static RegMask *init_input_masks( uint size, RegMask &ret_adr, RegMask &fp ) {
 void Matcher::init_first_stack_mask() {
 
   // Allocate storage for spill masks as masks for the appropriate load type.
-  RegMask *rms = (RegMask*)C->comp_arena()->Amalloc_D(sizeof(RegMask) * (3*6+5));
+  RegMask *rms = (RegMask*)C->comp_arena()->Amalloc_D(sizeof(RegMask) * (3*11));
 
   idealreg2spillmask  [Op_RegN] = &rms[0];
   idealreg2spillmask  [Op_RegI] = &rms[1];
@@ -449,6 +455,18 @@ void Matcher::init_first_stack_mask() {
   idealreg2spillmask  [Op_VecX] = &rms[20];
   idealreg2spillmask  [Op_VecY] = &rms[21];
   idealreg2spillmask  [Op_VecZ] = &rms[22];
+
+  idealreg2debugmask  [Op_VecS] = &rms[23];
+  idealreg2debugmask  [Op_VecD] = &rms[24];
+  idealreg2debugmask  [Op_VecX] = &rms[25];
+  idealreg2debugmask  [Op_VecY] = &rms[26];
+  idealreg2debugmask  [Op_VecZ] = &rms[27];
+
+  idealreg2mhdebugmask[Op_VecS] = &rms[28];
+  idealreg2mhdebugmask[Op_VecD] = &rms[29];
+  idealreg2mhdebugmask[Op_VecX] = &rms[30];
+  idealreg2mhdebugmask[Op_VecY] = &rms[31];
+  idealreg2mhdebugmask[Op_VecZ] = &rms[32];
 
   OptoReg::Name i;
 
@@ -496,13 +514,19 @@ void Matcher::init_first_stack_mask() {
   if (Matcher::vector_size_supported(T_BYTE,4)) {
     *idealreg2spillmask[Op_VecS] = *idealreg2regmask[Op_VecS];
      idealreg2spillmask[Op_VecS]->OR(C->FIRST_STACK_mask());
+  } else {
+    *idealreg2spillmask[Op_VecS] = RegMask::Empty;
   }
+
   if (Matcher::vector_size_supported(T_FLOAT,2)) {
     // For VecD we need dual alignment and 8 bytes (2 slots) for spills.
     // RA guarantees such alignment since it is needed for Double and Long values.
     *idealreg2spillmask[Op_VecD] = *idealreg2regmask[Op_VecD];
      idealreg2spillmask[Op_VecD]->OR(aligned_stack_mask);
+  } else {
+    *idealreg2spillmask[Op_VecD] = RegMask::Empty;
   }
+
   if (Matcher::vector_size_supported(T_FLOAT,4)) {
     // For VecX we need quadro alignment and 16 bytes (4 slots) for spills.
     //
@@ -520,7 +544,10 @@ void Matcher::init_first_stack_mask() {
      assert(aligned_stack_mask.is_AllStack(), "should be infinite stack");
     *idealreg2spillmask[Op_VecX] = *idealreg2regmask[Op_VecX];
      idealreg2spillmask[Op_VecX]->OR(aligned_stack_mask);
+  } else {
+    *idealreg2spillmask[Op_VecX] = RegMask::Empty;
   }
+
   if (Matcher::vector_size_supported(T_FLOAT,8)) {
     // For VecY we need octo alignment and 32 bytes (8 slots) for spills.
     OptoReg::Name in = OptoReg::add(_in_arg_limit, -1);
@@ -532,7 +559,10 @@ void Matcher::init_first_stack_mask() {
      assert(aligned_stack_mask.is_AllStack(), "should be infinite stack");
     *idealreg2spillmask[Op_VecY] = *idealreg2regmask[Op_VecY];
      idealreg2spillmask[Op_VecY]->OR(aligned_stack_mask);
+  } else {
+    *idealreg2spillmask[Op_VecY] = RegMask::Empty;
   }
+
   if (Matcher::vector_size_supported(T_FLOAT,16)) {
     // For VecZ we need enough alignment and 64 bytes (16 slots) for spills.
     OptoReg::Name in = OptoReg::add(_in_arg_limit, -1);
@@ -544,6 +574,8 @@ void Matcher::init_first_stack_mask() {
      assert(aligned_stack_mask.is_AllStack(), "should be infinite stack");
     *idealreg2spillmask[Op_VecZ] = *idealreg2regmask[Op_VecZ];
      idealreg2spillmask[Op_VecZ]->OR(aligned_stack_mask);
+  } else {
+    *idealreg2spillmask[Op_VecZ] = RegMask::Empty;
   }
    if (UseFPUForSpilling) {
      // This mask logic assumes that the spill operations are
@@ -571,19 +603,31 @@ void Matcher::init_first_stack_mask() {
   // Make up debug masks.  Any spill slot plus callee-save registers.
   // Caller-save registers are assumed to be trashable by the various
   // inline-cache fixup routines.
-  *idealreg2debugmask  [Op_RegN]= *idealreg2spillmask[Op_RegN];
-  *idealreg2debugmask  [Op_RegI]= *idealreg2spillmask[Op_RegI];
-  *idealreg2debugmask  [Op_RegL]= *idealreg2spillmask[Op_RegL];
-  *idealreg2debugmask  [Op_RegF]= *idealreg2spillmask[Op_RegF];
-  *idealreg2debugmask  [Op_RegD]= *idealreg2spillmask[Op_RegD];
-  *idealreg2debugmask  [Op_RegP]= *idealreg2spillmask[Op_RegP];
+  *idealreg2debugmask  [Op_RegN] = *idealreg2spillmask[Op_RegN];
+  *idealreg2debugmask  [Op_RegI] = *idealreg2spillmask[Op_RegI];
+  *idealreg2debugmask  [Op_RegL] = *idealreg2spillmask[Op_RegL];
+  *idealreg2debugmask  [Op_RegF] = *idealreg2spillmask[Op_RegF];
+  *idealreg2debugmask  [Op_RegD] = *idealreg2spillmask[Op_RegD];
+  *idealreg2debugmask  [Op_RegP] = *idealreg2spillmask[Op_RegP];
 
-  *idealreg2mhdebugmask[Op_RegN]= *idealreg2spillmask[Op_RegN];
-  *idealreg2mhdebugmask[Op_RegI]= *idealreg2spillmask[Op_RegI];
-  *idealreg2mhdebugmask[Op_RegL]= *idealreg2spillmask[Op_RegL];
-  *idealreg2mhdebugmask[Op_RegF]= *idealreg2spillmask[Op_RegF];
-  *idealreg2mhdebugmask[Op_RegD]= *idealreg2spillmask[Op_RegD];
-  *idealreg2mhdebugmask[Op_RegP]= *idealreg2spillmask[Op_RegP];
+  *idealreg2debugmask  [Op_VecS] = *idealreg2spillmask[Op_VecS];
+  *idealreg2debugmask  [Op_VecD] = *idealreg2spillmask[Op_VecD];
+  *idealreg2debugmask  [Op_VecX] = *idealreg2spillmask[Op_VecX];
+  *idealreg2debugmask  [Op_VecY] = *idealreg2spillmask[Op_VecY];
+  *idealreg2debugmask  [Op_VecZ] = *idealreg2spillmask[Op_VecZ];
+
+  *idealreg2mhdebugmask[Op_RegN] = *idealreg2spillmask[Op_RegN];
+  *idealreg2mhdebugmask[Op_RegI] = *idealreg2spillmask[Op_RegI];
+  *idealreg2mhdebugmask[Op_RegL] = *idealreg2spillmask[Op_RegL];
+  *idealreg2mhdebugmask[Op_RegF] = *idealreg2spillmask[Op_RegF];
+  *idealreg2mhdebugmask[Op_RegD] = *idealreg2spillmask[Op_RegD];
+  *idealreg2mhdebugmask[Op_RegP] = *idealreg2spillmask[Op_RegP];
+
+  *idealreg2mhdebugmask[Op_VecS] = *idealreg2spillmask[Op_VecS];
+  *idealreg2mhdebugmask[Op_VecD] = *idealreg2spillmask[Op_VecD];
+  *idealreg2mhdebugmask[Op_VecX] = *idealreg2spillmask[Op_VecX];
+  *idealreg2mhdebugmask[Op_VecY] = *idealreg2spillmask[Op_VecY];
+  *idealreg2mhdebugmask[Op_VecZ] = *idealreg2spillmask[Op_VecZ];
 
   // Prevent stub compilations from attempting to reference
   // callee-saved registers from debug info
@@ -601,12 +645,25 @@ void Matcher::init_first_stack_mask() {
       idealreg2debugmask  [Op_RegD]->Remove(i);
       idealreg2debugmask  [Op_RegP]->Remove(i);
 
+      idealreg2debugmask  [Op_VecS]->Remove(i);
+      idealreg2debugmask  [Op_VecD]->Remove(i);
+      idealreg2debugmask  [Op_VecX]->Remove(i);
+      idealreg2debugmask  [Op_VecY]->Remove(i);
+      idealreg2debugmask  [Op_VecZ]->Remove(i);
+
       idealreg2mhdebugmask[Op_RegN]->Remove(i);
       idealreg2mhdebugmask[Op_RegI]->Remove(i);
       idealreg2mhdebugmask[Op_RegL]->Remove(i);
       idealreg2mhdebugmask[Op_RegF]->Remove(i);
       idealreg2mhdebugmask[Op_RegD]->Remove(i);
       idealreg2mhdebugmask[Op_RegP]->Remove(i);
+
+      idealreg2mhdebugmask[Op_VecS]->Remove(i);
+      idealreg2mhdebugmask[Op_VecD]->Remove(i);
+      idealreg2mhdebugmask[Op_VecX]->Remove(i);
+      idealreg2mhdebugmask[Op_VecY]->Remove(i);
+      idealreg2mhdebugmask[Op_VecZ]->Remove(i);
+
     }
   }
 
@@ -619,6 +676,13 @@ void Matcher::init_first_stack_mask() {
   idealreg2mhdebugmask[Op_RegF]->SUBTRACT(save_mask);
   idealreg2mhdebugmask[Op_RegD]->SUBTRACT(save_mask);
   idealreg2mhdebugmask[Op_RegP]->SUBTRACT(save_mask);
+
+  idealreg2mhdebugmask[Op_VecS]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecD]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecX]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecY]->SUBTRACT(save_mask);
+  idealreg2mhdebugmask[Op_VecZ]->SUBTRACT(save_mask);
+
 }
 
 //---------------------------is_save_on_entry----------------------------------
@@ -842,54 +906,23 @@ void Matcher::init_spill_mask( Node *ret ) {
 
   // Grab the Frame Pointer
   Node *fp  = ret->in(TypeFunc::FramePtr);
-  Node *mem = ret->in(TypeFunc::Memory);
-  const TypePtr* atp = TypePtr::BOTTOM;
   // Share frame pointer while making spill ops
   set_shared(fp);
 
-  // Compute generic short-offset Loads
+// Get the ADLC notion of the right regmask, for each basic type.
 #ifdef _LP64
-  MachNode *spillCP = match_tree(new LoadNNode(NULL,mem,fp,atp,TypeInstPtr::BOTTOM,MemNode::unordered));
+  idealreg2regmask[Op_RegN] = regmask_for_ideal_register(Op_RegN, ret);
 #endif
-  MachNode *spillI  = match_tree(new LoadINode(NULL,mem,fp,atp,TypeInt::INT,MemNode::unordered));
-  MachNode *spillL  = match_tree(new LoadLNode(NULL,mem,fp,atp,TypeLong::LONG,MemNode::unordered, LoadNode::DependsOnlyOnTest, false));
-  MachNode *spillF  = match_tree(new LoadFNode(NULL,mem,fp,atp,Type::FLOAT,MemNode::unordered));
-  MachNode *spillD  = match_tree(new LoadDNode(NULL,mem,fp,atp,Type::DOUBLE,MemNode::unordered));
-  MachNode *spillP  = match_tree(new LoadPNode(NULL,mem,fp,atp,TypeInstPtr::BOTTOM,MemNode::unordered));
-  assert(spillI != NULL && spillL != NULL && spillF != NULL &&
-         spillD != NULL && spillP != NULL, "");
-  // Get the ADLC notion of the right regmask, for each basic type.
-#ifdef _LP64
-  idealreg2regmask[Op_RegN] = &spillCP->out_RegMask();
-#endif
-  idealreg2regmask[Op_RegI] = &spillI->out_RegMask();
-  idealreg2regmask[Op_RegL] = &spillL->out_RegMask();
-  idealreg2regmask[Op_RegF] = &spillF->out_RegMask();
-  idealreg2regmask[Op_RegD] = &spillD->out_RegMask();
-  idealreg2regmask[Op_RegP] = &spillP->out_RegMask();
-
-  // Vector regmasks.
-  if (Matcher::vector_size_supported(T_BYTE,4)) {
-    TypeVect::VECTS = TypeVect::make(T_BYTE, 4);
-    MachNode *spillVectS = match_tree(new LoadVectorNode(NULL,mem,fp,atp,TypeVect::VECTS));
-    idealreg2regmask[Op_VecS] = &spillVectS->out_RegMask();
-  }
-  if (Matcher::vector_size_supported(T_FLOAT,2)) {
-    MachNode *spillVectD = match_tree(new LoadVectorNode(NULL,mem,fp,atp,TypeVect::VECTD));
-    idealreg2regmask[Op_VecD] = &spillVectD->out_RegMask();
-  }
-  if (Matcher::vector_size_supported(T_FLOAT,4)) {
-    MachNode *spillVectX = match_tree(new LoadVectorNode(NULL,mem,fp,atp,TypeVect::VECTX));
-    idealreg2regmask[Op_VecX] = &spillVectX->out_RegMask();
-  }
-  if (Matcher::vector_size_supported(T_FLOAT,8)) {
-    MachNode *spillVectY = match_tree(new LoadVectorNode(NULL,mem,fp,atp,TypeVect::VECTY));
-    idealreg2regmask[Op_VecY] = &spillVectY->out_RegMask();
-  }
-  if (Matcher::vector_size_supported(T_FLOAT,16)) {
-    MachNode *spillVectZ = match_tree(new LoadVectorNode(NULL,mem,fp,atp,TypeVect::VECTZ));
-    idealreg2regmask[Op_VecZ] = &spillVectZ->out_RegMask();
-  }
+  idealreg2regmask[Op_RegI] = regmask_for_ideal_register(Op_RegI, ret);
+  idealreg2regmask[Op_RegP] = regmask_for_ideal_register(Op_RegP, ret);
+  idealreg2regmask[Op_RegF] = regmask_for_ideal_register(Op_RegF, ret);
+  idealreg2regmask[Op_RegD] = regmask_for_ideal_register(Op_RegD, ret);
+  idealreg2regmask[Op_RegL] = regmask_for_ideal_register(Op_RegL, ret);
+  idealreg2regmask[Op_VecS] = regmask_for_ideal_register(Op_VecS, ret);
+  idealreg2regmask[Op_VecD] = regmask_for_ideal_register(Op_VecD, ret);
+  idealreg2regmask[Op_VecX] = regmask_for_ideal_register(Op_VecX, ret);
+  idealreg2regmask[Op_VecY] = regmask_for_ideal_register(Op_VecY, ret);
+  idealreg2regmask[Op_VecZ] = regmask_for_ideal_register(Op_VecZ, ret);
 }
 
 #ifdef ASSERT
@@ -2050,6 +2083,14 @@ bool Matcher::is_bmi_pattern(Node *n, Node *m) {
 }
 #endif // X86
 
+bool Matcher::is_vshift_con_pattern(Node *n, Node *m) {
+  if (n != NULL && m != NULL) {
+    return VectorNode::is_vector_shift(n) &&
+           VectorNode::is_vector_shift_count(m) && m->in(1)->is_Con();
+  }
+  return false;
+}
+
 bool Matcher::clone_base_plus_offset_address(AddPNode* m, Matcher::MStack& mstack, VectorSet& address_visited) {
   Node *off = m->in(AddPNode::Offset);
   if (off->is_Con()) {
@@ -2167,6 +2208,7 @@ void Matcher::find_shared( Node *n ) {
       case Op_FmaF:
       case Op_FmaVD:
       case Op_FmaVF:
+      case Op_MacroLogicV:
       case Op_ThreadRefetch:      // This must be added, otherwise we couldn't match the ThreadRefetchNode.
         set_shared(n); // Force result into register (it will be anyways)
         break;
@@ -2233,6 +2275,10 @@ void Matcher::find_shared( Node *n ) {
           continue;
         }
 #endif
+        if (is_vshift_con_pattern(n, m)) {
+          mstack.push(m, Visit);
+          continue;
+        }
 
         // Clone addressing expressions as they are "free" in memory access instructions
         if (mem_op && i == mem_addr_idx && mop == Op_AddP &&
@@ -2324,6 +2370,15 @@ void Matcher::find_shared( Node *n ) {
         n->del_req(3);
         break;
       }
+      case Op_MacroLogicV: {
+        Node* pair1 = new BinaryNode(n->in(1), n->in(2));
+        Node* pair2 = new BinaryNode(n->in(3), n->in(4));
+        n->set_req(1, pair1);
+        n->set_req(2, pair2);
+        n->del_req(4);
+        n->del_req(3);
+        break;
+      }
       case Op_LoopLimit: {
         Node *pair1 = new BinaryNode(n->in(1),n->in(2));
         n->set_req(1,pair1);
@@ -2374,6 +2429,26 @@ void Matcher::find_shared( Node *n ) {
       case Op_SignumD: {
         Node* pair = new BinaryNode(n->in(2), n->in(3));
         n->set_req(2, pair);
+        n->del_req(3);
+        break;
+      }
+      case Op_VectorBlend:
+      case Op_VectorInsert: {
+        Node* pair = new BinaryNode(n->in(1), n->in(2));
+        n->set_req(1, pair);
+        n->set_req(2, n->in(3));
+        n->del_req(3);
+        break;
+      }
+      case Op_StoreVectorScatter: {
+        Node* pair = new BinaryNode(n->in(MemNode::ValueIn), n->in(MemNode::ValueIn+1));
+        n->set_req(MemNode::ValueIn, pair);
+        n->del_req(MemNode::ValueIn+1);
+        break;
+      }
+      case Op_VectorMaskCmp: {
+        n->set_req(1, new BinaryNode(n->in(1), n->in(2)));
+        n->set_req(2, n->in(3));
         n->del_req(3);
         break;
       }
@@ -2495,6 +2570,152 @@ void Matcher::validate_null_checks( ) {
     }
   }
 }
+
+// Compute RegMask for an ideal register.
+const RegMask* Matcher::regmask_for_ideal_register(uint ideal_reg, Node* ret) {
+  const Type* t = Type::mreg2type[ideal_reg];
+  if (t == NULL) {
+    assert(ideal_reg >= Op_VecS && ideal_reg <= Op_VecZ, "not a vector: %d", ideal_reg);
+    return NULL; // not supported
+  }
+  Node* fp  = ret->in(TypeFunc::FramePtr);
+  Node* mem = ret->in(TypeFunc::Memory);
+  const TypePtr* atp = TypePtr::BOTTOM;
+  MemNode::MemOrd mo = MemNode::unordered;
+
+  Node* spill;
+  switch (ideal_reg) {
+    case Op_RegN: spill = new LoadNNode(NULL, mem, fp, atp, t->is_narrowoop(), mo); break;
+    case Op_RegI: spill = new LoadINode(NULL, mem, fp, atp, t->is_int(),       mo); break;
+    case Op_RegP: spill = new LoadPNode(NULL, mem, fp, atp, t->is_ptr(),       mo); break;
+    case Op_RegF: spill = new LoadFNode(NULL, mem, fp, atp, t,                 mo); break;
+    case Op_RegD: spill = new LoadDNode(NULL, mem, fp, atp, t,                 mo); break;
+    case Op_RegL: spill = new LoadLNode(NULL, mem, fp, atp, t->is_long(),      mo); break;
+
+    case Op_VecS: // fall-through
+    case Op_VecD: // fall-through
+    case Op_VecX: // fall-through
+    case Op_VecY: // fall-through
+    case Op_VecZ: spill = new LoadVectorNode(NULL, mem, fp, atp, t->is_vect()); break;
+
+    default: ShouldNotReachHere(); spill = NULL;
+  }
+  MachNode* mspill = match_tree(spill);
+  assert(mspill != NULL, "matching failed: %d", ideal_reg);
+  // Handle generic vector operand case
+  if (Matcher::supports_generic_vector_operands && t->isa_vect()) {
+    specialize_mach_node(mspill);
+  }
+  return &mspill->out_RegMask();
+}
+
+// Process Mach IR right after selection phase is over.
+void Matcher::do_postselect_cleanup() {
+  if (supports_generic_vector_operands) {
+    specialize_generic_vector_operands();
+    if (C->failing())  return;
+  }
+}
+
+//----------------------------------------------------------------------
+// Generic machine operands elision.
+//----------------------------------------------------------------------
+
+// Compute concrete vector operand for a generic TEMP vector mach node based on its user info.
+void Matcher::specialize_temp_node(MachTempNode* tmp, MachNode* use, uint idx) {
+  assert(use->in(idx) == tmp, "not a user");
+  assert(!Matcher::is_generic_vector(use->_opnds[0]), "use not processed yet");
+
+  if ((uint)idx == use->two_adr()) { // DEF_TEMP case
+    tmp->_opnds[0] = use->_opnds[0]->clone();
+  } else {
+    uint ideal_vreg = vector_ideal_reg(C->max_vector_size());
+    tmp->_opnds[0] = Matcher::pd_specialize_generic_vector_operand(tmp->_opnds[0], ideal_vreg, true /*is_temp*/);
+  }
+}
+
+// Compute concrete vector operand for a generic DEF/USE vector operand (of mach node m at index idx).
+MachOper* Matcher::specialize_vector_operand(MachNode* m, uint opnd_idx) {
+  assert(Matcher::is_generic_vector(m->_opnds[opnd_idx]), "repeated updates");
+  Node* def = NULL;
+  if (opnd_idx == 0) { // DEF
+    def = m; // use mach node itself to compute vector operand type
+  } else {
+    int base_idx = m->operand_index(opnd_idx);
+    def = m->in(base_idx);
+    if (def->is_Mach()) {
+      if (def->is_MachTemp() && Matcher::is_generic_vector(def->as_Mach()->_opnds[0])) {
+        specialize_temp_node(def->as_MachTemp(), m, base_idx); // MachTemp node use site
+      } else if (is_generic_reg2reg_move(def->as_Mach())) {
+        def = def->in(1); // skip over generic reg-to-reg moves
+      }
+    }
+  }
+  assert(def->bottom_type()->isa_vect(), "not a vector");
+  uint ideal_vreg = def->bottom_type()->ideal_reg();
+  return Matcher::pd_specialize_generic_vector_operand(m->_opnds[opnd_idx], ideal_vreg, false /*is_temp*/);
+}
+
+void Matcher::specialize_mach_node(MachNode* m) {
+  assert(!m->is_MachTemp(), "processed along with its user");
+  // For generic use operands pull specific register class operands from
+  // its def instruction's output operand (def operand).
+  for (uint i = 0; i < m->num_opnds(); i++) {
+    if (Matcher::is_generic_vector(m->_opnds[i])) {
+      m->_opnds[i] = specialize_vector_operand(m, i);
+    }
+  }
+}
+
+// Replace generic vector operands with concrete vector operands and eliminate generic reg-to-reg moves from the graph.
+void Matcher::specialize_generic_vector_operands() {
+  assert(supports_generic_vector_operands, "sanity");
+  ResourceMark rm;
+
+  if (C->max_vector_size() == 0) {
+    return; // no vector instructions or operands
+  }
+  // Replace generic vector operands (vec/legVec) with concrete ones (vec[SDXYZ]/legVec[SDXYZ])
+  // and remove reg-to-reg vector moves (MoveVec2Leg and MoveLeg2Vec).
+  Unique_Node_List live_nodes;
+  C->identify_useful_nodes(live_nodes);
+
+  while (live_nodes.size() > 0) {
+    MachNode* m = live_nodes.pop()->isa_Mach();
+    if (m != NULL) {
+      if (Matcher::is_generic_reg2reg_move(m)) {
+        // Register allocator properly handles vec <=> leg moves using register masks.
+        int opnd_idx = m->operand_index(1);
+        Node* def = m->in(opnd_idx);
+        m->subsume_by(def, C);
+      } else if (m->is_MachTemp()) {
+        // process MachTemp nodes at use site (see Matcher::specialize_vector_operand)
+      } else {
+        specialize_mach_node(m);
+      }
+    }
+  }
+}
+
+#ifdef ASSERT
+bool Matcher::verify_after_postselect_cleanup() {
+  assert(!C->failing(), "sanity");
+  if (supports_generic_vector_operands) {
+    Unique_Node_List useful;
+    C->identify_useful_nodes(useful);
+    for (uint i = 0; i < useful.size(); i++) {
+      MachNode* m = useful.at(i)->isa_Mach();
+      if (m != NULL) {
+        assert(!Matcher::is_generic_reg2reg_move(m), "no MoveVec nodes allowed");
+        for (uint j = 0; j < m->num_opnds(); j++) {
+          assert(!Matcher::is_generic_vector(m->_opnds[j]), "no generic vector operands allowed");
+        }
+      }
+    }
+  }
+  return true;
+}
+#endif // ASSERT
 
 // Used by the DFA in dfa_xxx.cpp.  Check for a following barrier or
 // atomic instruction acting as a store_load barrier without any

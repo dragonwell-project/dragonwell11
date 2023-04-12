@@ -297,7 +297,7 @@ class LateInlineCallGenerator : public DirectCallGenerator {
   virtual bool do_late_inline_check(JVMState* jvms) { return true; }
 
  public:
-  LateInlineCallGenerator(ciMethod* method, CallGenerator* inline_cg) :
+ LateInlineCallGenerator(ciMethod* method, CallGenerator* inline_cg) :
     DirectCallGenerator(method, true), _inline_cg(inline_cg), _unique_id(0) {}
 
   virtual bool is_late_inline() const { return true; }
@@ -561,6 +561,28 @@ CallGenerator* CallGenerator::for_boxing_late_inline(ciMethod* method, CallGener
   return new LateInlineBoxingCallGenerator(method, inline_cg);
 }
 
+class LateInlineVectorReboxingCallGenerator : public LateInlineCallGenerator {
+
+ public:
+  LateInlineVectorReboxingCallGenerator(ciMethod* method, CallGenerator* inline_cg) :
+    LateInlineCallGenerator(method, inline_cg) {}
+
+  virtual JVMState* generate(JVMState* jvms) {
+    Compile *C = Compile::current();
+
+    C->log_inline_id(this);
+
+    C->add_vector_reboxing_late_inline(this);
+
+    JVMState* new_jvms = DirectCallGenerator::generate(jvms);
+    return new_jvms;
+  }
+};
+
+//   static CallGenerator* for_vector_reboxing_late_inline(ciMethod* m, CallGenerator* inline_cg);
+CallGenerator* CallGenerator::for_vector_reboxing_late_inline(ciMethod* method, CallGenerator* inline_cg) {
+  return new LateInlineVectorReboxingCallGenerator(method, inline_cg);
+}
 //---------------------------WarmCallGenerator--------------------------------
 // Internal class which handles initial deferral of inlining decisions.
 class WarmCallGenerator : public CallGenerator {

@@ -67,6 +67,7 @@
 #include "opto/runtime.hpp"
 #include "opto/stringopts.hpp"
 #include "opto/type.hpp"
+#include "opto/vector.hpp"
 #include "opto/vectornode.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -76,6 +77,7 @@
 #include "utilities/align.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/macros.hpp"
+#include "utilities/resourceHash.hpp"
 #if INCLUDE_G1GC
 #include "gc/g1/g1ThreadLocalData.hpp"
 #endif // INCLUDE_G1GC
@@ -427,6 +429,7 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
   remove_useless_late_inlines(&_string_late_inlines, useful);
   remove_useless_late_inlines(&_boxing_late_inlines, useful);
   remove_useless_late_inlines(&_late_inlines, useful);
+  remove_useless_late_inlines(&_vector_reboxing_late_inlines, useful);
   debug_only(verify_graph_edges(true/*check for no_dead_code*/);)
 }
 
@@ -691,6 +694,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _late_inlines(comp_arena(), 2, 0, NULL),
                   _string_late_inlines(comp_arena(), 2, 0, NULL),
                   _boxing_late_inlines(comp_arena(), 2, 0, NULL),
+                  _vector_reboxing_late_inlines(comp_arena(), 2, 0, NULL),
                   _late_inlines_pos(0),
                   _number_of_mh_late_inlines(0),
                   _inlining_progress(false),
@@ -2146,6 +2150,8 @@ void Compile::inline_incrementally(PhaseIterGVN& igvn) {
       igvn.optimize();
     }
 
+    print_method(PHASE_INCREMENTAL_INLINE_STEP, 3);
+
     if (failing())  return;
   }
 
@@ -2285,6 +2291,16 @@ void Compile::Optimize() {
   // No more new expensive nodes will be added to the list from here
   // so keep only the actual candidates for optimizations.
   cleanup_expensive_nodes(igvn);
+
+  assert(EnableVectorSupport || !has_vbox_nodes(), "sanity");
+  if (EnableVectorSupport && has_vbox_nodes()) {
+    TracePhase tp("", &timers[_t_vector]);
+    PhaseVector pv(igvn);
+    pv.optimize_vector_boxes();
+
+    print_method(PHASE_ITER_GVN_AFTER_VECTOR, 2);
+  }
+  assert(!has_vbox_nodes(), "sanity");
 
   if (!failing() && RenumberLiveNodes && live_nodes() + NodeLimitFudgeFactor < unique()) {
     Compile::TracePhase tp("", &timers[_t_renumberLive]);
@@ -2448,6 +2464,11 @@ void Compile::Optimize() {
     igvn.optimize();
   }
 
+  if (C->max_vector_size() > 0) {
+    C->optimize_logic_cones(igvn);
+    igvn.optimize();
+  }
+
   DEBUG_ONLY( _modified_nodes = NULL; )
  } // (End scope of igvn; run destructor if necessary for asserts.)
 
@@ -2464,6 +2485,354 @@ void Compile::Optimize() {
  print_method(PHASE_OPTIMIZE_FINISHED, 2);
 }
 
+void Compile::inline_vector_reboxing_calls() {
+  if (C->_vector_reboxing_late_inlines.length() > 0) {
+    PhaseGVN* gvn = C->initial_gvn();
+
+    _late_inlines_pos = C->_late_inlines.length();
+    while (_vector_reboxing_late_inlines.length() > 0) {
+      CallGenerator* cg = _vector_reboxing_late_inlines.pop();
+      cg->do_late_inline();
+      if (failing())  return;
+      print_method(PHASE_INLINE_VECTOR_REBOX, cg->call_node());
+    }
+    _vector_reboxing_late_inlines.trunc_to(0);
+  }
+}
+
+bool Compile::has_vbox_nodes() {
+  if (C->_vector_reboxing_late_inlines.length() > 0) {
+    return true;
+  }
+  for (int macro_idx = C->macro_count() - 1; macro_idx >= 0; macro_idx--) {
+    Node * n = C->macro_node(macro_idx);
+    assert(n->is_macro(), "only macro nodes expected here");
+    if (n->Opcode() == Op_VectorUnbox || n->Opcode() == Op_VectorBox || n->Opcode() == Op_VectorBoxAllocate) {
+      return true;
+    }
+  }
+  return false;
+}
+
+//---------------------------- Bitwise operation packing optimization ---------------------------
+
+static bool is_vector_unary_bitwise_op(Node* n) {
+  return n->Opcode() == Op_XorV &&
+         VectorNode::is_vector_bitwise_not_pattern(n);
+}
+
+static bool is_vector_binary_bitwise_op(Node* n) {
+  switch (n->Opcode()) {
+    case Op_AndV:
+    case Op_OrV:
+      return true;
+
+    case Op_XorV:
+      return !is_vector_unary_bitwise_op(n);
+
+    default:
+      return false;
+  }
+}
+
+static bool is_vector_ternary_bitwise_op(Node* n) {
+  return n->Opcode() == Op_MacroLogicV;
+}
+
+static bool is_vector_bitwise_op(Node* n) {
+  return is_vector_unary_bitwise_op(n)  ||
+         is_vector_binary_bitwise_op(n) ||
+         is_vector_ternary_bitwise_op(n);
+}
+
+static bool is_vector_bitwise_cone_root(Node* n) {
+  if (!is_vector_bitwise_op(n)) {
+    return false;
+  }
+  for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
+    if (is_vector_bitwise_op(n->fast_out(i))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static uint collect_unique_inputs(Node* n, Unique_Node_List& partition, Unique_Node_List& inputs) {
+  uint cnt = 0;
+  if (is_vector_bitwise_op(n)) {
+    if (VectorNode::is_vector_bitwise_not_pattern(n)) {
+      for (uint i = 1; i < n->req(); i++) {
+        Node* in = n->in(i);
+        bool skip = VectorNode::is_all_ones_vector(in);
+        if (!skip && !inputs.member(in)) {
+          inputs.push(in);
+          cnt++;
+        }
+      }
+      assert(cnt <= 1, "not unary");
+    } else {
+      uint last_req = n->req();
+      if (is_vector_ternary_bitwise_op(n)) {
+        last_req = n->req() - 1; // skip last input
+      }
+      for (uint i = 1; i < last_req; i++) {
+        Node* def = n->in(i);
+        if (!inputs.member(def)) {
+          inputs.push(def);
+          cnt++;
+        }
+      }
+    }
+    partition.push(n);
+  } else { // not a bitwise operations
+    if (!inputs.member(n)) {
+      inputs.push(n);
+      cnt++;
+    }
+  }
+  return cnt;
+}
+
+void Compile::collect_logic_cone_roots(Unique_Node_List& list) {
+  Unique_Node_List useful_nodes;
+  C->identify_useful_nodes(useful_nodes);
+
+  for (uint i = 0; i < useful_nodes.size(); i++) {
+    Node* n = useful_nodes.at(i);
+    if (is_vector_bitwise_cone_root(n)) {
+      list.push(n);
+    }
+  }
+}
+
+Node* Compile::xform_to_MacroLogicV(PhaseIterGVN& igvn,
+                                    const TypeVect* vt,
+                                    Unique_Node_List& partition,
+                                    Unique_Node_List& inputs) {
+  assert(partition.size() == 2 || partition.size() == 3, "not supported");
+  assert(inputs.size()    == 2 || inputs.size()    == 3, "not supported");
+  assert(Matcher::match_rule_supported_vector(Op_MacroLogicV, vt->length(), vt->element_basic_type()), "not supported");
+
+  Node* in1 = inputs.at(0);
+  Node* in2 = inputs.at(1);
+  Node* in3 = (inputs.size() == 3 ? inputs.at(2) : in2);
+
+  uint func = compute_truth_table(partition, inputs);
+  return igvn.transform(MacroLogicVNode::make(igvn, in3, in2, in1, func, vt));
+}
+
+static uint extract_bit(uint func, uint pos) {
+  return (func & (1 << pos)) >> pos;
+}
+
+//
+//  A macro logic node represents a truth table. It has 4 inputs,
+//  First three inputs corresponds to 3 columns of a truth table
+//  and fourth input captures the logic function.
+//
+//  eg.  fn = (in1 AND in2) OR in3;
+//
+//      MacroNode(in1,in2,in3,fn)
+//
+//  -----------------
+//  in1 in2 in3  fn
+//  -----------------
+//  0    0   0    0
+//  0    0   1    1
+//  0    1   0    0
+//  0    1   1    1
+//  1    0   0    0
+//  1    0   1    1
+//  1    1   0    1
+//  1    1   1    1
+//
+
+uint Compile::eval_macro_logic_op(uint func, uint in1 , uint in2, uint in3) {
+  int res = 0;
+  for (int i = 0; i < 8; i++) {
+    int bit1 = extract_bit(in1, i);
+    int bit2 = extract_bit(in2, i);
+    int bit3 = extract_bit(in3, i);
+
+    int func_bit_pos = (bit1 << 2 | bit2 << 1 | bit3);
+    int func_bit = extract_bit(func, func_bit_pos);
+
+    res |= func_bit << i;
+  }
+  return res;
+}
+
+static uint eval_operand(Node* n, ResourceHashtable<Node*,uint>& eval_map) {
+  assert(n != NULL, "");
+  assert(eval_map.contains(n), "absent");
+  return *(eval_map.get(n));
+}
+
+static void eval_operands(Node* n,
+                          uint& func1, uint& func2, uint& func3,
+                          ResourceHashtable<Node*,uint>& eval_map) {
+  assert(is_vector_bitwise_op(n), "");
+
+  if (is_vector_unary_bitwise_op(n)) {
+    Node* opnd = n->in(1);
+    if (VectorNode::is_vector_bitwise_not_pattern(n) && VectorNode::is_all_ones_vector(opnd)) {
+      opnd = n->in(2);
+    }
+    func1 = eval_operand(opnd, eval_map);
+  } else if (is_vector_binary_bitwise_op(n)) {
+    func1 = eval_operand(n->in(1), eval_map);
+    func2 = eval_operand(n->in(2), eval_map);
+  } else {
+    assert(is_vector_ternary_bitwise_op(n), "unknown operation");
+    func1 = eval_operand(n->in(1), eval_map);
+    func2 = eval_operand(n->in(2), eval_map);
+    func3 = eval_operand(n->in(3), eval_map);
+  }
+}
+
+uint Compile::compute_truth_table(Unique_Node_List& partition, Unique_Node_List& inputs) {
+  assert(inputs.size() <= 3, "sanity");
+  ResourceMark rm;
+  uint res = 0;
+  ResourceHashtable<Node*,uint> eval_map;
+
+  // Populate precomputed functions for inputs.
+  // Each input corresponds to one column of 3 input truth-table.
+  uint input_funcs[] = { 0xAA,   // (_, _, a) -> a
+                         0xCC,   // (_, b, _) -> b
+                         0xF0 }; // (c, _, _) -> c
+  for (uint i = 0; i < inputs.size(); i++) {
+    eval_map.put(inputs.at(i), input_funcs[i]);
+  }
+
+  for (uint i = 0; i < partition.size(); i++) {
+    Node* n = partition.at(i);
+
+    uint func1 = 0, func2 = 0, func3 = 0;
+    eval_operands(n, func1, func2, func3, eval_map);
+
+    switch (n->Opcode()) {
+      case Op_OrV:
+        assert(func3 == 0, "not binary");
+        res = func1 | func2;
+        break;
+      case Op_AndV:
+        assert(func3 == 0, "not binary");
+        res = func1 & func2;
+        break;
+      case Op_XorV:
+        if (VectorNode::is_vector_bitwise_not_pattern(n)) {
+          assert(func2 == 0 && func3 == 0, "not unary");
+          res = (~func1) & 0xFF;
+        } else {
+          assert(func3 == 0, "not binary");
+          res = func1 ^ func2;
+        }
+        break;
+      case Op_MacroLogicV:
+        // Ordering of inputs may change during evaluation of sub-tree
+        // containing MacroLogic node as a child node, thus a re-evaluation
+        // makes sure that function is evaluated in context of current
+        // inputs.
+        res = eval_macro_logic_op(n->in(4)->get_int(), func1, func2, func3);
+        break;
+
+      default: assert(false, "not supported: %s", n->Name());
+    }
+    assert(res <= 0xFF, "invalid");
+    eval_map.put(n, res);
+  }
+  return res;
+}
+
+bool Compile::compute_logic_cone(Node* n, Unique_Node_List& partition, Unique_Node_List& inputs) {
+  assert(partition.size() == 0, "not empty");
+  assert(inputs.size() == 0, "not empty");
+  if (is_vector_ternary_bitwise_op(n)) {
+    return false;
+  }
+
+  bool is_unary_op = is_vector_unary_bitwise_op(n);
+  if (is_unary_op) {
+    assert(collect_unique_inputs(n, partition, inputs) == 1, "not unary");
+    return false; // too few inputs
+  }
+
+  assert(is_vector_binary_bitwise_op(n), "not binary");
+  Node* in1 = n->in(1);
+  Node* in2 = n->in(2);
+
+  int in1_unique_inputs_cnt = collect_unique_inputs(in1, partition, inputs);
+  int in2_unique_inputs_cnt = collect_unique_inputs(in2, partition, inputs);
+  partition.push(n);
+
+  // Too many inputs?
+  if (inputs.size() > 3) {
+    partition.clear();
+    inputs.clear();
+    { // Recompute in2 inputs
+      Unique_Node_List not_used;
+      in2_unique_inputs_cnt = collect_unique_inputs(in2, not_used, not_used);
+    }
+    // Pick the node with minimum number of inputs.
+    if (in1_unique_inputs_cnt >= 3 && in2_unique_inputs_cnt >= 3) {
+      return false; // still too many inputs
+    }
+    // Recompute partition & inputs.
+    Node* child       = (in1_unique_inputs_cnt < in2_unique_inputs_cnt ? in1 : in2);
+    collect_unique_inputs(child, partition, inputs);
+
+    Node* other_input = (in1_unique_inputs_cnt < in2_unique_inputs_cnt ? in2 : in1);
+    inputs.push(other_input);
+
+    partition.push(n);
+  }
+
+  return (partition.size() == 2 || partition.size() == 3) &&
+         (inputs.size()    == 2 || inputs.size()    == 3);
+}
+
+void Compile::process_logic_cone_root(PhaseIterGVN &igvn, Node *n, VectorSet &visited) {
+  assert(is_vector_bitwise_op(n), "not a root");
+
+  visited.set(n->_idx);
+
+  // 1) Do a DFS walk over the logic cone.
+  for (uint i = 1; i < n->req(); i++) {
+    Node* in = n->in(i);
+    if (!visited.test(in->_idx) && is_vector_bitwise_op(in)) {
+      process_logic_cone_root(igvn, in, visited);
+    }
+  }
+
+  // 2) Bottom up traversal: Merge node[s] with
+  // the parent to form macro logic node.
+  Unique_Node_List partition;
+  Unique_Node_List inputs;
+  if (compute_logic_cone(n, partition, inputs)) {
+    const TypeVect* vt = n->bottom_type()->is_vect();
+    Node* macro_logic = xform_to_MacroLogicV(igvn, vt, partition, inputs);
+    igvn.replace_node(n, macro_logic);
+  }
+}
+
+void Compile::optimize_logic_cones(PhaseIterGVN &igvn) {
+  ResourceMark rm;
+  if (Matcher::match_rule_supported(Op_MacroLogicV)) {
+    Unique_Node_List list;
+    collect_logic_cone_roots(list);
+
+    while (list.size() > 0) {
+      Node* n = list.pop();
+      const TypeVect* vt = n->bottom_type()->is_vect();
+      bool supported = Matcher::match_rule_supported_vector(Op_MacroLogicV, vt->length(), vt->element_basic_type());
+      if (supported) {
+        VectorSet visited(comp_arena());
+        process_logic_cone_root(igvn, n, visited);
+      }
+    }
+  }
+}
 
 //------------------------------Code_Gen---------------------------------------
 // Given a graph, generate code for it
@@ -2490,6 +2859,7 @@ void Compile::Code_Gen() {
     if (failing()) {
       return;
     }
+    print_method(PHASE_AFTER_MATCHING, 3);
   }
 
   // In debug mode can dump m._nodes.dump() for mapping of ideal to machine
@@ -2800,7 +3170,8 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
     // Check for commutative opcode
     switch( nop ) {
     case Op_AddI:  case Op_AddF:  case Op_AddD:  case Op_AddL:
-    case Op_MaxI:  case Op_MinI:
+    case Op_MaxI:  case Op_MaxL:  case Op_MaxF:  case Op_MaxD:
+    case Op_MinI:  case Op_MinL:  case Op_MinF:  case Op_MinD:
     case Op_MulI:  case Op_MulF:  case Op_MulD:  case Op_MulL:
     case Op_AndL:  case Op_XorL:  case Op_OrL:
     case Op_AndI:  case Op_XorI:  case Op_OrI: {
@@ -3370,6 +3741,8 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
 
   case Op_LoadVector:
   case Op_StoreVector:
+  case Op_LoadVectorGather:
+  case Op_StoreVectorScatter:
     break;
 
   case Op_AddReductionVI:
@@ -3382,6 +3755,9 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   case Op_MulReductionVD:
   case Op_MinReductionV:
   case Op_MaxReductionV:
+  case Op_AndReductionV:
+  case Op_OrReductionV:
+  case Op_XorReductionV:
     break;
 
   case Op_PackB:
@@ -4995,4 +5371,33 @@ void CloneMap::dump(node_idx_t key) const {
     NodeCloneInfo ni(val);
     ni.dump();
   }
+}
+
+void Compile::print_method(CompilerPhaseType cpt, const char *name, int level, int idx) {
+  EventCompilerPhase event;
+  if (event.should_commit()) {
+      event.set_starttime(C->_latest_stage_start_counter);
+      event.set_phase((u1) cpt);
+      event.set_compileId(C->_compile_id);
+      event.set_phaseLevel(level);
+      event.commit();
+  }
+#ifndef PRODUCT
+  if (_method != NULL && should_print(level)) {
+    _printer->print_method(name, level);
+  }
+#endif
+  C->_latest_stage_start_counter.stamp();
+}
+
+void Compile::print_method(CompilerPhaseType cpt, Node* n, int level) {
+  ResourceMark rm;
+  stringStream ss;
+  ss.print_raw(CompilerPhaseTypeHelper::to_string(cpt));
+  if (n != NULL) {
+    ss.print(": %d %s ", n->_idx, NodeClassNames[n->Opcode()]);
+  } else {
+    ss.print_raw(": NULL");
+  }
+  C->print_method(cpt, ss.as_string(), level);
 }

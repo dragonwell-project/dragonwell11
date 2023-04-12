@@ -222,6 +222,13 @@ class OopStorage;
   /* force inline of iterators */                                                                                        \
   do_klass(Iterator_klass,                              java_util_Iterator,                        Pre                 ) \
                                                                                                                          \
+  /* support for vectors*/                                                                                               \
+  do_klass(vector_VectorSupport_klass,                  jdk_internal_vm_vector_VectorSupport,      Opt                 ) \
+  do_klass(vector_VectorPayload_klass,                  jdk_internal_vm_vector_VectorPayload,      Opt                 ) \
+  do_klass(vector_Vector_klass,                         jdk_internal_vm_vector_Vector,             Opt                 ) \
+  do_klass(vector_VectorMask_klass,                     jdk_internal_vm_vector_VectorMask,         Opt                 ) \
+  do_klass(vector_VectorShuffle_klass,                  jdk_internal_vm_vector_VectorShuffle,      Opt                 ) \
+                                                                                                                         \
   /* Stack manipulation classes */                                                                                       \
   do_klass(java_dyn_CoroutineSupport_klass,             java_dyn_CoroutineSupport,                 Opt                 ) \
   do_klass(java_dyn_CoroutineBase_klass,                java_dyn_CoroutineBase,                    Opt                 ) \

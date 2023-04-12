@@ -58,6 +58,7 @@ BOOT_MODULES += \
     java.rmi \
     java.security.sasl \
     java.xml \
+    jdk.incubator.vector \
     jdk.internal.vm.ci \
     jdk.jfr \
     jdk.management \
@@ -149,6 +150,7 @@ DOCS_MODULES += \
     jdk.editpad \
     jdk.hotspot.agent \
     jdk.httpserver \
+    jdk.incubator.vector \
     jdk.jartool \
     jdk.javadoc \
     jdk.jcmd \

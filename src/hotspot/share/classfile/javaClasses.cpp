@@ -4431,6 +4431,30 @@ void java_nio_Buffer::compute_offsets() {
   BUFFER_FIELDS_DO(FIELD_COMPUTE_OFFSET);
 }
 
+int vector_VectorPayload::_payload_offset;
+
+#define VECTORPAYLOAD_FIELDS_DO(macro) \
+  macro(_payload_offset, k, "payload", object_signature, false)
+
+void vector_VectorPayload::compute_offsets() {
+  InstanceKlass* k = SystemDictionary::vector_VectorPayload_klass();
+  VECTORPAYLOAD_FIELDS_DO(FIELD_COMPUTE_OFFSET);
+}
+
+#if INCLUDE_CDS
+void vector_VectorPayload::serialize_offsets(SerializeClosure* f) {
+  VECTORPAYLOAD_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
+}
+#endif
+
+void vector_VectorPayload::set_payload(oop o, oop val) {
+  o->obj_field_put(_payload_offset, val);
+}
+
+bool vector_VectorPayload::is_instance(oop obj) {
+  return obj != NULL && is_subclass(obj->klass());
+}
+
 /* stack manipulation */
 
 #define COROUTINEBASE_FIELDS_DO(macro) \

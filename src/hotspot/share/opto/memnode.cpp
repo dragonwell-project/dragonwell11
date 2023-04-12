@@ -45,6 +45,7 @@
 #include "opto/phaseX.hpp"
 #include "opto/regmask.hpp"
 #include "opto/rootnode.hpp"
+#include "opto/vectornode.hpp"
 #include "utilities/align.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/macros.hpp"
@@ -668,7 +669,8 @@ Node* MemNode::find_previous_store(PhaseTransform* phase) {
       }
 
       if (st_offset != offset && st_offset != Type::OffsetBot) {
-        const int MAX_STORE = BytesPerLong;
+        const int MAX_STORE = MAX2(BytesPerLong, (int)MaxVectorSize);
+        assert(mem->as_Store()->memory_size() <= MAX_STORE, "");
         if (st_offset >= offset + size_in_bytes ||
             st_offset <= offset - MAX_STORE ||
             st_offset <= offset - mem->as_Store()->memory_size()) {
@@ -1114,8 +1116,17 @@ Node* MemNode::can_see_stored_value(Node* st, PhaseTransform* phase) const {
         // Thus, we are able to replace L by V.
       }
       // Now prove that we have a LoadQ matched to a StoreQ, for some Q.
-      if (store_Opcode() != st->Opcode())
+      if (store_Opcode() != st->Opcode()) {
         return NULL;
+      }
+      // LoadVector/StoreVector needs additional check to ensure the types match.
+      if (store_Opcode() == Op_StoreVector) {
+        const TypeVect*  in_vt = st->as_StoreVector()->vect_type();
+        const TypeVect* out_vt = as_LoadVector()->vect_type();
+        if (in_vt != out_vt) {
+          return NULL;
+        }
+      }
       return st->in(MemNode::ValueIn);
     }
 
@@ -1988,10 +1999,12 @@ const Type* LoadNode::Value(PhaseGVN* phase) const {
     }
   }
 
-  if (is_instance) {
+  bool is_vect = (_type->isa_vect() != NULL);
+  if (is_instance && !is_vect) {
     // If we have an instance type and our memory input is the
     // programs's initial memory state, there is no matching store,
-    // so just return a zero of the appropriate type
+    // so just return a zero of the appropriate type -
+    // except if it is vectorized - then we have no zero constant.
     Node *mem = in(MemNode::Memory);
     if (mem->is_Parm() && mem->in(0)->is_Start()) {
       assert(mem->as_Parm()->_con == TypeFunc::Memory, "must be memory Parm");
@@ -2573,6 +2586,8 @@ Node *StoreNode::Ideal(PhaseGVN *phase, bool can_reshape) {
       assert(Opcode() == st->Opcode() ||
              st->Opcode() == Op_StoreVector ||
              Opcode() == Op_StoreVector ||
+             st->Opcode() == Op_StoreVectorScatter ||
+             Opcode() == Op_StoreVectorScatter ||
              phase->C->get_alias_index(adr_type()) == Compile::AliasIdxRaw ||
              (Opcode() == Op_StoreL && st->Opcode() == Op_StoreI) || // expanded ClearArrayNode
              (Opcode() == Op_StoreI && st->Opcode() == Op_StoreL) || // initialization by arraycopy
@@ -3769,7 +3784,7 @@ intptr_t InitializeNode::can_capture_store(StoreNode* st, PhaseTransform* phase,
 int InitializeNode::captured_store_insertion_point(intptr_t start,
                                                    int size_in_bytes,
                                                    PhaseTransform* phase) {
-  const int FAIL = 0, MAX_STORE = BytesPerLong;
+  const int FAIL = 0, MAX_STORE = MAX2(BytesPerLong, (int)MaxVectorSize);
 
   if (is_complete())
     return FAIL;                // arraycopy got here first; punt
@@ -3799,6 +3814,7 @@ int InitializeNode::captured_store_insertion_point(intptr_t start,
       }
       return -(int)i;           // not found; here is where to put it
     } else if (st_off < start) {
+      assert(st->as_Store()->memory_size() <= MAX_STORE, "");
       if (size_in_bytes != 0 &&
           start < st_off + MAX_STORE &&
           start < st_off + st->as_Store()->memory_size()) {

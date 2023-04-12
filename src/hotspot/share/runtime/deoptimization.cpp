@@ -43,6 +43,7 @@
 #include "oops/typeArrayOop.inline.hpp"
 #include "oops/verifyOopClosure.hpp"
 #include "prims/jvmtiThreadState.hpp"
+#include "prims/vectorSupport.hpp"
 #include "runtime/biasedLocking.hpp"
 #include "runtime/compilationPolicy.hpp"
 #include "runtime/deoptimization.hpp"
@@ -203,7 +204,7 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
   // relock objects if synchronization on them was eliminated.
 #if !INCLUDE_JVMCI
   if (DoEscapeAnalysis || EliminateNestedLocks) {
-    if (EliminateAllocations) {
+    if (EliminateAllocations || EliminateAutoBox || EnableVectorAggressiveReboxing) {
 #endif // INCLUDE_JVMCI
       assert (chunk->at(0)->scope() != NULL,"expect only compiled java frames");
       GrowableArray<ScopeValue*>* objects = chunk->at(0)->scope()->objects();
@@ -233,7 +234,7 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
       }
       if (objects != NULL) {
         JRT_BLOCK
-          realloc_failures = realloc_objects(thread, &deoptee, objects, THREAD);
+          realloc_failures = realloc_objects(thread, &deoptee, &map, objects, THREAD);
         JRT_END
         bool skip_internal = (cm != NULL) && !cm->is_compiled_by_jvmci();
         reassign_fields(&deoptee, &map, objects, realloc_failures, skip_internal);
@@ -808,7 +809,7 @@ Deoptimization::DeoptAction Deoptimization::_unloaded_action
   = Deoptimization::Action_reinterpret;
 
 #if COMPILER2_OR_JVMCI
-bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, GrowableArray<ScopeValue*>* objects, TRAPS) {
+bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, RegisterMap* reg_map, GrowableArray<ScopeValue*>* objects, TRAPS) {
   Handle pending_exception(THREAD, thread->pending_exception());
   const char* exception_file = thread->exception_file();
   int exception_line = thread->exception_line();
@@ -825,7 +826,17 @@ bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, GrowableArra
 
     if (k->is_instance_klass()) {
       InstanceKlass* ik = InstanceKlass::cast(k);
-      obj = ik->allocate_instance(THREAD);
+      if (obj == NULL) {
+#ifdef COMPILER2
+        if (EnableVectorSupport && VectorSupport::is_vector(ik)) {
+          obj = VectorSupport::allocate_vector(ik, fr, reg_map, sv, THREAD);
+        } else {
+          obj = ik->allocate_instance(THREAD);
+        }
+#else        
+        obj = ik->allocate_instance(THREAD);
+#endif // COMPILER2        
+      }
     } else if (k->is_typeArray_klass()) {
       TypeArrayKlass* ak = TypeArrayKlass::cast(k);
       assert(sv->field_size() % type2size[ak->element_type()] == 0, "non-integral array length");
@@ -1092,13 +1103,37 @@ void Deoptimization::reassign_fields(frame* fr, RegisterMap* reg_map, GrowableAr
     Klass* k = java_lang_Class::as_Klass(sv->klass()->as_ConstantOopReadValue()->value()());
     Handle obj = sv->value();
     assert(obj.not_null() || realloc_failures, "reallocation was missed");
+#ifndef PRODUCT
     if (PrintDeoptimizationDetails) {
       tty->print_cr("reassign fields for object of type %s!", k->name()->as_C_string());
     }
+#endif // !PRODUCT
+
     if (obj.is_null()) {
       continue;
     }
 
+#ifdef COMPILER2
+    if (EnableVectorSupport && VectorSupport::is_vector(k)) {
+      assert(sv->field_size() == 1, "%s not a vector", k->name()->as_C_string());
+      ScopeValue* payload = sv->field_at(0);
+      if (payload->is_location() &&
+          payload->as_LocationValue()->location().type() == Location::vector) {
+#ifndef PRODUCT
+        if (PrintDeoptimizationDetails) {
+          tty->print_cr("skip field reassignment for this vector - it should be assigned already");
+          if (Verbose) {
+            Handle obj = sv->value();
+            k->oop_print_on(obj(), tty);
+          }
+        }
+#endif // !PRODUCT
+        continue; // Such vector's value was already restored in VectorSupport::allocate_vector().
+      }
+      // Else fall-through to do assignment for scalar-replaced boxed vector representation
+      // which could be restored after vector object allocation.
+    }
+#endif
     if (k->is_instance_klass()) {
       InstanceKlass* ik = InstanceKlass::cast(k);
       reassign_fields_by_klass(ik, fr, reg_map, sv, 0, obj(), skip_internal);

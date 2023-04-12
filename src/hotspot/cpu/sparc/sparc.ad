@@ -1710,7 +1710,7 @@ const bool Matcher::match_rule_supported(int opcode) {
   return true;  // Per default match rules are supported.
 }
 
-const bool Matcher::match_rule_supported_vector(int opcode, int vlen) {
+const bool Matcher::match_rule_supported_vector(int opcode, int vlen, BasicType bt) {
 
   // TODO
   // identify extra cases that we might want to provide match rules for
@@ -1747,11 +1747,6 @@ const int Matcher::vector_width_in_bytes(BasicType bt) {
 const uint Matcher::vector_ideal_reg(int size) {
   assert(MaxVectorSize == 8, "");
   return Op_RegD;
-}
-
-const uint Matcher::vector_shift_count_ideal_reg(int size) {
-  fatal("vector shift is not supported");
-  return Node::NotAMachineReg;
 }
 
 // Limits on vector size (number of elements) loaded into vector.
@@ -1813,6 +1808,24 @@ const bool Matcher::require_postalloc_expand = false;
 // Do we need to mask the count passed to shift instructions or does
 // the cpu only look at the lower 5/6 bits anyway?
 const bool Matcher::need_masked_shift_count = false;
+
+// No support for generic vector operands.
+const bool Matcher::supports_generic_vector_operands  = false;
+
+MachOper* Matcher::pd_specialize_generic_vector_operand(MachOper* original_opnd, uint ideal_reg, bool is_temp) {
+  ShouldNotReachHere(); // generic vector operands not supported
+  return NULL;
+}
+
+bool Matcher::is_generic_reg2reg_move(MachNode* m) {
+  ShouldNotReachHere();  // generic vector operands not supported
+  return false;
+}
+
+bool Matcher::is_generic_vector(MachOper* opnd)  {
+  ShouldNotReachHere();  // generic vector operands not supported
+  return false;
+}
 
 bool Matcher::narrow_oop_use_complex_address() {
   assert(UseCompressedOops, "only for compressed oops code");

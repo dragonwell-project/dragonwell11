@@ -140,7 +140,8 @@ module java.base {
         jdk.crypto.cryptoki;
     exports com.sun.security.ntlm to
         java.security.sasl;
-    exports jdk.internal to
+    exports jdk.internal to // for @HotSpotIntrinsicCandidate
+        jdk.incubator.vector,
         jdk.jfr;
     exports jdk.internal.event to
         jdk.jfr;
@@ -190,6 +191,7 @@ module java.base {
         jdk.attach,
         jdk.charsets,
         jdk.compiler,
+        jdk.incubator.vector,
         jdk.crypto.cryptoki,
         java.net.http,
         jdk.jfr,
@@ -227,7 +229,10 @@ module java.base {
         jdk.management.agent;
     exports jdk.internal.vm.annotation to
         jdk.internal.vm.ci,
+        jdk.incubator.vector,
         jdk.unsupported;
+    exports jdk.internal.vm.vector to
+        jdk.incubator.vector;
     exports jdk.internal.util.jar to
         jdk.jartool;
     exports jdk.internal.util.xml to

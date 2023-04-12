@@ -190,6 +190,9 @@
   notproduct(bool, TraceSuperWordLoopUnrollAnalysis, false,                 \
           "Trace what Superword Level Parallelism analysis applies")        \
                                                                             \
+  diagnostic(bool, UseVectorMacroLogic, true,                               \
+          "Use ternary macro logic instructions")                           \
+                                                                            \
   product(intx,  LoopUnrollMin, 4,                                          \
           "Minimum number of unroll loop bodies before checking progress"   \
           "of rounds of unroll,optimize,..")                                \
@@ -729,6 +732,15 @@
                                                                             \
   diagnostic(bool, UseMontgomerySquareIntrinsic, false,                     \
           "Enables intrinsification of BigInteger.montgomerySquare()")      \
+                                                                            \
+  experimental(bool, EnableVectorSupport, false,                            \
+          "Enables VectorSupport intrinsics")                               \
+                                                                            \
+  experimental(bool, EnableVectorReboxing, false,                           \
+          "Enables reboxing of vectors")                                    \
+                                                                            \
+  experimental(bool, EnableVectorAggressiveReboxing, false,                 \
+          "Enables aggressive reboxing of vectors")                         \
                                                                             \
   product(bool, UseTypeSpeculation, true,                                   \
           "Speculatively propagate types from profiles")                    \
