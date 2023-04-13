@@ -29,7 +29,7 @@
 # @modules jdk.compiler
 # @modules java.base/jdk.internal.misc
 # @build jdk.test.lib.compiler.CompilerUtils
-# @requires os.arch=="amd64"
+# @requires os.arch=="amd64" | os.arch=="aarch64"
 # @run shell testDelegatingClassLoaderJVMTI.sh
 #
 
@@ -50,12 +50,6 @@ case ${OS} in
     exit 1
     ;;
 esac
-
-if [[ "x$(uname -m)" = "xaarch64" ]];
-then
-  echo "Test only valid for x86"
-  exit 0
-fi
 
 JAVA=${TESTJAVA}${FS}bin${FS}java
 JAVAC=${TESTJAVA}${FS}bin${FS}javac

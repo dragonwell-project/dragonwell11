@@ -29,7 +29,7 @@ import java.util.Base64;
  * @test
  * @summary test startupProbe of quickstart
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestExecStartupProbe
  */
 public class TestExecStartupProbe implements SingleProjectProvider {
@@ -68,7 +68,9 @@ public class TestExecStartupProbe implements SingleProjectProvider {
                         "        FileWriter fw = new FileWriter(\"%s\");\n" +
                         "        fw.write(\"%s\");\n" +
                         "        fw.close();\n" +
-                        "        Thread.sleep(10 * 1000);\n" +
+                        "        String debug = System.getProperty(\"jdk.debug\");\n" +
+                        "        int time = 10 + (debug.equals(\"release\") ? 0 : 10);\n"+
+                        "        Thread.sleep(time * 1000);\n" +
                         "    }" +
                         " }";
 

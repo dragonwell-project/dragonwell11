@@ -25,7 +25,7 @@
  * @test
  * @summary Test Integrity Check
  * @library /test/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm/timeout=600 TestIntegrityCheck
  */
 

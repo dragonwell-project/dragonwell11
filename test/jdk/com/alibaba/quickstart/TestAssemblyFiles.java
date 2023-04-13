@@ -26,7 +26,7 @@
  * @summary Test files assemblied into JDK
  * @library /test/lib
  * @library /lib/testlibrary
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestAssemblyFiles
  */
 

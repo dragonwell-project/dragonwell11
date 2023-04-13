@@ -29,7 +29,7 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.util:+open
  * @build jdk.test.lib.compiler.CompilerUtils
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestRegisterClassLoader
  */
 
