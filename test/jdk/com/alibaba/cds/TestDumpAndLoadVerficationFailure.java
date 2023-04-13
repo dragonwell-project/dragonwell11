@@ -34,7 +34,7 @@
  * @build trivial.Parent
  * @build trivial.ChildA
  * @build trivial.ChildB
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @compile --add-exports=java.base/jdk.internal.loader=ALL-UNNAMED TestVerificationFailure.java
  * @run driver ClassFileInstaller -jar test.jar TestVerificationFailure TestVerificationFailure$1 TestVerificationFailure$2 TestVerificationFailure$3
  * @run main/othervm -XX:+UnlockExperimentalVMOptions --add-exports=java.base/jdk.internal.loader=ALL-UNNAMED TestDumpAndLoadVerficationFailure

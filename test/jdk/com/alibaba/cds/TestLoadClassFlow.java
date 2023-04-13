@@ -34,7 +34,7 @@
  * @build Classes4CDS
  * @build TestSimple
  * @build TestLoadClass
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run driver ClassFileInstaller -jar test.jar TestLoadClass
  * @run main/othervm -XX:+UnlockExperimentalVMOptions TestLoadClassFlow
  */

@@ -36,7 +36,7 @@
  * @build Classes4CDS
  * @build TestSimple
  * @build TestClassLoaderWithNullURL
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run driver ClassFileInstaller -jar test.jar TestClassLoaderWithNullURL MyWebAppClassLoader
  * @run main/othervm -XX:+UnlockExperimentalVMOptions TestDumpAndLoadClassWithNullURL
  */

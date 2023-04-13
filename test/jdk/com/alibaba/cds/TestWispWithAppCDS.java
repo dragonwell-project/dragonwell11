@@ -32,7 +32,7 @@
  * @modules java.base/com.alibaba.util:+open
  * @build TestSimpleWispUsage
  * @build Classes4CDS
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run driver ClassFileInstaller  -jar test.jar TestSimpleWispUsage
  * @run main/othervm TestWispWithAppCDS
  */

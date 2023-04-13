@@ -12,7 +12,7 @@
  * @build MyWebAppClassLoader
  * @build LoadMultiVersionedJarClass
  * @build Compiler JarBuilder CreateMultiReleaseTestJars
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run driver ClassFileInstaller -jar test.jar LoadMultiVersionedJarClass MyWebAppClassLoader
  * @run main/othervm -XX:+UnlockExperimentalVMOptions TestMultiVersionedJar
  */

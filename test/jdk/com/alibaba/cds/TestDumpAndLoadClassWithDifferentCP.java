@@ -33,7 +33,7 @@
  * @build Classes4CDS
  * @build trivial.ThrowException
  * @build TestAppClassLoader
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run driver ClassFileInstaller -jar testSimple.jar trivial.ThrowException
  * @run driver ClassFileInstaller -jar test.jar TestAppClassLoader
  * @run main/othervm -XX:+UnlockExperimentalVMOptions TestDumpAndLoadClassWithDifferentCP

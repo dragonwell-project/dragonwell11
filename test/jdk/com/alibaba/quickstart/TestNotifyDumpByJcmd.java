@@ -27,7 +27,7 @@
  * @summary Test dumping using jcmd
  * @library /test/lib
  * @build TestDump
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run driver ClassFileInstaller -jar test-notifyDumpByJcmd.jar TestDump TestDump$Policy TestDump$ClassLoadingPolicy TestDump$WatcherThread
  * @run main/othervm/timeout=600 TestNotifyDumpByJcmd
  */

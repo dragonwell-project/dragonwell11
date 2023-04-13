@@ -7,7 +7,7 @@ import java.util.function.Function;
  * @test
  * @summary Test order changed of class path
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestClassPathOrderChanged
  */
 public class TestClassPathOrderChanged implements SingleProjectProvider {
