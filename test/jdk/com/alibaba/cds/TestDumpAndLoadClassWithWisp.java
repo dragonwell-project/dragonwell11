@@ -33,7 +33,7 @@
  * @build Classes4CDS
  * @build TestSimple
  * @build TestClassLoaderWithSignature
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run driver ClassFileInstaller -jar test.jar TestClassLoaderWithSignature
  * @run main/othervm -XX:+UnlockExperimentalVMOptions TestDumpAndLoadClassWithWisp
  */

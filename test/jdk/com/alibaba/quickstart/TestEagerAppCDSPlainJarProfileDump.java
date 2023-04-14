@@ -25,7 +25,7 @@
  * @test
  * @summary test quickstart when enable EagerAppCDS with the process: profile,dump,replay
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestEagerAppCDSPlainJarProfileDump
  */
 public class TestEagerAppCDSPlainJarProfileDump implements SingleProjectProvider {

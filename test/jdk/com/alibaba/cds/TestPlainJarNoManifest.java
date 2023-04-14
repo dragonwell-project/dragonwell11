@@ -2,7 +2,7 @@
  * @test
  * @summary far jar and some jar have no manifest.
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestPlainJarNoManifest
  */
 public class TestPlainJarNoManifest implements SingleProjectProvider {
