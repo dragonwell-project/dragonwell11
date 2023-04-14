@@ -623,7 +623,10 @@ jobs:
           path: serverless-adapter
 
       - name: Build serverless-adapter
-        run: mvn package
+        run: |
+          mvn -v
+          mvn clean install -e
+          mvn package -e
         working-directory: serverless-adapter
 
       - name: Copy serverless-adapter into bundles
