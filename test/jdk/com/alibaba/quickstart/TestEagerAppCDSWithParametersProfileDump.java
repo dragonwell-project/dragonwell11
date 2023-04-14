@@ -25,7 +25,7 @@
  * @test
  * @summary test main class with parameter like a VM option.
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestEagerAppCDSWithParametersProfileDump
  */
 public class TestEagerAppCDSWithParametersProfileDump implements SingleProjectProvider {

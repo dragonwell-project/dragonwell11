@@ -615,6 +615,32 @@ jobs:
         run: make CONF_NAME=linux-aarch64
         working-directory: jdk
 
+      - name: Download serverless-adapter source code
+        uses: actions/checkout@v3
+        with:
+          repository: dragonwell-project/serverless-adapter
+          ref: main
+          path: serverless-adapter
+
+      - name: Build serverless-adapter
+        run: mvn package
+        working-directory: serverless-adapter
+
+      - name: Copy serverless-adapter into bundles
+        run: |
+          mkdir -p tmp
+          cd tmp
+          cp ../jdk/build/linux-x64/bundles/jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz ./
+          tar xf jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz
+          rm -rf jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz
+          mkdir -p jdk-${{ env.JDK_VERSION }}/${{ matrix.artifact-path }}lib/serverless
+          cp -f ../serverless-adapter/target/serverless-adapter-0.1.jar jdk-${{ env.JDK_VERSION }}/${{ matrix.artifact-path }}lib/serverless/serverless-adapter.jar
+          cp -f ../serverless-adapter/output/libloadclassagent.so jdk-${{ env.JDK_VERSION }}/${{ matrix.artifact-path }}lib/serverless/
+          tar zcf jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz *
+          cp -f jdk-${{ env.JDK_VERSION }}-internal+0_linux-x64_bin${{ matrix.artifact }}.tar.gz ../jdk/build/linux-x64/bundles/
+          cd ..
+          rm -rf tmp
+
       - name: Persist test bundles
         uses: actions/upload-artifact@v3
         with:

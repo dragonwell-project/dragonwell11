@@ -7,7 +7,7 @@ import java.util.List;
  * @test
  * @summary Test the jar when dumping is subset of jars when replaying
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestPrefixClassPath
  */
 public class TestPrefixClassPath implements SingleProjectProvider {

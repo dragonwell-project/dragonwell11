@@ -25,7 +25,7 @@
  * @test
  * @summary test quickstart with all features with the process: profile,dump,replay
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestAllFeaturePlainJarProfileDump
  */
 public class TestAllFeaturePlainJarProfileDump implements SingleProjectProvider {

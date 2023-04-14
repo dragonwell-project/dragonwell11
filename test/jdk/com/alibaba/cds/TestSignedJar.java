@@ -4,7 +4,7 @@ import java.io.File;
  * @test
  * @summary Test EagerAppCDS that process signed jar.When a jar is signed, EagerAppCDS will not process it.
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestSignedJar
  */
 public class TestSignedJar implements SingleProjectProvider {

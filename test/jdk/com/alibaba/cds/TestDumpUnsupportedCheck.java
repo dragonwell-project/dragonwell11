@@ -30,7 +30,7 @@
  *          java.management
  *          jdk.jartool/sun.tools.jar
  * @modules jdk.compiler
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions TestDumpUnsupportedCheck
  */
 

@@ -25,7 +25,7 @@
  * @test
  * @summary jars that load by a custom URLClassLoader.This class loader override loadClass and findResource, not use the URLs that provided by constructor.
  * @library /test/lib /com/alibaba/lib
- * @requires os.arch=="amd64"
+ * @requires os.arch=="amd64" | os.arch=="aarch64"
  * @run main/othervm TestNoURLsURLClassLoader
  */
 public class TestNoURLsURLClassLoader implements SingleProjectProvider {
