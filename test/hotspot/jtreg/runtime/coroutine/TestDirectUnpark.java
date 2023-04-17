@@ -2,6 +2,7 @@
  * @test
  * @library /test/lib
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @summary Test the optimization of direct unpark with Object.wait/notify
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestDirectUnpark
 */

@@ -4,6 +4,7 @@
  * @summary Test for thread WispTask leak
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestId2TaskMapLeak
 */
 import com.alibaba.wisp.engine.WispEngine;

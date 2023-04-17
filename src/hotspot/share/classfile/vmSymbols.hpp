@@ -378,6 +378,8 @@
   template(run_finalization_name,                     "runFinalization")                          \
   template(dispatchUncaughtException_name,            "dispatchUncaughtException")                \
   template(loadClass_name,                            "loadClass")                                \
+  template(loadClassFromCDS_name,                     "loadClassFromCDS")                         \
+  template(loadClassFromCDS_signature,                "(Ljava/lang/String;Ljava/lang/String;JI)Ljava/lang/Class;") \
   template(get_name,                                  "get")                                      \
   template(put_name,                                  "put")                                      \
   template(type_name,                                 "type")                                     \
@@ -725,6 +727,14 @@
   template(invoke0_signature,                          "(Ljava/lang/reflect/Method;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;")  \
   template(jdk_internal_reflect_NativeConstructorAccessorImpl,  "jdk/internal/reflect/NativeConstructorAccessorImpl")               \
   template(newInstance0_signature,                     "(Ljava/lang/reflect/Constructor;[Ljava/lang/Object;)Ljava/lang/Object;")  \
+                                                                                                                 \
+  /* QuickStart support */                                                                                       \
+  template(com_alibaba_util_QuickStart,                "com/alibaba/util/QuickStart")                            \
+  template(com_alibaba_util_CDSDumpHook,               "com/alibaba/util/CDSDumpHook")                           \
+  template(notifyDump_name,                            "notifyDump")                                             \
+  template(string_string_string_string_bool_void_signature,   "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V") \
+  template(initialize_name,                           "initialize")                                              \
+  template(int_string_bool_stringarray_string_void_signature,             "(ILjava/lang/String;Z[Ljava/lang/String;Ljava/lang/String;)V")  \
                                                                                                                  \
   /* forEachRemaining support */                                                                                  \
   template(java_util_stream_StreamsRangeIntSpliterator,          "java/util/stream/Streams$RangeIntSpliterator")  \

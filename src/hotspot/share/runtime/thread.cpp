@@ -44,6 +44,7 @@
 #include "jfr/jfrEvents.hpp"
 #include "jvmtifiles/jvmtiEnv.hpp"
 #include "logging/log.hpp"
+#include "logging/logAsyncWriter.hpp"
 #include "logging/logConfiguration.hpp"
 #include "logging/logStream.hpp"
 #include "memory/allocation.inline.hpp"
@@ -108,6 +109,7 @@
 #include "runtime/vmThread.hpp"
 #include "runtime/vmOperations.hpp"
 #include "runtime/vm_version.hpp"
+#include "runtime/quickStart.hpp"
 #include "services/attachListener.hpp"
 #include "services/management.hpp"
 #include "services/memTracker.hpp"
@@ -373,9 +375,9 @@ void Thread::call_run() {
   // At this point, Thread object should be fully initialized and
   // Thread::current() should be set.
 
-  register_thread_stack_with_NMT();
-
   MACOS_AARCH64_ONLY(this->init_wx());
+
+  register_thread_stack_with_NMT();
 
   JFR_ONLY(Jfr::on_thread_start(this);)
 
@@ -942,7 +944,9 @@ void Thread::print_on_error(outputStream* st, char* buf, int buflen) const {
   else if (is_GC_task_thread())       { st->print("GCTaskThread"); }
   else if (is_Watcher_thread())       { st->print("WatcherThread"); }
   else if (is_ConcurrentGC_thread())  { st->print("ConcurrentGCThread"); }
-  else                                { st->print("Thread"); }
+  else if (this == AsyncLogWriter::instance()) {
+    st->print("%s", this->name());
+  } else                                { st->print("Thread"); }
 
   if (is_Named_thread()) {
     st->print(" \"%s\"", name());
@@ -1632,6 +1636,7 @@ void JavaThread::initialize() {
   clear_must_deopt_id();
   set_monitor_chunks(NULL);
   set_next(NULL);
+  _in_asgct = false;
   _on_thread_list = false;
   _thread_state = _thread_new;
   _terminated = _not_terminated;
@@ -2706,10 +2711,7 @@ void JavaThread::create_stack_guard_pages() {
   } else {
     log_warning(os, thread)("Attempt to protect stack guard pages failed ("
       PTR_FORMAT "-" PTR_FORMAT ").", p2i(low_addr), p2i(low_addr + len));
-    if (os::uncommit_memory((char *) low_addr, len)) {
-      log_warning(os, thread)("Attempt to deallocate stack guard pages failed.");
-    }
-    return;
+    vm_exit_out_of_memory(len, OOM_MPROTECT_ERROR, "memory to guard stack pages");
   }
 
   log_debug(os, thread)("Thread " UINTX_FORMAT " stack guard pages activated: "
@@ -3005,6 +3007,9 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
     Coroutine* current = _coroutine_list;
     do {
       current->oops_do(f, cf);
+      if (UseWispMonitor) {
+        current->wisp_thread()->oops_do(f, cf);
+      }
       current = current->next();
     } while (current != _coroutine_list);
   }
@@ -3219,7 +3224,7 @@ const char* JavaThread::get_thread_name() const {
 }
 
 // Returns a non-NULL representation of this thread's name, or a suitable
-// descriptive string if there is no set name
+// descriptive string if there is no set name.
 const char* JavaThread::get_thread_name_string(char* buf, int buflen) const {
   const char* name_str;
   oop thread_obj = threadObj();
@@ -3279,6 +3284,19 @@ ThreadPriority JavaThread::java_priority() const {
   ThreadPriority priority = java_lang_Thread::priority(thr_oop);
   assert(MinPriority <= priority && priority <= MaxPriority, "sanity check");
   return priority;
+}
+
+// Helper to extract the name from the thread oop for logging.
+const char* JavaThread::name_for(oop thread_obj) {
+  assert(thread_obj != NULL, "precondition");
+  oop name = java_lang_Thread::name(thread_obj);
+  const char* name_str;
+  if (name != NULL) {
+    name_str = java_lang_String::as_utf8_string(name);
+  } else {
+    name_str = "<un-named>";
+  }
+  return name_str;
 }
 
 void JavaThread::prepare(jobject jni_thread, ThreadPriority prio) {
@@ -3729,6 +3747,13 @@ static void call_initPhase3(TRAPS) {
   if (EnableCoroutine) {
     call_initializeWispClass(CHECK);
     call_startWispDaemons(THREAD);
+    if (HAS_PENDING_EXCEPTION) {
+      vm_exit_during_initialization(Handle(THREAD, PENDING_EXCEPTION));
+    }
+  }
+
+  if (!QuickStart::is_normal()) {
+    QuickStart::initialize(THREAD);
     if (HAS_PENDING_EXCEPTION) {
       vm_exit_during_initialization(Handle(THREAD, PENDING_EXCEPTION));
     }
@@ -4874,6 +4899,12 @@ void Threads::print_on(outputStream* st, bool print_stacks,
     st->cr();
   }
 
+  AsyncLogWriter* aw = AsyncLogWriter::instance();
+  if (aw != NULL) {
+    aw->print_on(st);
+    st->cr();
+  }
+
   st->flush();
 }
 
@@ -4926,6 +4957,7 @@ void Threads::print_on_error(outputStream* st, Thread* current, char* buf,
   st->print_cr("Other Threads:");
   print_on_error(VMThread::vm_thread(), st, current, buf, buflen, &found_current);
   print_on_error(WatcherThread::watcher_thread(), st, current, buf, buflen, &found_current);
+  print_on_error(AsyncLogWriter::instance(), st, current, buf, buflen, &found_current);
 
   if (Universe::heap() != NULL) {
     PrintOnErrorClosure print_closure(st, current, buf, buflen, &found_current);

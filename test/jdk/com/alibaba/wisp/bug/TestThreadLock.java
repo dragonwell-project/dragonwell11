@@ -3,6 +3,7 @@
  * @summary Test fix of WispEngine block on Thread.class lock
  * @modules java.base/java.lang:+open
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -XX:+UnlockExperimentalVMOptions -XX:SyncKnobs="ReportSettings=1:QMode=1" -Dcom.alibaba.wisp.transparentWispSwitch=true TestThreadLock
  */
 

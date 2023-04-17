@@ -34,12 +34,13 @@ import jdk.test.lib.JDKToolLauncher;
 import jdk.test.lib.Platform;
 import jdk.test.lib.process.OutputAnalyzer;
 import jdk.test.lib.process.ProcessTools;
+import jdk.test.lib.SA.SATestUtils;
 import jdk.test.lib.Utils;
 
 /**
  * @test
  * @library /test/lib
- * @requires vm.hasSAandCanAttach & os.family != "mac"
+ * @requires vm.hasSA
  * @modules java.base/jdk.internal.misc
  *          jdk.hotspot.agent/sun.jvm.hotspot
  *          jdk.hotspot.agent/sun.jvm.hotspot.utilities
@@ -64,22 +65,21 @@ public class TestRevPtrsForInvokeDynamic {
 
     private static void createAnotherToAttach(long lingeredAppPid)
                                                          throws Exception {
-        String[] toolArgs = {
+        // Start a new process to attach to the lingered app
+        ProcessBuilder processBuilder = ProcessTools.createJavaProcessBuilder(
             "--add-modules=jdk.hotspot.agent",
             "--add-exports=jdk.hotspot.agent/sun.jvm.hotspot=ALL-UNNAMED",
             "--add-exports=jdk.hotspot.agent/sun.jvm.hotspot.utilities=ALL-UNNAMED",
             "TestRevPtrsForInvokeDynamic",
-            Long.toString(lingeredAppPid)
-        };
-
-        // Start a new process to attach to the lingered app
-        ProcessBuilder processBuilder = ProcessTools.createJavaProcessBuilder(toolArgs);
+            Long.toString(lingeredAppPid));
+        SATestUtils.addPrivilegesIfNeeded(processBuilder);
         OutputAnalyzer SAOutput = ProcessTools.executeProcess(processBuilder);
         SAOutput.shouldHaveExitValue(0);
         System.out.println(SAOutput.getOutput());
     }
 
     public static void main (String... args) throws Exception {
+        SATestUtils.skipIfCannotAttach(); // throws SkippedException if attach not expected to work.
         if (args == null || args.length == 0) {
             try {
                 List<String> vmArgs = new ArrayList<String>();

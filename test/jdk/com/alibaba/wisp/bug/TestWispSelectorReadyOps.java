@@ -2,6 +2,7 @@
  * @test
  * @summary ensure nio program call SelectionKey.is{}able() and got correct result.
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  TestWispSelectorReadyOps
 */
 

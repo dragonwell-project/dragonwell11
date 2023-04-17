@@ -217,35 +217,22 @@ inline unsigned int OpCode_Size (op_code_t op) { return Is_OpCode_ESC (op) ? 2: 
 
 struct number_t
 {
-  void init () { set_real (0.0); }
-  void fini () {}
-
-  void set_int (int v)       { value = (double) v; }
-  int to_int () const        { return (int) value; }
+  void set_int (int v)       { value = v; }
+  int to_int () const        { return value; }
 
   void set_fixed (int32_t v) { value = v / 65536.0; }
-  int32_t to_fixed () const  { return (int32_t) (value * 65536.0); }
+  int32_t to_fixed () const  { return value * 65536.0; }
 
-  void set_real (double v)       { value = v; }
+  void set_real (double v)   { value = v; }
   double to_real () const    { return value; }
-
-  int ceil () const          { return (int) ::ceil (value); }
-  int floor () const         { return (int) ::floor (value); }
 
   bool in_int_range () const
   { return ((double) (int16_t) to_int () == value); }
 
-  bool operator > (const number_t &n) const
-  { return value > n.to_real (); }
-
-  bool operator < (const number_t &n) const
-  { return n > *this; }
-
-  bool operator >= (const number_t &n) const
-  { return !(*this < n); }
-
-  bool operator <= (const number_t &n) const
-  { return !(*this > n); }
+  bool operator >  (const number_t &n) const { return value > n.to_real (); }
+  bool operator <  (const number_t &n) const { return n > *this; }
+  bool operator >= (const number_t &n) const { return !(*this < n); }
+  bool operator <= (const number_t &n) const { return !(*this > n); }
 
   const number_t &operator += (const number_t &n)
   {
@@ -255,87 +242,63 @@ struct number_t
   }
 
   protected:
-  double  value;
+  double value = 0.;
 };
 
 /* byte string */
 struct UnsizedByteStr : UnsizedArrayOf <HBUINT8>
 {
+  hb_ubytes_t as_ubytes (unsigned l) const
+  { return hb_ubytes_t ((const unsigned char *) this, l); }
+
   // encode 2-byte int (Dict/CharString) or 4-byte int (Dict)
-  template <typename INTTYPE, int minVal, int maxVal>
-  static bool serialize_int (hb_serialize_context_t *c, op_code_t intOp, int value)
+  template <typename T, typename V>
+  static bool serialize_int (hb_serialize_context_t *c, op_code_t intOp, V value)
   {
     TRACE_SERIALIZE (this);
 
-    if (unlikely ((value < minVal || value > maxVal)))
-      return_trace (false);
-
     HBUINT8 *p = c->allocate_size<HBUINT8> (1);
-    if (unlikely (p == nullptr)) return_trace (false);
-    p->set (intOp);
+    if (unlikely (!p)) return_trace (false);
+    *p = intOp;
 
-    INTTYPE *ip = c->allocate_size<INTTYPE> (INTTYPE::static_size);
-    if (unlikely (ip == nullptr)) return_trace (false);
-    ip->set ((unsigned int)value);
-
-    return_trace (true);
+    T *ip = c->allocate_size<T> (T::static_size);
+    if (unlikely (!ip)) return_trace (false);
+    return_trace (c->check_assign (*ip, value, HB_SERIALIZE_ERROR_INT_OVERFLOW));
   }
 
-  static bool serialize_int4 (hb_serialize_context_t *c, int value)
-  { return serialize_int<HBUINT32, 0, 0x7FFFFFFF> (c, OpCode_longintdict, value); }
+  template <typename V>
+  static bool serialize_int4 (hb_serialize_context_t *c, V value)
+  { return serialize_int<HBINT32> (c, OpCode_longintdict, value); }
 
-  static bool serialize_int2 (hb_serialize_context_t *c, int value)
-  { return serialize_int<HBUINT16, 0, 0x7FFF> (c, OpCode_shortint, value); }
+  template <typename V>
+  static bool serialize_int2 (hb_serialize_context_t *c, V value)
+  { return serialize_int<HBINT16> (c, OpCode_shortint, value); }
 
   /* Defining null_size allows a Null object may be created. Should be safe because:
    * A descendent struct Dict uses a Null pointer to indicate a missing table,
    * checked before access.
-   * byte_str_t, a wrapper struct pairing a byte pointer along with its length, always
-   * checks the length before access. A Null pointer is used as the initial pointer
-   * along with zero length by the default ctor.
    */
   DEFINE_SIZE_MIN(0);
-};
-
-/* Holder of a section of byte string within a CFFIndex entry */
-struct byte_str_t : hb_ubytes_t
-{
-  byte_str_t ()
-    : hb_ubytes_t () {}
-  byte_str_t (const UnsizedByteStr& s, unsigned int l)
-    : hb_ubytes_t ((const unsigned char*)&s, l) {}
-  byte_str_t (const unsigned char *s, unsigned int l)
-    : hb_ubytes_t (s, l) {}
-  byte_str_t (const hb_ubytes_t &ub)    /* conversion from hb_ubytes_t */
-    : hb_ubytes_t (ub) {}
-
-  /* sub-string */
-  byte_str_t sub_str (unsigned int offset, unsigned int len_) const
-  { return byte_str_t (hb_ubytes_t::sub_array (offset, len_)); }
-
-  bool check_limit (unsigned int offset, unsigned int count) const
-  { return (offset + count <= length); }
 };
 
 /* A byte string associated with the current offset and an error condition */
 struct byte_str_ref_t
 {
-  byte_str_ref_t ()
-  { init (); }
+  byte_str_ref_t () { init (); }
 
   void init ()
   {
-    str = byte_str_t ();
+    str = hb_ubytes_t ();
     offset = 0;
     error = false;
   }
 
   void fini () {}
 
-  byte_str_ref_t (const byte_str_t &str_, unsigned int offset_ = 0)
+  byte_str_ref_t (const hb_ubytes_t &str_, unsigned int offset_ = 0)
     : str (str_), offset (offset_), error (false) {}
 
-  void reset (const byte_str_t &str_, unsigned int offset_ = 0)
+  void reset (const hb_ubytes_t &str_, unsigned int offset_ = 0)
   {
     str = str_;
     offset = offset_;
@@ -343,25 +306,22 @@ struct byte_str_ref_t
   }
 
   const unsigned char& operator [] (int i) {
-    if (unlikely ((unsigned int)(offset + i) >= str.length))
+    if (unlikely ((unsigned int) (offset + i) >= str.length))
     {
       set_error ();
-      return Null(unsigned char);
+      return Null (unsigned char);
     }
-    else
-      return str[offset + i];
+    return str[offset + i];
   }
 
-  /* Conversion to byte_str_t */
-  operator byte_str_t () const { return str.sub_str (offset, str.length - offset); }
+  /* Conversion to hb_ubytes_t */
+  operator hb_ubytes_t () const { return str.sub_array (offset, str.length - offset); }
 
-  byte_str_t sub_str (unsigned int offset_, unsigned int len_) const
-  { return str.sub_str (offset_, len_); }
+  hb_ubytes_t sub_array (unsigned int offset_, unsigned int len_) const
+  { return str.sub_array (offset_, len_); }
 
   bool avail (unsigned int count=1) const
-  {
-    return (!in_error () && str.check_limit (offset, count));
-  }
+  { return (!in_error () && offset + count <= str.length); }
   void inc (unsigned int count=1)
   {
     if (likely (!in_error () && (offset <= str.length) && (offset + count <= str.length)))
@@ -378,56 +338,44 @@ struct byte_str_ref_t
   void set_error ()      { error = true; }
   bool in_error () const { return error; }
 
-  byte_str_t       str;
+  hb_ubytes_t       str;
   unsigned int  offset; /* beginning of the sub-string within str */
 
   protected:
   bool    error;
 };
 
-typedef hb_vector_t<byte_str_t> byte_str_array_t;
+using byte_str_array_t = hb_vector_t<hb_ubytes_t>;
 
 /* stack */
 template <typename ELEM, int LIMIT>
-struct stack_t
+struct cff_stack_t
 {
-  void init ()
-  {
-    error = false;
-    count = 0;
-    elements.init ();
-    elements.resize (kSizeLimit);
-    for (unsigned int i = 0; i < elements.length; i++)
-      elements[i].init ();
-  }
-
-  void fini ()
-  {
-    elements.fini_deep ();
-  }
-
   ELEM& operator [] (unsigned int i)
   {
-    if (unlikely (i >= count)) set_error ();
+    if (unlikely (i >= count))
+    {
+      set_error ();
+      return Crap (ELEM);
+    }
     return elements[i];
   }
 
   void push (const ELEM &v)
   {
-    if (likely (count < elements.length))
+    if (likely (count < LIMIT))
       elements[count++] = v;
     else
       set_error ();
   }
-
   ELEM &push ()
   {
-    if (likely (count < elements.length))
+    if (likely (count < LIMIT))
       return elements[count++];
     else
     {
       set_error ();
-      return Crap(ELEM);
+      return Crap (ELEM);
     }
   }
 
@@ -438,10 +386,9 @@ struct stack_t
     else
     {
       set_error ();
-      return Crap(ELEM);
+      return Crap (ELEM);
     }
   }
-
   void pop (unsigned int n)
   {
     if (likely (count >= n))
@@ -452,18 +399,17 @@ struct stack_t
 
   const ELEM& peek ()
   {
-    if (likely (count > 0))
-      return elements[count-1];
-    else
+    if (unlikely (count == 0))
     {
       set_error ();
-      return Null(ELEM);
+      return Null (ELEM);
     }
+    return elements[count - 1];
   }
 
   void unpop ()
   {
-    if (likely (count < elements.length))
+    if (likely (count < LIMIT))
       count++;
     else
       set_error ();
@@ -471,23 +417,24 @@ struct stack_t
 
   void clear () { count = 0; }
 
-  bool in_error () const { return (error || elements.in_error ()); }
+  bool in_error () const { return (error); }
   void set_error ()      { error = true; }
 
   unsigned int get_count () const { return count; }
-  bool is_empty () const { return count == 0; }
+  bool is_empty () const          { return !count; }
 
-  static constexpr unsigned kSizeLimit = LIMIT;
+  hb_array_t<const ELEM> sub_array (unsigned start, unsigned length) const
+  { return hb_array_t<const ELEM> (elements).sub_array (start, length); }
 
-  protected:
-  bool error;
-  unsigned int count;
-  hb_vector_t<ELEM> elements;
+  private:
+  bool error = false;
+  unsigned int count = 0;
+  ELEM elements[LIMIT];
 };
 
 /* argument stack */
 template <typename ARG=number_t>
-struct arg_stack_t : stack_t<ARG, 513>
+struct arg_stack_t : cff_stack_t<ARG, 513>
 {
   void push_int (int v)
   {
@@ -519,7 +466,7 @@ struct arg_stack_t : stack_t<ARG, 513>
       i = 0;
       S::set_error ();
     }
-    return (unsigned)i;
+    return (unsigned) i;
   }
 
   void push_longint_from_substr (byte_str_ref_t& str_ref)
@@ -537,23 +484,15 @@ struct arg_stack_t : stack_t<ARG, 513>
     return true;
   }
 
-  hb_array_t<const ARG> get_subarray (unsigned int start) const
-  {
-    return S::elements.sub_array (start);
-  }
-
   private:
-  typedef stack_t<ARG, 513> S;
+  typedef cff_stack_t<ARG, 513> S;
 };
 
 /* an operator prefixed by its operands in a byte string */
 struct op_str_t
 {
-  void init () {}
-  void fini () {}
-
+  hb_ubytes_t str;
   op_code_t  op;
-  byte_str_t str;
 };
 
 /* base of OP_SERIALIZER */
@@ -565,7 +504,7 @@ struct op_serializer_t
     TRACE_SERIALIZE (this);
 
     HBUINT8 *d = c->allocate_size<HBUINT8> (opstr.str.length);
-    if (unlikely (d == nullptr)) return_trace (false);
+    if (unlikely (!d)) return_trace (false);
     memcpy (d, &opstr.str[0], opstr.str.length);
     return_trace (true);
   }
@@ -579,13 +518,18 @@ struct parsed_values_t
     opStart = 0;
     values.init ();
   }
-  void fini () { values.fini_deep (); }
+  void fini () { values.fini (); }
+
+  void alloc (unsigned n)
+  {
+    values.alloc (n);
+  }
 
   void add_op (op_code_t op, const byte_str_ref_t& str_ref = byte_str_ref_t ())
   {
     VAL *val = values.push ();
     val->op = op;
-    val->str = str_ref.str.sub_str (opStart, str_ref.offset - opStart);
+    val->str = str_ref.str.sub_array (opStart, str_ref.offset - opStart);
     opStart = str_ref.offset;
   }
 
@@ -593,19 +537,19 @@ struct parsed_values_t
   {
     VAL *val = values.push (v);
     val->op = op;
-    val->str = str_ref.sub_str ( opStart, str_ref.offset - opStart);
+    val->str = str_ref.sub_array ( opStart, str_ref.offset - opStart);
     opStart = str_ref.offset;
   }
 
   bool has_op (op_code_t op) const
   {
-    for (unsigned int i = 0; i < get_count (); i++)
-      if (get_value (i).op == op) return true;
+    for (const auto& v : values)
+      if (v.op == op) return true;
     return false;
   }
 
   unsigned get_count () const { return values.length; }
-  const VAL &get_value (unsigned int i) const { return values[i]; }
+  const VAL &get_value (unsigned int i)   const { return values[i]; }
   const VAL &operator [] (unsigned int i) const { return get_value (i); }
 
   unsigned int       opStart;
@@ -615,14 +559,11 @@ struct parsed_values_t
 template <typename ARG=number_t>
 struct interp_env_t
 {
-  void init (const byte_str_t &str_)
+  interp_env_t () {}
+  interp_env_t (const hb_ubytes_t &str_)
   {
     str_ref.reset (str_);
-    argStack.init ();
-    error = false;
   }
-  void fini () { argStack.fini (); }
-
   bool in_error () const
   { return error || str_ref.in_error () || argStack.in_error (); }
 
@@ -644,33 +585,22 @@ struct interp_env_t
     return op;
   }
 
-  const ARG& eval_arg (unsigned int i)
-  {
-    return argStack[i];
-  }
+  const ARG& eval_arg (unsigned int i) { return argStack[i]; }
 
-  ARG& pop_arg ()
-  {
-    return argStack.pop ();
-  }
+  ARG& pop_arg () { return argStack.pop (); }
+  void pop_n_args (unsigned int n) { argStack.pop (n); }
 
-  void pop_n_args (unsigned int n)
-  {
-    argStack.pop (n);
-  }
+  void clear_args () { pop_n_args (argStack.get_count ()); }
 
-  void clear_args ()
-  {
-    pop_n_args (argStack.get_count ());
-  }
-
-  byte_str_ref_t    str_ref;
-  arg_stack_t<ARG> argStack;
+  byte_str_ref_t
+                str_ref;
+  arg_stack_t<ARG>
+                argStack;
   protected:
-  bool    error;
+  bool          error = false;
 };
 
-typedef interp_env_t<> num_interp_env_t;
+using num_interp_env_t =  interp_env_t<>;
 
 template <typename ARG=number_t>
 struct opset_t
@@ -691,7 +621,7 @@ struct opset_t
 
       case OpCode_TwoByteNegInt0: case OpCode_TwoByteNegInt1:
       case OpCode_TwoByteNegInt2: case OpCode_TwoByteNegInt3:
-        env.argStack.push_int ((int16_t)(-(op - OpCode_TwoByteNegInt0) * 256 - env.str_ref[0] - 108));
+        env.argStack.push_int ((-(int16_t)(op - OpCode_TwoByteNegInt0) * 256 - env.str_ref[0] - 108));
         env.str_ref.inc ();
         break;
 
@@ -711,13 +641,10 @@ struct opset_t
 };
 
 template <typename ENV>
-struct interpreter_t {
-
-  ~interpreter_t() { fini (); }
-
-  void fini () { env.fini (); }
-
-  ENV env;
+struct interpreter_t
+{
+  interpreter_t (ENV& env_) : env (env_) {}
+  ENV& env;
 };
 
 } /* namespace CFF */

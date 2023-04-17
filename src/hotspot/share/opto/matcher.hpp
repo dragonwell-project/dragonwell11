@@ -338,6 +338,10 @@ public:
   // Vector ideal reg
   static const uint vector_ideal_reg(int len);
 
+  // Vector element basic type
+  static BasicType vector_element_basic_type(const Node* n);
+  static BasicType vector_element_basic_type(const MachNode* use, const MachOper* opnd);
+
   // Does the CPU supports vector variable shift instructions?
   static bool supports_vector_variable_shifts(void);
 

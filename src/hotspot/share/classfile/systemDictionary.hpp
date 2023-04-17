@@ -75,6 +75,10 @@
 
 class ClassFileStream;
 class Dictionary;
+class NotFoundClassTable;
+#if INCLUDE_JVMTI
+class UnregisteredClasspath2IDTable;
+#endif
 class PlaceholderTable;
 class LoaderConstraintTable;
 template <MEMFLAGS F> class HashtableBucket;
@@ -240,6 +244,8 @@ class OopStorage;
   do_klass(com_alibaba_wisp_engine_WispEngine_klass,    com_alibaba_wisp_engine_WispEngine,        Opt                 ) \
   do_klass(com_alibaba_wisp_engine_WispCarrier_klass,   com_alibaba_wisp_engine_WispCarrier,        Opt                 ) \
   do_klass(com_alibaba_wisp_engine_WispEventPump_klass, com_alibaba_wisp_engine_WispEventPump,     Opt                 ) \
+  do_klass(com_alibaba_util_QuickStart_klass,           com_alibaba_util_QuickStart,               Opt                 ) \
+  do_klass(com_alibaba_util_CDSDumpHook_klass,          com_alibaba_util_CDSDumpHook,              Opt                 ) \
   /* JVMCI classes. These are loaded on-demand. */                                                                       \
   JVMCI_WK_KLASSES_DO(do_klass)                                                                                          \
                                                                                                                          \
@@ -407,6 +413,10 @@ public:
 public:
   // Sharing support.
   static void reorder_dictionary_for_sharing() NOT_CDS_RETURN;
+  static void reorder_not_found_class_table_for_sharing() NOT_CDS_RETURN;
+#if INCLUDE_JVMTI
+  static void reorder_unregistered_classpath_id_table_for_sharing() NOT_CDS_RETURN;
+#endif
   static void combine_shared_dictionaries();
   static size_t count_bytes_for_buckets();
   static size_t count_bytes_for_table();
@@ -414,6 +424,27 @@ public:
   static void copy_table(char* top, char* end);
   static void set_shared_dictionary(HashtableBucket<mtClass>* t, int length,
                                     int number_of_entries);
+
+  static void create_not_found_class_table();
+  static size_t count_bytes_for_not_found_class_buckets();
+  static size_t count_bytes_for_not_found_class_table();
+  static void copy_not_found_class_buckets(char* top, char* end);
+  static void copy_not_found_class_table(char* top, char* end);
+  static void set_not_found_class_table(HashtableBucket<mtSymbol>* t, int length,
+                                        int number_of_entries);
+  static NotFoundClassTable* not_found_class_table() { return _not_found_class_table; }
+
+#if INCLUDE_JVMTI
+    static void create_unregistered_classpath_id_table();
+    static void set_unregistered_classpath_id_table(HashtableBucket<mtClass>* t, int number_of_entries);
+    static int get_or_generate_unregistered_classpath_id(Symbol *source_file_path);
+    static size_t count_bytes_for_unregistered_classpath_id_buckets();
+    static size_t count_bytes_for_unregistered_classpath_id_table();
+    static void copy_unregistered_classpath_id_buckets(char* top, char* end);
+    static void copy_unregistered_classpath_id_table(char* top, char* end);
+    static UnregisteredClasspath2IDTable* unregistered_classpath_id_table() { return _unregistered_classpath_id_table; }
+#endif
+
   // Printing
   static void print() { return print_on(tty); }
   static void print_on(outputStream* st);
@@ -628,6 +659,12 @@ public:
   // Hashtable holding classes from the shared archive.
   static Dictionary*             _shared_dictionary;
 
+  static NotFoundClassTable*     _not_found_class_table;
+
+#if INCLUDE_JVMTI
+  static UnregisteredClasspath2IDTable*   _unregistered_classpath_id_table;
+#endif
+
   // Lock object for system class loader
   static oop                     _system_loader_lock_obj;
 
@@ -677,8 +714,12 @@ protected:
   static InstanceKlass* load_shared_class(InstanceKlass* ik,
                                           Handle class_loader,
                                           Handle protection_domain,
+                                          const ClassFileStream *cfs,
                                           TRAPS);
   static InstanceKlass* load_instance_class(Symbol* class_name, Handle class_loader, TRAPS);
+#if INCLUDE_CDS
+  static void dump_class_and_loader_relationship(InstanceKlass* k, ClassLoaderData* initiating_loader_data, TRAPS);
+#endif
   static Handle compute_loader_lock_object(Handle class_loader, TRAPS);
   static void check_loader_lock_contention(Handle loader_lock, TRAPS);
   static bool is_parallelCapable(Handle class_loader);
@@ -700,6 +741,9 @@ public:
 
   static void initialize_oop_storage();
   static OopStorage* vm_weak_oop_storage();
+#if INCLUDE_CDS
+  static bool should_not_dump_class(InstanceKlass* k);
+#endif
 
 protected:
   static InstanceKlass* find_shared_class(Symbol* class_name);
@@ -747,6 +791,8 @@ protected:
   // table of box klasses (int_klass, etc.)
   static InstanceKlass* _box_klasses[T_VOID+1];
 
+  static bool invalid_class_name_for_EagerAppCDS(const char* name);
+  static bool invalid_class_name(const char* name);
 private:
   static oop  _java_system_loader;
   static oop  _java_platform_loader;
@@ -757,4 +803,5 @@ public:
   static void system_dict_lock_change(TRAPS);
 };
 
+#define DOUBLE_DOLLAR_STR "$$"
 #endif // SHARE_VM_CLASSFILE_SYSTEMDICTIONARY_HPP

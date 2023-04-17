@@ -61,6 +61,10 @@ public:
   // Attempt to locate file_name through this class path entry.
   // Returns a class file parsing stream if successfull.
   virtual ClassFileStream* open_stream(const char* name, TRAPS) = 0;
+  // Open the stream for a specific class loader
+  virtual ClassFileStream* open_stream_for_loader(const char* name, ClassLoaderData* loader_data, TRAPS) {
+    return open_stream(name, THREAD);
+  }
   // Debugging
   NOT_PRODUCT(virtual void compile_the_world(Handle loader, TRAPS) = 0;)
 };
@@ -140,6 +144,7 @@ public:
   ClassPathImageEntry(JImageFile* jimage, const char* name);
   virtual ~ClassPathImageEntry();
   ClassFileStream* open_stream(const char* name, TRAPS);
+  ClassFileStream* open_stream_for_loader(const char* name, ClassLoaderData* loader_data, TRAPS);
 
   // Debugging
   NOT_PRODUCT(void compile_the_world(Handle loader, TRAPS);)
@@ -267,11 +272,11 @@ class ClassLoader: AllStatic {
 
   static void load_zip_library();
   static void load_jimage_library();
+
+ public:
   static ClassPathEntry* create_class_path_entry(const char *path, const struct stat* st,
                                                  bool throw_exception,
                                                  bool is_boot_append, TRAPS);
-
- public:
 
   // If the package for the fully qualified class name is in the boot
   // loader's package entry table then add_package() sets the classpath_index

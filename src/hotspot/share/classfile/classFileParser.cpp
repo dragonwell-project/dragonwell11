@@ -5592,6 +5592,11 @@ InstanceKlass* ClassFileParser::create_instance_klass(bool changed_by_loadhook, 
   return ik;
 }
 
+void ClassFileParser::set_class_source(InstanceKlass* ik, TRAPS) {
+  const char* path = _stream->source();
+  ik->set_source_file_path(path ? SymbolTable::new_symbol(path, THREAD) : NULL);
+}
+
 void ClassFileParser::fill_instance_klass(InstanceKlass* ik, bool changed_by_loadhook, TRAPS) {
   assert(ik != NULL, "invariant");
 
@@ -5666,6 +5671,10 @@ void ClassFileParser::fill_instance_klass(InstanceKlass* ik, bool changed_by_loa
   ik->set_major_version(_major_version);
   ik->set_has_nonstatic_concrete_methods(_has_nonstatic_concrete_methods);
   ik->set_declares_nonstatic_concrete_methods(_declares_nonstatic_concrete_methods);
+
+  if (EagerAppCDS) {
+    set_class_source(ik, THREAD);
+  }
 
   if (_host_klass != NULL) {
     assert (ik->is_anonymous(), "should be the same");
@@ -5804,6 +5813,12 @@ void ClassFileParser::fill_instance_klass(InstanceKlass* ik, bool changed_by_loa
     }
   }
 
+#if INCLUDE_CDS
+  if (DumpAppCDSWithKlassId && DumpLoadedClassList != NULL) {
+    log_loaded_klass(ik, _stream, THREAD);
+  }
+#endif
+
   JFR_ONLY(INIT_ID(ik);)
 
   // If we reach here, all is well.
@@ -5816,6 +5831,95 @@ void ClassFileParser::fill_instance_klass(InstanceKlass* ik, bool changed_by_loa
 
   debug_only(ik->verify();)
 }
+
+#if INCLUDE_CDS
+static bool should_skip_class(ClassLoaderData* loader_data, const ClassFileStream* const stream) {
+  // Only dump the classes that can be stored into CDS archive.
+  // Anonymous classes such as generated LambdaForm classes are also not included.
+  oop class_loader = loader_data->class_loader();
+  bool skip = false;
+  if (class_loader == NULL || SystemDictionary::is_platform_class_loader(class_loader)) {
+    // For the boot and platform class loaders, skip classes that are not found in the
+    // java runtime image, such as those found in the --patch-module entries.
+    // These classes can't be loaded from the archive during runtime.
+    if (!ClassLoader::is_modules_image(stream->source()) && strncmp(stream->source(), "jrt:", 4) != 0) {
+      skip = true;
+    }
+
+    if (class_loader == NULL && ClassLoader::contains_append_entry(stream->source())) {
+      // .. but don't skip the boot classes that are loaded from -Xbootclasspath/a
+      // as they can be loaded from the archive during runtime.
+      skip = false;
+    }
+  }
+  return skip;
+}
+
+void ClassFileParser::log_loaded_klass(InstanceKlass* ik, const ClassFileStream *stream, TRAPS) {
+  if (stream->source() == NULL || !classlist_file->is_open()) {
+    return;
+  }
+
+  ClassLoaderData *loader_data = ik->class_loader_data();
+  ResourceMark rm(THREAD);
+  const char *name = ik->name()->as_C_string();
+  bool is_builtin = loader_data->is_builtin_class_loader_data();
+
+  MutexLocker mu(DumpLoadedClassList_lock, THREAD);
+  if (is_builtin) {
+    if(!should_skip_class(loader_data, stream)) {
+      classlist_file->print("%s klass: " INTPTR_FORMAT, name, p2i(ik));
+      if (EagerAppCDS) {
+        classlist_file->print(" super: " INTPTR_FORMAT, p2i(ik->superklass()));
+        classlist_file->print(" origin: %s", stream->source());
+        classlist_file->print(" fingerprint: " PTR64_FORMAT, stream->compute_fingerprint());
+        Array<Klass*>* intf = ik->local_interfaces();
+        if (intf->length() > 0) {
+          classlist_file->print(" interfaces:");
+          int length = intf->length();
+          for (int i=0; i < length; i++) {
+            classlist_file->print(" " INTPTR_FORMAT,
+                                  p2i(InstanceKlass::cast(intf->at(i))));
+          }
+        }
+      }
+    } else {
+      return;
+    }
+  } else {
+    if (SystemDictionary::should_not_dump_class(ik)) {
+      return;
+    }
+
+    // TestSimple source: file:/tmp/classes/com/alibaba/cds/TestDumpAndLoadClass.d/ klass: 0x0000000800066840
+    // super: 0x0000000800001000 defining_loader_hash: fa474cbf fingerprint: 0x00000199e3c89ea7
+    // If the signature is 0, still dump the class loading information for AppCDS usage
+    classlist_file->print("%s origin: %s source: %s klass: " INTPTR_FORMAT, name, stream->source(), stream->source(), p2i(ik));
+    classlist_file->print(" super: " INTPTR_FORMAT, p2i(ik->superklass()));
+
+    Array<Klass*>* intf = ik->local_interfaces();
+    if (intf->length() > 0) {
+      classlist_file->print(" interfaces:");
+      int length = intf->length();
+      for (int i=0; i < length; i++) {
+        classlist_file->print(" " INTPTR_FORMAT,
+                              p2i(InstanceKlass::cast(intf->at(i))));
+      }
+    }
+
+    if (EagerAppCDS) {
+      int hash = java_lang_ClassLoader::signature(loader_data->class_loader());
+      if (hash != 0) {
+        classlist_file->print(" defining_loader_hash: %x", hash);
+      }
+      classlist_file->print(" origin: %s", stream->source());
+      classlist_file->print(" fingerprint: " PTR64_FORMAT, stream->compute_fingerprint());
+    }
+  }
+  classlist_file->cr();
+  classlist_file->flush();
+}
+#endif
 
 // For an anonymous class that is in the unnamed package, move it to its host class's
 // package by prepending its host class's package name to its class name and setting
@@ -6087,15 +6191,20 @@ void ClassFileParser::parse_stream(const ClassFileStream* const stream,
   _major_version = stream->get_u2_fast();
 
   if (DumpSharedSpaces && _major_version < JAVA_6_VERSION) {
-    ResourceMark rm;
-    warning("Pre JDK 6 class not supported by CDS: %u.%u %s",
-            _major_version,  _minor_version, _class_name->as_C_string());
-    Exceptions::fthrow(
-      THREAD_AND_LOCATION,
-      vmSymbols::java_lang_UnsupportedClassVersionError(),
-      "Unsupported major.minor version for dump time %u.%u",
-      _major_version,
-      _minor_version);
+    if (AppCDSLegacyVerisonSupport) {
+      log_trace(class, eagerappcds)("dump the pre JDK6 class: %s",
+                                    _class_name->as_C_string());
+    } else {
+      ResourceMark rm;
+      warning("Pre JDK 6 class not supported by CDS: %u.%u %s",
+              _major_version, _minor_version, _class_name->as_C_string());
+      Exceptions::fthrow(
+              THREAD_AND_LOCATION,
+              vmSymbols::java_lang_UnsupportedClassVersionError(),
+              "Unsupported major.minor version for dump time %u.%u",
+              _major_version,
+              _minor_version);
+    }
   }
 
   // Check version numbers - we check this even with verifier off
@@ -6219,31 +6328,24 @@ void ClassFileParser::parse_stream(const ClassFileStream* const stream,
         DumpLoadedClassList = NULL;
       } else if (SystemDictionaryShared::is_sharing_possible(_loader_data) &&
           _host_klass == NULL) {
-        // Only dump the classes that can be stored into CDS archive.
-        // Anonymous classes such as generated LambdaForm classes are also not included.
-        oop class_loader = _loader_data->class_loader();
         ResourceMark rm(THREAD);
-        bool skip = false;
-        if (class_loader == NULL || SystemDictionary::is_platform_class_loader(class_loader)) {
-          // For the boot and platform class loaders, skip classes that are not found in the
-          // java runtime image, such as those found in the --patch-module entries.
-          // These classes can't be loaded from the archive during runtime.
-          if (!ClassLoader::is_modules_image(stream->source()) && strncmp(stream->source(), "jrt:", 4) != 0) {
-            skip = true;
-          }
-
-          if (class_loader == NULL && ClassLoader::contains_append_entry(stream->source())) {
-            // .. but don't skip the boot classes that are loaded from -Xbootclasspath/a
-            // as they can be loaded from the archive during runtime.
-            skip = false;
-          }
-        }
+        bool skip = should_skip_class(_loader_data, stream);
         if (skip) {
           tty->print_cr("skip writing class %s from source %s to classlist file",
-            _class_name->as_C_string(), stream->source());
+                        _class_name->as_C_string(), stream->source());
         } else {
-          classlist_file->print_cr("%s", _class_name->as_C_string());
-          classlist_file->flush();
+          if (!DumpAppCDSWithKlassId) { // normal appcds only.
+            classlist_file->print_cr("%s", _class_name->as_C_string());
+            classlist_file->flush();
+          }
+          if (AppCDSClassFingerprintCheck && SystemDictionary::is_system_class_loader(_loader_data->class_loader()) &&
+              log_is_enabled(Trace, class, cds)) {
+            int clsfile_size  = stream->length();
+            int clsfile_crc32 = ClassLoader::crc32(0, (const char*)stream->buffer(), stream->length());
+            uint64_t fingerprint = (uint64_t(clsfile_size) << 32) | uint64_t(uint32_t(clsfile_crc32));
+            log_trace(class, cds) ("[%s] Dump class %s (" PTR64_FORMAT ") with source %s", LOAD_CLASS_DETAIL_TAG,
+                                   _class_name->as_C_string(), fingerprint, stream->source());
+          }
         }
       }
     }

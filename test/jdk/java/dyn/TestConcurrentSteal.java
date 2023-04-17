@@ -1,6 +1,6 @@
 /* @test
  * @summary unit tests for steal in concurrent situation
- * @run junit/othervm/timeout=300 -XX:+EnableCoroutine TestConcurrentSteal
+ * @run junit/othervm/timeout=300 -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine TestConcurrentSteal
  */
 
 import org.junit.Test;

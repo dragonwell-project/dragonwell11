@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @library /test/lib
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @summary test thread as wisp still keep the daemon semantic
  *
  * @run main TestDaemon

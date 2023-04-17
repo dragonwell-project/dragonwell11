@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,15 +32,6 @@ template<typename K> struct ResourceHashtableFns {
     typedef bool (*equals_fn)(K const&, K const&);
 };
 
-template<typename K> unsigned primitive_hash(const K& k) {
-  unsigned hash = (unsigned)((uintptr_t)k);
-  return hash ^ (hash >> 3); // just in case we're dealing with aligned ptrs
-}
-
-template<typename K> bool primitive_equals(const K& k0, const K& k1) {
-  return k0 == k1;
-}
-
 template<
     typename K, typename V,
     // xlC does not compile this:
@@ -55,6 +46,7 @@ template<
     >
 class ResourceHashtable : public ResourceObj {
  private:
+  int _number_of_entries;
 
   class Node : public ResourceObj {
    public:
@@ -90,7 +82,8 @@ class ResourceHashtable : public ResourceObj {
   }
 
  public:
-  ResourceHashtable() { memset(_table, 0, SIZE * sizeof(Node*)); }
+  ResourceHashtable(): _number_of_entries(0) { memset(_table, 0, SIZE * sizeof(Node*)); }
+  ResourceHashtable(unsigned size): _number_of_entries(0) { memset(_table, 0, size * sizeof(Node*)); }
 
   ~ResourceHashtable() {
     if (ALLOC_TYPE == C_HEAP) {
@@ -106,6 +99,8 @@ class ResourceHashtable : public ResourceObj {
       }
     }
   }
+
+  int number_of_entries() const { return _number_of_entries; }
 
   bool contains(K const& key) const {
     return get(key) != NULL;
@@ -134,8 +129,45 @@ class ResourceHashtable : public ResourceObj {
       return false;
     } else {
       *ptr = new (ALLOC_TYPE, MEM_TYPE) Node(hv, key, value);
+      _number_of_entries ++;
       return true;
     }
+  }
+
+  // Look up the key.
+  // If an entry for the key exists, leave map unchanged and return a pointer to its value.
+  // If no entry for the key exists, create a new entry from key and a default-created value
+  //  and return a pointer to the value.
+  // *p_created is true if entry was created, false if entry pre-existed.
+  V* put_if_absent(K const& key, bool* p_created) {
+    unsigned hv = HASH(key);
+    Node** ptr = lookup_node(hv, key);
+    if (*ptr == NULL) {
+      *ptr = new (ALLOC_TYPE, MEM_TYPE) Node(hv, key);
+      *p_created = true;
+      _number_of_entries ++;
+    } else {
+      *p_created = false;
+    }
+    return &(*ptr)->_value;
+  }
+
+  // Look up the key.
+  // If an entry for the key exists, leave map unchanged and return a pointer to its value.
+  // If no entry for the key exists, create a new entry from key and value and return a
+  //  pointer to the value.
+  // *p_created is true if entry was created, false if entry pre-existed.
+  V* put_if_absent(K const& key, V const& value, bool* p_created) {
+    unsigned hv = HASH(key);
+    Node** ptr = lookup_node(hv, key);
+    if (*ptr == NULL) {
+      *ptr = new (ALLOC_TYPE, MEM_TYPE) Node(hv, key, value);
+      *p_created = true;
+      _number_of_entries ++;
+    } else {
+      *p_created = false;
+    }
+    return &(*ptr)->_value;
   }
 
   bool remove(K const& key) {
@@ -148,6 +180,7 @@ class ResourceHashtable : public ResourceObj {
       if (ALLOC_TYPE == C_HEAP) {
         delete node;
       }
+      _number_of_entries --;
       return true;
     }
     return false;

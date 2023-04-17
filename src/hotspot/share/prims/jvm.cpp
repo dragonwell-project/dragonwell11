@@ -76,6 +76,7 @@
 #include "runtime/vframe.inline.hpp"
 #include "runtime/vmOperations.hpp"
 #include "runtime/vm_version.hpp"
+#include "runtime/quickStart.hpp"
 #include "services/attachListener.hpp"
 #include "services/management.hpp"
 #include "services/threadService.hpp"
@@ -997,7 +998,7 @@ JVM_ENTRY(jclass, JVM_DefineClassWithSource(JNIEnv *env, const char *name, jobje
   return jvm_define_class_common(env, name, loader, buf, len, pd, source, THREAD);
 JVM_END
 
-JVM_ENTRY(jclass, JVM_FindLoadedClass(JNIEnv *env, jobject loader, jstring name))
+JVM_ENTRY(jclass, JVM_FindLoadedClass(JNIEnv *env, jobject loader, jstring name, jboolean onlyFind))
   JVMWrapper("JVM_FindLoadedClass");
   ResourceMark rm(THREAD);
 
@@ -1031,7 +1032,7 @@ JVM_ENTRY(jclass, JVM_FindLoadedClass(JNIEnv *env, jobject loader, jstring name)
                                                               Handle(),
                                                               CHECK_NULL);
 #if INCLUDE_CDS
-  if (k == NULL) {
+  if (k == NULL && !onlyFind) {
     // If the class is not already loaded, try to see if it's in the shared
     // archive for the current classloader (h_loader).
     k = SystemDictionaryShared::find_or_load_shared_class(klass_name, h_loader, CHECK_NULL);
@@ -2400,6 +2401,23 @@ JVM_ENTRY(jobject, JVM_AssertionStatusDirectives(JNIEnv *env, jclass unused))
   return JNIHandles::make_local(env, asd);
 JVM_END
 
+JVM_ENTRY(jclass, JVM_DefineClassFromCDS(JNIEnv *env, jclass clz, jobject loader, jobject pd, jlong iklass))
+  JVMWrapper("JVM_DefineClassFromCDS");
+  ResourceMark rm(THREAD);
+  HandleMark hm(THREAD);
+
+#if INCLUDE_CDS
+  Handle protection_domain (THREAD, JNIHandles::resolve(pd));
+  Handle class_loader (THREAD, JNIHandles::resolve(loader));
+  InstanceKlass* loaded = SystemDictionaryShared::define_class_from_cds((InstanceKlass*) iklass, class_loader,
+                                                                         protection_domain, THREAD);
+
+  return loaded ? (jclass)JNIHandles::make_local(env, loaded->java_mirror()) : NULL;
+#else
+  return NULL;
+#endif
+JVM_END
+
 // Verification ////////////////////////////////////////////////////////////////////////////////
 
 // Reflection for the verifier /////////////////////////////////////////////////////////////////
@@ -2957,6 +2975,9 @@ JVM_ENTRY(void, JVM_StartThread(JNIEnv* env, jobject jthread))
   assert(native_thread != NULL, "Starting null thread?");
 
   if (native_thread->osthread() == NULL) {
+    ResourceMark rm(thread);
+    log_warning(os, thread)("Failed to start the native thread for java.lang.Thread \"%s\"",
+                            JavaThread::name_for(JNIHandles::resolve_non_null(jthread)));
     // No one should hold a reference to the 'native_thread'.
     native_thread->smr_delete();
     if (JvmtiExport::should_post_resource_exhausted()) {
@@ -3909,4 +3930,9 @@ JVM_END
 
 JVM_ENTRY_NO_ENV(jint, JVM_FindSignal(const char *name))
   return os::get_signal_number(name);
+JVM_END
+
+JVM_ENTRY(void, JVM_NotifyDump(JNIEnv *env, jclass ignored))
+  JVMWrapper("JVM_NotifyDump");
+  QuickStart::notify_dump();
 JVM_END

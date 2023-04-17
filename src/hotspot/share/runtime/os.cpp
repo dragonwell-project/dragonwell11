@@ -103,6 +103,14 @@ int os::snprintf(char* buf, size_t len, const char* fmt, ...) {
 }
 
 // Fill in buffer with current local time as an ISO-8601 string.
+// E.g., YYYY-MM-DDThh:mm:ss.mmm+zzzz.
+// Returns buffer, or NULL if it failed.
+char* os::iso8601_time(char* buffer, size_t buffer_length, bool utc) {
+  const jlong now = javaTimeMillis();
+  return os::iso8601_time(now, buffer, buffer_length, utc);
+}
+
+// Fill in buffer with an ISO-8601 string corresponding to the given javaTimeMillis value
 // E.g., yyyy-mm-ddThh:mm:ss-zzzz.
 // Returns buffer, or NULL if it failed.
 // This would mostly be a call to
@@ -110,24 +118,18 @@ int os::snprintf(char* buf, size_t len, const char* fmt, ...) {
 // except that on Windows the %z behaves badly, so we do it ourselves.
 // Also, people wanted milliseconds on there,
 // and strftime doesn't do milliseconds.
-char* os::iso8601_time(char* buffer, size_t buffer_length, bool utc) {
+char* os::iso8601_time(jlong milliseconds_since_19700101, char* buffer, size_t buffer_length, bool utc) {
   // Output will be of the form "YYYY-MM-DDThh:mm:ss.mmm+zzzz\0"
-  //                                      1         2
-  //                             12345678901234567890123456789
-  // format string: "%04d-%02d-%02dT%02d:%02d:%02d.%03d%c%02d%02d"
-  static const size_t needed_buffer = 29;
 
   // Sanity check the arguments
   if (buffer == NULL) {
     assert(false, "NULL buffer");
     return NULL;
   }
-  if (buffer_length < needed_buffer) {
+  if (buffer_length < os::iso8601_timestamp_size) {
     assert(false, "buffer_length too small");
     return NULL;
   }
-  // Get the current time
-  jlong milliseconds_since_19700101 = javaTimeMillis();
   const int milliseconds_per_microsecond = 1000;
   const time_t seconds_since_19700101 =
     milliseconds_since_19700101 / milliseconds_per_microsecond;
@@ -705,6 +707,11 @@ void* os::malloc(size_t size, MEMFLAGS memflags, const NativeCallStack& stack) {
   NMT_TrackingLevel level = MemTracker::tracking_level();
   size_t            nmt_header_size = MemTracker::malloc_header_size(level);
 
+  // Check for overflow.
+  if (size + nmt_header_size < size) {
+    return NULL;
+  }
+
 #ifndef ASSERT
   const size_t alloc_size = size + nmt_header_size;
 #else
@@ -863,7 +870,7 @@ int os::random() {
   while (true) {
     unsigned int seed = _rand_seed;
     unsigned int rand = random_helper(seed);
-    if (Atomic::cmpxchg(rand, &_rand_seed, seed) == seed) {
+    if (Atomic::cmpxchg(rand, &_rand_seed, seed, memory_order_relaxed) == seed) {
       return static_cast<int>(rand);
     }
   }
@@ -1218,30 +1225,36 @@ void os::print_location(outputStream* st, intptr_t x, bool verbose) {
   st->print_cr(INTPTR_FORMAT " is an unknown value", p2i(addr));
 }
 
+bool is_pointer_bad(intptr_t* ptr) {
+  return !is_aligned(ptr, sizeof(uintptr_t)) || !os::is_readable_pointer(ptr);
+}
+
+// Native stack isn't walkable for RISCV this way.
+// Native C frame and Java frame have different structure on RISCV.
+// A seperate implementation is provided under linux_riscv for RISCV.
+
+#if !defined(RISCV) || defined(ZERO)
 // Looks like all platforms can use the same function to check if C
 // stack is walkable beyond current frame. The check for fp() is not
 // necessary on Sparc, but it's harmless.
+// Returns true if this is not the case, i.e. the frame is possibly
+// the first C frame on the stack.
 bool os::is_first_C_frame(frame* fr) {
   // Load up sp, fp, sender sp and sender fp, check for reasonable values.
   // Check usp first, because if that's bad the other accessors may fault
   // on some architectures.  Ditto ufp second, etc.
-  uintptr_t fp_align_mask = (uintptr_t)(sizeof(address)-1);
-  // sp on amd can be 32 bit aligned.
-  uintptr_t sp_align_mask = (uintptr_t)(sizeof(int)-1);
 
-  uintptr_t usp    = (uintptr_t)fr->sp();
-  if ((usp & sp_align_mask) != 0) return true;
+  if (is_pointer_bad(fr->sp())) return true;
 
   uintptr_t ufp    = (uintptr_t)fr->fp();
-  if ((ufp & fp_align_mask) != 0) return true;
+  if (is_pointer_bad(fr->fp())) return true;
 
   uintptr_t old_sp = (uintptr_t)fr->sender_sp();
-  if ((old_sp & sp_align_mask) != 0) return true;
-  if (old_sp == 0 || old_sp == (uintptr_t)-1) return true;
+  if ((uintptr_t)fr->sender_sp() == (uintptr_t)-1 || is_pointer_bad(fr->sender_sp())) return true;
 
-  uintptr_t old_fp = (uintptr_t)fr->link();
-  if ((old_fp & fp_align_mask) != 0) return true;
-  if (old_fp == 0 || old_fp == (uintptr_t)-1 || old_fp == ufp) return true;
+  uintptr_t old_fp = (uintptr_t)fr->link_or_null();
+  if (old_fp == 0 || old_fp == (uintptr_t)-1 || old_fp == ufp ||
+    is_pointer_bad(fr->link_or_null())) return true;
 
   // stack grows downwards; if old_fp is below current fp or if the stack
   // frame is too large, either the stack is corrupted or fp is not saved
@@ -1252,7 +1265,7 @@ bool os::is_first_C_frame(frame* fr) {
 
   return false;
 }
-
+#endif
 
 // Set up the boot classpath.
 

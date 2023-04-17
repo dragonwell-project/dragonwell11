@@ -111,6 +111,7 @@ class WispThread;
 //         - GCTaskThread
 //     - WatcherThread
 //     - JfrThreadSampler
+//     - LogAsyncWriter
 //
 // All Thread subclasses must be either JavaThread or NonJavaThread.
 // This means !t->is_Java_thread() iff t is a NonJavaThread, or t is
@@ -937,8 +938,10 @@ class JavaThread: public Thread {
   friend class VMStructs;
   friend class JVMCIVMStructs;
   friend class WhiteBox;
+  friend class WispThread;
  private:
   JavaThread*    _next;                          // The next thread in the Threads list
+  bool           _in_asgct;                      // Is set when this JavaThread is handling ASGCT call
   bool           _on_thread_list;                // Is set when this JavaThread is added to the Threads list
   oop            _threadObj;                     // The Java level thread object
 
@@ -1264,7 +1267,7 @@ class JavaThread: public Thread {
   address last_Java_pc(void)                     { return _anchor.last_Java_pc(); }
 
   // Safepoint support
-#if !(defined(PPC64) || defined(AARCH64))
+#if !(defined(PPC64) || defined(AARCH64) || defined(RISCV64))
   JavaThreadState thread_state() const           { return _thread_state; }
   void set_thread_state(JavaThreadState s)       {
     assert((UseWispMonitor && is_Wisp_thread()) || current_or_null() == NULL || current_or_null() == this,
@@ -1866,6 +1869,7 @@ class JavaThread: public Thread {
 
   // Misc. operations
   char* name() const { return (char*)get_thread_name(); }
+  static const char* name_for(oop thread_obj);
   void print_on(outputStream* st, bool print_extended_info) const;
   void print_on(outputStream* st) const { print_on(st, false); }
   void print_value();
@@ -2093,6 +2097,10 @@ class JavaThread: public Thread {
 
   bool has_aync_thread_death_exception();
   void clear_aync_thread_death_exception();
+
+  // AsyncGetCallTrace support
+  inline bool in_asgct(void) {return _in_asgct;}
+  inline void set_in_asgct(bool value) {_in_asgct = value;}
 };
 
 // Inline implementation of JavaThread::current

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -99,17 +99,17 @@ public class TestCommon extends CDSTestUtils {
 
     // Create AppCDS archive using most common args - convenience method
     // Legacy name preserved for compatibility
-    public static OutputAnalyzer dump(String appJar, String appClasses[],
+    public static OutputAnalyzer dump(String appJar, String classList[],
                                                String... suffix) throws Exception {
-        return createArchive(appJar, appClasses, suffix);
+        return createArchive(appJar, classList, suffix);
     }
 
 
     // Create AppCDS archive using most common args - convenience method
-    public static OutputAnalyzer createArchive(String appJar, String appClasses[],
+    public static OutputAnalyzer createArchive(String appJar, String classList[],
                                                String... suffix) throws Exception {
-        AppCDSOptions opts = (new AppCDSOptions()).setAppJar(appJar)
-            .setAppClasses(appClasses);
+        AppCDSOptions opts = (new AppCDSOptions()).setAppJar(appJar);
+        opts.setClassList(classList);
         opts.addSuffix(suffix);
         return createArchive(opts);
     }
@@ -123,7 +123,6 @@ public class TestCommon extends CDSTestUtils {
         throws Exception {
 
         ArrayList<String> cmd = new ArrayList<String>();
-        File classList = makeClassList(opts.appClasses);
         startNewArchiveName();
 
         for (String p : opts.prefix) cmd.add(p);
@@ -132,26 +131,37 @@ public class TestCommon extends CDSTestUtils {
             cmd.add("-cp");
             cmd.add(opts.appJar);
         } else {
-            cmd.add("-cp");
-            cmd.add("\"\"");
+            cmd.add("-Djava.class.path=");
         }
 
         cmd.add("-Xshare:dump");
         cmd.add("-Xlog:cds,cds+hashtables");
-        cmd.add("-XX:ExtraSharedClassListFile=" + classList.getPath());
 
         if (opts.archiveName == null)
             opts.archiveName = getCurrentArchiveName();
 
         cmd.add("-XX:SharedArchiveFile=" + opts.archiveName);
 
+        if (opts.classList != null) {
+            File classListFile = makeClassList(opts.classList);
+            cmd.add("-XX:ExtraSharedClassListFile=" + classListFile.getPath());
+        }
+
         for (String s : opts.suffix) cmd.add(s);
 
-        String[] cmdLine = cmd.toArray(new String[cmd.size()]);
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true, makeCommandLineForAppCDS(cmdLine));
+        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true, cmd);
         return executeAndLog(pb, "dump");
     }
 
+    // This allows you to run the AppCDS tests with JFR enabled at runtime (though not at
+    // dump time, as that's uncommon for typical AppCDS users).
+    //
+    // To run in this special mode, add the following to your jtreg command-line
+    //    -Dtest.cds.run.with.jfr=true
+    //
+    // Some AppCDS tests are not compatible with this mode. See the group
+    // hotspot_appcds_with_jfr in ../../TEST.ROOT for details.
+    private static final boolean RUN_WITH_JFR = Boolean.getBoolean("test.cds.run.with.jfr");
 
     // Execute JVM using AppCDS archive with specified AppCDSOptions
     public static OutputAnalyzer runWithArchive(AppCDSOptions opts)
@@ -172,6 +182,22 @@ public class TestCommon extends CDSTestUtils {
         }
 
         for (String s : opts.suffix) cmd.add(s);
+
+        if (RUN_WITH_JFR) {
+            boolean usesJFR = false;
+            for (String s : cmd) {
+                if (s.startsWith("-XX:StartFlightRecording=") || s.startsWith("-XX:FlightRecorderOptions")) {
+                    System.out.println("JFR option might have been specified. Don't interfere: " + s);
+                    usesJFR = true;
+                    break;
+                }
+            }
+            if (!usesJFR) {
+                System.out.println("JFR option not specified. Enabling JFR ...");
+                cmd.add(0, "-XX:StartFlightRecording=dumponexit=true");
+                System.out.println(cmd);
+            }
+        }
 
         String[] cmdLine = cmd.toArray(new String[cmd.size()]);
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true, makeCommandLineForAppCDS(cmdLine));
@@ -244,9 +270,9 @@ public class TestCommon extends CDSTestUtils {
 
 
     // A common operation: dump, then check results
-    public static OutputAnalyzer testDump(String appJar, String appClasses[],
+    public static OutputAnalyzer testDump(String appJar, String classList[],
                                           String... suffix) throws Exception {
-        OutputAnalyzer output = dump(appJar, appClasses, suffix);
+        OutputAnalyzer output = dump(appJar, classList, suffix);
         output.shouldContain("Loading classes to share");
         output.shouldHaveExitValue(0);
         return output;
@@ -254,11 +280,11 @@ public class TestCommon extends CDSTestUtils {
 
 
     /**
-     * Simple test -- dump and execute appJar with the given appClasses in classlist.
+     * Simple test -- dump and execute appJar with the given classList in classlist.
      */
-    public static OutputAnalyzer test(String appJar, String appClasses[], String... args)
+    public static OutputAnalyzer test(String appJar, String classList[], String... args)
         throws Exception {
-        testDump(appJar, appClasses);
+        testDump(appJar, classList);
 
         OutputAnalyzer output = exec(appJar, args);
         return checkExec(output);

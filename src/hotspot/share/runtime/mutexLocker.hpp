@@ -36,6 +36,7 @@ extern Mutex*   Patching_lock;                   // a lock used to guard code pa
 extern Monitor* SystemDictionary_monitor_lock;   // a lock on the system dictonary
 extern SystemDictMonitor* SystemDictionary_lock; // a lock on the system dictonary, transform to ObjectMonitor after wisp is booted
 extern Mutex*   SharedDictionary_lock;           // a lock on the CDS shared dictionary
+extern Mutex*   DumpLoadedClassList_lock;        // a lock used to guard loaded class dumping
 extern Mutex*   Module_lock;                     // a lock on module and package related data structures
 extern Mutex*   CompiledIC_lock;                 // a lock used to guard compiled IC patching and access
 extern Mutex*   InlineCacheBuffer_lock;          // a lock used to guard the InlineCacheBuffer
@@ -140,6 +141,9 @@ extern Mutex*   ThreadHeapSampler_lock;          // protects the static data for
 extern Monitor* ThreadsSMRDelete_lock;           // Used by ThreadsSMRSupport to take pressure off the Threads_lock
 extern Mutex*   SharedDecoder_lock;              // serializes access to the decoder during normal (not error reporting) use
 extern Mutex*   DCmdFactory_lock;                // serialize access to DCmdFactory information
+#if INCLUDE_CDS && INCLUDE_JVMTI
+extern Mutex*   CDSClassFileStream_lock;         // FileMapInfo::open_stream_for_jvmti
+#endif
 #if INCLUDE_JFR
 extern Mutex*   JfrStacktrace_lock;              // used to guard access to the JFR stacktrace table
 extern Monitor* JfrMsg_lock;                     // protects JFR messaging

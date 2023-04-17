@@ -81,7 +81,9 @@ public class DifferentHeapSizes {
                             out.shouldNotContain(CDSTestUtils.MSG_RANGE_ALREADT_IN_USE);
                         });
                 } else {
-                    result.assertAbnormalExit(CDSTestUtils.MSG_COMPRESSION_MUST_BE_USED);
+                    result
+                        .assertAbnormalExit("Unable to use shared archive.",
+                                            "The saved state of UseCompressedOops and UseCompressedClassPointers is different from runtime, CDS will be disabled.");
                 }
             }
         }

@@ -416,6 +416,9 @@ template <class E> class LinkedListIterator : public StackObj {
     _p = _p->next();
     return e;
   }
+
+  //provided for logAsyncWriter.cpp to iterate AsyncLogMessage
+  bool has_next() const { return _p == NULL; }
 };
 
 #endif

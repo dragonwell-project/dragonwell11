@@ -50,17 +50,10 @@
  *      -XX:+WhiteBoxAPI
  *      -XX:+UseG1GC
  *      -XX:+ExplicitGCInvokesConcurrent
- *      -Xbootclasspath/a:.
- *      -XX:+UnlockDiagnosticVMOptions
- *      -XX:+WhiteBoxAPI
- *      -XX:+UseG1GC
- *      -XX:+ExplicitGCInvokesConcurrent
- *      -Xlog:gc:gc.log
- *      -XX:-UseGCOverheadLimit
  *      -Xlog:gc:gc.log
  *      -XX:-UseGCOverheadLimit
  *      gc.g1.unloading.UnloadingTest
- *      -redefineClasses
+ *      -redefineClasses true
  *      -keep object
  *      -numberOfChecksLimit 4
  *      -stressTime 180

@@ -24,7 +24,7 @@
 /*
  * @test ReservedStackTest
  *
- * @requires vm.opt.DeoptimizeALot == null | vm.opt.DeoptimizeALot == false
+ * @requires vm.opt.DeoptimizeALot != true
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  * @modules java.base/jdk.internal.vm.annotation
@@ -240,7 +240,7 @@ public class ReservedStackTest {
             (Platform.isLinux() &&
              (Platform.isPPC() || Platform.isS390x() || Platform.isX64() ||
               Platform.isX86())) ||
-            Platform.isOSX() ||
+            Platform.isOSX() || Platform.isRiscv64() ||
             Platform.isSolaris();
     }
 

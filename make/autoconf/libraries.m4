@@ -130,6 +130,13 @@ AC_DEFUN_ONCE([LIB_SETUP_LIBRARIES],
     BASIC_JVM_LIBS="$BASIC_JVM_LIBS -lthread"
   fi
 
+  # Programs which use C11 or C++11 atomics, like #include <atomic>,
+  # generally must link against -latomic on RISC-V
+  if test "x$OPENJDK_TARGET_OS" = xlinux && test "x$OPENJDK_TARGET_CPU" = xriscv64; then
+    BASIC_JDKLIB_LIBS="$BASIC_JDKLIB_LIBS -latomic"
+    BASIC_JVM_LIBS="$BASIC_JVM_LIBS -latomic"
+  fi
+
   # perfstat lib
   if test "x$OPENJDK_TARGET_OS" = xaix; then
     BASIC_JVM_LIBS="$BASIC_JVM_LIBS -lperfstat"
@@ -187,9 +194,9 @@ AC_DEFUN_ONCE([LIB_SETUP_MISC_LIBS],
 
   # Deprecated libraries, keep the flags for backwards compatibility
   if test "x$OPENJDK_TARGET_OS" = "xwindows"; then
-    BASIC_DEPRECATED_ARG_WITH([dxsdk])
-    BASIC_DEPRECATED_ARG_WITH([dxsdk-lib])
-    BASIC_DEPRECATED_ARG_WITH([dxsdk-include])
+    UTIL_DEPRECATED_ARG_WITH([dxsdk])
+    UTIL_DEPRECATED_ARG_WITH([dxsdk-lib])
+    UTIL_DEPRECATED_ARG_WITH([dxsdk-include])
   fi
 
   # Control if libzip can use mmap. Available for purposes of overriding.
@@ -214,7 +221,7 @@ AC_DEFUN_ONCE([LIB_SETUP_SOLARIS_STLPORT],
     fi
     if test -f "$STLPORT_LIB"; then
       AC_MSG_RESULT([yes, $STLPORT_LIB])
-      BASIC_FIXUP_PATH([STLPORT_LIB])
+      UTIL_FIXUP_PATH([STLPORT_LIB])
     else
       AC_MSG_RESULT([no, not found at $STLPORT_LIB])
       AC_MSG_ERROR([Failed to find libstlport.so.1, cannot build Hotspot gtests])

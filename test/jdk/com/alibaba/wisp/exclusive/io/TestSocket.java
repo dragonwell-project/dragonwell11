@@ -2,6 +2,7 @@
  * @test
  * @summary Test WispEngine's Socket
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestSocket
 */
 

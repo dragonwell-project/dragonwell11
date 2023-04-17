@@ -29,7 +29,11 @@
  * @requires vm.opt.ExplicitGCInvokesConcurrent == null | vm.opt.ExplicitGCInvokesConcurrent == false
  * @modules java.management/sun.management
  *          jdk.management
- * @run     main/othervm -Xms64m -Xmx64m GarbageCollectionNotificationContentTest
+ * @library /test/lib /
+ * @build   sun.hotspot.WhiteBox
+ * @run     driver ClassFileInstaller sun.hotspot.WhiteBox
+ * @run     main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *                       -Xms64m -Xmx64m GarbageCollectionNotificationContentTest
   */
 
 import java.util.*;
@@ -42,6 +46,8 @@ import com.sun.management.GcInfo;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.lang.reflect.Field;
+import sun.hotspot.WhiteBox;
+import sun.hotspot.gc.GC;
 
 public class GarbageCollectionNotificationContentTest {
     private static HashMap<String,GarbageCollectionNotificationInfo> listenerInvoked
@@ -99,6 +105,14 @@ public class GarbageCollectionNotificationContentTest {
         Object data[] = new Object[32];
         for(int i = 0; i<10000000; i++) {
             data[i%32] = new int[8];
+        }
+        // Trigger G1's concurrent mark
+        if (GC.G1.isSelected()) {
+            WhiteBox wb = WhiteBox.getWhiteBox();
+            wb.g1StartConcMarkCycle();
+            while (wb.g1InConcurrentMark()) {
+                Thread.sleep(5);
+            }
         }
         int wakeup = 0;
         synchronized(synchronizer) {

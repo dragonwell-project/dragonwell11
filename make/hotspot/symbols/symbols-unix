@@ -51,6 +51,7 @@ JVM_CountStackFrames
 JVM_CurrentThread
 JVM_CurrentTimeMillis
 JVM_DefineClass
+JVM_DefineClassFromCDS
 JVM_DefineClassWithSource
 JVM_DesiredAssertionStatus
 JVM_DoPrivileged
@@ -166,6 +167,7 @@ JVM_NativePath
 JVM_NewArray
 JVM_NewInstanceFromConstructor
 JVM_NewMultiArray
+JVM_NotifyDump
 JVM_RaiseSignal
 JVM_RawMonitorCreate
 JVM_RawMonitorDestroy

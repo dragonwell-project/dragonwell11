@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 
+package gc.g1;
+
 /*
  * @test TestGCLogMessages
  * @bug 8035406 8027295 8035398 8019342 8027959 8048179 8027962 8069330 8076463 8150630 8160055 8177059 8166191
@@ -33,10 +35,11 @@
  *          java.management
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
- * @run main TestGCLogMessages
+ * @run main gc.g1.TestGCLogMessages
  */
 
 import jdk.test.lib.process.OutputAnalyzer;
+import jdk.test.lib.Platform;
 import jdk.test.lib.process.ProcessTools;
 import jdk.test.lib.Platform;
 
@@ -160,7 +163,9 @@ public class TestGCLogMessages {
 
     public static void main(String[] args) throws Exception {
         new TestGCLogMessages().testNormalLogs();
-        new TestGCLogMessages().testWithToSpaceExhaustionLogs();
+        if (Platform.isDebugBuild()) {
+          new TestGCLogMessages().testWithEvacuationFailureLogs();
+        }
         new TestGCLogMessages().testWithInitialMark();
         new TestGCLogMessages().testExpandHeap();
     }
@@ -201,12 +206,15 @@ public class TestGCLogMessages {
         new LogMessageWithLevel("Remove Self Forwards", Level.TRACE),
     };
 
-    private void testWithToSpaceExhaustionLogs() throws Exception {
+    private void testWithEvacuationFailureLogs() throws Exception {
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UseG1GC",
                                                                   "-Xmx32M",
                                                                   "-Xmn16M",
+                                                                  "-XX:+G1EvacuationFailureALot",
+                                                                  "-XX:G1EvacuationFailureALotCount=100",
+                                                                  "-XX:G1EvacuationFailureALotInterval=1",
                                                                   "-Xlog:gc+phases=debug",
-                                                                  GCTestWithToSpaceExhaustion.class.getName());
+                                                                  GCTestWithEvacuationFailure.class.getName());
 
         OutputAnalyzer output = new OutputAnalyzer(pb.start());
         checkMessagesAtLevel(output, exhFailureMessages, Level.DEBUG);
@@ -215,8 +223,9 @@ public class TestGCLogMessages {
         pb = ProcessTools.createJavaProcessBuilder("-XX:+UseG1GC",
                                                    "-Xmx32M",
                                                    "-Xmn16M",
+                                                   "-Xms32M",
                                                    "-Xlog:gc+phases=trace",
-                                                   GCTestWithToSpaceExhaustion.class.getName());
+                                                   GCTestWithEvacuationFailure.class.getName());
 
         output = new OutputAnalyzer(pb.start());
         checkMessagesAtLevel(output, exhFailureMessages, Level.TRACE);
@@ -265,16 +274,19 @@ public class TestGCLogMessages {
         }
     }
 
-    static class GCTestWithToSpaceExhaustion {
+    static class GCTestWithEvacuationFailure {
         private static byte[] garbage;
         private static byte[] largeObject;
+        private static Object[] holder = new Object[200]; // Must be larger than G1EvacuationFailureALotCount
+
         public static void main(String [] args) {
             largeObject = new byte[16*1024*1024];
             System.out.println("Creating garbage");
-            // create 128MB of garbage. This should result in at least one GC,
-            // some of them with to-space exhaustion.
-            for (int i = 0; i < 1024; i++) {
-                garbage = new byte[128 * 1024];
+            // Create 16 MB of garbage. This should result in at least one GC,
+            // (Heap size is 32M, we use 17MB for the large object above)
+            // which is larger than G1EvacuationFailureALotInterval.
+            for (int i = 0; i < 16 * 1024; i++) {
+                holder[i % holder.length] = new byte[1024];
             }
             System.out.println("Done");
         }

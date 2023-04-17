@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 
 package jdk.test.lib.process;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -31,8 +30,9 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.concurrent.CountDownLatch;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -40,6 +40,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 
 import jdk.test.lib.JDKToolFinder;
 import jdk.test.lib.Utils;
@@ -59,50 +62,6 @@ public final class ProcessTools {
     }
 
     private ProcessTools() {
-    }
-
-    /**
-     * Pumps stdout and stderr from running the process into a String.
-     *
-     * @param processBuilder ProcessBuilder to run.
-     * @return Output from process.
-     * @throws IOException If an I/O error occurs.
-     */
-    public static OutputBuffer getOutput(ProcessBuilder processBuilder) throws IOException {
-        return getOutput(processBuilder.start());
-    }
-
-    /**
-     * Pumps stdout and stderr the running process into a String.
-     *
-     * @param process Process to pump.
-     * @return Output from process.
-     * @throws IOException If an I/O error occurs.
-     */
-    public static OutputBuffer getOutput(Process process) throws IOException {
-        ByteArrayOutputStream stderrBuffer = new ByteArrayOutputStream();
-        ByteArrayOutputStream stdoutBuffer = new ByteArrayOutputStream();
-        StreamPumper outPumper = new StreamPumper(process.getInputStream(), stdoutBuffer);
-        StreamPumper errPumper = new StreamPumper(process.getErrorStream(), stderrBuffer);
-        Thread outPumperThread = new Thread(outPumper);
-        Thread errPumperThread = new Thread(errPumper);
-
-        outPumperThread.setDaemon(true);
-        errPumperThread.setDaemon(true);
-
-        outPumperThread.start();
-        errPumperThread.start();
-
-        try {
-            process.waitFor();
-            outPumperThread.join();
-            errPumperThread.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-        }
-
-        return new OutputBuffer(stdoutBuffer.toString(), stderrBuffer.toString());
     }
 
     /**
@@ -201,7 +160,7 @@ public final class ProcessTools {
                                        TimeUnit unit)
     throws IOException, InterruptedException, TimeoutException {
         System.out.println("["+name+"]:" + processBuilder.command().stream().collect(Collectors.joining(" ")));
-        Process p = processBuilder.start();
+        Process p = privilegedStart(processBuilder);
         StreamPumper stdout = new StreamPumper(p.getInputStream());
         StreamPumper stderr = new StreamPumper(p.getErrorStream());
 
@@ -301,19 +260,40 @@ public final class ProcessTools {
         return ProcessHandle.current().pid();
     }
 
-
+    /**
+     * Create ProcessBuilder using the java launcher from the jdk to be tested.
+     *
+     * @param command Arguments to pass to the java command.
+     * @return The ProcessBuilder instance representing the java command.
+     */
+    public static ProcessBuilder createJavaProcessBuilder(List<String> command) {
+        return createJavaProcessBuilder(false, command);
+    }
 
     /**
-     * Create ProcessBuilder using the java launcher from the jdk to be tested and
-     * with any platform specific arguments prepended
+     * Create ProcessBuilder using the java launcher from the jdk to be tested.
+     *
+     * @param addTestVmAndJavaOptions If true, adds test.vm.opts and test.java.opts
+     *        to the java arguments.
+     * @param command Arguments to pass to the java command.
+     * @return The ProcessBuilder instance representing the java command.
+     */
+    public static ProcessBuilder createJavaProcessBuilder(boolean addTestVmAndJavaOptions, List<String> command) {
+        return createJavaProcessBuilder(addTestVmAndJavaOptions, command.toArray(String[]::new));
+    }
+
+    /**
+     * Create ProcessBuilder using the java launcher from the jdk to be tested.
+     *
+     * @param command Arguments to pass to the java command.
+     * @return The ProcessBuilder instance representing the java command.
      */
     public static ProcessBuilder createJavaProcessBuilder(String... command) {
         return createJavaProcessBuilder(false, command);
     }
 
     /**
-     * Create ProcessBuilder using the java launcher from the jdk to be tested,
-     * and with any platform specific arguments prepended.
+     * Create ProcessBuilder using the java launcher from the jdk to be tested.
      *
      * @param addTestVmAndJavaOptions If true, adds test.vm.opts and test.java.opts
      *        to the java arguments.
@@ -341,7 +321,7 @@ public final class ProcessTools {
             cmdLine.append(cmd).append(' ');
         System.out.println("Command line: [" + cmdLine.toString() + "]");
 
-        return new ProcessBuilder(args.toArray(new String[args.size()]));
+        return new ProcessBuilder(args);
     }
 
     private static void printStack(Thread t, StackTraceElement[] stack) {
@@ -368,8 +348,25 @@ public final class ProcessTools {
      * @param cmds User specified arguments.
      * @return The output from the process.
      */
+    public static OutputAnalyzer executeTestJvm(List<String> cmds) throws Exception {
+        return executeTestJvm(cmds.toArray(String[]::new));
+    }
+
+    /**
+     * Executes a test jvm process, waits for it to finish and returns the process output.
+     * The default jvm options from jtreg, test.vm.opts and test.java.opts, are added.
+     * The java from the test.jdk is used to execute the command.
+     *
+     * The command line will be like:
+     * {test.jdk}/bin/java {test.vm.opts} {test.java.opts} cmds
+     *
+     * The jvm process will have exited before this method returns.
+     *
+     * @param cmds User specified arguments.
+     * @return The output from the process.
+     */
     public static OutputAnalyzer executeTestJvm(String... cmds) throws Exception {
-        ProcessBuilder pb = createJavaProcessBuilder(Utils.addTestJavaOpts(cmds));
+        ProcessBuilder pb = createJavaProcessBuilder(true, cmds);
         return executeProcess(pb);
     }
 
@@ -389,11 +386,29 @@ public final class ProcessTools {
      * @return The {@linkplain OutputAnalyzer} instance wrapping the process.
      */
     public static OutputAnalyzer executeProcess(ProcessBuilder pb) throws Exception {
+        return executeProcess(pb, null);
+    }
+
+    /**
+     * Executes a process, pipe some text into its STDIN, waits for it
+     * to finish and returns the process output. The process will have exited
+     * before this method returns.
+     * @param pb The ProcessBuilder to execute.
+     * @param input The text to pipe into STDIN. Can be null.
+     * @return The {@linkplain OutputAnalyzer} instance wrapping the process.
+     */
+    public static OutputAnalyzer executeProcess(ProcessBuilder pb, String input) throws Exception {
         OutputAnalyzer output = null;
         Process p = null;
         boolean failed = false;
         try {
-            p = pb.start();
+            p = privilegedStart(pb);
+            if (input != null) {
+               try (PrintStream ps = new PrintStream(p.getOutputStream())) {
+                   ps.print(input);
+               }
+            }
+
             output = new OutputAnalyzer(p);
             p.waitFor();
 
@@ -496,6 +511,17 @@ public final class ProcessTools {
         OutputAnalyzer analyzer = ProcessTools.executeProcess(pb);
         System.out.println(analyzer.getOutput());
         return analyzer;
+    }
+
+    private static Process privilegedStart(ProcessBuilder pb) throws IOException {
+        try {
+            return AccessController.doPrivileged(
+                (PrivilegedExceptionAction<Process>) () -> pb.start());
+        } catch (PrivilegedActionException e) {
+            @SuppressWarnings("unchecked")
+            IOException t = (IOException) e.getException();
+            throw t;
+        }
     }
 
     private static class ProcessImpl extends Process {

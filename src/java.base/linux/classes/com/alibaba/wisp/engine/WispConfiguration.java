@@ -66,6 +66,7 @@ class WispConfiguration {
     static final int WISP_SHUTDOWN_SLEEP_TIME;
     static final WispScheduler.SchedulingPolicy SCHEDULING_POLICY;
     static final boolean USE_DIRECT_SELECTOR_WAKEUP;
+    static final boolean SEPARATE_IO_POLLER;
     static final boolean CARRIER_AS_POLLER;
     static final boolean MONOLITHIC_POLL;
     static final boolean CARRIER_GROW;
@@ -124,7 +125,9 @@ class WispConfiguration {
             WISP_PROFILE_LOG_PATH = "";
         }
 
-        CARRIER_AS_POLLER = parseBooleanParameter(p, "com.alibaba.wisp.useCarrierAsPoller", ALL_THREAD_AS_WISP);
+        SEPARATE_IO_POLLER = parseBooleanParameter(p, "com.alibaba.wisp.separateIOPoller", false);
+        CARRIER_AS_POLLER = parseBooleanParameter(p, "com.alibaba.wisp.useCarrierAsPoller",
+                ALL_THREAD_AS_WISP && (!SEPARATE_IO_POLLER || WORKER_COUNT / POLLER_SHARDING_SIZE > 1));
         MONOLITHIC_POLL = parseBooleanParameter(p, "com.alibaba.wisp.monolithicPoll", true);
         WISP_HIGH_PRECISION_TIMER = parseBooleanParameter(p, "com.alibaba.wisp.highPrecisionTimer", false);
         WISP_USE_STEAL_LOCK = parseBooleanParameter(p, "com.alibaba.wisp.useStealLock", true);

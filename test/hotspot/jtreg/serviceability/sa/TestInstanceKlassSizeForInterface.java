@@ -30,18 +30,19 @@ import sun.jvm.hotspot.oops.InstanceKlass;
 import sun.jvm.hotspot.debugger.*;
 
 import jdk.test.lib.apps.LingeredApp;
+import jdk.test.lib.Asserts;
 import jdk.test.lib.JDKToolLauncher;
 import jdk.test.lib.JDKToolFinder;
 import jdk.test.lib.Platform;
 import jdk.test.lib.process.ProcessTools;
 import jdk.test.lib.process.OutputAnalyzer;
+import jdk.test.lib.SA.SATestUtils;
 import jdk.test.lib.Utils;
-import jdk.test.lib.Asserts;
 
 /**
  * @test
  * @library /test/lib
- * @requires vm.hasSAandCanAttach
+ * @requires vm.hasSA
  * @modules java.base/jdk.internal.misc
  *          jdk.hotspot.agent/sun.jvm.hotspot
  *          jdk.hotspot.agent/sun.jvm.hotspot.utilities
@@ -96,20 +97,17 @@ public class TestInstanceKlassSizeForInterface {
     private static void createAnotherToAttach(
                             String[] instanceKlassNames,
                             int lingeredAppPid) throws Exception {
-
-        String[] toolArgs = {
+        // Start a new process to attach to the LingeredApp process to get SA info
+        ProcessBuilder processBuilder = ProcessTools.createJavaProcessBuilder(
             "--add-modules=jdk.hotspot.agent",
             "--add-exports=jdk.hotspot.agent/sun.jvm.hotspot=ALL-UNNAMED",
             "--add-exports=jdk.hotspot.agent/sun.jvm.hotspot.utilities=ALL-UNNAMED",
             "--add-exports=jdk.hotspot.agent/sun.jvm.hotspot.oops=ALL-UNNAMED",
             "--add-exports=jdk.hotspot.agent/sun.jvm.hotspot.debugger=ALL-UNNAMED",
             "TestInstanceKlassSizeForInterface",
-            Integer.toString(lingeredAppPid)
-        };
+            Integer.toString(lingeredAppPid));
 
-        // Start a new process to attach to the LingeredApp process
-        ProcessBuilder processBuilder = ProcessTools
-                  .createJavaProcessBuilder(toolArgs);
+        SATestUtils.addPrivilegesIfNeeded(processBuilder);
         OutputAnalyzer SAOutput = ProcessTools.executeProcess(processBuilder);
         SAOutput.shouldHaveExitValue(0);
         System.out.println(SAOutput.getOutput());
@@ -147,6 +145,7 @@ public class TestInstanceKlassSizeForInterface {
     }
 
     public static void main (String... args) throws Exception {
+        SATestUtils.skipIfCannotAttach(); // throws SkippedException if attach not expected to work.
         String[] instanceKlassNames = new String[] {
                                           "Language",
                                           "ParselTongue",

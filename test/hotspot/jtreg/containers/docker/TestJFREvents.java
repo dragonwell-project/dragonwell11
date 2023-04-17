@@ -24,6 +24,7 @@
 
 /*
  * @test
+ * @key cgroups
  * @summary Ensure that certain JFR events return correct results for resource values
  *          when run inside Docker container, such as available CPU and memory.
  *          Also make sure that PIDs are based on value provided by container,
@@ -57,7 +58,7 @@ public class TestJFREvents {
             return;
         }
 
-        DockerTestUtils.buildJdkDockerImage(imageName, "Dockerfile-BasicTest", "jdk-docker");
+        DockerTestUtils.buildJdkContainerImage(imageName);
 
         try {
             // leave one CPU for system and tools, otherwise this test may be unstable

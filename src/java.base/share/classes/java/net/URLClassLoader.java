@@ -30,6 +30,7 @@ import java.io.File;
 import java.io.FilePermission;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.SoftReference;
 import java.security.AccessControlContext;
 import java.security.AccessController;
 import java.security.CodeSigner;
@@ -39,12 +40,7 @@ import java.security.PermissionCollection;
 import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
 import java.security.SecureClassLoader;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.WeakHashMap;
+import java.util.*;
 import java.util.jar.Attributes;
 import java.util.jar.Attributes.Name;
 import java.util.jar.JarFile;
@@ -86,6 +82,8 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
 
     /* The context to be used when loading classes and resources */
     private final AccessControlContext acc;
+
+    private Map<String, SoftReference<Optional<Manifest>>> manifestCache;
 
     /**
      * Constructs a new URLClassLoader for the given URLs. The URLs will be
@@ -446,26 +444,40 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
     protected Class<?> findClass(final String name)
         throws ClassNotFoundException
     {
+        return findClassInternal(name, false, null, 0);
+    }
+
+    private Class<?> findClassInternal(final String name, boolean eagerAppCDSFastPath, String sourcepath, long ik)
+            throws ClassNotFoundException
+    {
         final Class<?> result;
         try {
             result = AccessController.doPrivileged(
                 new PrivilegedExceptionAction<>() {
                     public Class<?> run() throws ClassNotFoundException {
                         String path = name.replace('.', '/').concat(".class");
-                        Resource res = ucp.getResource(path, false);
-                        if (res != null) {
+                        if (eagerAppCDSFastPath) {
                             try {
-                                return defineClass(name, res);
+                                return defineClassFromCDS(name, path, sourcepath, ik);
                             } catch (IOException e) {
                                 throw new ClassNotFoundException(name, e);
-                            } catch (ClassFormatError e2) {
-                                if (res.getDataError() != null) {
-                                    e2.addSuppressed(res.getDataError());
-                                }
-                                throw e2;
                             }
                         } else {
-                            return null;
+                            Resource res = ucp.getResource(path, false);
+                            if (res != null) {
+                                try {
+                                    return defineClass(name, res);
+                                } catch (IOException e) {
+                                    throw new ClassNotFoundException(name, e);
+                                } catch (ClassFormatError e2) {
+                                    if (res.getDataError() != null) {
+                                        e2.addSuppressed(res.getDataError());
+                                    }
+                                    throw e2;
+                                }
+                            } else {
+                                return null;
+                            }
                         }
                     }
                 }, acc);
@@ -476,6 +488,37 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
             throw new ClassNotFoundException(name);
         }
         return result;
+    }
+
+
+    private Optional<Manifest> getManifest(String path, String sourcePath) throws IOException {
+        Optional<Manifest> mf;
+        synchronized (this) {
+            if (manifestCache == null) {
+                manifestCache = new HashMap<>();
+            }
+            SoftReference<Optional<Manifest>> ref = manifestCache.get(sourcePath);
+            if (ref == null || (mf = ref.get()) == null) {
+                Manifest mf0;
+                URL url = findResource(path);
+                if (url != null) {
+                    URLConnection connection = url.openConnection();
+                    if (connection instanceof JarURLConnection) {
+                        mf0 = ((JarURLConnection) connection).getManifest();
+                    } else {
+                        //Don't know how to process it.return null to enter slow path
+                        return null;
+                    }
+                } else {
+                    //not find the resource.return null to enter slow path
+                    return null;
+                }
+                //If the jar have no manifest, avoid cache miss by adding an optional value instead of a null object.
+                mf = Optional.ofNullable(mf0);
+                manifestCache.put(sourcePath, new SoftReference<>(mf));
+            }
+        }
+        return mf;
     }
 
     /*
@@ -507,19 +550,70 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
         return pkg;
     }
 
+    /**
+     * Finds and loads the class in CDS flow.
+     *
+     * @param name the name of the class
+     *
+     * @param sourcepath the path to load the class
+     *
+     * @param ik instance class
+     *
+     * @return the resulting class
+     *
+     * @exception ClassNotFoundException if the class could not be found,
+     *            or if the loader is closed.
+     */
+    protected Class<?> findClassFromCDS(String name, String sourcepath, long ik)
+            throws ClassNotFoundException {
+        return findClassInternal(name, true, sourcepath, ik);
+    }
+
+    /**
+     * Defines a Class for CDS flow
+     */
+    private Class<?> defineClassFromCDS(String name, String path, String sourcepath, long ik) throws IOException {
+        return defineClassInternal(name, null, true, path, sourcepath, ik);
+    }
+
     /*
      * Defines a Class using the class bytes obtained from the specified
      * Resource. The resulting Class must be resolved before it can be
      * used.
      */
     private Class<?> defineClass(String name, Resource res) throws IOException {
+        return defineClassInternal(name, res, false, null, null, 0);
+    }
+
+    private Class<?> defineClassInternal(String name, Resource res, boolean eagerAppCDSFastPath,
+                                         String path, String sourcepath, long ik) throws IOException {
         long t0 = System.nanoTime();
         int i = name.lastIndexOf('.');
-        URL url = res.getCodeSourceURL();
+        URL url;
+        if (eagerAppCDSFastPath) {
+            url = new URL(sourcepath);
+        } else {
+            url = res.getCodeSourceURL();
+        }
         if (i != -1) {
             String pkgname = name.substring(0, i);
             // Check if package already loaded.
-            Manifest man = res.getManifest();
+            Manifest man = null;
+            if (eagerAppCDSFastPath) {
+                final boolean isJar =
+                        (sourcepath.startsWith("file:") && sourcepath.endsWith(".jar")) ||
+                                sourcepath.startsWith("jar:file:");
+                if (isJar) {
+                    Optional<Manifest> optional = getManifest(path, sourcepath);
+                    if (optional == null) {
+                        return null;
+                    } else {
+                        man = optional.orElse(null);
+                    }
+                }
+            } else {
+                man = res.getManifest();
+            }
             if (getAndVerifyPackage(pkgname, man, url) == null) {
                 try {
                     if (man != null) {
@@ -537,6 +631,14 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
                     }
                 }
             }
+        }
+
+        if (eagerAppCDSFastPath) {
+            //class with code signer not dump to archive file
+            CodeSigner[] signers = null;
+            CodeSource cs = new CodeSource(url, signers);
+            PerfCounter.getReadClassBytesTime().addElapsedTimeFrom(t0);
+            return defineClassFromCDS(name, ik, cs);
         }
         // Now read the class bytes and define the class
         java.nio.ByteBuffer bb = res.getByteBuffer();

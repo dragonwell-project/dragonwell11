@@ -43,8 +43,11 @@ ifneq ($(findstring $(OPENJDK_TARGET_OS), windows aix),)
 endif
 
 ################################################################################
-# Copy the microsoft runtime libraries on windows
-ifeq ($(OPENJDK_TARGET_OS), windows)
+# Copy the microsoft runtime libraries on windows, but only if we are not
+# creating a buildjdk. If we are, the provided runtime librareis are made for
+# the target platform, not the build platform (and we should not need to bundle
+# anything with the minimalistic, locally-only buildjdk.)
+ifeq ($(OPENJDK_TARGET_OS)+$(CREATING_BUILDJDK), windows+false)
 
   # Chmod to avoid permission issues if bundles are unpacked on unix platforms.
   define copy-and-chmod
@@ -59,12 +62,17 @@ ifeq ($(OPENJDK_TARGET_OS), windows)
       FILES := $(MSVCR_DLL), \
       MACRO := copy-and-chmod))
 
+  $(eval $(call SetupCopyFiles,COPY_VCRUNTIME_1, \
+      DEST := $(LIB_DST_DIR), \
+      FILES := $(VCRUNTIME_1_DLL), \
+      MACRO := copy-and-chmod))
+
   $(eval $(call SetupCopyFiles,COPY_MSVCP, \
       DEST := $(LIB_DST_DIR), \
       FILES := $(MSVCP_DLL), \
       MACRO := copy-and-chmod))
 
-  TARGETS += $(COPY_MSVCR) $(COPY_MSVCP)
+  TARGETS += $(COPY_MSVCR) $(COPY_VCRUNTIME_1) $(COPY_MSVCP)
 
   ifneq ($(UCRT_DLL_DIR), )
     $(eval $(call SetupCopyFiles, COPY_UCRT_DLLS, \
@@ -182,6 +190,15 @@ $(eval $(call SetupCopyFiles, COPY_NET_PROPERTIES, \
 ))
 
 TARGETS += $(COPY_NET_PROPERTIES)
+
+################################################################################
+
+$(eval $(call SetupCopyFiles, COPY_QUICKSTART_PROPERTIES, \
+    FILES := $(TOPDIR)/src/java.base/share/conf/quickstart.properties, \
+    DEST := $(CONF_DST_DIR), \
+))
+
+TARGETS += $(COPY_QUICKSTART_PROPERTIES)
 
 ################################################################################
 

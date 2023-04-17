@@ -544,7 +544,13 @@ bool GenerateOopMap::jump_targets_do(BytecodeStream *bcs, jmpFct_t jmpFct, int *
     case Bytecodes::_ifnull:
     case Bytecodes::_ifnonnull:
       (*jmpFct)(this, bcs->dest(), data);
-      (*jmpFct)(this, bci + 3, data);
+      // Class files verified by the old verifier can have a conditional branch
+      // as their last bytecode, provided the conditional branch is unreachable
+      // during execution.  Check if this instruction is the method's last bytecode
+      // and, if so, don't call the jmpFct.
+      if (bci + 3 < method()->code_size()) {
+        (*jmpFct)(this, bci + 3, data);
+      }
       break;
 
     case Bytecodes::_goto:
@@ -1879,7 +1885,7 @@ void GenerateOopMap::do_ldc(int bci) {
   constantTag tag = cp->tag_at(ldc.pool_index()); // idx is index in resolved_references
   BasicType       bt  = ldc.result_type();
 #ifdef ASSERT
-  BasicType   tag_bt = tag.is_dynamic_constant() ? bt : tag.basic_type();
+  BasicType   tag_bt = (tag.is_dynamic_constant() || tag.is_dynamic_constant_in_error()) ? bt : tag.basic_type();
   assert(bt == tag_bt, "same result");
 #endif
   CellTypeState   cts;

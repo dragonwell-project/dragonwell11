@@ -313,4 +313,151 @@ public:
     return (SymbolPropertyEntry*) Hashtable<Symbol*, mtSymbol>::bucket(i);
   }
 };
+
+class NotFoundClassEntry : public HashtableEntry<Symbol*, mtSymbol> {
+  friend class VMStructs;
+private:
+  int _initiating_loader_hash;
+public:
+  Symbol* symbol() const            { return literal(); }
+  int initiating_loader_hash() const  { return _initiating_loader_hash; }
+  void set_initiating_loader_hash(int hash) {
+    _initiating_loader_hash = hash;
+  }
+
+  NotFoundClassEntry* next() const {
+    return (NotFoundClassEntry*)HashtableEntry<Symbol*, mtSymbol>::next();
+  }
+
+  NotFoundClassEntry** next_addr() {
+    return (NotFoundClassEntry**)HashtableEntry<Symbol*, mtSymbol>::next_addr();
+  }
+
+  void metaspace_pointers_do(MetaspaceClosure* it);
+};
+
+class NotFoundClassTable : public Hashtable<Symbol*, mtSymbol> {
+  friend class VMStructs;
+private:
+  // The following method is not MT-safe and must be done under lock.
+  NotFoundClassTable** bucket_addr(int i) {
+    return (NotFoundClassTable**) Hashtable<Symbol*, mtSymbol>::bucket_addr(i);
+  }
+
+  void add_entry(int index, NotFoundClassEntry* new_entry) {
+    ShouldNotReachHere();
+  }
+
+  NotFoundClassEntry* new_entry(unsigned int hash, Symbol* symbol, int initiating_loader_hash) {
+    NotFoundClassEntry* entry = (NotFoundClassEntry*) Hashtable<Symbol*, mtSymbol>::new_entry(hash, symbol);
+    // Hashtable with Symbol* literal must increment and decrement refcount.
+    symbol->increment_refcount();
+    entry->set_initiating_loader_hash(initiating_loader_hash);
+    return entry;
+  }
+
+public:
+  NotFoundClassTable(int table_size);
+  NotFoundClassTable(int table_size, HashtableBucket<mtSymbol>* t, int number_of_entries);
+
+  void free_entry(NotFoundClassEntry* entry) {
+    // no need to free NotFoundClassTable
+    ShouldNotReachHere();
+  }
+
+  unsigned int compute_hash(Symbol* sym) {
+    // Use the regular identity_hash.
+    return Hashtable<Symbol*, mtSymbol>::compute_hash(sym);
+  }
+
+  int index_for(Symbol* name) {
+    return hash_to_index(compute_hash(name));
+  }
+
+  // need not be locked; no state change
+  NotFoundClassEntry* find_entry(int index, unsigned int hash, Symbol* name, int initiating_loader_hash);
+
+  // must be done under SystemDictionary_lock
+  NotFoundClassEntry* add_entry(int index, unsigned int hash, Symbol* name, int initiating_loader_hash);
+
+  NotFoundClassEntry* bucket(int i) {
+    return (NotFoundClassEntry*) Hashtable<Symbol*, mtSymbol>::bucket(i);
+  }
+
+  void metaspace_pointers_do(MetaspaceClosure* it);
+  void reorder_not_found_class_table_for_sharing();
+};
+
+#if INCLUDE_JVMTI
+// EagerAppCDS: custom classloader jvmti support: HashMap<Symbol*, id>
+class UnregisteredClasspath2IDEntry : public HashtableEntry<Symbol*, mtClass> {
+  friend class VMStructs;
+private:
+  int _id;
+public:
+  UnregisteredClasspath2IDEntry() : _id(0) {}
+  Symbol* symbol() const            { return literal(); }
+  int id() const                    { return _id; }
+  void set_id(int id) {
+    _id = id;
+  }
+  UnregisteredClasspath2IDEntry* next() const {
+    return (UnregisteredClasspath2IDEntry*)HashtableEntry<Symbol*, mtClass>::next();
+  }
+  UnregisteredClasspath2IDEntry** next_addr() {
+    return (UnregisteredClasspath2IDEntry**)HashtableEntry<Symbol*, mtClass>::next_addr();
+  }
+};
+
+class UnregisteredClasspath2IDTable : public Hashtable<Symbol*, mtClass> {
+private:
+  int _id_gen;
+private:
+  void add(Symbol *source_file_path, int id) {
+    unsigned int hash = source_file_path->identity_hash();
+    UnregisteredClasspath2IDEntry* entry = new_entry(hash, source_file_path, id);
+    Hashtable<Symbol*, mtClass>::add_entry(hash_to_index(hash), entry);
+  }
+
+  int lookup(Symbol *source_file_path) {
+    unsigned int hash = source_file_path->identity_hash();
+    int index = hash_to_index(hash);
+    for (UnregisteredClasspath2IDEntry* e = bucket(index); e != NULL; e = e->next()) {
+      if (e->hash() == hash && e->literal() == source_file_path) {
+        return e->id();
+      }
+    }
+    return -1;
+  }
+
+  // The following method is not MT-safe and must be done under lock.
+  UnregisteredClasspath2IDEntry* new_entry(unsigned int hash, Symbol* symbol, int id) {
+    symbol->increment_refcount();
+    UnregisteredClasspath2IDEntry* entry = (UnregisteredClasspath2IDEntry*) Hashtable<Symbol*, mtClass>::new_entry(hash, symbol);
+    entry->set_id(id);
+    return entry;
+  }
+  UnregisteredClasspath2IDEntry* bucket(int i) {
+    return (UnregisteredClasspath2IDEntry*) Hashtable<Symbol*, mtClass>::bucket(i);
+  }
+public:
+  UnregisteredClasspath2IDTable() : Hashtable<Symbol*, mtClass>(181, sizeof(UnregisteredClasspath2IDEntry)), _id_gen(0) { }
+  UnregisteredClasspath2IDTable(HashtableBucket<mtClass>* t, int number_of_entries)
+    : Hashtable<Symbol*, mtClass>(181, sizeof(UnregisteredClasspath2IDEntry), t, number_of_entries), _id_gen(0) {}
+
+  int lookup_or_add(Symbol *source_file_path) {
+    int id = lookup(source_file_path);
+    if (id == -1) {
+      // generate one.
+      id = _id_gen++;
+      add(source_file_path, id);
+    }
+    return id;
+  }
+
+  void metaspace_pointers_do(MetaspaceClosure* it);
+  void reorder_unregistered_classpath_id_table_for_sharing();
+};
+#endif // INCLUDE_JVMTI
+
 #endif // SHARE_VM_CLASSFILE_DICTIONARY_HPP

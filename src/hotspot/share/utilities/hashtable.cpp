@@ -66,6 +66,7 @@ template <MEMFLAGS F> BasicHashtableEntry<F>* BasicHashtable<F>::new_entry(unsig
       len = 1 << log2_int(len); // round down to power of 2
       assert(len >= _entry_size, "");
       _first_free_entry = NEW_C_HEAP_ARRAY2(char, len, F, CURRENT_PC);
+      _entry_blocks->append(_first_free_entry);
       _end_block = _first_free_entry + len;
     }
     entry = (BasicHashtableEntry<F>*)_first_free_entry;
@@ -87,7 +88,9 @@ template <class T, MEMFLAGS F> HashtableEntry<T, F>* Hashtable<T, F>::new_entry(
 }
 
 // Version of hashtable entry allocation that allocates in the C heap directly.
-// The allocator in blocks is preferable but doesn't have free semantics.
+// The block allocator in BasicHashtable has less fragmentation, but the memory is not freed until
+// the whole table is freed. Use allocate_new_entry() if you want to individually free the memory
+// used by each entry
 template <class T, MEMFLAGS F> HashtableEntry<T, F>* Hashtable<T, F>::allocate_new_entry(unsigned int hashValue, T obj) {
   HashtableEntry<T, F>* entry = (HashtableEntry<T, F>*) NEW_C_HEAP_ARRAY(char, this->entry_size(), F);
 
@@ -310,6 +313,20 @@ template <MEMFLAGS F> bool BasicHashtable<F>::resize(int new_size) {
   return true;
 }
 
+template <MEMFLAGS F> bool BasicHashtable<F>::maybe_grow(int max_size, int load_factor) {
+  assert(SafepointSynchronize::is_at_safepoint(), "must be at safepoint");
+
+  if (table_size() >= max_size) {
+    return false;
+  }
+  if (number_of_entries() / table_size() > load_factor) {
+    resize(MIN2<int>(table_size() * 2, max_size));
+    return true;
+  } else {
+    return false;
+  }
+}
+
 // Dump footprint and bucket length statistics
 //
 // Note: if you create a new subclass of Hashtable<MyNewType, F>, you will need to
@@ -476,6 +493,7 @@ template class BasicHashtable<mtCode>;
 template class BasicHashtable<mtInternal>;
 template class BasicHashtable<mtModule>;
 template class BasicHashtable<mtCompiler>;
+template class BasicHashtable<mtLogging>;
 
 template void BasicHashtable<mtClass>::verify_table<DictionaryEntry>(char const*);
 template void BasicHashtable<mtModule>::verify_table<ModuleEntry>(char const*);

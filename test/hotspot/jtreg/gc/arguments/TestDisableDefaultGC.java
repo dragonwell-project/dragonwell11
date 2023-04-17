@@ -21,16 +21,19 @@
  * questions.
  */
 
+package gc.arguments;
+
 /*
  * @test TestDisableDefaultGC
  * @summary Test that the VM complains when the default GC is disabled and no other GC is specified
  * @bug 8068579
  * @key gc
  * @library /test/lib
+ * @library /
  * @requires vm.gc=="null"
  * @modules java.base/jdk.internal.misc
  *          java.management
- * @run driver TestDisableDefaultGC
+ * @run driver gc.arguments.TestDisableDefaultGC
  */
 
 import jdk.test.lib.process.ProcessTools;
@@ -39,7 +42,7 @@ import jdk.test.lib.process.OutputAnalyzer;
 public class TestDisableDefaultGC {
     public static void main(String[] args) throws Exception {
         // Start VM, disabling all possible default GCs
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:-UseSerialGC",
+        ProcessBuilder pb = GCArguments.createJavaProcessBuilder("-XX:-UseSerialGC",
                                                                   "-XX:-UseParallelGC",
                                                                   "-XX:-UseG1GC",
                                                                   "-XX:-UseConcMarkSweepGC",

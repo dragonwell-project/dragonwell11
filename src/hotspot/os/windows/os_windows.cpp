@@ -438,16 +438,6 @@ LONG WINAPI topLevelExceptionFilter(struct _EXCEPTION_POINTERS* exceptionInfo);
 static unsigned __stdcall thread_native_entry(Thread* thread) {
 
   thread->record_stack_base_and_size();
-
-  // Try to randomize the cache line index of hot stack frames.
-  // This helps when threads of the same stack traces evict each other's
-  // cache lines. The threads can be either from the same JVM instance, or
-  // from different JVM instances. The benefit is especially true for
-  // processors with hyperthreading technology.
-  static int counter = 0;
-  int pid = os::current_process_id();
-  _alloca(((pid ^ counter++) & 7) * 128);
-
   thread->initialize_thread_current();
 
   OSThread* osthr = thread->osthread();
@@ -641,6 +631,7 @@ bool os::create_thread(Thread* thread, ThreadType thr_type,
     case os::vm_thread:
     case os::pgc_thread:
     case os::cgc_thread:
+    case os::asynclog_thread:
     case os::watcher_thread:
       if (VMThreadStackSize > 0) stack_size = (size_t)(VMThreadStackSize * K);
       break;
@@ -669,21 +660,27 @@ bool os::create_thread(Thread* thread, ThreadType thr_type,
   // flag appears to work with _beginthredex() as well.
 
   const unsigned initflag = CREATE_SUSPENDED | STACK_SIZE_PARAM_IS_A_RESERVATION;
-  HANDLE thread_handle =
-    (HANDLE)_beginthreadex(NULL,
-                           (unsigned)stack_size,
-                           (unsigned (__stdcall *)(void*)) thread_native_entry,
-                           thread,
-                           initflag,
-                           &thread_id);
+  HANDLE thread_handle;
+  int limit = 3;
+  do {
+    thread_handle =
+      (HANDLE)_beginthreadex(NULL,
+                             (unsigned)stack_size,
+                             (unsigned (__stdcall *)(void*)) thread_native_entry,
+                             thread,
+                             initflag,
+                             &thread_id);
+  } while (thread_handle == NULL && errno == EAGAIN && limit-- > 0);
 
+  ResourceMark rm;
   char buf[64];
   if (thread_handle != NULL) {
-    log_info(os, thread)("Thread started (tid: %u, attributes: %s)",
-      thread_id, describe_beginthreadex_attributes(buf, sizeof(buf), stack_size, initflag));
+    log_info(os, thread)("Thread \"%s\" started (tid: %u, attributes: %s)",
+                         thread->name(), thread_id,
+                         describe_beginthreadex_attributes(buf, sizeof(buf), stack_size, initflag));
   } else {
-    log_warning(os, thread)("Failed to start thread - _beginthreadex failed (%s) for attributes: %s.",
-      os::errno_name(errno), describe_beginthreadex_attributes(buf, sizeof(buf), stack_size, initflag));
+    log_warning(os, thread)("Failed to start thread \"%s\" - _beginthreadex failed (%s) for attributes: %s.",
+                            thread->name(), os::errno_name(errno), describe_beginthreadex_attributes(buf, sizeof(buf), stack_size, initflag));
     // Log some OS information which might explain why creating the thread failed.
     log_info(os, thread)("Number of threads approx. running in the VM: %d", Threads::number_of_threads());
     LogStream st(Log(os, thread)::info());
@@ -5457,6 +5454,55 @@ void Parker::park(bool isAbsolute, jlong time) {
 void Parker::unpark() {
   guarantee(_ParkEvent != NULL, "invariant");
   SetEvent(_ParkEvent);
+}
+
+// Platform Monitor implementation
+
+os::PlatformMonitor::PlatformMonitor() {
+  InitializeConditionVariable(&_cond);
+  InitializeCriticalSection(&_mutex);
+}
+
+os::PlatformMonitor::~PlatformMonitor() {
+  DeleteCriticalSection(&_mutex);
+}
+
+void os::PlatformMonitor::lock() {
+  EnterCriticalSection(&_mutex);
+}
+
+void os::PlatformMonitor::unlock() {
+  LeaveCriticalSection(&_mutex);
+}
+
+bool os::PlatformMonitor::try_lock() {
+  return TryEnterCriticalSection(&_mutex);
+}
+
+// Must already be locked
+int os::PlatformMonitor::wait(jlong millis) {
+  assert(millis >= 0, "negative timeout");
+  int ret = OS_TIMEOUT;
+  int status = SleepConditionVariableCS(&_cond, &_mutex,
+                                        millis == 0 ? INFINITE : millis);
+  if (status != 0) {
+    ret = OS_OK;
+  }
+  #ifndef PRODUCT
+  else {
+    DWORD err = GetLastError();
+    assert(err == ERROR_TIMEOUT, "SleepConditionVariableCS: %ld:", err);
+  }
+  #endif
+  return ret;
+}
+
+void os::PlatformMonitor::notify() {
+  WakeConditionVariable(&_cond);
+}
+
+void os::PlatformMonitor::notify_all() {
+  WakeAllConditionVariable(&_cond);
 }
 
 // Run the specified command in a separate process. Return its exit value,

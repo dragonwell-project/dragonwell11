@@ -1339,6 +1339,7 @@ class java_lang_ClassLoader : AllStatic {
   static int name_offset;
   static int nameAndId_offset;
   static int unnamedModule_offset;
+  static int signature_offset;
 
  public:
   static void compute_offsets();
@@ -1351,6 +1352,7 @@ class java_lang_ClassLoader : AllStatic {
   static oop parent(oop loader);
   static oop name(oop loader);
   static oop nameAndId(oop loader);
+  static int signature(oop loader);
   static bool isAncestor(oop loader, oop cl);
 
   // Support for parallelCapable field

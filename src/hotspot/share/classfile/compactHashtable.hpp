@@ -27,7 +27,7 @@
 
 #include "oops/array.hpp"
 #include "oops/symbol.hpp"
-#include "utilities/hashtable.hpp"
+#include "utilities/growableArray.hpp"
 
 template <class T, class N> class CompactHashtable;
 class NumberSeq;

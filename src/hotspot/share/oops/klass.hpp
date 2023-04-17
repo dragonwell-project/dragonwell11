@@ -172,6 +172,11 @@ private:
   // -1.
   jshort _shared_class_path_index;
 
+#if INCLUDE_JVMTI
+  // custom classloader support
+  jshort _shared_unregistered_class_path_index;
+#endif
+
 #if INCLUDE_CDS
   // Flags of the current shared class.
   u2     _shared_class_flags;
@@ -304,6 +309,16 @@ protected:
   void set_shared_classpath_index(int index) {
     _shared_class_path_index = index;
   };
+
+#if INCLUDE_JVMTI
+  int shared_unregistered_classpath_index() const   {
+    return _shared_unregistered_class_path_index;
+  };
+
+  void set_shared_unregistered_classpath_index(int index) {
+    _shared_unregistered_class_path_index = index;
+  };
+#endif
 
   void set_has_raw_archived_mirror() {
     CDS_ONLY(_shared_class_flags |= _has_raw_archived_mirror;)

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2005, 2021, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,9 @@
 # It also contains test-suite configuration information.
 
 # The list of keywords supported in this test suite
-keys=cte_test jcmd nmt regression gc stress metaspace headful intermittent
+# randomness:           test uses randomness, test cases differ from run to run
+# cgroups:              test uses cgroups
+keys=cte_test jcmd nmt regression gc stress metaspace headful intermittent randomness cgroups
 
 groups=TEST.groups TEST.quick-groups
 
@@ -56,7 +58,6 @@ requires.properties= \
     vm.cpu.features \
     vm.debug \
     vm.hasSA \
-    vm.hasSAandCanAttach \
     vm.hasJFR \
     vm.rtm.cpu \
     vm.rtm.compiler \
@@ -69,10 +70,11 @@ requires.properties= \
     vm.compiler1.enabled \
     vm.compiler2.enabled \
     vm.musl \
+    vm.flagless \
     docker.support
 
 # Minimum jtreg version
-requiredVersion=5.1 b1
+requiredVersion=6+1
 
 # Path to libraries in the topmost test directory. This is needed so @library
 # does not need ../../../ notation to reach them

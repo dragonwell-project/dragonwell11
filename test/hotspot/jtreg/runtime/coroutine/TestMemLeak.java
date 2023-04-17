@@ -2,6 +2,7 @@
  * @test
  * @summary test of memory leak while creating and destroying coroutine/thread
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.version=2  -Xmx10m  -Xms10m TestMemLeak
  */
 
