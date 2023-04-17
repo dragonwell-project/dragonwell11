@@ -624,20 +624,10 @@ jobs:
 
       - name: Build serverless-adapter
         run: |
-          pwd
-          mkdir -p tmp
-          cd tmp
-          cp ../../jdk/build/linux-aarch64/bundles/jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin${{ matrix.artifact }}.tar.gz ./
-          tar xf jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin${{ matrix.artifact }}.tar.gz
-          rm -rf jdk-${{ env.JDK_VERSION }}-internal+0_linux-aarch64_bin${{ matrix.artifact }}.tar.gz
-          cd ..
           echo $JAVA_HOME
-          export JAVA_HOME=./tmp/jdk-${{ env.JDK_VERSION }}/${{ matrix.artifact-path }}
+          export JAVA_HOME=../jdk/build/linux-aarch64/images/jdk
           echo $JAVA_HOME
-          mvn -v
-          mvn clean install -e
-          mvn package -e
-          rm -rf tmp
+          mvn package
         working-directory: serverless-adapter
 
       - name: Copy serverless-adapter into bundles
