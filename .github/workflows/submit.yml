@@ -624,9 +624,7 @@ jobs:
 
       - name: Build serverless-adapter
         run: |
-          echo $JAVA_HOME
           export JAVA_HOME=../jdk/build/linux-aarch64/images/jdk
-          echo $JAVA_HOME
           mvn package
         working-directory: serverless-adapter
 
