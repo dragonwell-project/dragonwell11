@@ -77,7 +77,6 @@ public:
   virtual void do_field(fieldDescriptor* fd) = 0;
 };
 
-#ifndef PRODUCT
 // Print fields.
 // If "obj" argument to constructor is NULL, prints static fields, otherwise prints non-static fields.
 class FieldPrinter: public FieldClosure {
@@ -87,7 +86,6 @@ class FieldPrinter: public FieldClosure {
    FieldPrinter(outputStream* st, oop obj = NULL) : _obj(obj), _st(st) {}
    void do_field(fieldDescriptor* fd);
 };
-#endif  // !PRODUCT
 
 // Describes where oops are located in instances of this klass.
 class OopMapBlock {
@@ -187,6 +185,9 @@ class InstanceKlass: public Klass {
   // Array name derived from this class which needs unreferencing
   // if this class is unloaded.
   Symbol*         _array_name;
+
+  // source file path, e.g. /home/xxx/liba.jar
+  Symbol*         _source_file_path;
 
   // Number of heapOopSize words used by non-static fields in this klass
   // (including inherited fields but after header_size()).
@@ -724,6 +725,9 @@ public:
   // symbol unloading support (refcount already added)
   Symbol* array_name()                     { return _array_name; }
   void set_array_name(Symbol* name)        { assert(_array_name == NULL  || name == NULL, "name already created"); _array_name = name; }
+
+  Symbol* source_file_path()               { return _source_file_path; }
+  void set_source_file_path(Symbol* value) { _source_file_path = value; }
 
   // nonstatic oop-map blocks
   static int nonstatic_oop_map_size(unsigned int oop_map_count) {
@@ -1346,16 +1350,14 @@ public:
 
  public:
   // Printing
-#ifndef PRODUCT
   void print_on(outputStream* st) const;
-#endif
   void print_value_on(outputStream* st) const;
 
   void oop_print_value_on(oop obj, outputStream* st);
 
-#ifndef PRODUCT
   void oop_print_on      (oop obj, outputStream* st);
 
+#ifndef PRODUCT
   void print_dependent_nmethods(bool verbose = false);
   bool is_dependent_nmethod(nmethod* nm);
 #endif

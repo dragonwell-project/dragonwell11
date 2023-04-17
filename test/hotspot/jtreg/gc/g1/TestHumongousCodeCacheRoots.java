@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 
+package gc.g1;
+
 /*
  * @test
  * @key regression gc
@@ -31,10 +33,10 @@
  *          java.management
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
- *                              sun.hotspot.WhiteBox$WhiteBoxPermission
+ *                                sun.hotspot.WhiteBox$WhiteBoxPermission
  * @summary Humongous objects may have references from the code cache
- * @run main TestHumongousCodeCacheRoots
-*/
+ * @run driver gc.g1.TestHumongousCodeCacheRoots
+ */
 
 import jdk.test.lib.process.OutputAnalyzer;
 import jdk.test.lib.process.ProcessTools;
@@ -90,10 +92,9 @@ public class TestHumongousCodeCacheRoots {
    * @param vmargs Arguments to the VM to run
    * @param classname Name of the class to run
    * @param arguments Arguments to the class
-   * @param useTestDotJavaDotOpts Use test.java.opts as part of the VM argument string
    * @return The OutputAnalyzer with the results for the invocation.
    */
-  public static OutputAnalyzer runWhiteBoxTest(String[] vmargs, String classname, String[] arguments, boolean useTestDotJavaDotOpts) throws Exception {
+  public static OutputAnalyzer runWhiteBoxTest(String[] vmargs, String classname, String[] arguments) throws Exception {
     ArrayList<String> finalargs = new ArrayList<String>();
 
     String[] whiteboxOpts = new String[] {
@@ -102,41 +103,15 @@ public class TestHumongousCodeCacheRoots {
       "-cp", System.getProperty("java.class.path"),
     };
 
-    if (useTestDotJavaDotOpts) {
-      // System.getProperty("test.java.opts") is '' if no options is set,
-      // we need to skip such a result
-      String[] externalVMOpts = new String[0];
-      if (System.getProperty("test.java.opts") != null && System.getProperty("test.java.opts").length() != 0) {
-        externalVMOpts = System.getProperty("test.java.opts").split(" ");
-      }
-      finalargs.addAll(Arrays.asList(externalVMOpts));
-    }
-
     finalargs.addAll(Arrays.asList(vmargs));
     finalargs.addAll(Arrays.asList(whiteboxOpts));
     finalargs.add(classname);
     finalargs.addAll(Arrays.asList(arguments));
 
-    ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(finalargs.toArray(new String[0]));
+    ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(finalargs);
     OutputAnalyzer output = new OutputAnalyzer(pb.start());
-    try {
-        output.shouldHaveExitValue(0);
-    } catch (RuntimeException e) {
-        // It's ok if there is no client vm in the jdk.
-        if (output.firstMatch("Unrecognized option: -client") == null) {
-            throw e;
-        }
-    }
-
+    output.shouldHaveExitValue(0);
     return output;
-  }
-
-  public static void runTest(String compiler, String[] other) throws Exception {
-    ArrayList<String> joined = new ArrayList<String>();
-    joined.add(compiler);
-    joined.addAll(Arrays.asList(other));
-    runWhiteBoxTest(joined.toArray(new String[0]), TestHumongousCodeCacheRootsHelper.class.getName(),
-      new String[] {}, false);
   }
 
   public static void main(String[] args) throws Exception {
@@ -146,8 +121,8 @@ public class TestHumongousCodeCacheRoots {
       "-XX:InitiatingHeapOccupancyPercent=1", // strong code root marking
       "-XX:+G1VerifyHeapRegionCodeRoots", "-XX:+VerifyAfterGC", // make sure that verification is run
     };
-    runTest("-client", baseArguments);
-    runTest("-server", baseArguments);
+
+    runWhiteBoxTest(baseArguments, TestHumongousCodeCacheRootsHelper.class.getName(), new String[] { });
   }
 }
 

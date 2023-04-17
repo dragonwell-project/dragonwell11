@@ -4,6 +4,7 @@
  * @summary Test TimeOut.Queue's offer and remove function, make sure it's consistent with the behavior of the jdk's priority queue
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm TestPriorityQueueSort
  */
 

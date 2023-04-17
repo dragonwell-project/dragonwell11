@@ -40,6 +40,7 @@
 Mutex*   Patching_lock                = NULL;
 Monitor* SystemDictionary_monitor_lock= NULL;
 Mutex*   SharedDictionary_lock        = NULL;
+Mutex*   DumpLoadedClassList_lock     = NULL;
 Mutex*   Module_lock                  = NULL;
 Mutex*   CompiledIC_lock              = NULL;
 Mutex*   InlineCacheBuffer_lock       = NULL;
@@ -157,6 +158,9 @@ Mutex*   DCmdFactory_lock             = NULL;
 SystemDictMonitor* SystemDictionary_lock = NULL;
 
 Monitor* Wisp_lock                    = NULL;
+#if INCLUDE_CDS && INCLUDE_JVMTI
+Mutex*   CDSClassFileStream_lock      = NULL;
+#endif
 
 #define MAX_NUM_MUTEX 128
 static Monitor * _mutex_array[MAX_NUM_MUTEX];
@@ -286,6 +290,7 @@ void mutex_init() {
 
   def(SystemDictionary_monitor_lock, PaddedMonitor, leaf,        true,  Monitor::_safepoint_check_always);     // lookups done by VM thread
   def(SharedDictionary_lock        , PaddedMutex  , leaf,        true,  Monitor::_safepoint_check_always);     // lookups done by VM thread
+  def(DumpLoadedClassList_lock     , PaddedMutex,   leaf,        true,  Monitor::_safepoint_check_always);     // lookups done by VM thread
   def(Module_lock                  , PaddedMutex  , leaf+2,      true,  Monitor::_safepoint_check_always);
   def(InlineCacheBuffer_lock       , PaddedMutex  , leaf,        true,  Monitor::_safepoint_check_always);
   def(VMStatistic_lock             , PaddedMutex  , leaf,        false, Monitor::_safepoint_check_always);
@@ -386,6 +391,9 @@ void mutex_init() {
   def(ThreadsSMRDelete_lock        , PaddedMonitor, special,     false, Monitor::_safepoint_check_never);
   def(SharedDecoder_lock           , PaddedMutex  , native,      false, Monitor::_safepoint_check_never);
   def(DCmdFactory_lock             , PaddedMutex  , leaf,        true,  Monitor::_safepoint_check_never);
+#if INCLUDE_CDS && INCLUDE_JVMTI
+  def(CDSClassFileStream_lock      , PaddedMutex  , max_nonleaf, false, Monitor::_safepoint_check_always);
+#endif
 }
 
 GCMutexLocker::GCMutexLocker(Monitor * mutex) {

@@ -259,7 +259,8 @@ void ClassLoaderExt::finalize_shared_paths_misc_info() {
 // Load the class of the given name from the location given by path. The path is specified by
 // the "source:" in the class list file (see classListParser.cpp), and can be a directory or
 // a JAR file.
-InstanceKlass* ClassLoaderExt::load_class(Symbol* name, const char* path, TRAPS) {
+InstanceKlass* ClassLoaderExt::load_class(Symbol* name, const char* path, const char *original_source, int defining_loader_hash,
+                                          int initiating_loader_hash, uint64_t fingerprint, TRAPS) {
 
   assert(name != NULL, "invariant");
   assert(DumpSharedSpaces, "this function is only used with -Xshare:dump");
@@ -288,6 +289,15 @@ InstanceKlass* ClassLoaderExt::load_class(Symbol* name, const char* path, TRAPS)
     return NULL;
   }
 
+  // here the class is loaded by ClassLoaderData::the_null_class_loader_data(), the stream shouldn't be changed.
+  // if the fingerprint isn't equal, it means that the original class loader changes the stream when calling
+  // defineClass. we ignore the class in EagerAppCDS flow.
+  if (EagerAppCDS && fingerprint != 0 && fingerprint != stream->compute_fingerprint()) {
+    tty->print_cr("Preload Warning: class %s with different fingerprint " PTR64_FORMAT " and " PTR64_FORMAT,
+                  class_name, fingerprint, stream->compute_fingerprint());
+    return NULL;
+  }
+
   assert(stream != NULL, "invariant");
   stream->set_verify(true);
 
@@ -307,7 +317,13 @@ InstanceKlass* ClassLoaderExt::load_class(Symbol* name, const char* path, TRAPS)
     return NULL;
   }
   result->set_shared_classpath_index(UNREGISTERED_INDEX);
-  SystemDictionaryShared::set_shared_class_misc_info(result, stream);
+#if INCLUDE_JVMTI
+  if (EagerAppCDS) {
+    result->set_shared_unregistered_classpath_index(
+            SystemDictionary::get_or_generate_unregistered_classpath_id(result->source_file_path()));
+  }
+#endif
+  SystemDictionaryShared::set_shared_class_misc_info(result, stream, defining_loader_hash, initiating_loader_hash);
   return result;
 }
 

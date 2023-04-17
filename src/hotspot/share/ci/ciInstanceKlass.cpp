@@ -317,7 +317,7 @@ void ciInstanceKlass::print_impl(outputStream* st) {
   ciKlass::print_impl(st);
   GUARDED_VM_ENTRY(st->print(" loader=" INTPTR_FORMAT, p2i((address)loader()));)
   if (is_loaded()) {
-    st->print(" loaded=true initialized=%s finalized=%s subklass=%s size=%d flags=",
+    st->print(" initialized=%s finalized=%s subklass=%s size=%d flags=",
               bool_to_str(is_initialized()),
               bool_to_str(has_finalizer()),
               bool_to_str(has_subklass()),
@@ -332,8 +332,6 @@ void ciInstanceKlass::print_impl(outputStream* st) {
     if (_java_mirror) {
       st->print(" mirror=PRESENT");
     }
-  } else {
-    st->print(" loaded=false");
   }
 }
 
@@ -601,8 +599,10 @@ bool ciInstanceKlass::is_leaf_type() {
 ciInstanceKlass* ciInstanceKlass::implementor() {
   ciInstanceKlass* impl = _implementor;
   if (impl == NULL) {
-    // Go into the VM to fetch the implementor.
-    {
+    if (is_shared()) {
+      impl = this; // assume a well-known interface never has a unique implementor
+    } else {
+      // Go into the VM to fetch the implementor.
       VM_ENTRY_MARK;
       MutexLocker ml(Compile_lock);
       Klass* k = get_instanceKlass()->implementor();
@@ -616,9 +616,7 @@ ciInstanceKlass* ciInstanceKlass::implementor() {
       }
     }
     // Memoize this result.
-    if (!is_shared()) {
-      _implementor = impl;
-    }
+    _implementor = impl;
   }
   return impl;
 }

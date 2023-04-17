@@ -61,7 +61,32 @@
                                                                             \
   diagnostic(bool, VerboseWisp, false,                                      \
           "Print verbose Wisp information")                                 \
-
+                                                                            \
+  experimental(bool, EagerAppCDS, false,                                    \
+          "aggressively skip over loadClass() to speed up boot time")       \
+                                                                            \
+  diagnostic(bool, PrintEagerAppCDSExceptions, false,                       \
+          "aggressively skip over loadClass() to speed up boot time")       \
+                                                                            \
+  product(bool, DumpAppCDSWithKlassId, false,                               \
+          "default appcds won't dump klasses with klass id - dump it for using Classes4CDS") \
+                                                                            \
+  product(bool, NotFoundClassOpt, false,                                    \
+          "optimization for not found class in EagerAppCDS flow")           \
+                                                                            \
+  experimental(bool, AppCDSLegacyVerisonSupport, false,                     \
+          "dump the classes which is compiled JDK1.5 or below")             \
+                                                                            \
+  product(bool, AppCDSClassFingerprintCheck, false,                         \
+          "Use class fingerprint to do the sanity check for AppCDS "        \
+          "instead of class path")                                          \
+                                                                            \
+  product(bool, IgnoreAppCDSDirCheck, false,                                \
+          "Ignore non-empty dir check in AppCDS")                           \
+                                                                            \
+  product(bool, AppCDSVerifyClassPathOrder, true,                           \
+          "Verify classpath order between the dump phase and replay phase") \
+                                                                            \
   //add new AJDK specific flags here
 
 

@@ -683,8 +683,8 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
 #ifndef PRODUCT
                   _trace_opto_output(directive->TraceOptoOutputOption),
                   _in_dump_cnt(0),
-                  _printer(IdealGraphPrinter::printer()),
 #endif
+                  NOT_PRODUCT(_printer(NULL) COMMA)
                   _congraph(NULL),
                   _comp_arena(mtCompiler),
                   _node_arena(mtCompiler),
@@ -707,11 +707,6 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _max_node_limit(MaxNodeLimit),
                   _has_reserved_stack_access(target->has_reserved_stack_access()) {
   C = this;
-#ifndef PRODUCT
-  if (_printer != NULL) {
-    _printer->set_compile(this);
-  }
-#endif
   CompileWrapper cw(this);
 
   if (CITimeVerbose) {
@@ -870,7 +865,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
   // Drain the list.
   Finish_Warm();
 #ifndef PRODUCT
-  if (_printer && _printer->should_print(1)) {
+  if (should_print(1)) {
     _printer->print_inlining();
   }
 #endif
@@ -1003,8 +998,8 @@ Compile::Compile( ciEnv* ci_env,
 #ifndef PRODUCT
     _trace_opto_output(directive->TraceOptoOutputOption),
     _in_dump_cnt(0),
-    _printer(NULL),
 #endif
+    NOT_PRODUCT(_printer(NULL) COMMA)
     _comp_arena(mtCompiler),
     _barrier_set_state(BarrierSet::barrier_set()->barrier_set_c2()->create_barrier_state(comp_arena())),
     _node_arena(mtCompiler),
@@ -2190,10 +2185,8 @@ void Compile::inline_incrementally(PhaseIterGVN& igvn) {
 
 bool Compile::optimize_loops(int& loop_opts_cnt, PhaseIterGVN& igvn, LoopOptsMode mode) {
   if(loop_opts_cnt > 0) {
-    debug_only( int cnt = 0; );
-    while(major_progress() && (loop_opts_cnt > 0)) {
+    while (major_progress() && (loop_opts_cnt > 0)) {
       TracePhase tp("idealLoop", &timers[_t_idealLoop]);
-      assert( cnt++ < 40, "infinite cycle in loop optimization" );
       PhaseIdealLoop ideal_loop(igvn, mode);
       loop_opts_cnt--;
       if (failing())  return false;
@@ -3837,7 +3830,7 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
       n->set_req(MemBarNode::Precedent, top());
       while (wq.size() > 0) {
         Node* m = wq.pop();
-        if (m->outcnt() == 0) {
+        if (m->outcnt() == 0 && m != top()) {
           for (uint j = 0; j < m->req(); j++) {
             Node* in = m->in(j);
             if (in != NULL) {
@@ -5390,7 +5383,7 @@ void Compile::print_method(CompilerPhaseType cpt, const char *name, int level, i
       event.commit();
   }
 #ifndef PRODUCT
-  if (_printer && _printer->should_print(level)) {
+  if (_method != NULL && should_print(level)) {
     _printer->print_method(name, level);
   }
 #endif

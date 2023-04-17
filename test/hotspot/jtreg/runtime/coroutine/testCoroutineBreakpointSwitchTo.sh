@@ -4,6 +4,7 @@
 # @test
 # @library /testlibrary
 # @requires os.family == "linux"
+# @requires os.arch != "riscv64"
 # @compile TestSimpleWisp.java
 #
 # @summary test Coroutine SwitchTo() crash problem

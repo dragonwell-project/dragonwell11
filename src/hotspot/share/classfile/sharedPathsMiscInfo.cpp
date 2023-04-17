@@ -136,6 +136,10 @@ bool SharedPathsMiscInfo::check() {
     }
     // skip checking the class path(s) which was not referenced during CDS dump
     if ((cur_index <= max_cp_index) || (cur_index >= module_paths_start_index)) {
+      if (AppCDSClassFingerprintCheck && type == APP_PATH) {
+        cur_index++;
+        continue;
+      }
       if (!check(type, path)) {
         if (!PrintSharedArchiveAndExit) {
           return false;
@@ -169,6 +173,19 @@ char* skip_first_path_entry(const char* path) {
     } );
   }
   return p;
+}
+
+static int qsort_strcmp(const void* a, const void* b) {
+  return strcmp((*(const char**)a), (*(const char**)b));
+}
+
+static void free_string_array(char** array, int size) {
+  for (int i = 0; i < size; i++) {
+    if (array[i] != NULL) {
+      FREE_C_HEAP_ARRAY(char, array[i]);
+    }
+  }
+  FREE_C_HEAP_ARRAY(char*, array);
 }
 
 bool SharedPathsMiscInfo::check(jint type, const char* path) {
@@ -240,19 +257,61 @@ bool SharedPathsMiscInfo::check(jint type, const char* path) {
     break;
   case APP_PATH:
     {
-      size_t len = strlen(path);
-      const char *appcp = Arguments::get_appclasspath();
-      assert(appcp != NULL, "NULL app classpath");
-      size_t appcp_len = strlen(appcp);
-      if (appcp_len < len) {
-        return fail("Run time APP classpath is shorter than the one at dump time: ", appcp);
-      }
-      // Prefix is OK: E.g., dump with -cp foo.jar, but run with -cp foo.jar:bar.jar.
-      if (os::file_name_strncmp(path, appcp, len) != 0) {
-        return fail("[APP classpath mismatch, actual: -Djava.class.path=", appcp);
-      }
-      if (appcp[len] != '\0' && appcp[len] != os::path_separator()[0]) {
-        return fail("Dump time APP classpath is not a proper prefix of run time APP classpath: ", appcp);
+      if (AppCDSVerifyClassPathOrder) {
+        size_t len = strlen(path);
+        const char *appcp = Arguments::get_appclasspath();
+        assert(appcp != NULL, "NULL app classpath");
+        size_t appcp_len = strlen(appcp);
+        if (appcp_len < len) {
+          return fail("Run time APP classpath is shorter than the one at dump time: ", appcp);
+        }
+        // Prefix is OK: E.g., dump with -cp foo.jar, but run with -cp foo.jar:bar.jar.
+        if (os::file_name_strncmp(path, appcp, len) != 0) {
+          return fail("[APP classpath mismatch, actual: -Djava.class.path=", appcp);
+        }
+        if (appcp[len] != '\0' && appcp[len] != os::path_separator()[0]) {
+          return fail("Dump time APP classpath is not a proper prefix of run time APP classpath: ", appcp);
+        }
+      } else {
+        const char *appcp = Arguments::get_appclasspath();
+        assert(appcp != NULL, "NULL app classpath");
+
+        int n_app;
+        char **app_elements = os::split_path(appcp, &n_app);
+        if (NULL == app_elements) {
+          return fail("Split app path failed!", appcp);
+        }
+        int n_path;
+        char **path_elements = os::split_path(path, &n_path);
+        if (NULL == path_elements) {
+          free_string_array(app_elements, n_app);
+          return fail("Split path failed!", path);
+        }
+
+        qsort(app_elements, n_app, sizeof(*app_elements), qsort_strcmp);
+        qsort(path_elements, n_path, sizeof(*path_elements), qsort_strcmp);
+
+        // S1: the set of dump(path_elements)
+        // S2: the set of run(app_elements)
+        // check if S1 == S2 or S1 is proper subset of S2
+        int i = 0, j = 0;
+        while (i < n_path && j < n_app) {
+          int c = strcmp(app_elements[j], path_elements[i]);
+          if (c == 0) {
+            i++;
+            j++;
+          } else if (c < 0) {
+            j++;
+          } else {
+            break;
+          }
+        }
+
+        free_string_array(app_elements, n_app);
+        free_string_array(path_elements, n_path);
+        if (i != n_path) {
+          return fail("[APP classpath mismatch, actual: -Djava.class.path=", appcp);
+        }
       }
     }
     break;

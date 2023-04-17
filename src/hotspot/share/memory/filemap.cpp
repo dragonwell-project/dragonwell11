@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,9 @@
 
 #include "precompiled.hpp"
 #include "jvm.h"
+#include "classfile/classFileStream.hpp"
 #include "classfile/classLoader.inline.hpp"
+#include "classfile/classLoaderData.inline.hpp"
 #include "classfile/classLoaderExt.hpp"
 #include "classfile/compactHashtable.inline.hpp"
 #include "classfile/stringTable.hpp"
@@ -47,6 +49,7 @@
 #include "prims/jvmtiExport.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/java.hpp"
+#include "runtime/mutexLocker.hpp"
 #include "runtime/os.inline.hpp"
 #include "runtime/vm_version.hpp"
 #include "services/memTracker.hpp"
@@ -161,18 +164,23 @@ template <int N> static void get_header_version(char (&header_version) [N]) {
   assert(header_version[JVM_IDENT_MAX-1] == 0, "must be");
 }
 
-FileMapInfo::FileMapInfo() {
+FileMapInfo::FileMapInfo() :
+  _file_open(false), _fd(-1), _file_offset(0), _full_path(NULL), _paths_misc_info(NULL) {
   assert(_current_info == NULL, "must be singleton"); // not thread safe
   _current_info = this;
-  memset((void*)this, 0, sizeof(FileMapInfo));
-  _file_offset = 0;
-  _file_open = false;
   _header = (FileMapHeader*)os::malloc(sizeof(FileMapHeader), mtInternal);
   _header->_version = INVALID_CDS_ARCHIVE_VERSION;
   _header->_has_platform_or_app_classes = true;
 }
 
 FileMapInfo::~FileMapInfo() {
+  assert(_header != NULL, "Sanity");
+  os::free(_header);
+
+  if (_file_open) {
+    ::close(_fd);
+  }
+
   assert(_current_info == this, "must be singleton"); // not thread safe
   _current_info = NULL;
 }
@@ -190,6 +198,8 @@ void FileMapHeader::populate(FileMapInfo* mapinfo, size_t alignment) {
   _narrow_oop_mode = Universe::narrow_oop_mode();
   _narrow_oop_base = Universe::narrow_oop_base();
   _narrow_oop_shift = Universe::narrow_oop_shift();
+  _compressed_oops = UseCompressedOops;
+  _compressed_class_ptrs = UseCompressedClassPointers;
   _max_heap_size = MaxHeapSize;
   _narrow_klass_base = Universe::narrow_klass_base();
   _narrow_klass_shift = Universe::narrow_klass_shift();
@@ -273,10 +283,12 @@ bool SharedClassPathEntry::validate(bool is_class_path) {
     // (no need to invalid the shared archive) because the shared runtime visibility check
     // filters out any archived module classes that do not have a matching runtime
     // module path location.
-    FileMapInfo::fail_continue("Required classpath entry does not exist: %s", name);
-    ok = false;
+    if (!AppCDSClassFingerprintCheck) {
+      FileMapInfo::fail_continue("Required classpath entry does not exist: %s", name);
+      ok = false;
+    }
   } else if (is_dir()) {
-    if (!os::dir_is_empty(name)) {
+    if (!IgnoreAppCDSDirCheck && !os::dir_is_empty(name)) {
       FileMapInfo::fail_continue("directory is not empty: %s", name);
       ok = false;
     }
@@ -368,6 +380,10 @@ void FileMapInfo::allocate_shared_path_table() {
 
 void FileMapInfo::check_nonempty_dir_in_shared_path_table() {
   assert(DumpSharedSpaces, "dump time only");
+
+  if (IgnoreAppCDSDirCheck) {
+    return;
+  }
 
   bool has_nonempty_dir = false;
 
@@ -498,6 +514,16 @@ bool FileMapInfo::validate_shared_path_table() {
   }
 
   _validating_shared_path_table = false;
+
+#if INCLUDE_JVMTI
+  if (_classpath_entries_for_jvmti != NULL) {
+    os::free(_classpath_entries_for_jvmti);
+  }
+  size_t sz = sizeof(ClassPathEntry*) *  _shared_path_table_size;
+  _classpath_entries_for_jvmti = (ClassPathEntry**)os::malloc(sz, mtClass);
+  memset(_classpath_entries_for_jvmti, 0, sz);
+#endif
+
   return true;
 }
 
@@ -1373,6 +1399,14 @@ bool FileMapHeader::validate() {
     return false;
   }
 
+  log_info(cds)("Archive was created with UseCompressedOops = %d, UseCompressedClassPointers = %d",
+                          compressed_oops(), compressed_class_pointers());
+  if (compressed_oops() != UseCompressedOops || compressed_class_pointers() != UseCompressedClassPointers) {
+    FileMapInfo::fail_continue("Unable to use shared archive.\nThe saved state of UseCompressedOops and UseCompressedClassPointers is "
+                               "different from runtime, CDS will be disabled.");
+    return false;
+  }
+
   return true;
 }
 
@@ -1436,3 +1470,114 @@ void FileMapInfo::stop_sharing_and_unmap(const char* msg) {
     fail_stop("%s", msg);
   }
 }
+
+#if INCLUDE_JVMTI
+ClassPathEntry** FileMapInfo::_classpath_entries_for_jvmti = NULL;
+ClassPathEntry** FileMapInfo::_unregistered_classpath_entries_for_jvmti = NULL;
+
+ClassPathEntry* FileMapInfo::get_classpath_entry_for_jvmti(int i, InstanceKlass *klass, TRAPS) {
+  if (i == UNREGISTERED_INDEX) {
+    return get_unregistered_classpath_entry_for_jvmti(klass, THREAD);
+  }
+  ClassPathEntry* ent = _classpath_entries_for_jvmti[i];
+  if (ent == NULL) {
+    if (i == 0) {
+      ent = ClassLoader::get_jrt_entry();
+      assert(ent != NULL, "must be");
+    } else {
+      SharedClassPathEntry* scpe = shared_path(i);
+      assert(IgnoreAppCDSDirCheck || scpe->is_jar(), "must be"); // other types of scpe will not produce archived classes
+
+      const char* path = scpe->name();
+      struct stat st;
+      if (os::stat(path, &st) != 0) {
+        char *msg = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char, strlen(path) + 128);
+        jio_snprintf(msg, strlen(path) + 127, "error in opening JAR file %s", path);
+        THROW_MSG_(vmSymbols::java_io_IOException(), msg, NULL);
+      } else {
+        ent = ClassLoader::create_class_path_entry(path, &st, /*throw_exception=*/true, false, CHECK_NULL);
+      }
+    }
+
+    MutexLocker mu(CDSClassFileStream_lock, THREAD);
+    if (_classpath_entries_for_jvmti[i] == NULL) {
+      _classpath_entries_for_jvmti[i] = ent;
+    } else {
+      // Another thread has beat me to creating this entry
+      delete ent;
+      ent = _classpath_entries_for_jvmti[i];
+    }
+  }
+
+  return ent;
+}
+
+ClassPathEntry* FileMapInfo::get_unregistered_classpath_entry_for_jvmti(InstanceKlass *klass, TRAPS) {
+  assert(EagerAppCDS, "only custom classloaders go here");
+  assert(UseSharedSpaces, "must be");
+  guarantee(SystemDictionary::unregistered_classpath_id_table(), "must have if we reach here because we are reading the shared archive for a class from one custom classloader");
+  ResourceMark rm;
+
+  // Note: nearly the same as FileMapInfo::get_classpath_entry_for_jvmti()
+
+  const int i = klass->shared_unregistered_classpath_index();
+  ClassPathEntry* ent = _unregistered_classpath_entries_for_jvmti[i];
+  if (ent == NULL) {
+    char* source = klass->source_file_path()->as_C_string();
+    const char* path = ClassLoader::skip_uri_protocol(source);
+    struct stat st;
+    if (os::stat(path, &st) != 0) {
+      char *msg = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char, JVM_MAXPATHLEN);
+      jio_snprintf(msg, JVM_MAXPATHLEN-1, "source not found or unsupported: %s", source);
+      THROW_MSG_(vmSymbols::java_io_IOException(), msg, NULL);
+    } else {
+      ent = ClassLoader::create_class_path_entry(path, &st, /*throw_exception=*/true, false, CHECK_NULL);
+    }
+
+    MutexLocker mu(CDSClassFileStream_lock, THREAD);
+    if (_unregistered_classpath_entries_for_jvmti[i] == NULL) {
+      _unregistered_classpath_entries_for_jvmti[i] = ent;
+    } else {
+      // Another thread has beat me to creating this entry
+      delete ent;
+      ent = _unregistered_classpath_entries_for_jvmti[i];
+    }
+  }
+
+  return ent;
+}
+
+ClassFileStream* FileMapInfo::open_stream_for_jvmti(InstanceKlass* ik, Handle class_loader, TRAPS) {
+  int path_index = ik->shared_classpath_index();
+  assert((EagerAppCDS && path_index == UNREGISTERED_INDEX) || path_index >= 0, "should be called for shared built-in classes only");
+  assert(path_index < (int)_shared_path_table_size, "sanity");
+
+  ClassPathEntry* cpe = get_classpath_entry_for_jvmti(path_index, ik, CHECK_NULL);
+  assert(cpe != NULL, "must be");
+
+  Symbol* name = ik->name();
+  const char* const class_name = name->as_C_string();
+  const char* const file_name = ClassLoader::file_name_for_class_name(class_name,
+                                                                      name->utf8_length());
+  ClassLoaderData* loader_data = ClassLoaderData::class_loader_data(class_loader());
+  ClassFileStream* cfs = cpe->open_stream_for_loader(file_name, loader_data, THREAD);
+  assert(cfs != NULL, "must be able to read the classfile data of shared classes for built-in loaders: %s %s.", cpe->name(), file_name);
+  if (path_index == UNREGISTERED_INDEX) {
+    assert(EagerAppCDS, "sanity");
+    log_debug(eagerappcds, jvmti)("classfile data for %s [%d: %s] = %d bytes", class_name, path_index,
+                          cfs->source(), cfs->length());
+  } else {
+    log_debug(cds, jvmti)("classfile data for %s [%d: %s] = %d bytes", class_name, path_index,
+                          cfs->source(), cfs->length());
+  }
+  return cfs;
+}
+
+void FileMapInfo::init_unregistered_classpath_entry_for_jvmti(int entry_len) {
+  assert(_unregistered_classpath_entries_for_jvmti == NULL, "uninitialized");
+  int sz = sizeof(ClassPathEntry*) * entry_len;
+  _unregistered_classpath_entries_for_jvmti = (ClassPathEntry**)os::malloc(sz, mtClass);
+  memset(_unregistered_classpath_entries_for_jvmti, 0, sz);
+}
+
+#endif

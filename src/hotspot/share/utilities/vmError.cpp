@@ -80,12 +80,13 @@ void* VMError::get_segfault_address() {
 const char *env_list[] = {
   // All platforms
   "JAVA_HOME", "JRE_HOME", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "CLASSPATH",
-  "JAVA_COMPILER", "PATH", "USERNAME",
+  "JAVA_COMPILER", "PATH", "USERNAME", "DRAGONWELL_JAVA_TOOL_OPTIONS", "DRAGONWELL_JAVA_TOOL_OPTIONS_JDK_ONLY",
 
   // Env variables that are defined on Solaris/Linux/BSD
   "LD_LIBRARY_PATH", "LD_PRELOAD", "SHELL", "DISPLAY",
   "HOSTTYPE", "OSTYPE", "ARCH", "MACHTYPE",
-  "LANG", "LC_ALL", "LC_CTYPE", "TZ",
+  "LANG", "LC_ALL", "LC_CTYPE", "LC_NUMERIC", "LC_TIME",
+  "TERM", "TMPDIR", "TZ",
 
   // defined on Linux
   "LD_ASSUME_KERNEL", "_JAVA_SR_SIGNUM",
@@ -96,7 +97,7 @@ const char *env_list[] = {
   "DYLD_INSERT_LIBRARIES",
 
   // defined on Windows
-  "OS", "PROCESSOR_IDENTIFIER", "_ALT_JAVA_HOME_DIR",
+  "OS", "PROCESSOR_IDENTIFIER", "_ALT_JAVA_HOME_DIR", "TMP", "TEMP",
 
   (const char *)0
 };
@@ -492,10 +493,12 @@ void VMError::report(outputStream* st, bool _verbose) {
      switch(static_cast<unsigned int>(_id)) {
        case OOM_MALLOC_ERROR:
        case OOM_MMAP_ERROR:
+       case OOM_MPROTECT_ERROR:
          if (_size) {
            st->print("# Native memory allocation ");
            st->print((_id == (int)OOM_MALLOC_ERROR) ? "(malloc) failed to allocate " :
-                                                 "(mmap) failed to map ");
+                     (_id == (int)OOM_MMAP_ERROR)   ? "(mmap) failed to map " :
+                                                      "(mprotect) failed to protect ");
            jio_snprintf(buf, sizeof(buf), SIZE_FORMAT, _size);
            st->print("%s", buf);
            st->print(" bytes");
@@ -1796,6 +1799,12 @@ void VMError::controlled_crash(int how) {
   funcPtr = (const void(*)()) &functionDescriptor;
 #else
   funcPtr = (const void(*)()) 0xF;
+#endif
+
+#ifdef __APPLE__
+  // 12 is unreliable on this platform, may just yield us a "Trap" message on stdout
+  // Use 14 instead, which seems to work always
+  if (how == 12) { how = 14; }
 #endif
 
   // Keep this in sync with test/hotspot/jtreg/runtime/ErrorHandling/ErrorHandler.java

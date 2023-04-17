@@ -343,6 +343,13 @@ inline size_t byte_size_in_exact_unit(size_t s) {
   return s;
 }
 
+// Memory size transition formatting.
+
+#define HEAP_CHANGE_FORMAT "%s: " SIZE_FORMAT "K(" SIZE_FORMAT "K)->" SIZE_FORMAT "K(" SIZE_FORMAT "K)"
+
+#define HEAP_CHANGE_FORMAT_ARGS(_name_, _prev_used_, _prev_capacity_, _used_, _capacity_) \
+  (_name_), (_prev_used_) / K, (_prev_capacity_) / K, (_used_) / K, (_capacity_) / K
+
 //----------------------------------------------------------------------------------------------------
 // VM type definitions
 
@@ -1419,5 +1426,18 @@ static inline void* dereference_vptr(const void* addr) {
 
 typedef const char* ccstr;
 typedef const char* ccstrlist;   // represents string arguments which accumulate
+
+//----------------------------------------------------------------------------------------------------
+// Default hash/equals functions used by ResourceHashtable and KVHashtable
+
+template<typename K> unsigned primitive_hash(const K& k) {
+  unsigned hash = (unsigned)((uintptr_t)k);
+  return hash ^ (hash >> 3); // just in case we're dealing with aligned ptrs
+}
+
+template<typename K> bool primitive_equals(const K& k0, const K& k1) {
+  return k0 == k1;
+}
+
 
 #endif // SHARE_VM_UTILITIES_GLOBALDEFINITIONS_HPP

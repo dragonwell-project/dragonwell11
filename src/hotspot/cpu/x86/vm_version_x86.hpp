@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -147,12 +147,11 @@ class VM_Version : public Abstract_VM_Version {
       uint32_t LahfSahf     : 1,
                CmpLegacy    : 1,
                             : 3,
-               lzcnt_intel  : 1,
                lzcnt        : 1,
                sse4a        : 1,
                misalignsse  : 1,
                prefetchw    : 1,
-                            : 22;
+                            : 23;
     } bits;
   };
 
@@ -498,13 +497,13 @@ protected:
       result |= CPU_CX8;
     if (_cpuid_info.std_cpuid1_edx.bits.cmov != 0)
       result |= CPU_CMOV;
-    if (_cpuid_info.std_cpuid1_edx.bits.fxsr != 0 || (is_amd() &&
+    if (_cpuid_info.std_cpuid1_edx.bits.fxsr != 0 || (is_amd_family() &&
         _cpuid_info.ext_cpuid1_edx.bits.fxsr != 0))
       result |= CPU_FXSR;
     // HT flag is set for multi-core processors also.
     if (threads_per_core() > 1)
       result |= CPU_HT;
-    if (_cpuid_info.std_cpuid1_edx.bits.mmx != 0 || (is_amd() &&
+    if (_cpuid_info.std_cpuid1_edx.bits.mmx != 0 || (is_amd_family() &&
         _cpuid_info.ext_cpuid1_edx.bits.mmx != 0))
       result |= CPU_MMX;
     if (_cpuid_info.std_cpuid1_edx.bits.sse != 0)
@@ -583,8 +582,8 @@ protected:
     if (_cpuid_info.std_cpuid1_ecx.bits.fma != 0)
       result |= CPU_FMA;
 
-    // AMD features.
-    if (is_amd()) {
+    // AMD|Hygon features.
+    if (is_amd_family()) {
       if ((_cpuid_info.ext_cpuid1_edx.bits.tdnow != 0) ||
           (_cpuid_info.ext_cpuid1_ecx.bits.prefetchw != 0))
         result |= CPU_3DNOW_PREFETCH;
@@ -594,21 +593,21 @@ protected:
         result |= CPU_SSE4A;
     }
     // Intel features.
-    if(is_intel()) {
-      if(_cpuid_info.ext_cpuid1_ecx.bits.lzcnt_intel != 0)
+    if (is_intel()) {
+      if (_cpuid_info.ext_cpuid1_ecx.bits.lzcnt != 0) {
         result |= CPU_LZCNT;
-      // for Intel, ecx.bits.misalignsse bit (bit 8) indicates support for prefetchw
-      if (_cpuid_info.ext_cpuid1_ecx.bits.misalignsse != 0) {
+      }
+      if (_cpuid_info.ext_cpuid1_ecx.bits.prefetchw != 0) {
         result |= CPU_3DNOW_PREFETCH;
       }
     }
 
     // ZX features.
     if (is_zx()) {
-      if (_cpuid_info.ext_cpuid1_ecx.bits.lzcnt_intel != 0)
+      if (_cpuid_info.ext_cpuid1_ecx.bits.lzcnt != 0) {
         result |= CPU_LZCNT;
-      // for ZX, ecx.bits.misalignsse bit (bit 8) indicates support for prefetchw
-      if (_cpuid_info.ext_cpuid1_ecx.bits.misalignsse != 0) {
+      }
+      if (_cpuid_info.ext_cpuid1_ecx.bits.prefetchw != 0) {
         result |= CPU_3DNOW_PREFETCH;
       }
     }
@@ -723,6 +722,8 @@ public:
   static int  cpu_family()        { return _cpu;}
   static bool is_P6()             { return cpu_family() >= 6; }
   static bool is_amd()            { assert_is_initialized(); return _cpuid_info.std_vendor_name_0 == 0x68747541; } // 'htuA'
+  static bool is_hygon()          { assert_is_initialized(); return _cpuid_info.std_vendor_name_0 == 0x6F677948; } // 'ogyH'
+  static bool is_amd_family()     { return is_amd() || is_hygon(); }
   static bool is_intel()          { assert_is_initialized(); return _cpuid_info.std_vendor_name_0 == 0x756e6547; } // 'uneG'
   static bool is_zx()             { assert_is_initialized(); return (_cpuid_info.std_vendor_name_0 == 0x746e6543) || (_cpuid_info.std_vendor_name_0 == 0x68532020); } // 'tneC'||'hS  '
   static bool is_atom_family()    { return ((cpu_family() == 0x06) && ((extended_cpu_model() == 0x36) || (extended_cpu_model() == 0x37) || (extended_cpu_model() == 0x4D))); } //Silvermont and Centerton
@@ -746,7 +747,7 @@ public:
       if (!supports_topology || result == 0) {
         result = (_cpuid_info.dcp_cpuid4_eax.bits.cores_per_cpu + 1);
       }
-    } else if (is_amd()) {
+    } else if (is_amd_family()) {
       result = (_cpuid_info.ext_cpuid8_ecx.bits.cores_per_cpu + 1);
     } else if (is_zx()) {
       bool supports_topology = supports_processor_topology();
@@ -782,7 +783,7 @@ public:
     intx result = 0;
     if (is_intel()) {
       result = (_cpuid_info.dcp_cpuid4_ebx.bits.L1_line_size + 1);
-    } else if (is_amd()) {
+    } else if (is_amd_family()) {
       result = _cpuid_info.ext_cpuid5_ecx.bits.L1_line_size;
     } else if (is_zx()) {
       result = (_cpuid_info.dcp_cpuid4_ebx.bits.L1_line_size + 1);
@@ -874,7 +875,7 @@ public:
 
   // AMD features
   static bool supports_3dnow_prefetch()    { return (_features & CPU_3DNOW_PREFETCH) != 0; }
-  static bool supports_mmx_ext()  { return is_amd() && _cpuid_info.ext_cpuid1_edx.bits.mmx_amd != 0; }
+  static bool supports_mmx_ext()  { return is_amd_family() && _cpuid_info.ext_cpuid1_edx.bits.mmx_amd != 0; }
   static bool supports_lzcnt()    { return (_features & CPU_LZCNT) != 0; }
   static bool supports_sse4a()    { return (_features & CPU_SSE4A) != 0; }
 
@@ -887,7 +888,7 @@ public:
   }
   static bool supports_tscinv() {
     return supports_tscinv_bit() &&
-           ( (is_amd() && !is_amd_Barcelona()) ||
+      ((is_amd_family() && !is_amd_Barcelona()) ||
              is_intel_tsc_synched_at_init() );
   }
 
@@ -913,7 +914,7 @@ public:
     // Core      - 256 / prefetchnta
     // It will be used only when AllocatePrefetchStyle > 0
 
-    if (is_amd()) { // AMD
+    if (is_amd_family()) { // AMD | Hygon
       if (supports_sse2()) {
         return 256; // Opteron
       } else {

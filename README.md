@@ -1,4 +1,4 @@
-![Dragonwell Logo](https://raw.githubusercontent.com/wiki/alibaba/dragonwell8/images/dragonwell_std_txt_horiz.png)
+![Dragonwell Logo](https://raw.githubusercontent.com/wiki/dragonwell-project/dragonwell8/images/dragonwell_std_txt_horiz.png)
 
 # Introduction
 
@@ -15,7 +15,7 @@ Alibaba Dragonwell JDK currently supports Linux/x86_64 platform only.
 ### Installation
 
 * You may download a pre-built Alibaba Dragonwell JDK from its GitHub page:
-https://github.com/alibaba/dragonwell11/releases.
+https://github.com/dragonwell-project/dragonwell11/releases.
 * Uncompress the package to the installation directory.
 
 ### Enable Alibaba Dragonwell for Java applications
@@ -57,4 +57,5 @@ Technologies included in Alibaba Dragonwell have been published in following pap
 - Fangxi Yin, Denghui Dong, Chuansheng Lu, Tongbao Zhang, Sanhong Li, Jianmei Guo, Kingsum Chow [**Cloud-Scale Java Profiling at Alibaba**](https://dl.acm.org/doi/10.1145/3185768.3186295) In _ICPE Companion 2018_, pp. 99&ndash;100
 
 - Fangxi Yin, Denghui Dong, Sanhong Li, Jianmei Guo, Kingsum Chow [**Java Performance Troubleshooting and Optimization at Alibaba**](https://www.icse2018.org/details/icse-2018-Software-Engineering-in-Practice/4/Java-Performance-Troubleshooting-and-Optimization-at-Alibaba) In _ICSE-SEIP 2018_, pp. 11&ndash;12
+
 

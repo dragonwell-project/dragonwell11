@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,6 +31,7 @@
 static bool zero_page_read_protected() { return true; }
 
 class Linux {
+  friend class CgroupSubsystem;
   friend class os;
   friend class OSContainer;
   friend class TestReserveMemorySpecial;
@@ -73,8 +74,6 @@ class Linux {
   static int _page_size;
 
   static julong available_memory();
-  static julong physical_memory() { return _physical_memory; }
-  static void set_physical_memory(julong phys_mem) { _physical_memory = phys_mem; }
   static int active_processor_count();
 
   static void initialize_system_info();
@@ -151,6 +150,10 @@ class Linux {
 
   static address   ucontext_get_pc(const ucontext_t* uc);
   static void ucontext_set_pc(ucontext_t* uc, address pc);
+
+  static julong physical_memory() { return _physical_memory; }
+  static julong host_swap();
+
   static intptr_t* ucontext_get_sp(const ucontext_t* uc);
   static intptr_t* ucontext_get_fp(const ucontext_t* uc);
 
@@ -224,6 +227,23 @@ class Linux {
   static void initialize_os_info();
   static bool os_version_is_known();
   static uint32_t os_version();
+
+  // Output structure for query_process_memory_info()
+  struct meminfo_t {
+    ssize_t vmsize;     // current virtual size
+    ssize_t vmpeak;     // peak virtual size
+    ssize_t vmrss;      // current resident set size
+    ssize_t vmhwm;      // peak resident set size
+    ssize_t vmswap;     // swapped out
+    ssize_t rssanon;    // resident set size (anonymous mappings, needs 4.5)
+    ssize_t rssfile;    // resident set size (file mappings, needs 4.5)
+    ssize_t rssshmem;   // resident set size (shared mappings, needs 4.5)
+  };
+
+  // Attempts to query memory information about the current process and return it in the output structure.
+  // May fail (returns false) or succeed (returns true) but not all output fields are available; unavailable
+  // fields will contain -1.
+  static bool query_process_memory_info(meminfo_t* info);
 
   // Stack repair handling
 

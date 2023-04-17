@@ -239,6 +239,7 @@ class Arguments : AllStatic {
   friend class JvmtiExport;
   friend class CodeCacheExtensions;
   friend class ArgumentsTest;
+  friend class QuickStart;
  public:
   // Operation modi
   enum Mode {
@@ -413,7 +414,8 @@ class Arguments : AllStatic {
   static void process_java_launcher_argument(const char*, void*);
   static void process_java_compiler_argument(const char* arg);
   static jint parse_options_environment_variable(const char* name, ScopedVMInitArgs* vm_args);
-  static jint parse_java_tool_options_environment_variable(ScopedVMInitArgs* vm_args);
+  static jint parse_java_tool_options_environment_variable(ScopedVMInitArgs* vm_args, bool enable_tool_options);
+  static jint parse_dragonwell_options_environment_variable(ScopedVMInitArgs* vm_args, bool enable_tool_options);
   static jint parse_java_options_environment_variable(ScopedVMInitArgs* vm_args);
   static jint parse_vm_options_file(const char* file_name, ScopedVMInitArgs* vm_args);
   static jint parse_options_buffer(const char* name, char* buffer, const size_t buf_len, ScopedVMInitArgs* vm_args);
@@ -437,10 +439,12 @@ class Arguments : AllStatic {
   static jint parse_vm_init_args(const JavaVMInitArgs *vm_options_args,
                                  const JavaVMInitArgs *java_tool_options_args,
                                  const JavaVMInitArgs *java_options_args,
-                                 const JavaVMInitArgs *cmd_line_args);
+                                 const JavaVMInitArgs *cmd_line_args,
+                                 const JavaVMInitArgs *dragonwell_java_tool_options_args);
   static jint parse_each_vm_init_arg(const JavaVMInitArgs* args, bool* patch_mod_javabase, JVMFlag::Flags origin);
   static jint finalize_vm_init_args(bool patch_mod_javabase);
   static bool is_bad_option(const JavaVMOption* option, jboolean ignore, const char* option_type);
+  static bool is_enable_tool_options(const JavaVMInitArgs* args);
 
   static bool is_bad_option(const JavaVMOption* option, jboolean ignore) {
     return is_bad_option(option, ignore, NULL);
@@ -485,6 +489,7 @@ class Arguments : AllStatic {
   static char*  SharedArchivePath;
 
  public:
+  static void check_arguments_for_riscv64();
   // Parses the arguments, first phase
   static jint parse(const JavaVMInitArgs* args);
   // Parse a string for a unsigned integer.  Returns true if value
@@ -665,4 +670,16 @@ do {                                                     \
   }                                                      \
 } while(0)
 
-#endif // SHARE_VM_RUNTIME_ARGUMENTS_HPP
+// similar to UNSUPPORTED_OPTION but sets flag to NULL
+#define UNSUPPORTED_OPTION_NULL(opt)                     \
+do {                                                     \
+  if (opt) {                                             \
+    if (FLAG_IS_CMDLINE(opt)) {                          \
+      warning("-XX flag " #opt " not supported in this VM"); \
+    }                                                    \
+    FLAG_SET_DEFAULT(opt, NULL);                         \
+  }                                                      \
+} while(0)
+
+
+#endif // SHARE_RUNTIME_ARGUMENTS_HPP

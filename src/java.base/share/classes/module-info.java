@@ -130,6 +130,7 @@ module java.base {
     exports javax.security.cert;
     exports com.alibaba.rcm;
     exports com.alibaba.wisp.engine;
+    exports com.alibaba.util;
 
 
     // additional qualified exports may be inserted at build time
@@ -298,7 +299,8 @@ module java.base {
         jdk.crypto.cryptoki,
         jdk.security.auth;
     exports sun.security.provider.certpath to
-        java.naming;
+        java.naming,
+        jdk.jartool;
     exports sun.security.rsa to
         jdk.crypto.cryptoki;
     exports sun.security.ssl to

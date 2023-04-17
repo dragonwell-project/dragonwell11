@@ -110,6 +110,8 @@ struct FileMapHeader : public CDSFileMapHeaderBase {
   size_t  _core_spaces_size;        // number of bytes allocated by the core spaces
                                     // (mc, md, ro, rw and od).
   MemRegion _heap_reserved;         // reserved region for the entire heap at dump time.
+  bool    _compressed_oops;         // save the flag UseCompressedOops
+  bool    _compressed_class_ptrs;   // save the flag UseCompressedClassPointers
 
   // The following fields are all sanity checks for whether this archive
   // will function correctly with this JVM and the bootclasspath it's
@@ -157,6 +159,9 @@ struct FileMapHeader : public CDSFileMapHeaderBase {
   bool has_platform_or_app_classes() { return _has_platform_or_app_classes; }
   jshort max_used_path_index()       { return _max_used_path_index; }
   jshort app_module_paths_start_index() { return _app_module_paths_start_index; }
+
+  bool compressed_oops()           const { return _compressed_oops; }
+  bool compressed_class_pointers() const { return _compressed_class_ptrs; }
 
   bool validate();
   void populate(FileMapInfo* info, size_t alignment);
@@ -299,6 +304,10 @@ public:
   bool validate_shared_path_table();
   static void update_shared_classpath(ClassPathEntry *cpe, SharedClassPathEntry* ent, TRAPS);
 
+#if INCLUDE_JVMTI
+  static ClassFileStream* open_stream_for_jvmti(InstanceKlass* ik, Handle class_loader, TRAPS);
+#endif
+
   static SharedClassPathEntry* shared_path(int index) {
     if (index < 0) {
       return NULL;
@@ -345,6 +354,17 @@ public:
   }
 
   address decode_start_address(CDSFileMapRegion* spc, bool with_current_oop_encoding_mode);
+
+#if INCLUDE_JVMTI
+  // builtin classloaders' classpath entries
+  static ClassPathEntry** _classpath_entries_for_jvmti;
+  static ClassPathEntry* get_classpath_entry_for_jvmti(int i, InstanceKlass *klass, TRAPS);
+  // custom classloaders' classpath entries
+  static ClassPathEntry** _unregistered_classpath_entries_for_jvmti;
+  static ClassPathEntry* get_unregistered_classpath_entry_for_jvmti(InstanceKlass *klass, TRAPS);  // called by 'get_classpath_entry_for_jvmti()'
+public:
+  static void init_unregistered_classpath_entry_for_jvmti(int entry_len);
+#endif
 };
 
 #endif // SHARE_VM_MEMORY_FILEMAP_HPP

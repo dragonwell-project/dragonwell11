@@ -5,6 +5,7 @@
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @summary verify canceled timers are removed ASAP
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestWisp2TimerRemove
  */
 

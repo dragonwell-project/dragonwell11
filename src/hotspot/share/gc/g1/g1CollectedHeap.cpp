@@ -1423,6 +1423,7 @@ G1CollectedHeap::G1CollectedHeap(G1CollectorPolicy* collector_policy) :
   _card_table(NULL),
   _memory_manager("G1 Young Generation", "end of minor GC"),
   _full_gc_memory_manager("G1 Old Generation", "end of major GC"),
+  _conc_gc_memory_manager("G1 Concurrent GC", "end of concurrent GC pause"),
   _eden_pool(NULL),
   _survivor_pool(NULL),
   _old_pool(NULL),
@@ -1742,6 +1743,8 @@ void G1CollectedHeap::initialize_serviceability() {
   _full_gc_memory_manager.add_pool(_eden_pool);
   _full_gc_memory_manager.add_pool(_survivor_pool);
   _full_gc_memory_manager.add_pool(_old_pool);
+
+  _conc_gc_memory_manager.add_pool(_old_pool);
 
   _memory_manager.add_pool(_eden_pool);
   _memory_manager.add_pool(_survivor_pool);
@@ -5024,9 +5027,10 @@ void G1CollectedHeap::rebuild_strong_code_roots() {
 }
 
 GrowableArray<GCMemoryManager*> G1CollectedHeap::memory_managers() {
-  GrowableArray<GCMemoryManager*> memory_managers(2);
+  GrowableArray<GCMemoryManager*> memory_managers(3);
   memory_managers.append(&_memory_manager);
   memory_managers.append(&_full_gc_memory_manager);
+  memory_managers.append(&_conc_gc_memory_manager);
   return memory_managers;
 }
 

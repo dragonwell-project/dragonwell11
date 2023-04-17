@@ -26,6 +26,7 @@
 package sun.management;
 
 import com.alibaba.wisp.engine.WispEngine;
+import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.WispEngineAccess;
 
@@ -206,7 +207,11 @@ public class ThreadImpl implements ThreadMXBean {
         if (WispEngine.enableThreadAsWisp()) {
             for (int i = 0; i < infos.length; i++) {
                 if (infos[i] == null) {
-                    infos[i] = ThreadInfo.from(new WispThreadCompositeData(WEA.getWispTaskById(ids[i])));
+                    WispTask task = WEA.getWispTaskById(ids[i]);
+                    if (task == null) {
+                        continue;
+                    }
+                    infos[i] = ThreadInfo.from(new WispThreadCompositeData(task));
                 }
             }
         }

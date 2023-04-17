@@ -52,7 +52,7 @@ public interface WispEngineAccess {
 
     boolean isAllThreadAsWisp();
 
-    boolean tryStartThreadAsWisp(Thread thread, Runnable target);
+    boolean tryStartThreadAsWisp(Thread thread, Runnable target, long stackSize);
 
     boolean useDirectSelectorWakeup();
 
@@ -63,4 +63,13 @@ public interface WispEngineAccess {
     WispTask getWispTaskById(long id);
 
     Thread.State getState(Thread thread);
+
+    /**
+     * @param channel     Blocking SocketChannel waiting for interestOps
+     * @param interestOps Net.* enum constant interests
+     * @param timeout     timeout in milliseconds
+     * @return active event count
+     * @throws IOException
+     */
+    int poll(SelectableChannel channel, int interestOps, long timeout) throws IOException;
 }

@@ -11,10 +11,15 @@
 #
 # A "headful" test requires a graphical environment to meaningfully
 # run. Tests that are not headful are "headless".
+# A test flagged with key sound needs audio devices on the system, this
+# may be accompanied by the headful keyword since audio device access 
+# is often linked to access to desktop resources and headful systems are
+# also more likely to have audio devices (ie meaning both input and output)
 # A test flagged with key "printer" requires a printer to succeed, else
 # throws a PrinterException or the like.
+# A test flagged with cgroups uses cgroups.
 
-keys=2d dnd headful i18n intermittent printer randomness jfr
+keys=2d dnd headful sound i18n intermittent printer randomness jfr cgroups
 
 # Tests that must run in othervm mode
 othervm.dirs=java/awt java/beans javax/accessibility javax/imageio javax/sound javax/swing javax/print \
@@ -43,6 +48,7 @@ requires.extraPropDefns.vmOpts = -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
 requires.properties= \
     sun.arch.data.model \
     java.runtime.name \
+    vm.gc.G1 \
     vm.gc.Z \
     vm.gc.Shenandoah \
     vm.graal.enabled \
@@ -52,13 +58,12 @@ requires.properties= \
     vm.musl \
     vm.debug \
     vm.hasSA \
-    vm.hasSAandCanAttach \
     vm.hasJFR \
     docker.support \
     release.implementor
 
 # Minimum jtreg version
-requiredVersion=5.1 b1
+requiredVersion=6+1
 
 # Path to libraries in the topmost test directory. This is needed so @library
 # does not need ../../ notation to reach them

@@ -205,9 +205,13 @@ void VM_CGC_Operation::doit() {
   G1CollectedHeap* g1h = G1CollectedHeap::heap();
   GCTraceTime(Info, gc) t(_printGCMessage, g1h->concurrent_mark()->gc_timer_cm(), GCCause::_no_gc, true);
   TraceCollectorStats tcs(g1h->g1mm()->conc_collection_counters());
+  TraceMemoryManagerStats tms(&g1h->_conc_gc_memory_manager, g1h->gc_cause(),
+                              true /* allMemoryPoolsAffected */);
   SvcGCMarker sgcm(SvcGCMarker::CONCURRENT);
   IsGCActiveMark x;
   _cl->do_void();
+  // Update before TraceMemoryManagerStats destructor.
+  g1h->g1mm()->update_sizes();
 }
 
 bool VM_CGC_Operation::doit_prologue() {

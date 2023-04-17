@@ -100,6 +100,9 @@ Node* GraphKit::vector_shift_count(Node* cnt, int shift_op, BasicType bt, int nu
 }
 
 bool LibraryCallKit::arch_supports_vector(int sopc, int num_elem, BasicType type, VectorMaskUseType mask_use_type, bool has_scalar_args) {
+
+#if defined(IA32) || defined(AMD64)
+
   // Check that the operation is valid.
   if (sopc <= 0) {
 #ifndef PRODUCT
@@ -159,6 +162,10 @@ bool LibraryCallKit::arch_supports_vector(int sopc, int num_elem, BasicType type
   }
 
   return true;
+
+#else
+  return false;
+#endif
 }
 
 static bool is_vector_mask(ciKlass* klass) {

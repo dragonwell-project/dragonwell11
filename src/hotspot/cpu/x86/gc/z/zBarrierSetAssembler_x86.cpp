@@ -31,6 +31,7 @@
 #include "gc/z/zBarrierSetRuntime.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "runtime/stubCodeGenerator.hpp"
 #include "utilities/macros.hpp"
 #ifdef COMPILER1
 #include "c1/c1_LIRAssembler.hpp"

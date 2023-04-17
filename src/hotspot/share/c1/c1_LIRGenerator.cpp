@@ -425,11 +425,15 @@ CodeEmitInfo* LIRGenerator::state_for(Instruction* x, ValueStack* state, bool ig
 
     MethodLivenessResult liveness = method->liveness_at_bci(bci);
     if (bci == SynchronizationEntryBCI) {
-      if (x->as_ExceptionObject() || x->as_Throw()) {
+      // Wisp adds a OopMap by copying a state, which may contains dead oops because when
+      // bci == SynchronizationEntryBCI && x is MonitorExit we can determine it is the implicit
+      // monitorexit for the synchronized keyword of a synchronized method. We need to clear
+      // dead locals for it because no locals are needed at this time.
+      if (x->as_ExceptionObject() || x->as_Throw() || (UseWispMonitor && x->as_MonitorExit())) {
         // all locals are dead on exit from the synthetic unlocker
         liveness.clear();
       } else {
-        assert(x->as_MonitorEnter() || x->as_ProfileInvoke() || (UseWispMonitor && x->as_MonitorExit()), "only other cases are MonitorEnter and ProfileInvoke, or Wisp MonitorExit");
+        assert(x->as_MonitorEnter() || x->as_ProfileInvoke(), "only other cases are MonitorEnter and ProfileInvoke");
       }
     }
     if (!liveness.is_valid()) {
@@ -485,6 +489,7 @@ void LIRGenerator::array_range_check(LIR_Opr array, LIR_Opr index,
   } else {
     cmp_reg_mem(lir_cond_aboveEqual, index, array,
                 arrayOopDesc::length_offset_in_bytes(), T_INT, null_check_info);
+    // forward branch
     __ branch(lir_cond_aboveEqual, T_INT, stub); // forward branch
   }
 }
@@ -493,11 +498,23 @@ void LIRGenerator::array_range_check(LIR_Opr array, LIR_Opr index,
 void LIRGenerator::nio_range_check(LIR_Opr buffer, LIR_Opr index, LIR_Opr result, CodeEmitInfo* info) {
   CodeStub* stub = new RangeCheckStub(info, index);
   if (index->is_constant()) {
+#ifdef RISCV64
+    LIR_Opr left = new_register(T_INT);
+    LIR_Opr right = LIR_OprFact::intConst(index->as_jint());
+    __ load(generate_address(buffer, java_nio_Buffer::limit_offset(), T_INT), left, info);
+#else
     cmp_mem_int(lir_cond_belowEqual, buffer, java_nio_Buffer::limit_offset(), index->as_jint(), info);
+#endif
     __ branch(lir_cond_belowEqual, T_INT, stub); // forward branch
   } else {
+#ifdef RISCV64
+    LIR_Opr right = new_register(T_INT);
+     __ load(generate_address(buffer, java_nio_Buffer::limit_offset(), T_INT), right, info);
+#else
     cmp_reg_mem(lir_cond_aboveEqual, index, buffer,
                 java_nio_Buffer::limit_offset(), T_INT, info);
+#endif
+    // forward branch
     __ branch(lir_cond_aboveEqual, T_INT, stub); // forward branch
   }
   __ move(index, result);
@@ -1326,14 +1343,12 @@ void LIRGenerator::do_isPrimitive(Intrinsic* x) {
   __ cmove(lir_cond_notEqual, LIR_OprFact::intConst(0), LIR_OprFact::intConst(1), result, T_BOOLEAN);
 }
 
-
 // Example: Thread.currentThread()
 void LIRGenerator::do_currentThread(Intrinsic* x) {
   assert(x->number_of_arguments() == 0, "wrong type");
   LIR_Opr reg = rlock_result(x);
   __ move_wide(new LIR_Address(getThreadPointer(), in_bytes(JavaThread::threadObj_offset()), T_OBJECT), reg);
 }
-
 
 void LIRGenerator::do_RegisterFinalizer(Intrinsic* x) {
   assert(x->number_of_arguments() == 1, "wrong type");
@@ -1785,11 +1800,11 @@ void LIRGenerator::do_NIOCheckIndex(Intrinsic* x) {
     CodeStub* stub = new RangeCheckStub(info, index.result());
     if (index.result()->is_constant()) {
       cmp_mem_int(lir_cond_belowEqual, buf.result(), java_nio_Buffer::limit_offset(), index.result()->as_jint(), info);
-      __ branch(lir_cond_belowEqual, T_INT, stub);
+      __ branch(lir_cond_belowEqual, T_INT, stub); // forward branch
     } else {
       cmp_reg_mem(lir_cond_aboveEqual, index.result(), buf.result(),
                   java_nio_Buffer::limit_offset(), T_INT, info);
-      __ branch(lir_cond_aboveEqual, T_INT, stub);
+      __ branch(lir_cond_aboveEqual, T_INT, stub); // forward branch
     }
     __ move(index.result(), result);
   } else {

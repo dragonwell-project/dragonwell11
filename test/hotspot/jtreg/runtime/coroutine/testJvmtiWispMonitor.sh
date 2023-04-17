@@ -3,6 +3,7 @@
 ## @test
 ##
 ## @requires os.family == "linux"
+## @requires os.arch != "riscv64"
 ## @summary test jvmti and wispMonitor could work together
 ## @run shell testJvmtiWispMonitor.sh
 

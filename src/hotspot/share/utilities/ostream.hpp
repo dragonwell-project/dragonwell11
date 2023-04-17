@@ -217,7 +217,7 @@ class stringStream : public outputStream {
   size_t      size() const { return _written; }
   const char* base() const { return _buffer; }
   void  reset();
-  char* as_string() const;
+  char* as_string(bool c_heap = false) const;
 };
 
 class fileStream : public outputStream {

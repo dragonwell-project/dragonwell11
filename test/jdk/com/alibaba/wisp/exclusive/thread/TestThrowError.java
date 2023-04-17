@@ -3,6 +3,7 @@
  * @summary test coroutine throw Error
  * @library /lib/testlibrary
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestThrowError
 */
 

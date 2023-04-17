@@ -3,6 +3,7 @@
  * @summary Test unpark in JNI critical case
  * @modules java.base/jdk.internal.misc
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm   -XX:-UseBiasedLocking -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:StartFlightRecording=dumponexit=true,filename=1.jfr  TestJNICritical
  */
 

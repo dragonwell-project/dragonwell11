@@ -130,6 +130,7 @@ class G1RegionMappingChangedListener : public G1MappingChangedListener {
 class G1CollectedHeap : public CollectedHeap {
   friend class G1FreeCollectionSetTask;
   friend class VM_CollectForMetadataAllocation;
+  friend class VM_CGC_Operation;
   friend class VM_G1CollectForAllocation;
   friend class VM_G1CollectFull;
   friend class VMStructs;
@@ -162,6 +163,7 @@ private:
 
   GCMemoryManager _memory_manager;
   GCMemoryManager _full_gc_memory_manager;
+  GCMemoryManager _conc_gc_memory_manager;
 
   MemoryPool* _eden_pool;
   MemoryPool* _survivor_pool;

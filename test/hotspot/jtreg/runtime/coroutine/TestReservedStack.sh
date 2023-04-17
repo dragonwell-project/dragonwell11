@@ -4,6 +4,7 @@
 ##
 ## @requires vm.opt.DeoptimizeALot == null | vm.opt.DeoptimizeALot == false
 ## @requires os.family == "linux"
+## @requires os.arch != "riscv64"
 ## @library /test/lib
 ## @summary test \@ReservedStackAccess
 ## @run shell TestReservedStack.sh

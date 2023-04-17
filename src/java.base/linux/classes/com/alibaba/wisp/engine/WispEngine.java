@@ -26,12 +26,14 @@ package com.alibaba.wisp.engine;
 import jdk.internal.misc.JavaLangAccess;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.WispEngineAccess;
+import sun.nio.ch.Net;
 
 import java.dyn.Coroutine;
 import java.dyn.CoroutineExitException;
 import java.dyn.CoroutineSupport;
 import java.io.IOException;
 import java.nio.channels.SelectableChannel;
+import java.nio.channels.SelectionKey;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -319,8 +321,9 @@ public class WispEngine extends AbstractExecutorService {
             }
 
             @Override
-            public boolean tryStartThreadAsWisp(Thread thread, Runnable target) {
-                return ThreadAsWisp.tryStart(thread, target);
+            public boolean tryStartThreadAsWisp(Thread thread, Runnable target, long stackSize) {
+                // Thread uses 0 as the default stack size.
+                return ThreadAsWisp.tryStart(thread, target, stackSize == 0 ? WispConfiguration.STACK_SIZE : stackSize);
             }
 
             @Override
@@ -362,6 +365,37 @@ public class WispEngine extends AbstractExecutorService {
                 } else {
                     return task.status == WispTask.Status.CACHED ? Thread.State.TERMINATED : Thread.State.RUNNABLE;
                 }
+            }
+
+            @Override
+            public int poll(SelectableChannel channel, int interestOps, long millsTimeOut) throws IOException {
+                assert interestOps == Net.POLLIN || interestOps == Net.POLLCONN || interestOps == Net.POLLOUT;
+                WispTask task = WispCarrier.current().getCurrentTask();
+                if (millsTimeOut > 0) {
+                    task.carrier.addTimer(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(millsTimeOut),
+                            TimeOut.Action.JDK_UNPARK);
+                }
+                try {
+                    task.carrier.registerEvent(channel, translateToSelectionKey(interestOps));
+                    park(-1);
+                    return millsTimeOut > 0 && task.timeOut.expired() ? 0 : 1;
+                } finally {
+                    if (millsTimeOut > 0) {
+                        task.carrier.cancelTimer();
+                    }
+                    unregisterEvent();
+                }
+            }
+
+            private int translateToSelectionKey(int event) {
+                if (Net.POLLIN == event) {
+                    return SelectionKey.OP_READ;
+                } else if (Net.POLLCONN == event) {
+                    return SelectionKey.OP_CONNECT;
+                } else if (Net.POLLOUT == event) {
+                    return SelectionKey.OP_WRITE;
+                }
+                return 0;
             }
         });
     }
@@ -515,7 +549,7 @@ public class WispEngine extends AbstractExecutorService {
         public void run() {
             WispCarrier.current().runTaskInternal(
                     wispControlGroup == null ? new ShutdownEngine() : new ShutdownControlGroup(wispControlGroup),
-                    WispTask.SHUTDOWN_TASK_NAME, null, null);
+                    WispTask.SHUTDOWN_TASK_NAME, null, null, WispConfiguration.STACK_SIZE);
         }
     }
 
@@ -628,7 +662,7 @@ public class WispEngine extends AbstractExecutorService {
     @Override
     public void execute(Runnable command) {
         scheduler.execute(new TaskDispatcher(WispCarrier.current().current.ctxClassLoader,
-                command, "execute task", null));
+                command, "execute task", null, WispConfiguration.STACK_SIZE));
     }
 
     public List<Long> getWispCarrierIds() {
@@ -660,9 +694,9 @@ public class WispEngine extends AbstractExecutorService {
         });
     }
 
-    void startAsThread(Runnable target, String name, Thread thread) {
+    void startAsThread(Runnable target, String name, Thread thread, long stackSize) {
         scheduler.execute(new TaskDispatcher(WispCarrier.current().current.ctxClassLoader,
-                target, name, thread));
+                target, name, thread, stackSize));
     }
 
     private static native void registerNatives();

@@ -3,6 +3,7 @@
  * @summary Test the config compatibility in different wisp version
  * @library /test/lib
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main TestConfigurationCompatibilityCheck
  */
 import java.util.ArrayList;

@@ -49,6 +49,7 @@
 #include "runtime/globals_extension.hpp"
 #include "runtime/java.hpp"
 #include "runtime/os.inline.hpp"
+#include "runtime/quickStart.hpp"
 #include "runtime/safepoint.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/vm_version.hpp"
@@ -2189,7 +2190,8 @@ Arguments::ArgsRange Arguments::parse_memory_size(const char* s,
 jint Arguments::parse_vm_init_args(const JavaVMInitArgs *vm_options_args,
                                    const JavaVMInitArgs *java_tool_options_args,
                                    const JavaVMInitArgs *java_options_args,
-                                   const JavaVMInitArgs *cmd_line_args) {
+                                   const JavaVMInitArgs *cmd_line_args,
+                                   const JavaVMInitArgs *dragonwell_java_tool_options_args) {
   bool patch_mod_javabase = false;
 
   // Save default settings for some mode flags
@@ -2214,6 +2216,13 @@ jint Arguments::parse_vm_init_args(const JavaVMInitArgs *vm_options_args,
   // Parse args structure generated from JAVA_TOOL_OPTIONS environment
   // variable (if present).
   result = parse_each_vm_init_arg(java_tool_options_args, &patch_mod_javabase, JVMFlag::ENVIRON_VAR);
+  if (result != JNI_OK) {
+    return result;
+  }
+
+  // Parse args structure generated from DRAGONWELL_JAVA_TOOL_OPTIONS environment
+  // variable (if present).
+  result = parse_each_vm_init_arg(dragonwell_java_tool_options_args, &patch_mod_javabase, JVMFlag::ENVIRON_VAR);
   if (result != JNI_OK) {
     return result;
   }
@@ -2831,6 +2840,20 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, bool* patch_m
       // Deprecated flag to redirect GC output to a file. -Xloggc:<filename>
       log_warning(gc)("-Xloggc is deprecated. Will use -Xlog:gc:%s instead.", tail);
       _gc_log_filename = os::strdup_check_oom(tail);
+    } else if (match_option(option, "-Xquickstart", &tail)) {
+      bool ret = false;
+      if (*tail == '\0') {
+        ret = QuickStart::parse_command_line_arguments();
+        assert(ret, "-Xquickstart without arguments should never fail to parse");
+      } else if (*tail == ':') {
+        ret = QuickStart::parse_command_line_arguments(tail + 1);
+      }
+      if (!ret) {
+        jio_fprintf(defaultStream::error_stream(),
+                    "Invalid -Xquickstart option '-Xquickstart%s', see the error log for details.\n",
+                    tail);
+        return JNI_EINVAL;
+      }
     } else if (match_option(option, "-Xlog", &tail)) {
       bool ret = false;
       if (strcmp(tail, ":help") == 0) {
@@ -2839,6 +2862,9 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, bool* patch_m
         vm_exit(0);
       } else if (strcmp(tail, ":disable") == 0) {
         LogConfiguration::disable_logging();
+        ret = true;
+      } else if (strcmp(tail, ":async") == 0) {
+        LogConfiguration::set_async_mode(true);
         ret = true;
       } else if (*tail == '\0') {
         ret = LogConfiguration::parse_command_line_arguments();
@@ -3306,12 +3332,47 @@ class ScopedVMInitArgs : public StackObj {
   }
 };
 
+bool Arguments::is_enable_tool_options(const JavaVMInitArgs *args) {
+  bool enable = true;
+  const char* sun_tool_package = "jdk.jcmd/sun.tools.";
+
+  char *buffer = ::getenv("DRAGONWELL_JAVA_TOOL_OPTIONS_JDK_ONLY");
+  if (buffer != NULL && strcmp(buffer,"true") == 0) {
+    int index;
+    const char* tail = NULL;
+    for (index = 0; index < args->nOptions; index++) {
+      const JavaVMOption *option = args->options + index;
+      if (match_option(option, "-Dsun.java.command=", &tail)) {
+        break;
+      }
+    }
+    //if no -Dsun.java.command like :java -version
+    //or JDK builtin tools
+    if (NULL == tail || strncmp(sun_tool_package, tail, strlen(sun_tool_package)) == 0) {
+      enable = false;
+    }
+  }
+  return enable;
+}
+
 jint Arguments::parse_java_options_environment_variable(ScopedVMInitArgs* args) {
   return parse_options_environment_variable("_JAVA_OPTIONS", args);
 }
 
-jint Arguments::parse_java_tool_options_environment_variable(ScopedVMInitArgs* args) {
-  return parse_options_environment_variable("JAVA_TOOL_OPTIONS", args);
+jint Arguments::parse_java_tool_options_environment_variable(ScopedVMInitArgs* args, bool enable_tool_options) {
+  if (enable_tool_options) {
+    return parse_options_environment_variable("JAVA_TOOL_OPTIONS", args);
+  } else {
+    return JNI_OK;
+  }
+}
+
+jint Arguments::parse_dragonwell_options_environment_variable(ScopedVMInitArgs* args, bool enable_tool_options) {
+  if (enable_tool_options) {
+    return parse_options_environment_variable("DRAGONWELL_JAVA_TOOL_OPTIONS", args);
+  } else {
+    return JNI_OK;
+  }
 }
 
 jint Arguments::parse_options_environment_variable(const char* name,
@@ -3485,16 +3546,6 @@ void Arguments::set_shared_spaces_flags() {
       warning("Cannot dump shared archive while using shared archive");
     }
     UseSharedSpaces = false;
-#ifdef _LP64
-    if (!UseCompressedOops || !UseCompressedClassPointers) {
-      vm_exit_during_initialization(
-        "Cannot dump shared archive when UseCompressedOops or UseCompressedClassPointers is off.", NULL);
-    }
-  } else {
-    if (!UseCompressedOops || !UseCompressedClassPointers) {
-      no_shared_spaces("UseCompressedOops and UseCompressedClassPointers must be on for UseSharedSpaces.");
-    }
-#endif
   }
 }
 
@@ -3749,6 +3800,19 @@ void Arguments::handle_extra_cms_flags(const char* msg) {
   }
 }
 
+#ifdef RISCV64
+#define UNSUPPORTED_RISCV64_OPTS(opt) \
+   if ((opt)) { \
+      tty->print_cr("Option %s is not supported on RISCV64, VM will exit", #opt); \
+      vm_abort(false); \
+   }
+
+// Some AJDK features are not supported in riscv64
+void Arguments::check_arguments_for_riscv64() {
+  UNSUPPORTED_RISCV64_OPTS(EnableCoroutine || UseWispMonitor);
+}
+#endif //
+
 // Parse entry point called from JNI_CreateJavaVM
 
 jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
@@ -3766,22 +3830,32 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
   ScopedVMInitArgs initial_vm_options_args("");
   ScopedVMInitArgs initial_java_tool_options_args("env_var='JAVA_TOOL_OPTIONS'");
   ScopedVMInitArgs initial_java_options_args("env_var='_JAVA_OPTIONS'");
+  ScopedVMInitArgs initial_dragonwell_java_tool_options_args("env_var='DRAGONWELL_JAVA_TOOL_OPTIONS'");
 
   // Pointers to current working set of containers
   JavaVMInitArgs* cur_cmd_args;
   JavaVMInitArgs* cur_vm_options_args;
   JavaVMInitArgs* cur_java_options_args;
   JavaVMInitArgs* cur_java_tool_options_args;
+  JavaVMInitArgs* cur_dragonwell_java_tool_options_args;
 
   // Containers for modified/expanded options
   ScopedVMInitArgs mod_cmd_args("cmd_line_args");
   ScopedVMInitArgs mod_vm_options_args("vm_options_args");
   ScopedVMInitArgs mod_java_tool_options_args("env_var='JAVA_TOOL_OPTIONS'");
   ScopedVMInitArgs mod_java_options_args("env_var='_JAVA_OPTIONS'");
+  ScopedVMInitArgs mod_dragonwell_java_tool_options_args("env_var='DRAGONWELL_JAVA_TOOL_OPTIONS'");
 
+  bool enable_tool_options = is_enable_tool_options(initial_cmd_args);
 
   jint code =
-      parse_java_tool_options_environment_variable(&initial_java_tool_options_args);
+      parse_java_tool_options_environment_variable(&initial_java_tool_options_args, enable_tool_options);
+  if (code != JNI_OK) {
+    return code;
+  }
+
+  // Parse DRAGONWELL_JAVA_TOOL_OPTIONS environment variable (if present)
+  code = parse_dragonwell_options_environment_variable(&initial_dragonwell_java_tool_options_args, enable_tool_options);
   if (code != JNI_OK) {
     return code;
   }
@@ -3807,6 +3881,14 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
   if (code != JNI_OK) {
     return code;
   }
+
+  code = expand_vm_options_as_needed(initial_dragonwell_java_tool_options_args.get(),
+                                     &mod_dragonwell_java_tool_options_args,
+                                     &cur_dragonwell_java_tool_options_args);
+  if (code != JNI_OK) {
+    return code;
+  }
+
 
   code = expand_vm_options_as_needed(initial_cmd_args,
                                      &mod_cmd_args,
@@ -3836,6 +3918,7 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     cur_cmd_args->ignoreUnrecognized = true;
     cur_java_tool_options_args->ignoreUnrecognized = true;
     cur_java_options_args->ignoreUnrecognized = true;
+    cur_dragonwell_java_tool_options_args->ignoreUnrecognized = true;
   }
 
   // Parse specified settings file
@@ -3863,16 +3946,22 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     print_options(cur_java_tool_options_args);
     print_options(cur_cmd_args);
     print_options(cur_java_options_args);
+    print_options(cur_dragonwell_java_tool_options_args);
   }
 
   // Parse JavaVMInitArgs structure passed in, as well as JAVA_TOOL_OPTIONS and _JAVA_OPTIONS
   jint result = parse_vm_init_args(cur_vm_options_args,
                                    cur_java_tool_options_args,
                                    cur_java_options_args,
-                                   cur_cmd_args);
+                                   cur_cmd_args,
+                                   cur_dragonwell_java_tool_options_args);
 
   if (result != JNI_OK) {
     return result;
+  }
+
+  if (QuickStart::is_enabled()) {
+    QuickStart::post_process_arguments(cur_cmd_args);
   }
 
   // Call get_shared_archive_path() here, after possible SharedArchiveFile option got parsed.
@@ -3904,7 +3993,7 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
 #endif
 
 #if defined(AIX)
-  UNSUPPORTED_OPTION(AllocateHeapAt);
+  UNSUPPORTED_OPTION_NULL(AllocateHeapAt);
 #endif
 
   ArgumentsExt::report_unsupported_options();
@@ -3969,8 +4058,20 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
   }
 #endif
 
+#ifdef RISCV64
+  check_arguments_for_riscv64();
+#endif // RISCV64
+
   if (Wisp2ThreadStop && !UseWisp2) {
     vm_exit_during_initialization("Wisp2ThreadStop only works with UseWisp2");
+  }
+
+  if (EagerAppCDS) {
+    if (!FLAG_IS_CMDLINE(NotFoundClassOpt)) {
+      NotFoundClassOpt = true;
+    }
+    // Need to use Classes4CDS.java to parse the result.
+    DumpAppCDSWithKlassId = true;
   }
 
   // Set object alignment values.

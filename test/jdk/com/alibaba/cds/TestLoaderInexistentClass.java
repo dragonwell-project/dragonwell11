@@ -1,0 +1,110 @@
+/*
+ * Copyright (c) 2023, Alibaba Group Holding Limited. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import jdk.internal.misc.JavaLangClassLoaderAccess;
+import jdk.internal.misc.SharedSecrets;
+
+public class TestLoaderInexistentClass {
+    private static final Path CLASSES_DIR = Paths.get(System.getProperty("test.classes"));
+
+    private static void registerClassLoader(ClassLoader loader, String loaderName) throws Exception {
+        try {
+            Method m = Class.forName("com.alibaba.util.Utils").getDeclaredMethod("registerClassLoader",
+                    ClassLoader.class, String.class);
+            m.setAccessible(true);
+            m.invoke(null, loader, loaderName);
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String... args) throws Exception {
+        //  class loader with name
+        testURLClassLoader("myloader");
+
+        testURLClassLoader("myloader2");
+
+        testURLClassLoader2("myloader3");
+
+        testURLClassLoader3();
+    }
+
+    public static void testURLClassLoader(String loaderName) throws Exception {
+        URL[] urls = new URL[] { CLASSES_DIR.toUri().toURL() };
+        ClassLoader parent = ClassLoader.getSystemClassLoader();
+        URLClassLoader loader = new URLClassLoader(urls, parent);
+
+        registerClassLoader(loader, loaderName);
+
+        try {
+            Class<?> c = Class.forName("TestSimple", true, loader);
+        } catch (Exception e) {
+        }
+
+        try {
+            Class<?> c2 = Class.forName("TestSimple2", true, loader);
+        } catch (Exception e) {
+        }
+    }
+
+    public static void testURLClassLoader2(String loaderName) throws Exception {
+        URL[] urls = new URL[] { CLASSES_DIR.toUri().toURL() };
+        ClassLoader parent = ClassLoader.getSystemClassLoader();
+        URLClassLoader loader = new URLClassLoader(urls, parent);
+
+        try {
+            Class<?> c = Class.forName("TestSimple", true, loader);
+        } catch (Exception e) {
+        }
+
+        try {
+            Class<?> c2 = Class.forName("TestSimple2", true, loader);
+        } catch (Exception e) {
+        }
+    }
+
+    public static void testURLClassLoader3() throws Exception {
+        URL[] urls = new URL[] { CLASSES_DIR.toUri().toURL() };
+        ClassLoader parent = ClassLoader.getSystemClassLoader();
+        URLClassLoader a = new URLClassLoader(urls, null);
+        URLClassLoader b = new URLClassLoader(urls, null);
+
+        try {
+            // test dup classes
+            Class.forName("TestSimple", true, a);
+            Class.forName("TestSimple", true, b);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+}
+

@@ -417,7 +417,8 @@ InstanceKlass::InstanceKlass(const ClassFileParser& parser, unsigned kind, Klass
   _reference_type(parser.reference_type()),
   _nest_members(NULL),
   _nest_host_index(0),
-  _nest_host(NULL) {
+  _nest_host(NULL),
+  _source_file_path(NULL) {
     set_vtable_length(parser.vtable_size());
     set_kind(kind);
     set_access_flags(parser.access_flags());
@@ -2258,6 +2259,10 @@ void InstanceKlass::metaspace_pointers_do(MetaspaceClosure* it) {
   // _fields might be written into by Rewriter::scan_method() -> fd.set_has_initialized_final_update()
   it->push(&_fields, MetaspaceClosure::_writable);
 
+  if (EagerAppCDS) {
+    it->push(&_source_file_path);
+  }
+
   if (itable_length() > 0) {
     itableOffsetEntry* ioe = (itableOffsetEntry*)start_of_itable();
     int method_table_offset_in_words = ioe->offset()/wordSize;
@@ -2323,6 +2328,7 @@ void InstanceKlass::remove_unshareable_info() {
 #if INCLUDE_JVMTI
   guarantee(_breakpoints == NULL, "must be");
   guarantee(_previous_versions == NULL, "must be");
+  _cached_class_file = NULL;
 #endif
 
   _init_thread = NULL;
@@ -2474,7 +2480,7 @@ void InstanceKlass::release_C_heap_structures() {
   }
 
   // deallocate the cached class file
-  if (_cached_class_file != NULL && !MetaspaceShared::is_in_shared_metaspace(_cached_class_file)) {
+  if (_cached_class_file != NULL) {
     os::free(_cached_class_file);
     _cached_class_file = NULL;
   }
@@ -3121,8 +3127,6 @@ nmethod* InstanceKlass::lookup_osr_nmethod(const Method* m, int bci, int comp_le
 // -----------------------------------------------------------------------------------------------------
 // Printing
 
-#ifndef PRODUCT
-
 #define BULLET  " - "
 
 static const char* state_names[] = {
@@ -3264,15 +3268,11 @@ void InstanceKlass::print_on(outputStream* st) const {
   st->cr();
 }
 
-#endif //PRODUCT
-
 void InstanceKlass::print_value_on(outputStream* st) const {
   assert(is_klass(), "must be klass");
   if (Verbose || WizardMode)  access_flags().print_on(st);
   name()->print_value_on(st);
 }
-
-#ifndef PRODUCT
 
 void FieldPrinter::do_field(fieldDescriptor* fd) {
   _st->print(BULLET);
@@ -3330,8 +3330,6 @@ void InstanceKlass::oop_print_on(oop obj, outputStream* st) {
     st->cr();
   }
 }
-
-#endif //PRODUCT
 
 void InstanceKlass::oop_print_value_on(oop obj, outputStream* st) {
   st->print("a ");
@@ -4006,12 +4004,7 @@ Method* InstanceKlass::method_with_orig_idnum(int idnum, int version) {
 
 #if INCLUDE_JVMTI
 JvmtiCachedClassFileData* InstanceKlass::get_cached_class_file() {
-  if (MetaspaceShared::is_in_shared_metaspace(_cached_class_file)) {
-    // Ignore the archived class stream data
-    return NULL;
-  } else {
-    return _cached_class_file;
-  }
+  return _cached_class_file;
 }
 
 jint InstanceKlass::get_cached_class_file_len() {
@@ -4020,23 +4013,6 @@ jint InstanceKlass::get_cached_class_file_len() {
 
 unsigned char * InstanceKlass::get_cached_class_file_bytes() {
   return VM_RedefineClasses::get_cached_class_file_bytes(_cached_class_file);
-}
-
-bool InstanceKlass::is_reentrant_initialization(Thread *thread)  {
-  if (UseWispMonitor) {
-    assert(thread != NULL, "sanity check");
-    thread = WispThread::current(thread);
-  }
-  return thread == _init_thread;
-}
-
-void InstanceKlass::set_init_thread(Thread *thread)  {
-  if (UseWispMonitor && thread != NULL) {
-    assert(thread->is_Java_thread(), "sanity check");
-    assert(((JavaThread*) thread)->current_coroutine() != NULL, "sanity check");
-    thread = WispThread::current(thread);
-  }
-  _init_thread = thread;
 }
 
 #if INCLUDE_CDS
@@ -4054,3 +4030,20 @@ JvmtiCachedClassFileData* InstanceKlass::get_archived_class_data() {
 }
 #endif
 #endif
+
+bool InstanceKlass::is_reentrant_initialization(Thread *thread)  {
+  if (UseWispMonitor) {
+    assert(thread != NULL, "sanity check");
+    thread = WispThread::current(thread);
+  }
+  return thread == _init_thread;
+}
+
+void InstanceKlass::set_init_thread(Thread *thread)  {
+  if (UseWispMonitor && thread != NULL) {
+    assert(thread->is_Java_thread(), "sanity check");
+    assert(((JavaThread*) thread)->current_coroutine() != NULL, "sanity check");
+    thread = WispThread::current(thread);
+  }
+  _init_thread = thread;
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,7 @@
 /**
  * @test
  * @requires vm.cds
- * @library /test/jdk/lib/testlibrary /test/lib /test/hotspot/jtreg/runtime/appcds
+ * @library /test/lib /test/hotspot/jtreg/runtime/appcds
  * @modules jdk.compiler
  *          jdk.jartool/sun.tools.jar
  *          jdk.jlink
@@ -40,7 +40,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import jdk.test.lib.process.OutputAnalyzer;
-import jdk.testlibrary.ProcessTools;
 
 public class ModulePathAndCP {
 
@@ -94,6 +93,10 @@ public class ModulePathAndCP {
     }
 
     public static void main(String... args) throws Exception {
+        run();
+    }
+
+    public static void run(String... extra_runtime_args) throws Exception {
         // compile the modules and create the modular jar files
         buildTestModule();
         String appClasses[] = {MAIN_CLASS, APP_CLASS};
@@ -104,7 +107,8 @@ public class ModulePathAndCP {
                                         "--module-path", moduleDir.toString(),
                                         "-m", MAIN_MODULE);
         TestCommon.checkDump(output);
-        String prefix[] = {"-cp", "\"\"", "-Xlog:class+load=trace"};
+        String prefix[] = {"-Djava.class.path=", "-Xlog:class+load=trace"};
+        prefix = TestCommon.concat(prefix, extra_runtime_args);
 
         // run with the archive with the --module-path the same as the one during
         // dump time. The classes should be loaded from the archive.
