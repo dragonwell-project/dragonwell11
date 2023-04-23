@@ -29,6 +29,12 @@
 #import "JavaComponentAccessibility.h"
 #import "JavaAccessibilityUtilities.h"
 
+// these constants are duplicated in CAccessibility.java
+#define JAVA_AX_ALL_CHILDREN (-1)
+#define JAVA_AX_SELECTED_CHILDREN (-2)
+#define JAVA_AX_VISIBLE_CHILDREN (-3)
+// If the value is >=0, it's an index
+
 @interface CommonComponentAccessibility : JavaComponentAccessibility <NSAccessibilityElement> {
 
 }
@@ -36,6 +42,8 @@
 + (JavaComponentAccessibility * _Nullable) getComponentAccessibility:(NSString * _Nonnull)role;
 - (NSRect)accessibilityFrame;
 - (nullable id)accessibilityParent;
+- (BOOL)performAccessibleAction:(int)index;
+- (BOOL)isAccessibilityElement;
 @end
 
 #endif

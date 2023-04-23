@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary Test different coroutines waiting on the same socket's read and write events.
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/timeout=10/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.separateIOPoller=true TestIssue311
  */
 

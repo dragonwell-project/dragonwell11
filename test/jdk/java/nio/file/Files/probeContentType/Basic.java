@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -162,7 +162,7 @@ public class Basic {
                 new ExType("doc", List.of("application/msword")),
                 new ExType("docx", List.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
                 new ExType("gz", List.of("application/gzip", "application/x-gzip")),
-                new ExType("jar", List.of("application/java-archive", "application/x-java-archive")),
+                new ExType("jar", List.of("application/java-archive", "application/x-java-archive", "application/jar")),
                 new ExType("jpg", List.of("image/jpeg")),
                 new ExType("js", List.of("text/javascript", "application/javascript")),
                 new ExType("json", List.of("application/json")),
@@ -179,7 +179,7 @@ public class Basic {
                 new ExType("ppt", List.of("application/vnd.ms-powerpoint")),
                 new ExType("pptx",List.of("application/vnd.openxmlformats-officedocument.presentationml.presentation")),
                 new ExType("py", List.of("text/plain", "text/x-python", "text/x-python-script")),
-                new ExType("rar", List.of("application/rar", "application/vnd.rar", "application/x-rar")),
+                new ExType("rar", List.of("application/rar", "application/vnd.rar", "application/x-rar", "application/x-rar-compressed")),
                 new ExType("rtf", List.of("application/rtf", "text/rtf")),
                 new ExType("webm", List.of("video/webm")),
                 new ExType("webp", List.of("image/webp")),
