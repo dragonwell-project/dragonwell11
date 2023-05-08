@@ -27,9 +27,10 @@
  * @summary Testing different combination of CompressedOops and CompressedClassPointers
  * @requires vm.cds
  * @requires (vm.gc=="null")
- * @library /test/lib /test/hotspot/jtreg/runtime/cds/appcds
+ * @library /test/lib /test/hotspot/jtreg/runtime/appcds
  * @compile test-classes/Hello.java
  * @modules java.base/jdk.internal.misc
+ *          jdk.jartool/sun.tools.jar
  * @run main/othervm  TestCombinedCompressedFlags
  */
 
