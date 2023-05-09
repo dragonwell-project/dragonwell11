@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -5068,8 +5068,9 @@ void CMSRefProcTaskProxy::work(uint worker_id) {
   CMSParDrainMarkingStackClosure par_drain_stack(_collector, _span,
                                                  _mark_bit_map,
                                                  work_queue(worker_id));
+  BarrierEnqueueDiscoveredFieldClosure enqueue;
   CMSIsAliveClosure is_alive_closure(_span, _mark_bit_map);
-  _task.work(worker_id, is_alive_closure, par_keep_alive, par_drain_stack);
+  _task.work(worker_id, is_alive_closure, par_keep_alive, enqueue, par_drain_stack);
   if (_task.marks_oops_alive()) {
     do_work_steal(worker_id, &par_drain_stack, &par_keep_alive,
                   _collector->hash_seed(worker_id));
@@ -5167,6 +5168,7 @@ void CMSCollector::refProcessingWork() {
     // Setup keep_alive and complete closures.
     CMSKeepAliveClosure cmsKeepAliveClosure(this, _span, &_markBitMap,
                                             &_markStack, false /* !preclean */);
+    BarrierEnqueueDiscoveredFieldClosure cmsEnqueue;
     CMSDrainMarkingStackClosure cmsDrainMarkingStackClosure(this,
                                   _span, &_markBitMap, &_markStack,
                                   &cmsKeepAliveClosure, false /* !preclean */);
@@ -5192,12 +5194,14 @@ void CMSCollector::refProcessingWork() {
       CMSRefProcTaskExecutor task_executor(*this);
       stats = rp->process_discovered_references(&_is_alive_closure,
                                         &cmsKeepAliveClosure,
+                                        &cmsEnqueue,
                                         &cmsDrainMarkingStackClosure,
                                         &task_executor,
                                         &pt);
     } else {
       stats = rp->process_discovered_references(&_is_alive_closure,
                                         &cmsKeepAliveClosure,
+                                        &cmsEnqueue,
                                         &cmsDrainMarkingStackClosure,
                                         NULL,
                                         &pt);
@@ -5535,17 +5539,18 @@ void CMSCollector::reset_stw() {
 
 void CMSCollector::do_CMS_operation(CMS_op_type op, GCCause::Cause gc_cause) {
   GCTraceCPUTime tcpu;
-  TraceCollectorStats tcs_cgc(cgc_counters());
 
   switch (op) {
     case CMS_op_checkpointRootsInitial: {
       GCTraceTime(Info, gc) t("Pause Initial Mark", NULL, GCCause::_no_gc, true);
+      TraceCollectorStats tcs_cgc(cgc_counters());
       SvcGCMarker sgcm(SvcGCMarker::CONCURRENT);
       checkpointRootsInitial();
       break;
     }
     case CMS_op_checkpointRootsFinal: {
       GCTraceTime(Info, gc) t("Pause Remark", NULL, GCCause::_no_gc, true);
+      TraceCollectorStats tcs_cgc(cgc_counters());
       SvcGCMarker sgcm(SvcGCMarker::CONCURRENT);
       checkpointRootsFinal();
       break;
