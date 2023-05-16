@@ -110,6 +110,8 @@ Coroutine* Coroutine::create_thread_coroutine(JavaThread* thread, CoroutineStack
   coro->_last_SEH = NULL;
 #endif
   coro->_privileged_stack_top = NULL;
+  coro->_monitor_chunks = NULL;
+  coro->_do_not_unlock_if_synchronized = false;
   coro->_wisp_thread  = UseWispMonitor ? new WispThread(coro) : NULL;
   if (UseWispMonitor) {
     coro->_wisp_thread->set_thread_state(_thread_in_vm);
@@ -162,6 +164,8 @@ Coroutine* Coroutine::create_coroutine(JavaThread* thread, CoroutineStack* stack
   coro->_last_SEH = NULL;
 #endif
   coro->_privileged_stack_top = NULL;
+  coro->_monitor_chunks = NULL;
+  coro->_do_not_unlock_if_synchronized = false;
   coro->_wisp_thread  = UseWispMonitor ? new WispThread(coro) : NULL;
   if (UseWispMonitor) {
     coro->_wisp_thread->set_thread_state(_thread_in_vm);
@@ -304,7 +308,11 @@ void Coroutine::oops_do(OopClosure* f, CodeBlobClosure* cf) {
     _active_handles->oops_do(f);
     if (_privileged_stack_top != NULL) {
       _privileged_stack_top->oops_do(f);
-    } 
+    }
+    // Traverse the monitor chunks
+    for (MonitorChunk* chunk = _monitor_chunks; chunk != NULL; chunk = chunk->next()) {
+      chunk->oops_do(f);
+    }
   }
   if (_wisp_task != NULL) {
     f->do_oop((oop*) &_wisp_engine);
@@ -888,6 +896,8 @@ void WispThread::unpark(int task_id, bool using_wisp_park, bool proxy_unpark, Pa
 }
 
 int WispThread::get_proxy_unpark(jintArray res) {
+  HandleMark hm;
+  typeArrayHandle a(JavaThread::current(), typeArrayOop(JNIHandles::resolve_non_null(res)));
   // We need to hoist code of safepoint state out of MutexLocker to prevent safepoint deadlock problem
   // See the same usage: SR_lock in `JavaThread::exit()`
   ThreadBlockInVM tbivm(JavaThread::current());
@@ -901,8 +911,7 @@ int WispThread::get_proxy_unpark(jintArray res) {
     // current wait(true): first safepoint then hold lock to deal with the problem.
     Wisp_lock->wait(Mutex::_no_safepoint_check_flag);
   }
-  typeArrayOop a = typeArrayOop(JNIHandles::resolve_non_null(res));
-  if (a == NULL) {
+  if (a.is_null()) {
     return 0;
   }
   int copy_cnt = a->length() < _proxy_unpark->length() ? a->length() : _proxy_unpark->length();
