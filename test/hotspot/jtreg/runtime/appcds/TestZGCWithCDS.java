@@ -2,8 +2,9 @@
  * @test 8232069 for ZGC
  * @requires vm.cds
  * @requires (vm.gc=="null")
- * @library /test/lib /test/hotspot/jtreg/runtime/cds/appcds
+ * @library /test/lib /test/hotspot/jtreg/runtime/appcds
  * @compile test-classes/Hello.java
+ * @modules jdk.jartool/sun.tools.jar
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox sun.hotspot.WhiteBox$WhiteBoxPermission
  * @run main/othervm -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -Xbootclasspath/a:. TestZGCWithCDS
