@@ -26,7 +26,6 @@
 #include "logging/logOutputList.hpp"
 #include "memory/allocation.inline.hpp"
 #include "runtime/atomic.hpp"
-#include "runtime/orderAccess.hpp"
 #include "utilities/globalDefinitions.hpp"
 
 jint LogOutputList::increase_readers() {
@@ -43,9 +42,12 @@ jint LogOutputList::decrease_readers() {
 
 void LogOutputList::wait_until_no_readers() const {
   OrderAccess::storeload();
-  while (_active_readers != 0) {
+  while (Atomic::load(&_active_readers) != 0) {
     // Busy wait
   }
+  // Prevent mutations to the output list to float above the active reader check.
+  // Such a reordering would lead to readers loading faulty data.
+  OrderAccess::loadstore();
 }
 
 void LogOutputList::set_output_level(LogOutput* output, LogLevelType level) {
@@ -124,17 +126,22 @@ void LogOutputList::add_output(LogOutput* output, LogLevelType level) {
        node->_next = node->_next->_next) {
   }
 
+  // To allow lock-free iteration of the output list the updates in the loops
+  // below require release semantics.
+  OrderAccess::release();
+
   // Update the _level_start index
   for (int l = LogLevel::Last; l >= level; l--) {
-    if (_level_start[l] == NULL || _level_start[l]->_level < level) {
-      _level_start[l] = node;
+    LogOutputNode* lnode = Atomic::load(&_level_start[l]);
+    if (lnode == NULL || lnode->_level < level) {
+      Atomic::store(node, &_level_start[l]);
     }
   }
 
   // Add the node the list
-  for (LogOutputNode* cur = _level_start[LogLevel::Last]; cur != NULL; cur = cur->_next) {
-    if (cur != node && cur->_next == node->_next) {
-      cur->_next = node;
+  for (LogOutputNode* cur = Atomic::load(&_level_start[LogLevel::Last]); cur != NULL; cur = Atomic::load(&cur->_next)) {
+    if (cur != node && Atomic::load(&cur->_next) == node->_next) {
+      Atomic::store(node, &cur->_next);
       break;
     }
   }

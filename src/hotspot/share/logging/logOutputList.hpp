@@ -26,6 +26,7 @@
 
 #include "logging/logLevel.hpp"
 #include "memory/allocation.hpp"
+#include "runtime/orderAccess.hpp"
 #include "utilities/globalDefinitions.hpp"
 
 class LogOutput;
@@ -48,11 +49,11 @@ class LogOutputList {
  private:
   struct LogOutputNode : public CHeapObj<mtLogging> {
     LogOutput*      _value;
-    LogOutputNode*  _next;
+    LogOutputNode* volatile _next;
     LogLevelType    _level;
   };
 
-  LogOutputNode*  _level_start[LogLevel::Count];
+  LogOutputNode* volatile _level_start[LogLevel::Count];
   volatile jint   _active_readers;
 
   LogOutputNode* find(const LogOutput* output) const;
@@ -125,7 +126,9 @@ class LogOutputList {
     }
 
     void operator++(int) {
-      _current = _current->_next;
+      // FIXME: memory_order_consume could be used here.
+      // Atomic access on the reading side for LogOutputList.
+      _current = OrderAccess::load_acquire(&_current->_next);
     }
 
     bool operator!=(const LogOutputNode *ref) const {
@@ -139,7 +142,9 @@ class LogOutputList {
 
   Iterator iterator(LogLevelType level = LogLevel::Last) {
     increase_readers();
-    return Iterator(this, _level_start[level]);
+    // FIXME: memory_order_consume could be used here.
+    // Atomic access on the reading side for LogOutputList.
+    return Iterator(this, OrderAccess::load_acquire(&_level_start[level]));
   }
 
   LogOutputNode* end() const {
