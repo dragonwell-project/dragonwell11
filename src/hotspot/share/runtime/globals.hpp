@@ -2478,7 +2478,7 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
                                                                             \
   /* Shared spaces */                                                       \
                                                                             \
-  product(bool, UseSharedSpaces, true,                                      \
+  product(bool, UseSharedSpaces, false,                                     \
           "Use shared spaces for metadata")                                 \
                                                                             \
   product(bool, VerifySharedSpaces, false,                                  \

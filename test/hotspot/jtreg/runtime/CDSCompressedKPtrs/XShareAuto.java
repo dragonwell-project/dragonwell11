@@ -45,12 +45,8 @@ public class XShareAuto {
         output.shouldContain("Loading classes to share");
         output.shouldHaveExitValue(0);
 
-
-        // We have 2 test cases:
         String cases[] = {
             "-Xshare:auto",    // case [1]: -Xshare:auto is explicitly specified.
-            "-showversion"     // case [2]: -Xshare:auto is not explicitly specified,
-                               //           but VM should still use it by default.
         };
 
         for (String x : cases) {
@@ -68,6 +64,22 @@ public class XShareAuto {
                 // ASLR.
                 output.shouldContain("sharing");
             }
+            output.shouldHaveExitValue(0);
+        }
+
+        //We turn off UseSharedSpace by default.so if no -Xshare:auto, VM should not use it by default
+        String noShareCases[] = {
+                "-showversion"
+        };
+        for (String x : noShareCases) {
+            pb = ProcessTools.createJavaProcessBuilder(
+                    "-XX:+UnlockDiagnosticVMOptions",
+                    "-XX:SharedArchiveFile=./XShareAuto.jsa",
+                    "-Xlog:cds",
+                    x,
+                    "-version");
+            output = new OutputAnalyzer(pb.start());
+            output.shouldNotContain("sharing");
             output.shouldHaveExitValue(0);
         }
     }
