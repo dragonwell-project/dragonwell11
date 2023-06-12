@@ -138,6 +138,7 @@ public class Threads {
         }
         virtualConstructor.addMapping("JvmtiAgentThread", JvmtiAgentThread.class);
         virtualConstructor.addMapping("ServiceThread", ServiceThread.class);
+        virtualConstructor.addMapping("AttachListenerThread", AttachListenerThread.class);
     }
 
     public Threads() {

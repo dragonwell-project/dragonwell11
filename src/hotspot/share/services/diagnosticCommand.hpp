@@ -334,6 +334,7 @@ protected:
   DCmdArgument<bool>  _mini_dump;
   DCmdArgument<jlong> _gzip;
   DCmdArgument<bool> _overwrite;
+  DCmdArgument<jlong> _parallel;
 public:
   HeapDumpDCmd(outputStream* output, bool heap);
   static const char* name() {

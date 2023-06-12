@@ -29,20 +29,9 @@
 #include "oops/oop.hpp"
 #include "runtime/os.hpp"
 
-// HeapDumper is used to dump the java heap to file in HPROF binary format:
-//
-//  { HeapDumper dumper(true /* full GC before heap dump */);
-//    if (dumper.dump("/export/java.hprof")) {
-//      ResourceMark rm;
-//      tty->print_cr("Dump failed: %s", dumper.error_as_C_string());
-//    } else {
-//      // dump succeeded
-//    }
-//  }
-//
-
 class outputStream;
 
+// HeapDumper is used to dump the java heap to file in HPROF binary format
 class HeapDumper : public StackObj {
  private:
   char* _error;
@@ -81,7 +70,7 @@ class HeapDumper : public StackObj {
 
   // dumps the heap to the specified file, returns 0 if success.
   // compression >= 0 creates a gzipped file with the given compression level.
-  int dump(const char* path, outputStream* out = NULL, int compression = -1, bool overwrite = false);
+  int dump(const char* path, outputStream* out = NULL, int compression = -1, bool overwrite = false, uint num_dump_threads = 1);
 
   // returns error message (resource allocated), or NULL if no error
   char* error_as_C_string() const;
@@ -89,6 +78,11 @@ class HeapDumper : public StackObj {
   static void dump_heap()    NOT_SERVICES_RETURN;
 
   static void dump_heap_from_oome()    NOT_SERVICES_RETURN;
+
+  // Parallel thread number for heap dump, initialize based on active processor count.
+  static uint default_num_of_dump_threads() {
+    return MAX2<uint>(1, (uint)os::initial_active_processor_count() * 3 / 8);
+  }
 
   inline bool is_mini_dump() const { return _mini_dump; }
 };

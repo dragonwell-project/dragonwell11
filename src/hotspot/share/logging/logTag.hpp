@@ -78,6 +78,7 @@
   LOG_TAG(handshake) \
   LOG_TAG(hashtables) \
   LOG_TAG(heap) \
+  LOG_TAG(heapdump) \
   LOG_TAG(humongous) \
   LOG_TAG(ihop) \
   LOG_TAG(iklass) \

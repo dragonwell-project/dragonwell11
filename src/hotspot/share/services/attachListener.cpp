@@ -247,7 +247,7 @@ jint dump_heap(AttachOperation* op, outputStream* out) {
     // This helps reduces the amount of unreachable objects in the dump
     // and makes it easier to browse.
     HeapDumper dumper(live_objects_only /* request GC */, false, mini_heap_dump);
-    int res = dumper.dump(op->arg(0));
+    int res = dumper.dump(op->arg(0), NULL, -1, false, HeapDumper::default_num_of_dump_threads());
     if (res == 0) {
       if (mini_heap_dump) {
         out->print_cr("Mini-heap dump file created");
@@ -368,7 +368,7 @@ static AttachOperationFunctionInfo funcs[] = {
 // from the queue, examines the operation name (command), and dispatches
 // to the corresponding function to perform the operation.
 
-static void attach_listener_thread_entry(JavaThread* thread, TRAPS) {
+void AttachListenerThread::thread_entry(JavaThread* thread, TRAPS) {
   os::set_priority(thread, NearMaxPriority);
 
   assert(thread == Thread::current(), "Must be");
@@ -484,7 +484,7 @@ void AttachListener::init() {
   }
 
   { MutexLocker mu(Threads_lock);
-    JavaThread* listener_thread = new JavaThread(&attach_listener_thread_entry);
+    JavaThread* listener_thread = new AttachListenerThread();
 
     // Check that thread and osthread were created
     if (listener_thread == NULL || listener_thread->osthread() == NULL) {

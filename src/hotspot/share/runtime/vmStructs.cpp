@@ -96,6 +96,7 @@
 #include "runtime/thread.inline.hpp"
 #include "runtime/vframeArray.hpp"
 #include "runtime/vmStructs.hpp"
+#include "services/attachListener.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/hashtable.hpp"
 #include "utilities/macros.hpp"
@@ -1395,6 +1396,7 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
         declare_type(ServiceThread, JavaThread)                           \
         declare_type(CompilerThread, JavaThread)                          \
         declare_type(CodeCacheSweeperThread, JavaThread)                  \
+        declare_type(AttachListenerThread, JavaThread)                    \
   declare_toplevel_type(OSThread)                                         \
   declare_toplevel_type(JavaFrameAnchor)                                  \
                                                                           \
