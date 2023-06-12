@@ -59,6 +59,15 @@ enum AttachListenerState {
 
 template<> struct IsRegisteredEnum<AttachListenerState> : public TrueType {};
 
+class AttachListenerThread : public JavaThread {
+private:
+  static void thread_entry(JavaThread* thread, TRAPS);
+
+public:
+  AttachListenerThread() : JavaThread(&AttachListenerThread::thread_entry) {}
+  bool is_AttachListener_thread() const { return true; }
+};
+
 class AttachListener: AllStatic {
  public:
   static void vm_start() NOT_SERVICES_RETURN;

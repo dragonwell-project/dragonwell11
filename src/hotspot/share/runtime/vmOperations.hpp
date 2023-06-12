@@ -63,6 +63,7 @@
   template(Verify)                                \
   template(PrintJNI)                              \
   template(HeapDumper)                            \
+  template(HeapDumpMerge)                         \
   template(DeoptimizeTheWorld)                    \
   template(CollectForMetadataAllocation)          \
   template(GC_HeapInspection)                     \
