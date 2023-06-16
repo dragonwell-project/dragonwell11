@@ -3743,6 +3743,9 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   case Op_StoreVector:
   case Op_LoadVectorGather:
   case Op_StoreVectorScatter:
+  case Op_VectorMaskGen:
+  case Op_LoadVectorMasked:
+  case Op_StoreVectorMasked:
     break;
 
   case Op_AddReductionVI:
