@@ -99,7 +99,9 @@ public:
          SlotsPerVecD = 2,
          SlotsPerVecX = 4,
          SlotsPerVecY = 8,
-         SlotsPerVecZ = 16 };
+         SlotsPerVecZ = 16,
+         SlotsPerRegVectMask = X86_ONLY(2) NOT_X86(1)
+         };
 
   // A constructor only used by the ADLC output.  All mask fields are filled
   // in directly.  Calls to this look something like RM(1,2,3,4);
