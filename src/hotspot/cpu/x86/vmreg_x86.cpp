@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2006, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -65,4 +65,6 @@ void VMRegImpl::set_regName() {
   for ( ; i < ConcreteRegisterImpl::number_of_registers ; i ++ ) {
     regName[i] = "NON-GPR-FPR-XMM-KREG";
   }
+
+//TODO: Case for KRegisters
 }

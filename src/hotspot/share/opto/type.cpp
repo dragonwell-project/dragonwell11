@@ -67,18 +67,21 @@ const Type::TypeInfo Type::_type_info[Type::lastype] = {
   { Bad,             T_ILLEGAL,    "vectory:",      false, 0,                    relocInfo::none          },  // VectorY
   { Bad,             T_ILLEGAL,    "vectorz:",      false, 0,                    relocInfo::none          },  // VectorZ
 #elif defined(PPC64)
+  { Bad,             T_ILLEGAL,    "vectormask:",   false, Op_RegVectMask,       relocInfo::none          },  // VectorMask.
   { Bad,             T_ILLEGAL,    "vectors:",      false, 0,                    relocInfo::none          },  // VectorS
   { Bad,             T_ILLEGAL,    "vectord:",      false, Op_RegL,              relocInfo::none          },  // VectorD
   { Bad,             T_ILLEGAL,    "vectorx:",      false, Op_VecX,              relocInfo::none          },  // VectorX
   { Bad,             T_ILLEGAL,    "vectory:",      false, 0,                    relocInfo::none          },  // VectorY
   { Bad,             T_ILLEGAL,    "vectorz:",      false, 0,                    relocInfo::none          },  // VectorZ
 #elif defined(S390)
+  { Bad,             T_ILLEGAL,    "vectormask:",   false, Op_RegVectMask,       relocInfo::none          },  // VectorMask.
   { Bad,             T_ILLEGAL,    "vectors:",      false, 0,                    relocInfo::none          },  // VectorS
   { Bad,             T_ILLEGAL,    "vectord:",      false, Op_RegL,              relocInfo::none          },  // VectorD
   { Bad,             T_ILLEGAL,    "vectorx:",      false, 0,                    relocInfo::none          },  // VectorX
   { Bad,             T_ILLEGAL,    "vectory:",      false, 0,                    relocInfo::none          },  // VectorY
   { Bad,             T_ILLEGAL,    "vectorz:",      false, 0,                    relocInfo::none          },  // VectorZ
 #else // all other
+  { Bad,             T_ILLEGAL,    "vectormask:",   false, Op_RegVectMask,       relocInfo::none          },  // VectorMask.
   { Bad,             T_ILLEGAL,    "vectors:",      false, Op_VecS,              relocInfo::none          },  // VectorS
   { Bad,             T_ILLEGAL,    "vectord:",      false, Op_VecD,              relocInfo::none          },  // VectorD
   { Bad,             T_ILLEGAL,    "vectorx:",      false, Op_VecX,              relocInfo::none          },  // VectorX
@@ -662,6 +665,9 @@ void Type::Initialize_shared(Compile* current) {
 
   // get_zero_type() should not happen for T_CONFLICT
   _zero_type[T_CONFLICT]= NULL;
+
+  TypeVect::VECTMASK = (TypeVect*)(new TypeVectMask(TypeInt::BOOL, MaxVectorSize))->hashcons();
+  mreg2type[Op_RegVectMask] = TypeVect::VECTMASK;
 
   // Vector predefined types, it needs initialized _const_basic_type[].
   if (Matcher::vector_size_supported(T_BYTE,4)) {
@@ -2350,6 +2356,7 @@ const TypeVect *TypeVect::VECTD = NULL; //  64-bit vectors
 const TypeVect *TypeVect::VECTX = NULL; // 128-bit vectors
 const TypeVect *TypeVect::VECTY = NULL; // 256-bit vectors
 const TypeVect *TypeVect::VECTZ = NULL; // 512-bit vectors
+const TypeVect *TypeVect::VECTMASK = NULL; // predicate/mask vector
 
 //------------------------------make-------------------------------------------
 const TypeVect* TypeVect::make(const Type *elem, uint length) {
@@ -2376,6 +2383,15 @@ const TypeVect* TypeVect::make(const Type *elem, uint length) {
   return NULL;
 }
 
+const TypeVect *TypeVect::makemask(const Type* elem, uint length) {
+  if (Matcher::has_predicated_vectors()) {
+    const TypeVect* mtype = Matcher::predicate_reg_type(elem, length);
+    return (TypeVect*)(const_cast<TypeVect*>(mtype))->hashcons();
+  } else {
+    return make(elem, length);
+  }
+}
+
 //------------------------------meet-------------------------------------------
 // Compute the MEET of two types.  It returns a new Type object.
 const Type *TypeVect::xmeet( const Type *t ) const {
@@ -2390,7 +2406,13 @@ const Type *TypeVect::xmeet( const Type *t ) const {
 
   default:                      // All else is a mistake
     typerr(t);
-
+  case VectorMask: {
+    const TypeVectMask* v = t->is_vectmask();
+    assert(  base() == v->base(), "");
+    assert(length() == v->length(), "");
+    assert(element_basic_type() == v->element_basic_type(), "");
+    return TypeVect::makemask(_elem->xmeet(v->_elem), _length);
+  }
   case VectorS:
   case VectorD:
   case VectorX:
@@ -2455,6 +2477,8 @@ void TypeVect::dump2(Dict &d, uint depth, outputStream *st) const {
     st->print("vectory["); break;
   case VectorZ:
     st->print("vectorz["); break;
+  case VectorMask:
+    st->print("vectormask["); break;
   default:
     ShouldNotReachHere();
   }
@@ -2464,6 +2488,14 @@ void TypeVect::dump2(Dict &d, uint depth, outputStream *st) const {
 }
 #endif
 
+bool TypeVectMask::eq(const Type *t) const {
+  const TypeVectMask *v = t->is_vectmask();
+  return (element_type() == v->element_type()) && (length() == v->length());
+}
+
+const Type *TypeVectMask::xdual() const {
+  return new TypeVectMask(element_type()->dual(), length());
+}
 
 //=============================================================================
 // Convenience common pre-built types.

@@ -158,8 +158,8 @@ class MacroAssembler: public Assembler {
 
 #ifdef COMPILER2
   // special instructions for EVEX
-  void setvectmask(Register dst, Register src);
-  void restorevectmask();
+  void setvectmask(Register dst, Register src, KRegister mask);
+  void restorevectmask(KRegister mask);
 #endif
 
   // Support optimal SSE move instructions.
@@ -1121,6 +1121,23 @@ public:
   void kmovwl(Register dst, KRegister src) { Assembler::kmovwl(dst, src); }
   void kmovwl(KRegister dst, Address src) { Assembler::kmovwl(dst, src); }
   void kmovwl(KRegister dst, AddressLiteral src, Register scratch_reg = rscratch1);
+  void kmovwl(Address dst,  KRegister src) { Assembler::kmovwl(dst, src); }
+  void kmovwl(KRegister dst, KRegister src) { Assembler::kmovwl(dst, src); }
+
+  void kmovql(KRegister dst, KRegister src) { Assembler::kmovql(dst, src); }
+  void kmovql(KRegister dst, Register src) { Assembler::kmovql(dst, src); }
+  void kmovql(Register dst, KRegister src) { Assembler::kmovql(dst, src); }
+  void kmovql(KRegister dst, Address src) { Assembler::kmovql(dst, src); }
+  void kmovql(Address  dst, KRegister src) { Assembler::kmovql(dst, src); }
+  void kmovql(KRegister dst, AddressLiteral src, Register scratch_reg = rscratch1);
+
+  // Safe move operation, lowers down to 16bit moves for targets supporting
+  // AVX512F feature and 64bit moves for targets supporting AVX512BW feature.
+  void kmov(Address  dst, KRegister src);
+  void kmov(KRegister dst, Address src);
+  void kmov(KRegister dst, KRegister src);
+  void kmov(Register dst, KRegister src);
+  void kmov(KRegister dst, Register src);
 
   // AVX Unaligned forms
   void vmovdqu(Address     dst, XMMRegister src);
@@ -1729,13 +1746,13 @@ public:
 
   // clear memory of size 'cnt' qwords, starting at 'base';
   // if 'is_large' is set, do not try to produce short loop
-  void clear_mem(Register base, Register cnt, Register rtmp, XMMRegister xtmp, bool is_large);
+  void clear_mem(Register base, Register cnt, Register rtmp, XMMRegister xtmp, bool is_large, KRegister mask=knoreg);
 
   // clear memory initialization sequence for constant size;
-  void clear_mem(Register base, int cnt, Register rtmp, XMMRegister xtmp);
+  void clear_mem(Register base, int cnt, Register rtmp, XMMRegister xtmp, KRegister mask=knoreg);
 
-  // clear memory of size 'cnt' qwords, starting at 'base' using XMM/YMM registers
-  void xmm_clear_mem(Register base, Register cnt, Register rtmp, XMMRegister xtmp);
+  // clear memory of size 'cnt' qwords, starting at 'base' using XMM/YMM registers  
+  void xmm_clear_mem(Register base, Register cnt, Register rtmp, XMMRegister xtmp, KRegister mask=knoreg);
 
 #ifdef COMPILER2
   void string_indexof_char(Register str1, Register cnt1, Register ch, Register result,
@@ -1767,18 +1784,18 @@ public:
   // Compare strings.
   void string_compare(Register str1, Register str2,
                       Register cnt1, Register cnt2, Register result,
-                      XMMRegister vec1, int ae);
+                      XMMRegister vec1, int ae, KRegister mask = knoreg);
 
   // Search for Non-ASCII character (Negative byte value) in a byte array,
   // return true if it has any and false otherwise.
   void has_negatives(Register ary1, Register len,
                      Register result, Register tmp1,
-                     XMMRegister vec1, XMMRegister vec2);
+                     XMMRegister vec1, XMMRegister vec2, KRegister mask1 = knoreg, KRegister mask2 = knoreg);
 
   // Compare char[] or byte[] arrays.
   void arrays_equals(bool is_array_equ, Register ary1, Register ary2,
                      Register limit, Register result, Register chr,
-                     XMMRegister vec1, XMMRegister vec2, bool is_char);
+                     XMMRegister vec1, XMMRegister vec2, bool is_char, KRegister mask = knoreg);
 
 #endif
 
@@ -1893,11 +1910,12 @@ public:
   // Compress char[] array to byte[].
   void char_array_compress(Register src, Register dst, Register len,
                            XMMRegister tmp1, XMMRegister tmp2, XMMRegister tmp3,
-                           XMMRegister tmp4, Register tmp5, Register result);
+                           XMMRegister tmp4, Register tmp5, Register result,
+                           KRegister mask1 = knoreg, KRegister mask2 = knoreg);
 
   // Inflate byte[] array to char[].
   void byte_array_inflate(Register src, Register dst, Register len,
-                          XMMRegister tmp1, Register tmp2);
+                          XMMRegister tmp1, Register tmp2, KRegister mask = knoreg);
 
   void fill64_masked_avx(uint shift, Register dst, int disp,
                          XMMRegister xmm, KRegister mask, Register length,
