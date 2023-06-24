@@ -28,6 +28,7 @@ package java.lang;
 import java.lang.annotation.Native;
 import java.math.*;
 import java.util.Objects;
+import jdk.internal.util.ByteArray;
 import jdk.internal.HotSpotIntrinsicCandidate;
 
 import static java.lang.String.COMPACT_STRINGS;
@@ -437,105 +438,112 @@ public final class Long extends Number implements Comparable<Long> {
     }
 
     static String fastUUID(long lsb, long msb) {
-        final char[] hex256 = HEX256;
-        char i = hex256[((int) (msb >> 56)) & 255];
-        char i1 = hex256[((int) (msb >> 48)) & 255];
-        char i2 = hex256[((int) (msb >> 40)) & 255];
-        char i3 = hex256[((int) (msb >> 32)) & 255];
-        char i4 = hex256[(((int) msb) >> 24) & 255];
-        char i5 = hex256[(((int) msb) >> 16) & 255];
-        char i6 = hex256[(((int) msb) >> 8) & 255];
-        char i7 = hex256[((int) msb) & 255];
-        char i8 = hex256[(((int) (lsb >> 56))) & 255];
-        char i9 = hex256[(((int) (lsb >> 48))) & 255];
-        char i10 = hex256[(((int) (lsb >> 40))) & 255];
-        char i11 = hex256[((int) (lsb >> 32)) & 255];
-        char i12 = hex256[(((int) lsb) >> 24) & 255];
-        char i13 = hex256[(((int) lsb) >> 16) & 255];
-        char i14 = hex256[(((int) lsb) >> 8) & 255];
-        char i15 = hex256[((int) lsb) & 255];
+        byte[] buf = new byte[36];
+        char[] H256 = DigitCache.HEX256;
 
-        if (COMPACT_STRINGS) {
-            byte[] buf = new byte[36];
-            buf[0] = (byte) (i >> 8);
-            buf[1] = (byte) i;
-            buf[2] = (byte) (i1 >> 8);
-            buf[3] = (byte) i1;
-            buf[4] = (byte) (i2 >> 8);
-            buf[5] = (byte) i2;
-            buf[6] = (byte) (i3 >> 8);
-            buf[7] = (byte) i3;
-            buf[8] = '-';
-            buf[9] = (byte) (i4 >> 8);
-            buf[10] = (byte) i4;
-            buf[11] = (byte) (i5 >> 8);
-            buf[12] = (byte) i5;
-            buf[13] = '-';
-            buf[14] = (byte) (i6 >> 8);
-            buf[15] = (byte) i6;
-            buf[16] = (byte) (i7 >> 8);
-            buf[17] = (byte) i7;
-            buf[18] = '-';
-            buf[19] = (byte) (i8 >> 8);
-            buf[20] = (byte) i8;
-            buf[21] = (byte) (i9 >> 8);
-            buf[22] = (byte) i9;
-            buf[23] = '-';
-            buf[24] = (byte) (i10 >> 8);
-            buf[25] = (byte) i10;
-            buf[26] = (byte) (i11 >> 8);
-            buf[27] = (byte) i11;
-            buf[28] = (byte) (i12 >> 8);
-            buf[29] = (byte) i12;
-            buf[30] = (byte) (i13 >> 8);
-            buf[31] = (byte) i13;
-            buf[32] = (byte) (i14 >> 8);
-            buf[33] = (byte) i14;
-            buf[34] = (byte) (i15 >> 8);
-            buf[35] = (byte) i15;
-            return new String(buf, LATIN1);
-        } else {
-            byte[] buf = new byte[72];
+        ByteArray.setLong(
+                buf,
+                0,
+                ((long) H256[((int) (msb >> 56)) & 0xff] << 48)
+                        | ((long) H256[((int) (msb >> 48)) & 0xff] << 32)
+                        | ((long) H256[((int) (msb >> 40)) & 0xff] << 16)
+                        | H256[((int) (msb >> 32)) & 0xff]);
+        buf[8] = '-';
+        ByteArray.setInt(
+                buf,
+                9,
+                (H256[(((int) msb) >> 24) & 0xff] << 16)
+                        | H256[(((int) msb) >> 16) & 0xff]);
+        buf[13] = '-';
+        ByteArray.setInt(
+                buf,
+                14,
+                (H256[(((int) msb) >> 8) & 0xff] << 16)
+                        | H256[((int) msb) & 0xff]);
+        buf[18] = '-';
+        ByteArray.setInt(
+                buf,
+                19,
+                (H256[(((int) (lsb >> 56))) & 0xff] << 16)
+                        | H256[(((int) (lsb >> 48))) & 0xff]);
+        buf[23] = '-';
+        ByteArray.setLong(
+                buf,
+                24,
+                ((long) H256[(((int) (lsb >> 40))) & 0xff] << 48)
+                        | ((long) H256[((int) (lsb >> 32)) & 0xff] << 32)
+                        | ((long) H256[(((int) lsb) >> 24) & 0xff] << 16)
+                        | H256[(((int) lsb) >> 16) & 0xff]);
+        ByteArray.setInt(
+                buf,
+                32,
+                (H256[(((int) lsb) >> 8) & 0xff] << 16)
+                        | H256[((int) lsb) & 0xff]);
 
-            StringUTF16.putChar(buf, 0, (byte) (i >> 8));
-            StringUTF16.putChar(buf, 1, (byte) i);
-            StringUTF16.putChar(buf, 2, (byte) (i1 >> 8));
-            StringUTF16.putChar(buf, 3, (byte) i1);
-            StringUTF16.putChar(buf, 4, (byte) (i2 >> 8));
-            StringUTF16.putChar(buf, 5, (byte) i2);
-            StringUTF16.putChar(buf, 6, (byte) (i3 >> 8));
-            StringUTF16.putChar(buf, 7, (byte) i3);
-            StringUTF16.putChar(buf, 8, '-');
-            StringUTF16.putChar(buf, 9, (byte) (i4 >> 8));
-            StringUTF16.putChar(buf, 10, (byte) i4);
-            StringUTF16.putChar(buf, 11, (byte) (i5 >> 8));
-            StringUTF16.putChar(buf, 12, (byte) i5);
-            StringUTF16.putChar(buf, 13, '-');
-            StringUTF16.putChar(buf, 14, (byte) (i6 >> 8));
-            StringUTF16.putChar(buf, 15, (byte) i6);
-            StringUTF16.putChar(buf, 16, (byte) (i7 >> 8));
-            StringUTF16.putChar(buf, 17, (byte) i7);
-            StringUTF16.putChar(buf, 18, '-');
-            StringUTF16.putChar(buf, 19, (byte) (i8 >> 8));
-            StringUTF16.putChar(buf, 20, (byte) i8);
-            StringUTF16.putChar(buf, 21, (byte) (i9 >> 8));
-            StringUTF16.putChar(buf, 22, (byte) i9);
-            StringUTF16.putChar(buf, 23, '-');
-            StringUTF16.putChar(buf, 24, (byte) (i10 >> 8));
-            StringUTF16.putChar(buf, 25, (byte) i10);
-            StringUTF16.putChar(buf, 26, (byte) (i11 >> 8));
-            StringUTF16.putChar(buf, 27, (byte) i11);
-            StringUTF16.putChar(buf, 28, (byte) (i12 >> 8));
-            StringUTF16.putChar(buf, 29, (byte) i12);
-            StringUTF16.putChar(buf, 30, (byte) (i13 >> 8));
-            StringUTF16.putChar(buf, 31, (byte) i13);
-            StringUTF16.putChar(buf, 32, (byte) (i14 >> 8));
-            StringUTF16.putChar(buf, 33, (byte) i14);
-            StringUTF16.putChar(buf, 34, (byte) (i15 >> 8));
-            StringUTF16.putChar(buf, 35, (byte) i15);
+        return new String(buf, LATIN1);
+    }
 
-            return new String(buf, UTF16);
-        }
+    static String fastUUIDUTF16(long lsb, long msb) {
+        char[] H256 = DigitCache.HEX256;
+
+        char i0 = H256[((int) (msb >> 56)) & 0xff];
+        char i1 = H256[((int) (msb >> 48)) & 0xff];
+        char i2 = H256[((int) (msb >> 40)) & 0xff];
+        char i3 = H256[((int) (msb >> 32)) & 0xff];
+        char i4 = H256[(((int) msb) >> 24) & 0xff];
+        char i5 = H256[(((int) msb) >> 16) & 0xff];
+        char i6 = H256[(((int) msb) >> 8) & 0xff];
+        char i7 = H256[((int) msb) & 0xff];
+        char i8 = H256[(((int) (lsb >> 56))) & 0xff];
+        char i9 = H256[(((int) (lsb >> 48))) & 0xff];
+        char i10 = H256[(((int) (lsb >> 40))) & 0xff];
+        char i11 = H256[((int) (lsb >> 32)) & 0xff];
+        char i12 = H256[(((int) lsb) >> 24) & 0xff];
+        char i13 = H256[(((int) lsb) >> 16) & 0xff];
+        char i14 = H256[(((int) lsb) >> 8) & 0xff];
+        char i15 = H256[((int) lsb) & 0xff];
+
+        byte[] buf = new byte[72];
+        int off = StringUTF16.isBigEndian() ? 1 : 0;
+
+        buf[0 + off] = (byte) (i0 >> 8);
+        buf[2 + off] = (byte) i0;
+        buf[4 + off] = (byte) (i1 >> 8);
+        buf[6 + off] = (byte) i1;
+        buf[8 + off] = (byte) (i2 >> 8);
+        buf[10 + off] = (byte) i2;
+        buf[12 + off] = (byte) (i3 >> 8);
+        buf[14 + off] = (byte) i3;
+        buf[16 + off] = '-';
+        buf[18 + off] = (byte) (i4 >> 8);
+        buf[20 + off] = (byte) i4;
+        buf[22 + off] = (byte) (i5 >> 8);
+        buf[24 + off] = (byte) i5;
+        buf[26 + off] = '-';
+        buf[28 + off] = (byte) (i6 >> 8);
+        buf[30 + off] = (byte) i6;
+        buf[32 + off] = (byte) (i7 >> 8);
+        buf[34 + off] = (byte) i7;
+        buf[36 + off] = '-';
+        buf[38 + off] = (byte) (i8 >> 8);
+        buf[40 + off] = (byte) i8;
+        buf[42 + off] = (byte) (i9 >> 8);
+        buf[44 + off] = (byte) i9;
+        buf[46 + off] = '-';
+        buf[48 + off] = (byte) (i10 >> 8);
+        buf[50 + off] = (byte) i10;
+        buf[52 + off] = (byte) (i11 >> 8);
+        buf[54 + off] = (byte) i11;
+        buf[56 + off] = (byte) (i12 >> 8);
+        buf[58 + off] = (byte) i12;
+        buf[60 + off] = (byte) (i13 >> 8);
+        buf[62 + off] = (byte) i13;
+        buf[64 + off] = (byte) (i14 >> 8);
+        buf[66 + off] = (byte) i14;
+        buf[68 + off] = (byte) (i15 >> 8);
+        buf[70 + off] = (byte) i15;
+
+        return new String(buf, UTF16);
     }
 
     /**
@@ -1233,6 +1241,20 @@ public final class Long extends Number implements Comparable<Long> {
         static {
             for(int i = 0; i < cache.length; i++)
                 cache[i] = new Long(i - 128);
+        }
+    }
+
+    static final class DigitCache {
+        @Stable
+        static final char[] HEX256;
+        static {
+            HEX256 = new char[256];
+            for (int i = 0; i < 256; i++) {
+                int hi = (i >> 4) & 15;
+                int lo = i & 15;
+                HEX256[i] = (char) (((hi < 10 ? '0' + hi : 'a' + hi - 10) << 8)
+                        + (lo < 10 ? '0' + lo : 'a' + lo - 10));
+            }
         }
     }
 

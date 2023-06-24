@@ -2140,7 +2140,7 @@ public final class System {
                 return cl.definePackage(name, module);
             }
             public String fastUUID(long lsb, long msb) {
-                return Long.fastUUID(lsb, msb);
+                return String.COMPACT_STRINGS ? Long.fastUUID(lsb, msb) : Long.fastUUIDUTF16(lsb, msb);
             }
             public void addNonExportedPackages(ModuleLayer layer) {
                 SecurityManager.addNonExportedPackages(layer);
