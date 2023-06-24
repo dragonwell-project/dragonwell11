@@ -30,6 +30,7 @@ import java.math.*;
 import java.util.Objects;
 import jdk.internal.util.ByteArray;
 import jdk.internal.HotSpotIntrinsicCandidate;
+import jdk.internal.vm.annotation.Stable;
 
 import static java.lang.String.COMPACT_STRINGS;
 import static java.lang.String.LATIN1;
