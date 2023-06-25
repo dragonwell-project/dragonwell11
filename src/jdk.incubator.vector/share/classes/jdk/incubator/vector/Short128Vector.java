@@ -583,31 +583,50 @@ final class Short128Vector extends ShortVector {
             return (Short128Vector) super.toVectorTemplate();  // specialize
         }
 
-        @Override
+        /**
+         * Helper function for lane-wise mask conversions.
+         * This function kicks in after intrinsic failure.
+         */
         @ForceInline
-        public <E> VectorMask<E> cast(VectorSpecies<E> s) {
-            AbstractSpecies<E> species = (AbstractSpecies<E>) s;
-            if (length() != species.laneCount())
-                throw new IllegalArgumentException("VectorMask length and species length differ");
+        private final <E>
+        VectorMask<E> defaultMaskCast(AbstractSpecies<E> dsp) {
+            assert(length() == dsp.laneCount());
             boolean[] maskArray = toArray();
             // enum-switches don't optimize properly JDK-8161245
-            switch (species.laneType.switchKey) {
+            switch (dsp.laneType.switchKey) {
             case LaneType.SK_BYTE:
-                return new Byte128Vector.Byte128Mask(maskArray).check(species);
+                return new Byte128Vector.Byte128Mask(maskArray).check(dsp);
             case LaneType.SK_SHORT:
-                return new Short128Vector.Short128Mask(maskArray).check(species);
+                return new Short128Vector.Short128Mask(maskArray).check(dsp);
             case LaneType.SK_INT:
-                return new Int128Vector.Int128Mask(maskArray).check(species);
+                return new Int128Vector.Int128Mask(maskArray).check(dsp);
             case LaneType.SK_LONG:
-                return new Long128Vector.Long128Mask(maskArray).check(species);
+                return new Long128Vector.Long128Mask(maskArray).check(dsp);
             case LaneType.SK_FLOAT:
-                return new Float128Vector.Float128Mask(maskArray).check(species);
+                return new Float128Vector.Float128Mask(maskArray).check(dsp);
             case LaneType.SK_DOUBLE:
-                return new Double128Vector.Double128Mask(maskArray).check(species);
+                return new Double128Vector.Double128Mask(maskArray).check(dsp);
             }
 
-            // Should not reach here.
-            throw new AssertionError(species);
+            throw new AssertionError(dsp);
+        }
+
+        @Override
+        @ForceInline
+        public <E> VectorMask<E> cast(VectorSpecies<E> dsp) {
+            AbstractSpecies<E> species = (AbstractSpecies<E>) dsp;
+            if (length() != species.laneCount())
+                throw new IllegalArgumentException("VectorMask length and species length differ");
+            if (VSIZE == species.vectorBitSize()) {
+                Class<?> dtype = species.elementType();
+                Class<?> dmtype = species.maskType();
+                return VectorSupport.convert(VectorSupport.VECTOR_OP_REINTERPRET,
+                    this.getClass(), ETYPE, VLENGTH,
+                    dmtype, dtype, VLENGTH,
+                    this, species,
+                    Short128Mask::defaultMaskCast);
+            }
+            return this.defaultMaskCast(species);
         }
 
         // Unary operations
