@@ -4230,9 +4230,10 @@ void Assembler::pmovmskb(Register dst, XMMRegister src) {
   emit_int8((unsigned char)(0xC0 | encode));
 }
 
-void Assembler::vpmovmskb(Register dst, XMMRegister src) {
-  assert(VM_Version::supports_avx2(), "");
-  InstructionAttr attributes(AVX_256bit, /* rex_w */ false, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
+void Assembler::vpmovmskb(Register dst, XMMRegister src, int vec_enc) {
+  assert((VM_Version::supports_avx() && vec_enc == AVX_128bit) ||
+         (VM_Version::supports_avx2() && vec_enc  == AVX_256bit), "");
+  InstructionAttr attributes(vec_enc, /* rex_w */ false, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
   int encode = vex_prefix_and_encode(dst->encoding(), 0, src->encoding(), VEX_SIMD_66, VEX_OPCODE_0F, &attributes);
   emit_int8((unsigned char)0xD7);
   emit_int8((unsigned char)(0xC0 | encode));
