@@ -34,6 +34,9 @@ import static java.lang.String.COMPACT_STRINGS;
 import static java.lang.String.LATIN1;
 import static java.lang.String.UTF16;
 
+import jdk.internal.util.ByteArray;
+import jdk.internal.util.DecDigits;
+
 /**
  * The {@code Long} class wraps a value of the primitive type {@code
  * long} in an object. An object of type {@code Long} contains a
@@ -468,16 +471,221 @@ public final class Long extends Number implements Comparable<Long> {
      * @return  a string representation of the argument in base&nbsp;10.
      */
     public static String toString(long i) {
-        int size = stringSize(i);
-        if (COMPACT_STRINGS) {
-            byte[] buf = new byte[size];
-            getChars(i, size, buf);
-            return new String(buf, LATIN1);
-        } else {
+        if (!COMPACT_STRINGS) {
+            int size = stringSize(i);
             byte[] buf = new byte[size * 2];
             StringUTF16.getChars(i, size, buf);
             return new String(buf, UTF16);
         }
+
+        if (i == Long.MIN_VALUE) {
+            return "-9223372036854775808";
+        }
+
+        final int[] digits = DecDigits.DIGITS;
+        long j = i < 0 ? -i : i;
+
+        int off = 0;
+        final long q1 = j / 1000;
+        if (q1 == 0) {
+            int v = digits[(int) j];
+            final int start = v >> 24;
+            byte[] buf = new byte[3 - start + (i < 0 ? 1 : 0)];
+            if (i < 0) {
+                buf[0] = '-';
+                off = 1;
+            }
+
+            if (start == 0) {
+                ByteArray.setChar(buf, off, (char) (v >> 8));
+                off += 2;
+            } else if (start == 1) {
+                buf[off++] = (byte) (v >> 8);
+            }
+            buf[off] = (byte) v;
+            return new String(buf, LATIN1);
+        }
+
+        final int r1 = (int) (j - q1 * 1000);
+        final long q2 = q1 / 1000;
+        final int v1 = digits[r1];
+        if (q2 == 0) {
+            final int v2 = digits[(int) q1];
+            int start = v2 >> 24;
+
+            byte[] buf = new byte[3 - start + (i < 0 ? 4 : 3)];
+            if (i < 0) {
+                buf[0] = '-';
+                off = 1;
+            }
+
+            if (start == 0) {
+                ByteArray.setChar(buf, off, (char) (v2 >> 8));
+                off += 2;
+            } else if (start == 1) {
+                buf[off++] = (byte) (v2 >> 8);
+            }
+            ByteArray.setInt(buf, off, (v2 << 24) | (v1 & 0xffffff));
+            return new String(buf, LATIN1);
+        }
+
+        final int r2 = (int) (q1 - q2 * 1000);
+        final long q3 = q2 / 1000;
+        final int v2 = digits[r2];
+        if (q3 == 0) {
+            int v3 = digits[(int) q2];
+            final int start = v3 >> 24;
+
+            byte[] buf = new byte[3 - start + (i < 0 ? 7 : 6)];
+            if (i < 0) {
+                buf[0] = '-';
+                off = 1;
+            }
+
+            if (start == 0) {
+                ByteArray.setChar(buf, off, (char) (v3 >> 8));
+                off += 2;
+            } else if (start == 1) {
+                buf[off++] = (byte) (v3 >> 8);
+            }
+            buf[off++] = (byte) v3;
+
+            ByteArray.setChar(buf, off, (char) (v2 >> 8));
+            ByteArray.setInt(buf, off + 2, (v2 << 24) | (v1 & 0xffffff));
+            return new String(buf, LATIN1);
+        }
+
+        final int r3 = (int) (q2 - q3 * 1000);
+        final int q4 = (int) (q3 / 1000);
+        final int v3 = digits[r3];
+        if (q4 == 0) {
+            final int v4 = digits[(int) q3];
+            final int start = v4 >> 24;
+
+            byte[] buf = new byte[3 - start + (i < 0 ? 10 : 9)];
+            if (i < 0) {
+                buf[0] = '-';
+                off = 1;
+            }
+
+            if (start == 0) {
+                ByteArray.setChar(buf, off, (char) (v4 >> 8));
+                off += 2;
+            } else if (start == 1) {
+                buf[off++] = (byte) (v4 >> 8);
+            }
+
+            ByteArray.setLong(
+                    buf,
+                    off,
+                    ((v4 & 0xffL) << 56)
+                            | ((v3 & 0xffffffL) << 32)
+                            | ((v2 & 0xffffff) << 8)
+                            | ((byte) (v1 >> 16))
+            );
+            ByteArray.setShort(
+                    buf,
+                    off + 8,
+                    (short) (v1 & 0xffff)
+            );
+            return new String(buf, LATIN1);
+        }
+        final int r4 = (int) (q3 - q4 * 1000);
+        final int q5 = q4 / 1000;
+
+        final int v4 = digits[r4];
+        if (q5 == 0) {
+            final int v5 = digits[q4];
+            int start = v5 >> 24;
+
+            byte[] buf = new byte[3 - start + (i < 0 ? 13 : 12)];
+            if (i < 0) {
+                buf[0] = '-';
+                off = 1;
+            }
+
+            if (start == 0) {
+                ByteArray.setShort(buf, off, (short) (v5 >> 8));
+                off += 2;
+            } else if (start == 1) {
+                buf[off++] = (byte) (v5 >> 8);
+            }
+
+            ByteArray.setLong(
+                    buf,
+                    off,
+                    ((v5 & 0xffL) << 56)
+                            | ((v4 & 0xffffffL) << 32)
+                            | ((v3 & 0xffffffL) << 8)
+                            | ((byte) (v2 >> 16))
+            );
+            ByteArray.setInt(
+                    buf,
+                    off + 8,
+                    ((v2 & 0xffff) << 16)
+                            | ((v1 >> 8) & 0xffff)
+            );
+            buf[off + 12] = (byte) v1;
+            return new String(buf, LATIN1);
+        }
+        final int r5 = q4 - q5 * 1000;
+        final int q6 = q5 / 1000;
+        final int v5 = digits[r5];
+
+        byte[] buf;
+        if (q6 == 0) {
+            int v = digits[q5];
+            final int start = v >> 24;
+
+            buf = new byte[3 - start + (i < 0 ? 16 : 15)];
+            if (i < 0) {
+                buf[0] = '-';
+                off = 1;
+            }
+
+            if (start == 0) {
+                buf[off] = (byte) (v >> 16);
+                buf[off + 1] = (byte) (v >> 8);
+                off += 2;
+            } else if (start == 1) {
+                buf[off++] = (byte) (v >> 8);
+            }
+            buf[off++] = (byte) v;
+        } else {
+            final int r6 = q5 - q6 * 1000;
+
+            buf = new byte[i < 0 ? 20 : 19];
+            if (i < 0) {
+                buf[0] = '-';
+                off = 1;
+            }
+
+            int v = digits[r6];
+            ByteArray.setInt(
+                    buf,
+                    off,
+                    ((q6 + '0') << 24) | (v & 0xffffff)
+            );
+            off += 4;
+        }
+
+        ByteArray.setLong(
+                buf,
+                off,
+                ((v5 & 0xffffffL) << 40)
+                        | ((v4 & 0xffffffL) << 16)
+                        | ((v3 >> 8) & 0xffff)
+        );
+        ByteArray.setInt(
+                buf,
+                off + 8,
+                (v3 << 24) | (v2 & 0xffffff)
+        );
+        ByteArray.setShort(buf, off + 12, (short) (v1 >> 8));
+
+        buf[off + 14] = (byte) v1;
+
+        return new String(buf, LATIN1);
     }
 
     /**

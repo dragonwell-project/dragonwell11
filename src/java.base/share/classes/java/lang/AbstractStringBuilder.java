@@ -26,10 +26,14 @@
 package java.lang;
 
 import jdk.internal.math.FloatingDecimal;
+import jdk.internal.util.DecDigits;
 import java.util.Arrays;
 import java.util.Spliterator;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
+import jdk.internal.vm.annotation.ForceInline;
+import jdk.internal.util.ByteArray;
+import jdk.internal.vm.annotation.Stable;
 
 import static java.lang.String.COMPACT_STRINGS;
 import static java.lang.String.UTF16;
@@ -70,6 +74,8 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
     int count;
 
     private static final byte[] EMPTYVALUE = new byte[0];
+    @Stable
+    private static final byte[] MIN_INT_BYTES = new byte[]{'-', '2', '1', '4', '7', '4', '8', '3', '6', '4', '8'};
 
     /**
      * This no-arg constructor is necessary for serialization of subclasses.
@@ -769,16 +775,91 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
      * @param   i   an {@code int}.
      * @return  a reference to this object.
      */
+    @ForceInline
     public AbstractStringBuilder append(int i) {
         int count = this.count;
-        int spaceNeeded = count + Integer.stringSize(i);
-        ensureCapacityInternal(spaceNeeded);
-        if (isLatin1()) {
-            Integer.getChars(i, spaceNeeded, value);
-        } else {
+
+        if (!COMPACT_STRINGS && coder != LATIN1) {
+            int spaceNeeded = count + Integer.stringSize(i);
+            ensureCapacityInternal(spaceNeeded);
             StringUTF16.getChars(i, count, spaceNeeded, value);
+            this.count = spaceNeeded;
+            return this;
         }
-        this.count = spaceNeeded;
+
+        int minimumCapacity = count + 11;
+        if (minimumCapacity > value.length) {
+            value = Arrays.copyOf(value, newCapacity(minimumCapacity));
+        }
+
+        final byte[] value = this.value;
+        if (i == Integer.MIN_VALUE) {
+            System.arraycopy(MIN_INT_BYTES, 0, value, count, MIN_INT_BYTES.length);
+            this.count = count + MIN_INT_BYTES.length;
+            return this;
+        }
+
+        if (i < 0) {
+            value[count++] = '-';
+            i = -i;
+        }
+
+        final int[] digits = DecDigits.DIGITS;
+
+        final int q1 = i / 1000;
+        if (q1 == 0) {
+            int v = digits[i];
+            final int start = v >> 24;
+            if (start == 0) {
+                ByteArray.setChar(value, count, (char) (v >> 8));
+                count += 2;
+            } else if (start == 1) {
+                value[count++] = (byte) (v >> 8);
+            }
+            value[count] = (byte) v;
+            this.count = count + 1;
+            return this;
+        }
+
+        final int r1 = i - q1 * 1000;
+        final int q2 = q1 / 1000;
+        final int v1 = digits[r1];
+        if (q2 == 0) {
+            final int v2 = digits[q1];
+            int start = v2 >> 24;
+            if (start == 0) {
+                ByteArray.setChar(value, count, (char) (v2 >> 8));
+                count += 2;
+            } else if (start == 1) {
+                value[count++] = (byte) (v2 >> 8);
+            }
+            ByteArray.setInt(value, count, (v2 << 24) | (v1 & 0xffffff));
+            this.count = count + 4;
+            return this;
+        }
+
+        final int r2 = q1 - q2 * 1000;
+        final int q3 = q2 / 1000;
+        final int v2 = digits[r2];
+
+        if (q3 == 0) {
+            int v = digits[q2];
+            final int start = v >> 24;
+            if (start == 0) {
+                ByteArray.setChar(value, count, (char) (v >> 8));
+                count += 2;
+            } else if (start == 1) {
+                value[count++] = (byte) (v >> 8);
+            }
+            value[count++] = (byte) v;
+        } else {
+            ByteArray.setInt(value, count, ((q3 + '0') << 24) | (digits[q2 - q3 * 1000] & 0xffffff));
+            count += 4;
+        }
+
+        ByteArray.setChar(value, count, (char) (v2 >> 8));
+        ByteArray.setInt(value, count + 2, (v2 << 24) | (v1 & 0xffffff));
+        this.count = count + 6;
         return this;
     }
 
