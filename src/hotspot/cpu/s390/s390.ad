@@ -1537,6 +1537,11 @@ int Matcher::regnum_to_fpu_offset(int regnum) {
   return regnum - 32; // The FP registers are in the second chunk.
 }
 
+// Does the CPU supports vector unsigned comparison instructions?
+const bool Matcher::supports_vector_comparison_unsigned(int vlen, BasicType bt) {
+  return false;
+}
+
 const bool Matcher::has_predicated_vectors(void) {
   return false;
 }

@@ -380,20 +380,6 @@ public abstract class IntVector extends AbstractVector<Integer> {
     }
 
     /*package-private*/
-    @ForceInline
-    static boolean doBinTest(int cond, int a, int b) {
-        switch (cond) {
-        case BT_eq:  return a == b;
-        case BT_ne:  return a != b;
-        case BT_lt:  return a < b;
-        case BT_le:  return a <= b;
-        case BT_gt:  return a > b;
-        case BT_ge:  return a >= b;
-        }
-        throw new AssertionError(Integer.toHexString(cond));
-    }
-
-    /*package-private*/
     @Override
     abstract IntSpecies vspecies();
 
@@ -1775,6 +1761,10 @@ public abstract class IntVector extends AbstractVector<Integer> {
         case BT_le:  return a <= b;
         case BT_gt:  return a >  b;
         case BT_ge:  return a >= b;
+        case BT_ult: return Integer.compareUnsigned(a, b) < 0;
+        case BT_ule: return Integer.compareUnsigned(a, b) <= 0;
+        case BT_ugt: return Integer.compareUnsigned(a, b) > 0;
+        case BT_uge: return Integer.compareUnsigned(a, b) >= 0;
         }
         throw new AssertionError();
     }
@@ -2851,6 +2841,8 @@ public abstract class IntVector extends AbstractVector<Integer> {
         }
     }
 
+
+
     /**
      * Loads a vector from a {@linkplain ByteBuffer byte buffer}
      * starting at an offset into the byte buffer.
@@ -2983,7 +2975,7 @@ public abstract class IntVector extends AbstractVector<Integer> {
     }
 
     /**
-     * Stores this vector into an array of {@code int}
+     * Stores this vector into an array of type {@code int[]}
      * starting at offset and using a mask.
      * <p>
      * For each vector lane, where {@code N} is the vector lane index,
@@ -3121,6 +3113,8 @@ public abstract class IntVector extends AbstractVector<Integer> {
         }
     }
 
+
+
     /**
      * {@inheritDoc} <!--workaround-->
      */
@@ -3226,6 +3220,8 @@ public abstract class IntVector extends AbstractVector<Integer> {
             (arr, off, s) -> s.ldOp(arr, off,
                                     (arr_, off_, i) -> arr_[off_ + i]));
     }
+
+
 
     @Override
     abstract
@@ -3361,6 +3357,8 @@ public abstract class IntVector extends AbstractVector<Integer> {
     static long arrayAddress(int[] a, int index) {
         return ARRAY_BASE + (((long)index) << ARRAY_SHIFT);
     }
+
+
 
     @ForceInline
     static long byteArrayAddress(byte[] a, int index) {

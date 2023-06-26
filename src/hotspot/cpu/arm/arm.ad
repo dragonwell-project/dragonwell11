@@ -1104,6 +1104,11 @@ const bool Matcher::match_rule_supported_vector(int opcode, int vlen, BasicType 
   return ret_value;  // Per default match rules are supported.
 }
 
+// Does the CPU supports vector unsigned comparison instructions?
+const bool Matcher::supports_vector_comparison_unsigned(int vlen, BasicType bt) {
+  return false;
+}
+
 const bool Matcher::has_predicated_vectors(void) {
   return false;
 }
