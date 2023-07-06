@@ -1308,7 +1308,12 @@ void Metaspace::global_initialize() {
   {
 #ifdef _LP64
     if (using_class_space()) {
-      char* base = (char*)align_up(Universe::heap()->reserved_region().end(), _reserve_alignment);
+      char* base;
+      if (UseCompressedOops) {
+        base = (char*)align_up(Universe::heap()->reserved_region().end(), _reserve_alignment);
+      } else {
+        base = (char*)HeapBaseMinAddress;
+      }
       allocate_metaspace_compressed_klass_ptrs(base, 0);
     }
 #endif // _LP64

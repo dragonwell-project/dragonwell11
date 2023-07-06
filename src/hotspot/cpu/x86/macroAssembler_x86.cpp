@@ -1112,6 +1112,7 @@ int MacroAssembler::biased_locking_enter(Register lock_reg,
                                          Register obj_reg,
                                          Register swap_reg,
                                          Register tmp_reg,
+                                         Register tmp_reg2,
                                          bool swap_reg_contains_mark,
                                          Label& done,
                                          Label* slow_case,
@@ -1156,7 +1157,7 @@ int MacroAssembler::biased_locking_enter(Register lock_reg,
   if (swap_reg_contains_mark) {
     null_check_offset = offset();
   }
-  load_prototype_header(tmp_reg, obj_reg);
+  load_prototype_header(tmp_reg, obj_reg, tmp_reg2);
 #ifdef _LP64
   orptr(tmp_reg, r15_thread);
   xorptr(tmp_reg, swap_reg);
@@ -1244,7 +1245,7 @@ int MacroAssembler::biased_locking_enter(Register lock_reg,
   //
   // FIXME: due to a lack of registers we currently blow away the age
   // bits in this situation. Should attempt to preserve them.
-  load_prototype_header(tmp_reg, obj_reg);
+  load_prototype_header(tmp_reg, obj_reg, tmp_reg2);
 #ifdef _LP64
   orptr(tmp_reg, r15_thread);
 #else
@@ -1281,7 +1282,7 @@ int MacroAssembler::biased_locking_enter(Register lock_reg,
   // FIXME: due to a lack of registers we currently blow away the age
   // bits in this situation. Should attempt to preserve them.
   NOT_LP64( movptr(swap_reg, saved_mark_addr); )
-  load_prototype_header(tmp_reg, obj_reg);
+  load_prototype_header(tmp_reg, obj_reg, tmp_reg2);
   if (os::is_MP()) {
     lock();
   }
@@ -1717,7 +1718,6 @@ void MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg
   if (use_rtm) {
     assert_different_registers(objReg, boxReg, tmpReg, scrReg, cx1Reg, cx2Reg);
   } else {
-    assert(cx1Reg == noreg, "");
     assert(cx2Reg == noreg, "");
     assert_different_registers(objReg, boxReg, tmpReg, scrReg);
   }
@@ -1758,7 +1758,7 @@ void MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg
     // at [FETCH], below, will never observe a biased encoding (*101b).
     // If this invariant is not held we risk exclusion (safety) failure.
     if (UseBiasedLocking && !UseOptoBiasInlining) {
-      biased_locking_enter(boxReg, objReg, tmpReg, scrReg, false, DONE_LABEL, NULL, counters);
+      biased_locking_enter(boxReg, objReg, tmpReg, scrReg, cx1Reg, false, DONE_LABEL, NULL, counters);
     }
 
 #if INCLUDE_RTM_OPT
@@ -2534,7 +2534,7 @@ void MacroAssembler::call_VM_base(Register oop_result,
 #ifdef ASSERT
   // TraceBytecodes does not use r12 but saves it over the call, so don't verify
   // r12 is the heapbase.
-  LP64_ONLY(if ((UseCompressedOops || UseCompressedClassPointers) && !TraceBytecodes) verify_heapbase("call_VM_base: heap base corrupted?");)
+  LP64_ONLY(if (UseCompressedOops && !TraceBytecodes) verify_heapbase("call_VM_base: heap base corrupted?");)
 #endif // ASSERT
 
   assert(java_thread != oop_result  , "cannot use the same register for java_thread & oop_result");
@@ -5591,25 +5591,29 @@ void MacroAssembler::load_mirror(Register mirror, Register method, Register tmp)
   resolve_oop_handle(mirror, tmp);
 }
 
-void MacroAssembler::load_klass(Register dst, Register src) {
+void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
+  assert_different_registers(src, tmp);
+  assert_different_registers(dst, tmp);
 #ifdef _LP64
   if (UseCompressedClassPointers) {
     movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
-    decode_klass_not_null(dst);
+    decode_klass_not_null(dst, tmp);
   } else
 #endif
     movptr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
 }
 
-void MacroAssembler::load_prototype_header(Register dst, Register src) {
-  load_klass(dst, src);
+void MacroAssembler::load_prototype_header(Register dst, Register src, Register tmp) {
+  load_klass(dst, src, tmp);
   movptr(dst, Address(dst, Klass::prototype_header_offset()));
 }
 
-void MacroAssembler::store_klass(Register dst, Register src) {
+void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
+  assert_different_registers(src, tmp);
+  assert_different_registers(dst, tmp);
 #ifdef _LP64
   if (UseCompressedClassPointers) {
-    encode_klass_not_null(src);
+    encode_klass_not_null(src, tmp);
     movl(Address(dst, oopDesc::klass_offset_in_bytes()), src);
   } else
 #endif
@@ -5814,61 +5818,38 @@ void  MacroAssembler::decode_heap_oop_not_null(Register dst, Register src) {
   }
 }
 
-void MacroAssembler::encode_klass_not_null(Register r) {
+void MacroAssembler::encode_klass_not_null(Register r, Register tmp) {
+  assert_different_registers(r, tmp);
   if (Universe::narrow_klass_base() != NULL) {
-    // Use r12 as a scratch register in which to temporarily load the narrow_klass_base.
-    assert(r != r12_heapbase, "Encoding a klass in r12");
-    mov64(r12_heapbase, (int64_t)Universe::narrow_klass_base());
-    subq(r, r12_heapbase);
+    mov64(tmp, (int64_t)Universe::narrow_klass_base());
+    subq(r, tmp);
   }
   if (Universe::narrow_klass_shift() != 0) {
     assert (LogKlassAlignmentInBytes == Universe::narrow_klass_shift(), "decode alg wrong");
     shrq(r, LogKlassAlignmentInBytes);
   }
-  if (Universe::narrow_klass_base() != NULL) {
-    reinit_heapbase();
-  }
 }
 
-void MacroAssembler::encode_klass_not_null(Register dst, Register src) {
-  if (dst == src) {
-    encode_klass_not_null(src);
-  } else {
-    if (Universe::narrow_klass_base() != NULL) {
-      mov64(dst, (int64_t)Universe::narrow_klass_base());
-      negq(dst);
-      addq(dst, src);
-    } else {
-      movptr(dst, src);
-    }
-    if (Universe::narrow_klass_shift() != 0) {
-      assert (LogKlassAlignmentInBytes == Universe::narrow_klass_shift(), "decode alg wrong");
-      shrq(dst, LogKlassAlignmentInBytes);
-    }
-  }
-}
-
-// Function instr_size_for_decode_klass_not_null() counts the instructions
-// generated by decode_klass_not_null(register r) and reinit_heapbase(),
-// when (Universe::heap() != NULL).  Hence, if the instructions they
-// generate change, then this method needs to be updated.
-int MacroAssembler::instr_size_for_decode_klass_not_null() {
-  assert (UseCompressedClassPointers, "only for compressed klass ptrs");
+void MacroAssembler::encode_and_move_klass_not_null(Register dst, Register src) {
+  assert_different_registers(src, dst);
   if (Universe::narrow_klass_base() != NULL) {
-    // mov64 + addq + shlq? + mov64  (for reinit_heapbase()).
-    return (Universe::narrow_klass_shift() == 0 ? 20 : 24);
+    mov64(dst, -(int64_t)Universe::narrow_klass_base());
+    addq(dst, src);
   } else {
-    // longest load decode klass function, mov64, leaq
-    return 16;
+    movptr(dst, src);
+  }
+  if (Universe::narrow_klass_shift() != 0) {
+    assert (LogKlassAlignmentInBytes == Universe::narrow_klass_shift(), "decode alg wrong");
+    shrq(dst, LogKlassAlignmentInBytes);
   }
 }
 
 // !!! If the instructions that get generated here change then function
 // instr_size_for_decode_klass_not_null() needs to get updated.
-void  MacroAssembler::decode_klass_not_null(Register r) {
+void  MacroAssembler::decode_klass_not_null(Register r, Register tmp) {
+  assert_different_registers(r, tmp);
   // Note: it will change flags
-  assert (UseCompressedClassPointers, "should only be used for compressed headers");
-  assert(r != r12_heapbase, "Decoding a klass in r12");
+  assert(UseCompressedClassPointers, "should only be used for compressed headers");
   // Cannot assert, unverified entry point counts instructions (see .ad file)
   // vtableStubs also counts instructions in pd_code_size_limit.
   // Also do not verify_oop as this is called by verify_oop.
@@ -5876,24 +5857,30 @@ void  MacroAssembler::decode_klass_not_null(Register r) {
     assert(LogKlassAlignmentInBytes == Universe::narrow_klass_shift(), "decode alg wrong");
     shlq(r, LogKlassAlignmentInBytes);
   }
-  // Use r12 as a scratch register in which to temporarily load the narrow_klass_base.
   if (Universe::narrow_klass_base() != NULL) {
-    mov64(r12_heapbase, (int64_t)Universe::narrow_klass_base());
-    addq(r, r12_heapbase);
-    reinit_heapbase();
+    mov64(tmp, (int64_t)Universe::narrow_klass_base());
+    addq(r, tmp);
   }
 }
 
-void  MacroAssembler::decode_klass_not_null(Register dst, Register src) {
+void  MacroAssembler::decode_and_move_klass_not_null(Register dst, Register src) {
+  assert_different_registers(src, dst);
   // Note: it will change flags
   assert (UseCompressedClassPointers, "should only be used for compressed headers");
-  if (dst == src) {
-    decode_klass_not_null(dst);
+  // Cannot assert, unverified entry point counts instructions (see .ad file)
+  // vtableStubs also counts instructions in pd_code_size_limit.
+  // Also do not verify_oop as this is called by verify_oop.
+  if (Universe::narrow_klass_base() == NULL &&
+      Universe::narrow_klass_shift() == 0) {
+    // The best case scenario is that there is no base or shift. Then it is already
+    // a pointer that needs nothing but a register rename.
+    movl(dst, src);
   } else {
-    // Cannot assert, unverified entry point counts instructions (see .ad file)
-    // vtableStubs also counts instructions in pd_code_size_limit.
-    // Also do not verify_oop as this is called by verify_oop.
-    mov64(dst, (int64_t)Universe::narrow_klass_base());
+    if (Universe::narrow_klass_base() != NULL) {
+      mov64(dst, (int64_t)Universe::narrow_klass_base());
+    } else {
+      xorq(dst, dst);
+    }
     if (Universe::narrow_klass_shift() != 0) {
       assert(LogKlassAlignmentInBytes == Universe::narrow_klass_shift(), "decode alg wrong");
       assert(LogKlassAlignmentInBytes == Address::times_8, "klass not aligned on 64bits?");
@@ -5973,7 +5960,7 @@ void  MacroAssembler::cmp_narrow_klass(Address dst, Klass* k) {
 }
 
 void MacroAssembler::reinit_heapbase() {
-  if (UseCompressedOops || UseCompressedClassPointers) {
+  if (UseCompressedOops) {
     if (Universe::heap() != NULL) {
       if (Universe::narrow_oop_base() == NULL) {
         MacroAssembler::xorptr(r12_heapbase, r12_heapbase);

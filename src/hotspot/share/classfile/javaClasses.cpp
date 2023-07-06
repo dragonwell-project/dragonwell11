@@ -4699,8 +4699,10 @@ void java_util_concurrent_locks_AbstractOwnableSynchronizer::serialize_offsets(S
 }
 #endif
 
-static int member_offset(int hardcoded_offset) {
-  return (hardcoded_offset * heapOopSize) + instanceOopDesc::base_offset_in_bytes();
+static int member_offset(int hardcoded_offset, int elementSize) {
+  // Use with care. This function makes a lot of assumptions about the contents of the object.
+  // So naturally, only hardcode offsets if you know what you are doing.
+  return align_up((hardcoded_offset * elementSize) + instanceOopDesc::base_offset_in_bytes(), elementSize);
 }
 
 // Compute hard-coded offsets
@@ -4709,14 +4711,14 @@ static int member_offset(int hardcoded_offset) {
 void JavaClasses::compute_hard_coded_offsets() {
 
   // java_lang_boxing_object
-  java_lang_boxing_object::value_offset      = member_offset(java_lang_boxing_object::hc_value_offset);
-  java_lang_boxing_object::long_value_offset = align_up(member_offset(java_lang_boxing_object::hc_value_offset), BytesPerLong);
+  java_lang_boxing_object::value_offset      = member_offset(java_lang_boxing_object::hc_value_offset, BytesPerInt);
+  java_lang_boxing_object::long_value_offset = member_offset(java_lang_boxing_object::hc_value_offset, BytesPerLong);
 
   // java_lang_ref_Reference
-  java_lang_ref_Reference::referent_offset    = member_offset(java_lang_ref_Reference::hc_referent_offset);
-  java_lang_ref_Reference::queue_offset       = member_offset(java_lang_ref_Reference::hc_queue_offset);
-  java_lang_ref_Reference::next_offset        = member_offset(java_lang_ref_Reference::hc_next_offset);
-  java_lang_ref_Reference::discovered_offset  = member_offset(java_lang_ref_Reference::hc_discovered_offset);
+  java_lang_ref_Reference::referent_offset    = member_offset(java_lang_ref_Reference::hc_referent_offset, heapOopSize);
+  java_lang_ref_Reference::queue_offset       = member_offset(java_lang_ref_Reference::hc_queue_offset, heapOopSize);
+  java_lang_ref_Reference::next_offset        = member_offset(java_lang_ref_Reference::hc_next_offset, heapOopSize);
+  java_lang_ref_Reference::discovered_offset  = member_offset(java_lang_ref_Reference::hc_discovered_offset, heapOopSize);
 }
 
 #define DO_COMPUTE_OFFSETS(k) k::compute_offsets();
