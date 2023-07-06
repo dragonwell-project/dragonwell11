@@ -55,4 +55,6 @@ const bool CCallingConventionRequiresIntsAsLongs = true;
 // SPARC have implemented the local polling
 #define THREAD_LOCAL_POLL
 
+#define COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS true
+
 #endif // CPU_SPARC_VM_GLOBALDEFINITIONS_SPARC_HPP

@@ -47,4 +47,6 @@ const bool CCallingConventionRequiresIntsAsLongs = false;
 
 #define THREAD_LOCAL_POLL
 
+#define COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS true
+
 #endif // CPU_RISCV_GLOBALDEFINITIONS_RISCV_HPP

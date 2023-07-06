@@ -32,7 +32,7 @@ import jdk.test.lib.jfr.GCHelper;
  * @requires vm.hasJFR
  * @requires vm.gc == "Parallel" | vm.gc == null
  * @library /test/lib /test/jdk
- * @run main/othervm -XX:+UseParallelGC -XX:-UseParallelOldGC -XX:+UnlockExperimentalVMOptions -XX:-UseFastUnorderedTimeStamps -XX:MarkSweepDeadRatio=0 -XX:-UseCompressedOops -XX:+IgnoreUnrecognizedVMOptions jdk.jfr.event.gc.objectcount.TestObjectCountAfterGCEventWithPSMarkSweep
+ * @run main/othervm -XX:+UseParallelGC -XX:-UseParallelOldGC -XX:+UnlockExperimentalVMOptions -XX:-UseFastUnorderedTimeStamps -XX:MarkSweepDeadRatio=0 -XX:-UseCompressedOops -XX:-UseCompressedClassPointers -XX:+IgnoreUnrecognizedVMOptions jdk.jfr.event.gc.objectcount.TestObjectCountAfterGCEventWithPSMarkSweep
  */
 public class TestObjectCountAfterGCEventWithPSMarkSweep {
     public static void main(String[] args) throws Exception {

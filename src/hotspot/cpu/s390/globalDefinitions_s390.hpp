@@ -56,4 +56,6 @@ const bool CCallingConventionRequiresIntsAsLongs = true;
 
 #define THREAD_LOCAL_POLL
 
+#define COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS true
+
 #endif // CPU_S390_VM_GLOBALDEFINITIONS_S390_HPP
