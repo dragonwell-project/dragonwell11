@@ -1542,6 +1542,10 @@ void Compile::fill_buffer(CodeBuffer* cb, uint* blk_starts) {
 #endif
   if (failing())  return;
 
+  // Fill in stubs.
+  _stub_list->emit(*cb);
+  if (C->failing())  return;
+
 #ifndef PRODUCT
   // Information on the size of the method, without the extraneous code
   Scheduling::increment_method_size(cb->insts_size());

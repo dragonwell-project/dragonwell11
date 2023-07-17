@@ -77,6 +77,10 @@ public abstract class JavaVFrame extends VFrame {
     if (mark.hasMonitor() &&
         ( // we have marked ourself as pending on this monitor
           mark.monitor().equals(thread.getCurrentPendingMonitor()) ||
+          // Owned anonymously means that we are not the owner of
+          // the monitor and must be waiting for the owner to
+          // exit it.
+          mark.monitor().isOwnedAnonymous() ||
           // we are not the owner of this monitor
           !mark.monitor().isEntered(thread)
         )) {
@@ -146,7 +150,7 @@ public abstract class JavaVFrame extends VFrame {
             // an inflated monitor that is first on the monitor list in
             // the first frame can block us on a monitor enter.
             lockState = identifyLockState(monitor, "waiting to lock");
-          } else if (frameCount != 0) {
+          } else if (frameCount != 0 && !VM.getVM().getCommandLineBooleanFlag("UseAltFastLocking")) { // JDK-8214499
             // This is not the first frame so we either own this monitor
             // or we owned the monitor before and called wait(). Because
             // wait() could have been called on any monitor in a lower

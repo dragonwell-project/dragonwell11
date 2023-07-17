@@ -732,64 +732,76 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
     // Load object pointer into obj_reg %c_rarg3
     ldr(obj_reg, Address(lock_reg, obj_offset));
 
-    if (UseBiasedLocking) {
-      biased_locking_enter(lock_reg, obj_reg, swap_reg, tmp, false, done, &slow_case);
-    }
-
-    // Load (object->mark() | 1) into swap_reg
-    ldr(rscratch1, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-    orr(swap_reg, rscratch1, 1);
-
-    // Save (object->mark() | 1) into BasicLock's displaced header
-    str(swap_reg, Address(lock_reg, mark_offset));
-
-    assert(lock_offset == 0,
-           "displached header must be first word in BasicObjectLock");
-
-    Label fail;
-    if (PrintBiasedLockingStatistics) {
-      Label fast;
-      cmpxchg_obj_header(swap_reg, lock_reg, obj_reg, rscratch1, fast, &fail);
-      bind(fast);
-      atomic_incw(Address((address)BiasedLocking::fast_path_entry_count_addr()),
-                  rscratch2, rscratch1, tmp);
+    if (UseAltFastLocking) {
+      ldr(tmp, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      fast_lock(obj_reg, tmp, rscratch1, rscratch2, slow_case);
       b(done);
-      bind(fail);
     } else {
-      cmpxchg_obj_header(swap_reg, lock_reg, obj_reg, rscratch1, done, /*fallthrough*/NULL);
+      if (UseBiasedLocking) {
+        biased_locking_enter(lock_reg, obj_reg, swap_reg, tmp, false, done, &slow_case);
+      }
+
+      // Load (object->mark() | 1) into swap_reg
+      ldr(rscratch1, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      orr(swap_reg, rscratch1, 1);
+
+      // Save (object->mark() | 1) into BasicLock's displaced header
+      str(swap_reg, Address(lock_reg, mark_offset));
+
+      assert(lock_offset == 0,
+             "displached header must be first word in BasicObjectLock");
+
+      Label fail;
+      if (PrintBiasedLockingStatistics) {
+        Label fast;
+        cmpxchg_obj_header(swap_reg, lock_reg, obj_reg, rscratch1, fast, &fail);
+        bind(fast);
+        atomic_incw(Address((address)BiasedLocking::fast_path_entry_count_addr()),
+                    rscratch2, rscratch1, tmp);
+        b(done);
+        bind(fail);
+      } else {
+        cmpxchg_obj_header(swap_reg, lock_reg, obj_reg, rscratch1, done, /*fallthrough*/NULL);
+      }
+
+      // Test if the oopMark is an obvious stack pointer, i.e.,
+      //  1) (mark & 7) == 0, and
+      //  2) rsp <= mark < mark + os::pagesize()
+      //
+      // These 3 tests can be done by evaluating the following
+      // expression: ((mark - rsp) & (7 - os::vm_page_size())),
+      // assuming both stack pointer and pagesize have their
+      // least significant 3 bits clear.
+      // NOTE: the oopMark is in swap_reg %r0 as the result of cmpxchg
+      // NOTE2: aarch64 does not like to subtract sp from rn so take a
+      // copy
+      mov(rscratch1, sp);
+      sub(swap_reg, swap_reg, rscratch1);
+      ands(swap_reg, swap_reg, (uint64_t)(7 - os::vm_page_size()));
+
+      // Save the test result, for recursive case, the result is zero
+      str(swap_reg, Address(lock_reg, mark_offset));
+
+      if (PrintBiasedLockingStatistics) {
+        br(Assembler::NE, slow_case);
+        atomic_incw(Address((address)BiasedLocking::fast_path_entry_count_addr()),
+                    rscratch2, rscratch1, tmp);
+      }
+      br(Assembler::EQ, done);
     }
-
-    // Test if the oopMark is an obvious stack pointer, i.e.,
-    //  1) (mark & 7) == 0, and
-    //  2) rsp <= mark < mark + os::pagesize()
-    //
-    // These 3 tests can be done by evaluating the following
-    // expression: ((mark - rsp) & (7 - os::vm_page_size())),
-    // assuming both stack pointer and pagesize have their
-    // least significant 3 bits clear.
-    // NOTE: the oopMark is in swap_reg %r0 as the result of cmpxchg
-    // NOTE2: aarch64 does not like to subtract sp from rn so take a
-    // copy
-    mov(rscratch1, sp);
-    sub(swap_reg, swap_reg, rscratch1);
-    ands(swap_reg, swap_reg, (uint64_t)(7 - os::vm_page_size()));
-
-    // Save the test result, for recursive case, the result is zero
-    str(swap_reg, Address(lock_reg, mark_offset));
-
-    if (PrintBiasedLockingStatistics) {
-      br(Assembler::NE, slow_case);
-      atomic_incw(Address((address)BiasedLocking::fast_path_entry_count_addr()),
-                  rscratch2, rscratch1, tmp);
-    }
-    br(Assembler::EQ, done);
 
     bind(slow_case);
 
     // Call the runtime routine for slow case
-    call_VM(noreg,
-            CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
-            lock_reg);
+    if (UseAltFastLocking) {
+      call_VM(noreg,
+              CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter_obj),
+              obj_reg);
+    } else {
+      call_VM(noreg,
+              CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
+              lock_reg);
+    }
 
     bind(done);
   }
@@ -824,9 +836,11 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
 
     save_bcp(); // Save in case of exception
 
-    // Convert from BasicObjectLock structure to object and BasicLock
-    // structure Store the BasicLock address into %r0
-    lea(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset_in_bytes()));
+    if (!UseAltFastLocking) {
+      // Convert from BasicObjectLock structure to object and BasicLock
+      // structure Store the BasicLock address into %r0
+      lea(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset_in_bytes()));
+    }
 
     // Load oop into obj_reg(%c_rarg3)
     ldr(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
@@ -834,19 +848,41 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
     // Free entry
     str(zr, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
 
-    if (UseBiasedLocking) {
-      biased_locking_exit(obj_reg, header_reg, done);
+    if (UseAltFastLocking) {
+      Label slow_case;
+
+      // Check for non-symmetric locking. This is allowed by the spec and the interpreter
+      // must handle it.
+      Register tmp = rscratch1;
+      // First check for lock-stack underflow.
+      ldrw(tmp, Address(rthread, JavaThread::lock_stack_top_offset()));
+      cmpw(tmp, (unsigned)LockStack::start_offset());
+      br(Assembler::LE, slow_case);
+      // Then check if the top of the lock-stack matches the unlocked object.
+      subw(tmp, tmp, oopSize);
+      ldr(tmp, Address(rthread, tmp));
+      cmpoop(tmp, obj_reg);
+      br(Assembler::NE, slow_case);
+      ldr(header_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      tbnz(header_reg, exact_log2(markOopDesc::monitor_value), slow_case);
+      fast_unlock(obj_reg, header_reg, swap_reg, rscratch1, slow_case);
+      b(done);
+      bind(slow_case);
+    } else {
+      if (UseBiasedLocking) {
+        biased_locking_exit(obj_reg, header_reg, done);
+      }
+
+      // Load the old header from BasicLock structure
+      ldr(header_reg, Address(swap_reg,
+                              BasicLock::displaced_header_offset_in_bytes()));
+
+      // Test for recursion
+      cbz(header_reg, done);
+
+      // Atomic swap back the old header
+      cmpxchg_obj_header(swap_reg, header_reg, obj_reg, rscratch1, done, /*fallthrough*/NULL);
     }
-
-    // Load the old header from BasicLock structure
-    ldr(header_reg, Address(swap_reg,
-                            BasicLock::displaced_header_offset_in_bytes()));
-
-    // Test for recursion
-    cbz(header_reg, done);
-
-    // Atomic swap back the old header
-    cmpxchg_obj_header(swap_reg, header_reg, obj_reg, rscratch1, done, /*fallthrough*/NULL);
 
     // Call the runtime routine for slow case.
     str(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes())); // restore obj

@@ -757,6 +757,7 @@ address monitorenter_address_interp = (address)InterpreterRuntime::monitorenter;
 
 //%note monitor_1
 IRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::monitorenter(JavaThread* thread, BasicObjectLock* elem))
+  assert(!UseAltFastLocking, "Should call monitorenter_obj() when using the alternative fast locking");
 #ifdef ASSERT
   thread->last_frame().interpreter_frame_verify_monitor(elem);
 #endif
@@ -786,6 +787,22 @@ IRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::monitorenter(JavaThread* thread, Ba
 #endif
 IRT_END
 
+// NOTE: We provide a separate implementation for the new lightweight locking to workaround a limitation
+// of registers in x86_32. This entry point accepts an oop instead of a BasicObjectLock*.
+// The problem is that we would need to preserve the register that holds the BasicObjectLock,
+// but we are using that register to hold the thread. We don't have enough registers to
+// also keep the BasicObjectLock, but we don't really need it anyway, we only need
+// the object. See also InterpreterMacroAssembler::lock_object().
+// As soon as legacy stack-locking goes away we could remove the other monitorenter() entry
+// point, and only use oop-accepting entries (same for monitorexit() below).
+JRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::monitorenter_obj(JavaThread* thread, oopDesc* obj))
+  assert(UseAltFastLocking, "Should call monitorenter() when not using the new lightweight locking");
+  Handle h_obj(thread, cast_to_oop(obj));
+  assert(Universe::heap()->is_in_or_null(h_obj()),
+         "must be null or an object");
+  ObjectSynchronizer::slow_enter(h_obj, NULL, thread);
+  return;
+JRT_END
 
 //%note monitor_1
 IRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::monitorexit(JavaThread* thread, BasicObjectLock* elem))

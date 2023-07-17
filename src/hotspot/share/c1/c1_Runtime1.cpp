@@ -702,13 +702,13 @@ JRT_BLOCK_ENTRY(void, Runtime1::monitorenter(JavaThread* thread, oopDesc* obj, B
   NOT_PRODUCT(_monitorenter_slowcase_cnt++;)
   if (!UseBiasedLocking) {
     if (UseFastLocking) {
-      assert(obj == lock->obj(), "must match");
+      assert(UseAltFastLocking || obj == lock->obj(), "must match");
     } else {
       lock->set_obj(obj);
     }
   }
   WispPostStealHandleUpdateMark w(thread, __hm);
-  SharedRuntime::monitor_enter_helper(obj, lock->lock(), thread, UseFastLocking);
+  SharedRuntime::monitor_enter_helper(obj, UseAltFastLocking ? NULL : lock->lock(), thread, UseFastLocking);
 JRT_END
 
 

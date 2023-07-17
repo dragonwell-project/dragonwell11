@@ -81,9 +81,10 @@
 #include "runtime/javaCalls.hpp"
 #include "runtime/jniHandles.inline.hpp"
 #include "runtime/jniPeriodicChecker.hpp"
+#include "runtime/lockStack.inline.hpp"
 #include "runtime/memprofiler.hpp"
 #include "runtime/mutexLocker.hpp"
-#include "runtime/objectMonitor.hpp"
+#include "runtime/objectMonitor.inline.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/prefetch.inline.hpp"
@@ -1062,6 +1063,7 @@ bool Thread::is_in_usable_stack(address adr) const {
 // should be revisited, and they should be removed if possible.
 
 bool Thread::is_lock_owned(address adr) const {
+  assert(!UseAltFastLocking, "sanity");
   return on_local_stack(adr);
 }
 
@@ -1715,7 +1717,7 @@ void JavaThread::initialize() {
 }
 
 JavaThread::JavaThread(bool is_attaching_via_jni) :
-                       Thread() {
+                       Thread(), _lock_stack(this) {
   initialize();
   if (is_attaching_via_jni) {
     _jni_attach_state = _attaching_via_jni;
@@ -1777,7 +1779,7 @@ static void compiler_thread_entry(JavaThread* thread, TRAPS);
 static void sweeper_thread_entry(JavaThread* thread, TRAPS);
 
 JavaThread::JavaThread(ThreadFunction entry_point, size_t stack_sz) :
-                       Thread() {
+                       Thread(), _lock_stack(this) {
   initialize();
   _jni_attach_state = _not_attaching_via_jni;
   set_entry_point(entry_point);
@@ -2220,6 +2222,7 @@ void JavaThread::clear_aync_thread_death_exception() {
 }
 
 bool JavaThread::is_lock_owned(address adr) const {
+  assert(!UseAltFastLocking, "sanity");
   if (Thread::is_lock_owned(adr)) return true;
 
   for (MonitorChunk* chunk = monitor_chunks(); chunk != NULL; chunk = chunk->next()) {
@@ -3044,6 +3047,10 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
 
   if (jvmti_thread_state() != NULL) {
     jvmti_thread_state()->oops_do(f, cf);
+  }
+
+  if (UseAltFastLocking) {
+    lock_stack().oops_do(f);
   }
 }
 
@@ -4803,6 +4810,7 @@ GrowableArray<JavaThread*>* Threads::get_pending_threads(ThreadsList * t_list,
 
 JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
                                                       address owner) {
+  assert(!UseAltFastLocking, "sanity");
   // NULL owner means not locked so we can skip the search
   if (owner == NULL) return NULL;
 
@@ -4853,6 +4861,31 @@ JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
 
   // cannot assert on lack of success here; see above comment
   return the_owner;
+}
+
+JavaThread* Threads::owning_thread_from_object(ThreadsList * t_list, oop obj) {
+  assert(UseAltFastLocking, "Only with new lightweight locking");
+  DO_JAVA_THREADS(t_list, q) {
+    if (q->lock_stack().contains(obj)) {
+      return q;
+    }
+  }
+  return NULL;
+}
+
+JavaThread* Threads::owning_thread_from_monitor(ThreadsList* t_list, ObjectMonitor* monitor) {
+  if (UseAltFastLocking) {
+    if (monitor->is_owner_anonymous()) {
+      return owning_thread_from_object(t_list, (oop)monitor->object());
+    } else {
+      Thread* owner = reinterpret_cast<Thread*>(monitor->owner());
+      assert(owner == NULL || owner->is_Java_thread(), "only JavaThreads own monitors");
+      return reinterpret_cast<JavaThread*>(owner);
+    }
+  } else {
+    address owner = (address)monitor->owner();
+    return owning_thread_from_monitor_owner(t_list, owner);
+  }
 }
 
 // Threads::print_on() is called at safepoint by VM_PrintThreads operation.

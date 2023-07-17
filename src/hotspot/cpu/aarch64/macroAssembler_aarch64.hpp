@@ -1040,6 +1040,9 @@ public:
                enum operand_size size,
                bool acquire, bool release, bool weak,
                Register result);
+
+  void fast_lock(Register obj, Register hdr, Register t1, Register t2, Label& slow);
+  void fast_unlock(Register obj, Register hdr, Register t1, Register t2, Label& slow);
 private:
   void compare_eq(Register rn, Register rm, enum operand_size size);
 

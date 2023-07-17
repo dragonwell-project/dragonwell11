@@ -35,6 +35,7 @@
 #include "libadt/vectset.hpp"
 #include "jfr/jfrEvents.hpp"
 #include "memory/resourceArea.hpp"
+#include "opto/c2_CodeStubs.hpp"
 #include "oops/methodData.hpp"
 #include "opto/idealGraphPrinter.hpp"
 #include "opto/phasetype.hpp"
@@ -610,6 +611,7 @@ class Compile : public Phase {
   int                   _first_block_size;      // Size of unvalidated entry point code / OSR poison code
   ExceptionHandlerTable _handler_table;         // Table of native-code exception handlers
   ImplicitExceptionTable _inc_table;            // Table of implicit null checks in native code
+  C2CodeStubList*        _stub_list;             // List of code stubs
   OopMapSet*            _oop_map_set;           // Table of oop maps (one for each safepoint location)
   static int            _CompiledZap_count;     // counter compared against CompileZap[First/Last]
   BufferBlob*           _scratch_buffer_blob;   // For temporary code buffers.
@@ -964,6 +966,9 @@ class Compile : public Phase {
 
   // Constant table
   ConstantTable&   constant_table() { return _constant_table; }
+
+  // Code stubs list
+  void add_stub(C2CodeStub* stub) { _stub_list->add_stub(stub); }
 
   MachConstantBaseNode*     mach_constant_base_node();
   bool                  has_mach_constant_base_node() const { return _mach_constant_base_node != NULL; }

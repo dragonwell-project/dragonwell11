@@ -953,7 +953,7 @@ JvmtiEnvBase::get_object_monitor_usage(JavaThread* calling_thread, jobject objec
 
   uint32_t debug_bits = 0;
   // first derive the object's owner and entry_count (if any)
-  {
+  if (!UseAltFastLocking) {
     // Revoke any biases before querying the mark word
     if (at_safepoint) {
       BiasedLocking::revoke_at_safepoint(hobj);
@@ -1022,9 +1022,25 @@ JvmtiEnvBase::get_object_monitor_usage(JavaThread* calling_thread, jobject objec
       ret.entry_count = count_locked_objects(owning_thread, hobj);
     }
     // implied else: entry_count == 0
+  } else {
+    ThreadsListHandle tlh;
+    owning_thread = ObjectSynchronizer::get_lock_owner(tlh.list(), hobj);
+    if (owning_thread != NULL) {  // monitor is owned
+      Handle th(current_thread, owning_thread->threadObj());
+      ret.owner = (jthread)jni_reference(calling_thread, th);
+      ret.entry_count = count_locked_objects(owning_thread, hobj);
+    }
   }
 
   jint nWant = 0, nWait = 0;
+  if (UseAltFastLocking) {
+    markOop mark = hobj->mark();
+    if (mark->has_monitor()) {
+      mon = mark->monitor();
+      assert(mon != NULL, "must have monitor");
+    }
+  }
+
   if (mon != NULL) {
     // this object has a heavyweight monitor
     nWant = mon->contentions(); // # of threads contending for monitor

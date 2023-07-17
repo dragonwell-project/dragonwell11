@@ -3657,36 +3657,40 @@ encode %{
       __ tbnz(disp_hdr, exact_log2(markOopDesc::monitor_value), object_has_monitor);
     }
 
-    // Set tmp to be (markOop of object | UNLOCK_VALUE).
-    __ orr(tmp, disp_hdr, markOopDesc::unlocked_value);
+    if (UseAltFastLocking) {
+      __ fast_lock(oop, disp_hdr, tmp, rscratch1, cont);
+    } else {
+      // Set tmp to be (markOop of object | UNLOCK_VALUE).
+      __ orr(tmp, disp_hdr, markOopDesc::unlocked_value);
 
-    // Initialize the box. (Must happen before we update the object mark!)
-    __ str(tmp, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      // Initialize the box. (Must happen before we update the object mark!)
+      __ str(tmp, Address(box, BasicLock::displaced_header_offset_in_bytes()));
 
-    // Compare object markOop with an unlocked value (tmp) and if
-    // equal exchange the stack address of our box with object markOop.
-    // On failure disp_hdr contains the possibly locked markOop.
-    __ cmpxchg(oop, tmp, box, Assembler::xword, /*acquire*/ true,
-               /*release*/ true, /*weak*/ false, disp_hdr);
-    __ br(Assembler::EQ, cont);
+      // Compare object markOop with an unlocked value (tmp) and if
+      // equal exchange the stack address of our box with object markOop.
+      // On failure disp_hdr contains the possibly locked markOop.
+      __ cmpxchg(oop, tmp, box, Assembler::xword, /*acquire*/ true,
+                 /*release*/ true, /*weak*/ false, disp_hdr);
+      __ br(Assembler::EQ, cont);
 
-    assert(oopDesc::mark_offset_in_bytes() == 0, "offset of _mark is not 0");
+      assert(oopDesc::mark_offset_in_bytes() == 0, "offset of _mark is not 0");
 
-    // If the compare-and-exchange succeeded, then we found an unlocked
-    // object, will have now locked it will continue at label cont
+      // If the compare-and-exchange succeeded, then we found an unlocked
+      // object, will have now locked it will continue at label cont
 
-    __ bind(cas_failed);
-    // We did not see an unlocked object so try the fast recursive case.
+      __ bind(cas_failed);
+      // We did not see an unlocked object so try the fast recursive case.
 
-    // Check if the owner is self by comparing the value in the
-    // markOop of object (disp_hdr) with the stack pointer.
-    __ mov(rscratch1, sp);
-    __ sub(disp_hdr, disp_hdr, rscratch1);
-    __ mov(tmp, (address) (~(os::vm_page_size()-1) | (uintptr_t)markOopDesc::lock_mask_in_place));
-    // If condition is true we are cont and hence we can store 0 as the
-    // displaced header in the box, which indicates that it is a recursive lock.
-    __ ands(tmp/*==0?*/, disp_hdr, tmp);   // Sets flags for result
-    __ str(tmp/*==0, perhaps*/, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      // Check if the owner is self by comparing the value in the
+      // markOop of object (disp_hdr) with the stack pointer.
+      __ mov(rscratch1, sp);
+      __ sub(disp_hdr, disp_hdr, rscratch1);
+      __ mov(tmp, (address) (~(os::vm_page_size()-1) | (uintptr_t)markOopDesc::lock_mask_in_place));
+      // If condition is true we are cont and hence we can store 0 as the
+      // displaced header in the box, which indicates that it is a recursive lock.
+      __ ands(tmp/*==0?*/, disp_hdr, tmp);   // Sets flags for result
+      __ str(tmp/*==0, perhaps*/, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+    }
 
     if ((EmitSync & 0x02) == 0) {
       __ b(cont);
@@ -3708,12 +3712,14 @@ encode %{
         __ ldr (rthread, Address(rthread, WispThread::thread_offset()));
       }
 
-      // Store a non-null value into the box to avoid looking like a re-entrant
-      // lock. The fast-path monitor unlock code checks for
-      // markOopDesc::monitor_value so use markOopDesc::unused_mark which has the
-      // relevant bit set, and also matches ObjectSynchronizer::slow_enter.
-      __ mov(tmp, (address)markOopDesc::unused_mark());
-      __ str(tmp, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      if (!UseAltFastLocking) {
+        // Store a non-null value into the box to avoid looking like a re-entrant
+        // lock. The fast-path monitor unlock code checks for
+        // markOopDesc::monitor_value so use markOopDesc::unused_mark which has the
+        // relevant bit set, and also matches ObjectSynchronizer::slow_enter.
+        __ mov(tmp, (address)markOopDesc::unused_mark());
+        __ str(tmp, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+      }
     }
 
     __ bind(cont);
@@ -3742,26 +3748,33 @@ encode %{
       __ biased_locking_exit(oop, tmp, cont);
     }
 
-    // Find the lock address and load the displaced header from the stack.
-    __ ldr(disp_hdr, Address(box, BasicLock::displaced_header_offset_in_bytes()));
+    if (!UseAltFastLocking) {
+      // Find the lock address and load the displaced header from the stack.
+      __ ldr(disp_hdr, Address(box, BasicLock::displaced_header_offset_in_bytes()));
 
-    // If the displaced header is 0, we have a recursive unlock.
-    __ cmp(disp_hdr, zr);
-    __ br(Assembler::EQ, cont);
+      // If the displaced header is 0, we have a recursive unlock.
+      __ cmp(disp_hdr, zr);
+      __ br(Assembler::EQ, cont);
+    }
 
     // Handle existing monitor.
     if ((EmitSync & 0x02) == 0) {
       __ ldr(tmp, Address(oop, oopDesc::mark_offset_in_bytes()));
-      __ tbnz(disp_hdr, exact_log2(markOopDesc::monitor_value), object_has_monitor);
+      __ tbnz(tmp, exact_log2(markOopDesc::monitor_value), object_has_monitor);
     }
 
-    // Check if it is still a light weight lock, this is is true if we
-    // see the stack address of the basicLock in the markOop of the
-    // object.
+    if (UseAltFastLocking) {
+      __ fast_unlock(oop, tmp, box, disp_hdr, cont);
+      __ b(cont);
+    } else {
+      // Check if it is still a light weight lock, this is is true if we
+      // see the stack address of the basicLock in the markOop of the
+      // object.
 
-    __ cmpxchg(oop, box, disp_hdr, Assembler::xword, /*acquire*/ false,
-               /*release*/ true, /*weak*/ false, tmp);
-    __ b(cont);
+      __ cmpxchg(oop, box, disp_hdr, Assembler::xword, /*acquire*/ false,
+                 /*release*/ true, /*weak*/ false, tmp);
+      __ b(cont);
+	}
 
     assert(oopDesc::mark_offset_in_bytes() == 0, "offset of _mark is not 0");
 
@@ -3769,6 +3782,20 @@ encode %{
     if ((EmitSync & 0x02) == 0) {
       __ bind(object_has_monitor);
       __ add(tmp, tmp, -markOopDesc::monitor_value); // monitor
+
+      if (UseAltFastLocking) {
+        // If the owner is anonymous, we need to fix it -- in an outline stub.
+        Register tmp2 = disp_hdr;
+        __ ldr(tmp2, Address(tmp, ObjectMonitor::owner_offset_in_bytes()));
+        // We cannot use tbnz here, the target might be too far away and cannot
+        // be encoded.
+        __ tst(tmp2, (uint64_t)ObjectMonitor::ANONYMOUS_OWNER);
+        C2HandleAnonOMOwnerStub* stub = new (Compile::current()->comp_arena()) C2HandleAnonOMOwnerStub(tmp, tmp2);
+        Compile::current()->add_stub(stub);
+        __ br(Assembler::NE, stub->entry());
+        __ bind(stub->continuation());
+      }
+
       __ ldr(rscratch1, Address(tmp, ObjectMonitor::owner_offset_in_bytes()));
       __ ldr(disp_hdr, Address(tmp, ObjectMonitor::recursions_offset_in_bytes()));
       if (UseWispMonitor) {

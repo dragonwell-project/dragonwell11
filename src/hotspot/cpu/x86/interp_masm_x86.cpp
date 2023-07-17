@@ -1193,55 +1193,74 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg) {
       biased_locking_enter(lock_reg, obj_reg, swap_reg, tmp_reg, rklass_decode_tmp, false, done, &slow_case);
     }
 
-    // Load immediate 1 into swap_reg %rax
-    movl(swap_reg, (int32_t)1);
+    if (UseAltFastLocking) {
+#ifdef _LP64
+      const Register thread = r15_thread;
+#else
+      const Register thread = lock_reg;
+      get_thread(thread);
+#endif
+      // Load object header, prepare for CAS from unlocked to locked.
+      movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      fast_lock_impl(obj_reg, swap_reg, thread, tmp_reg, slow_case);
+      jmp(done);
+    } else {
+      // Load immediate 1 into swap_reg %rax
+      movl(swap_reg, (int32_t)1);
 
-    // Load (object->mark() | 1) into swap_reg %rax
-    orptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      // Load (object->mark() | 1) into swap_reg %rax
+      orptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
 
-    // Save (object->mark() | 1) into BasicLock's displaced header
-    movptr(Address(lock_reg, mark_offset), swap_reg);
+      // Save (object->mark() | 1) into BasicLock's displaced header
+      movptr(Address(lock_reg, mark_offset), swap_reg);
 
-    assert(lock_offset == 0,
-           "displaced header must be first word in BasicObjectLock");
+      assert(lock_offset == 0,
+             "displaced header must be first word in BasicObjectLock");
 
-    if (os::is_MP()) lock();
-    cmpxchgptr(lock_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-    if (PrintBiasedLockingStatistics) {
-      cond_inc32(Assembler::zero,
-                 ExternalAddress((address) BiasedLocking::fast_path_entry_count_addr()));
+      if (os::is_MP()) lock();
+      cmpxchgptr(lock_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      if (PrintBiasedLockingStatistics) {
+        cond_inc32(Assembler::zero,
+                   ExternalAddress((address) BiasedLocking::fast_path_entry_count_addr()));
+      }
+      jcc(Assembler::zero, done);
+
+      const int zero_bits = LP64_ONLY(7) NOT_LP64(3);
+
+      // Test if the oopMark is an obvious stack pointer, i.e.,
+      //  1) (mark & zero_bits) == 0, and
+      //  2) rsp <= mark < mark + os::pagesize()
+      //
+      // These 3 tests can be done by evaluating the following
+      // expression: ((mark - rsp) & (zero_bits - os::vm_page_size())),
+      // assuming both stack pointer and pagesize have their
+      // least significant bits clear.
+      // NOTE: the oopMark is in swap_reg %rax as the result of cmpxchg
+      subptr(swap_reg, rsp);
+      andptr(swap_reg, zero_bits - os::vm_page_size());
+
+      // Save the test result, for recursive case, the result is zero
+      movptr(Address(lock_reg, mark_offset), swap_reg);
+
+      if (PrintBiasedLockingStatistics) {
+        cond_inc32(Assembler::zero,
+                   ExternalAddress((address) BiasedLocking::fast_path_entry_count_addr()));
+      }
+      jcc(Assembler::zero, done);
     }
-    jcc(Assembler::zero, done);
-
-    const int zero_bits = LP64_ONLY(7) NOT_LP64(3);
-
-    // Test if the oopMark is an obvious stack pointer, i.e.,
-    //  1) (mark & zero_bits) == 0, and
-    //  2) rsp <= mark < mark + os::pagesize()
-    //
-    // These 3 tests can be done by evaluating the following
-    // expression: ((mark - rsp) & (zero_bits - os::vm_page_size())),
-    // assuming both stack pointer and pagesize have their
-    // least significant bits clear.
-    // NOTE: the oopMark is in swap_reg %rax as the result of cmpxchg
-    subptr(swap_reg, rsp);
-    andptr(swap_reg, zero_bits - os::vm_page_size());
-
-    // Save the test result, for recursive case, the result is zero
-    movptr(Address(lock_reg, mark_offset), swap_reg);
-
-    if (PrintBiasedLockingStatistics) {
-      cond_inc32(Assembler::zero,
-                 ExternalAddress((address) BiasedLocking::fast_path_entry_count_addr()));
-    }
-    jcc(Assembler::zero, done);
 
     bind(slow_case);
 
     // Call the runtime routine for slow case
-    call_VM(noreg,
-            CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
-            lock_reg);
+    if (UseAltFastLocking) {
+      call_VM(noreg,
+              CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter_obj),
+              obj_reg);
+    } else {
+      call_VM(noreg,
+              CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorenter),
+              lock_reg);
+    }
 
     bind(done);
   }
@@ -1269,7 +1288,7 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
             CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit),
             lock_reg);
   } else {
-    Label done;
+    Label done, slow_case;
 
     const Register swap_reg   = rax;  // Must use rax for cmpxchg instruction
     const Register header_reg = LP64_ONLY(c_rarg2) NOT_LP64(rbx);  // Will contain the old oopMark
@@ -1277,9 +1296,11 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
 
     save_bcp(); // Save in case of exception
 
-    // Convert from BasicObjectLock structure to object and BasicLock
-    // structure Store the BasicLock address into %rax
-    lea(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset_in_bytes()));
+    if (!UseAltFastLocking) {
+      // Convert from BasicObjectLock structure to object and BasicLock
+      // structure Store the BasicLock address into %rax
+      lea(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset_in_bytes()));
+    }
 
     // Load oop into obj_reg(%c_rarg3)
     movptr(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
@@ -1287,26 +1308,46 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
     // Free entry
     movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()), (int32_t)NULL_WORD);
 
-    if (UseBiasedLocking) {
-      biased_locking_exit(obj_reg, header_reg, done);
+    if (UseAltFastLocking) {
+#ifdef _LP64
+      const Register thread = r15_thread;
+#else
+      const Register thread = header_reg;
+      get_thread(thread);
+#endif
+      // Handle unstructured locking.
+      Register tmp = swap_reg;
+      movl(tmp, Address(thread, JavaThread::lock_stack_top_offset()));
+      cmpptr(obj_reg, Address(thread, tmp, Address::times_1,  -oopSize));
+      jcc(Assembler::notEqual, slow_case);
+      // Try to swing header from locked to unlock.
+      movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      andptr(swap_reg, ~(int32_t)markOopDesc::lock_mask_in_place);
+      fast_unlock_impl(obj_reg, swap_reg, header_reg, slow_case);
+      jmp(done);
+      bind(slow_case);
+    } else {
+      if (UseBiasedLocking) {
+        biased_locking_exit(obj_reg, header_reg, done);
+      }
+
+      // Load the old header from BasicLock structure
+      movptr(header_reg, Address(swap_reg,
+                                 BasicLock::displaced_header_offset_in_bytes()));
+
+      // Test for recursion
+      testptr(header_reg, header_reg);
+
+      // zero for recursive case
+      jcc(Assembler::zero, done);
+
+      // Atomic swap back the old header
+      if (os::is_MP()) lock();
+      cmpxchgptr(header_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+
+      // zero for simple unlock of a stack-lock case
+      jcc(Assembler::zero, done);
     }
-
-    // Load the old header from BasicLock structure
-    movptr(header_reg, Address(swap_reg,
-                               BasicLock::displaced_header_offset_in_bytes()));
-
-    // Test for recursion
-    testptr(header_reg, header_reg);
-
-    // zero for recursive case
-    jcc(Assembler::zero, done);
-
-    // Atomic swap back the old header
-    if (os::is_MP()) lock();
-    cmpxchgptr(header_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-
-    // zero for simple unlock of a stack-lock case
-    jcc(Assembler::zero, done);
 
     // Call the runtime routine for slow case.
     movptr(Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()),

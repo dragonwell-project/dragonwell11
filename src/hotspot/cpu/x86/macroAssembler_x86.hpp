@@ -673,7 +673,7 @@ class MacroAssembler: public Assembler {
   // Code used by cmpFastLock and cmpFastUnlock mach instructions in .ad file.
   // See full desription in macroAssembler_x86.cpp.
   void fast_lock(Register obj, Register box, Register tmp,
-                 Register scr, Register cx1, Register cx2,
+                 Register scr, Register cx1, Register cx2, Register thread,
                  BiasedLockingCounters* counters,
                  RTMLockingCounters* rtm_counters,
                  RTMLockingCounters* stack_rtm_counters,
@@ -1893,6 +1893,9 @@ public:
                           XMMRegister tmp1, Register tmp2);
 
   void vallones(XMMRegister dst, int vector_len);
+
+  void fast_lock_impl(Register obj, Register hdr, Register thread, Register tmp, Label& slow);
+  void fast_unlock_impl(Register obj, Register hdr, Register tmp, Label& slow);
 };
 
 /**

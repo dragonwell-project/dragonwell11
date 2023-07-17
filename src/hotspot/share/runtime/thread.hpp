@@ -37,6 +37,7 @@
 #include "runtime/handshake.hpp"
 #include "runtime/javaFrameAnchor.hpp"
 #include "runtime/jniHandles.hpp"
+#include "runtime/lockStack.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/os.hpp"
 #include "runtime/osThread.hpp"
@@ -2107,6 +2108,19 @@ class JavaThread: public Thread {
   // AsyncGetCallTrace support
   inline bool in_asgct(void) {return _in_asgct;}
   inline void set_in_asgct(bool value) {_in_asgct = value;}
+
+private:
+  LockStack _lock_stack;
+
+public:
+  LockStack& lock_stack() { return _lock_stack; }
+
+  static ByteSize lock_stack_offset()      { return byte_offset_of(JavaThread, _lock_stack); }
+  // Those offsets are used in code generators to access the LockStack that is embedded in this
+  // JavaThread structure. Those accesses are relative to the current thread, which
+  // is typically in a dedicated register.
+  static ByteSize lock_stack_top_offset()  { return lock_stack_offset() + LockStack::top_offset(); }
+  static ByteSize lock_stack_base_offset() { return lock_stack_offset() + LockStack::base_offset(); }
 };
 
 // Inline implementation of JavaThread::current
@@ -2316,6 +2330,9 @@ class Threads: AllStatic {
   // Get owning Java thread from the monitor's owner field.
   static JavaThread *owning_thread_from_monitor_owner(ThreadsList * t_list,
                                                       address owner);
+
+  static JavaThread* owning_thread_from_object(ThreadsList* t_list, oop obj);
+  static JavaThread* owning_thread_from_monitor(ThreadsList* t_list, ObjectMonitor* owner);
 
   // Number of threads on the active threads list
   static int number_of_threads()                 { return _number_of_threads; }

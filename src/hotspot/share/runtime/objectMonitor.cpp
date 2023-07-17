@@ -285,7 +285,7 @@ void ObjectMonitor::enter(TRAPS) {
     return;
   }
 
-  if (Self->is_lock_owned ((address)cur)) {
+  if (!UseAltFastLocking && Self->is_lock_owned ((address)cur)) {
     assert(_recursions == 0, "internal state error");
     _recursions = 1;
     // Commute owner from a thread-specific on-stack BasicLockObject address to
@@ -954,7 +954,7 @@ void ObjectMonitor::exit(bool not_suspended, TRAPS) {
   }
   Thread * const Self = THREAD;
   if (THREAD != _owner) {
-    if (THREAD->is_lock_owned((address) _owner)) {
+    if (!UseAltFastLocking && THREAD->is_lock_owned((address) _owner)) {
       // Transmute _owner from a BasicLock pointer to a Thread address.
       // We don't need to hold _mutex for this transition.
       // Non-null to Non-null is safe as long as all readers can
@@ -1401,7 +1401,7 @@ intptr_t ObjectMonitor::complete_exit(TRAPS) {
   DeferredInitialize();
 
   if (THREAD != _owner) {
-    if (THREAD->is_lock_owned ((address)_owner)) {
+    if (!UseAltFastLocking && THREAD->is_lock_owned ((address)_owner)) {
       assert(_recursions == 0, "internal state error");
       _owner = THREAD;   // Convert from basiclock addr to Thread addr
       _recursions = 0;
@@ -1440,7 +1440,7 @@ void ObjectMonitor::reenter(intptr_t recursions, TRAPS) {
 #define CHECK_OWNER()                                                       \
   do {                                                                      \
     if (THREAD != _owner) {                                                 \
-      if (THREAD->is_lock_owned((address) _owner)) {                        \
+      if (!UseAltFastLocking && THREAD->is_lock_owned((address) _owner)) {  \
         _owner = THREAD;  /* Convert from basiclock addr to Thread addr */  \
         _recursions = 0;                                                    \
       } else {                                                              \
@@ -1455,7 +1455,7 @@ void ObjectMonitor::reenter(intptr_t recursions, TRAPS) {
 
 void ObjectMonitor::check_slow(TRAPS) {
   TEVENT(check_slow - throw IMSX);
-  assert(THREAD != _owner && !THREAD->is_lock_owned((address) _owner), "must not be owner");
+  assert(THREAD != _owner && !(!UseAltFastLocking && THREAD->is_lock_owned((address) _owner)), "must not be owner");
   THROW_MSG(vmSymbols::java_lang_IllegalMonitorStateException(), "current thread not owner");
 }
 

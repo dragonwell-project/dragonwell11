@@ -25,12 +25,24 @@
 #ifndef SHARE_VM_RUNTIME_OBJECTMONITOR_INLINE_HPP
 #define SHARE_VM_RUNTIME_OBJECTMONITOR_INLINE_HPP
 
+#include "runtime/lockStack.inline.hpp"
+
 inline intptr_t ObjectMonitor::is_entered(TRAPS) const {
   if (UseWispMonitor) {
     THREAD = WispThread::current(THREAD);
   }
-  if (THREAD == _owner || THREAD->is_lock_owned((address) _owner)) {
-    return 1;
+  if (UseAltFastLocking) {
+    if (is_owner_anonymous()) {
+      assert(THREAD->is_Java_thread(), "sanity");
+      JavaThread* jt = (JavaThread*)THREAD;
+      return jt->lock_stack().contains((oop)object()) ? 1 : 0;
+    } else {
+      return THREAD == _owner ? 1 : 0;
+    }
+  } else {
+    if (THREAD == _owner || THREAD->is_lock_owned((address) _owner)) {
+      return 1;
+    }
   }
   return 0;
 }
@@ -90,7 +102,7 @@ inline bool ObjectMonitor::check(TRAPS) {
     THREAD = WispThread::current(THREAD);
   }
   if (THREAD != _owner) {
-    if (THREAD->is_lock_owned((address) _owner)) {
+    if (!UseAltFastLocking && THREAD->is_lock_owned((address) _owner)) {
       _owner = THREAD;  // regain ownership of inflated monitor
       assert (_recursions == 0, "invariant") ;
     } else {

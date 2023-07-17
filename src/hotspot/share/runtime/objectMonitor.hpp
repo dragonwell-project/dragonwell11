@@ -153,6 +153,11 @@ class ObjectMonitor {
   DEFINE_PAD_MINUS_SIZE(0, DEFAULT_CACHE_LINE_SIZE,
                         sizeof(volatile markOop) + sizeof(void * volatile) +
                         sizeof(ObjectMonitor *));
+ public:
+  // NOTE: Typed as uintptr_t so that we can pick it up in SA, via vmStructs.
+  static const uintptr_t ANONYMOUS_OWNER = 1;
+ private:
+  static void* anon_owner_ptr() { return reinterpret_cast<void*>(ANONYMOUS_OWNER); }
  protected:                         // protected for JvmtiRawMonitor
   void *  volatile _owner;          // pointer to owning thread OR BasicLock
   volatile jlong _previous_owner_tid;  // thread id of the previous owner of the monitor
@@ -252,6 +257,20 @@ class ObjectMonitor {
 
   void*     owner() const;
   void      set_owner(void* owner);
+
+  void set_owner_anonymous() {
+    assert(_owner == NULL, "sanity");
+    _owner = anon_owner_ptr();
+  }
+
+  bool is_owner_anonymous() const {
+    return _owner == anon_owner_ptr();
+  }
+
+  void set_owner_from_anonymous(Thread* owner) {
+    assert(_owner == anon_owner_ptr(), "sanity");
+    _owner = owner;
+  }
 
   jint      waiters() const;
 

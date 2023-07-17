@@ -192,6 +192,7 @@ public class Threads {
 
     // refer to Threads::owning_thread_from_monitor_owner
     public JavaThread owningThreadFromMonitor(Address o) {
+        assert(!VM.getVM().getCommandLineBooleanFlag("UseAltFastLocking"));
         if (o == null) return null;
         for (JavaThread thread = first(); thread != null; thread = thread.next()) {
             if (o.equals(thread.threadObjectAddress())) {
@@ -207,7 +208,23 @@ public class Threads {
     }
 
     public JavaThread owningThreadFromMonitor(ObjectMonitor monitor) {
-        return owningThreadFromMonitor(monitor.owner());
+        if (VM.getVM().getCommandLineBooleanFlag("UseAltFastLocking")) {
+            if (monitor.isOwnedAnonymous()) {
+                OopHandle object = monitor.object();
+                for (JavaThread thread = first(); thread != null; thread = thread.next()) {
+                    if (thread.isLockOwned(object)) {
+                        return thread;
+                     }
+                }
+                throw new InternalError("We should have found a thread that owns the anonymous lock");
+            }
+            // Owner can only be threads at this point.
+            Address o = monitor.owner();
+            if (o == null) return null;
+            return new JavaThread(o);
+        } else {
+            return owningThreadFromMonitor(monitor.owner());
+        }
     }
 
     // refer to Threads::get_pending_threads
