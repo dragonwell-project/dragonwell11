@@ -264,12 +264,22 @@ class markOopDesc: public oopDesc {
     return markOop(value() | unlocked_value);
   }
   bool has_locker() const {
+    assert(!UseAltFastLocking, "should only be called with legacy stack locking");
     return ((value() & lock_mask_in_place) == locked_value);
   }
   BasicLock* locker() const {
     assert(has_locker(), "check");
     return (BasicLock*) value();
   }
+
+  bool is_fast_locked() const {
+    assert(UseAltFastLocking, "should only be called with new lightweight locking");
+    return (value() & lock_mask_in_place) == locked_value;
+  }
+  markOop set_fast_locked() const {
+    return markOop(value() & ~lock_mask_in_place);
+  }
+
   bool has_monitor() const {
     return ((value() & monitor_value) != 0);
   }
@@ -279,7 +289,11 @@ class markOopDesc: public oopDesc {
     return (ObjectMonitor*) (value() ^ monitor_value);
   }
   bool has_displaced_mark_helper() const {
-    return ((value() & unlocked_value) == 0);
+    if (UseAltFastLocking) {
+      return (value() & lock_mask_in_place) == monitor_value;
+    } else {
+      return ((value() & unlocked_value) == 0);
+    }
   }
   markOop displaced_mark_helper() const {
     assert(has_displaced_mark_helper(), "check");

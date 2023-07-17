@@ -1210,6 +1210,7 @@ void Compile::Init(int aliaslevel) {
   _type_verify_symmetry = true;
   _exception_backedge = false;
 #endif
+  _stub_list = new(comp_arena()) C2CodeStubList();
 }
 
 //---------------------------init_start----------------------------------------

@@ -81,39 +81,43 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
 
   // Load object header
   ldr(hdr, Address(obj, hdr_offset));
-  // and mark it as unlocked
-  orr(hdr, hdr, markOopDesc::unlocked_value);
-  // save unlocked object header into the displaced header location on the stack
-  str(hdr, Address(disp_hdr, 0));
-  // test if object header is still the same (i.e. unlocked), and if so, store the
-  // displaced header address in the object header - if it is not the same, get the
-  // object header instead
-  lea(rscratch2, Address(obj, hdr_offset));
-  cmpxchgptr(hdr, disp_hdr, rscratch2, rscratch1, done, /*fallthough*/NULL);
-  // if the object header was the same, we're done
-  // if the object header was not the same, it is now in the hdr register
-  // => test if it is a stack pointer into the same stack (recursive locking), i.e.:
-  //
-  // 1) (hdr & aligned_mask) == 0
-  // 2) sp <= hdr
-  // 3) hdr <= sp + page_size
-  //
-  // these 3 tests can be done by evaluating the following expression:
-  //
-  // (hdr - sp) & (aligned_mask - page_size)
-  //
-  // assuming both the stack pointer and page_size have their least
-  // significant 2 bits cleared and page_size is a power of 2
-  mov(rscratch1, sp);
-  sub(hdr, hdr, rscratch1);
-  ands(hdr, hdr, aligned_mask - os::vm_page_size());
-  // for recursive locking, the result is zero => save it in the displaced header
-  // location (NULL in the displaced hdr location indicates recursive locking)
-  str(hdr, Address(disp_hdr, 0));
-  // otherwise we don't care about the result and handle locking via runtime call
-  cbnz(hdr, slow_case);
-  // done
-  bind(done);
+  if (UseAltFastLocking) {
+    fast_lock(obj, hdr, rscratch1, rscratch2, slow_case);
+  } else {
+    // and mark it as unlocked
+    orr(hdr, hdr, markOopDesc::unlocked_value);
+    // save unlocked object header into the displaced header location on the stack
+    str(hdr, Address(disp_hdr, 0));
+    // test if object header is still the same (i.e. unlocked), and if so, store the
+    // displaced header address in the object header - if it is not the same, get the
+    // object header instead
+    lea(rscratch2, Address(obj, hdr_offset));
+    cmpxchgptr(hdr, disp_hdr, rscratch2, rscratch1, done, /*fallthough*/NULL);
+    // if the object header was the same, we're done
+    // if the object header was not the same, it is now in the hdr register
+    // => test if it is a stack pointer into the same stack (recursive locking), i.e.:
+    //
+    // 1) (hdr & aligned_mask) == 0
+    // 2) sp <= hdr
+    // 3) hdr <= sp + page_size
+    //
+    // these 3 tests can be done by evaluating the following expression:
+    //
+    // (hdr - sp) & (aligned_mask - page_size)
+    //
+    // assuming both the stack pointer and page_size have their least
+    // significant 2 bits cleared and page_size is a power of 2
+    mov(rscratch1, sp);
+    sub(hdr, hdr, rscratch1);
+    ands(hdr, hdr, aligned_mask - os::vm_page_size());
+    // for recursive locking, the result is zero => save it in the displaced header
+    // location (NULL in the displaced hdr location indicates recursive locking)
+    str(hdr, Address(disp_hdr, 0));
+    // otherwise we don't care about the result and handle locking via runtime call
+    cbnz(hdr, slow_case);
+    // done
+    bind(done);
+  }
   if (PrintBiasedLockingStatistics) {
     lea(rscratch2, ExternalAddress((address)BiasedLocking::fast_path_entry_count_addr()));
     addmw(Address(rscratch2, 0), 1, rscratch1);
@@ -134,29 +138,41 @@ void C1_MacroAssembler::unlock_object(Register hdr, Register obj, Register disp_
     biased_locking_exit(obj, hdr, done);
   }
 
-  // load displaced header
-  ldr(hdr, Address(disp_hdr, 0));
-  // if the loaded hdr is NULL we had recursive locking
-  // if we had recursive locking, we are done
-  cbz(hdr, done);
+  if (!UseAltFastLocking) {
+    // load displaced header
+    ldr(hdr, Address(disp_hdr, 0));
+    // if the loaded hdr is NULL we had recursive locking
+    // if we had recursive locking, we are done
+    cbz(hdr, done);
+  }
+
   if (!UseBiasedLocking) {
     // load object
     ldr(obj, Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()));
   }
   verify_oop(obj);
-  // test if object header is pointing to the displaced header, and if so, restore
-  // the displaced header in the object - if the object header is not pointing to
-  // the displaced header, get the object header instead
-  // if the object header was not pointing to the displaced header,
-  // we do unlocking via runtime call
-  if (hdr_offset) {
-    lea(rscratch1, Address(obj, hdr_offset));
-    cmpxchgptr(disp_hdr, hdr, rscratch1, rscratch2, done, &slow_case);
+  if (UseAltFastLocking) {
+    ldr(hdr, Address(obj, oopDesc::mark_offset_in_bytes()));
+    // We cannot use tbnz here, the target might be too far away and cannot
+    // be encoded.
+    tst(hdr, markOopDesc::monitor_value);
+    br(Assembler::NE, slow_case);
+    fast_unlock(obj, hdr, rscratch1, rscratch2, slow_case);
   } else {
-    cmpxchgptr(disp_hdr, hdr, obj, rscratch2, done, &slow_case);
+    // test if object header is pointing to the displaced header, and if so, restore
+    // the displaced header in the object - if the object header is not pointing to
+    // the displaced header, get the object header instead
+    // if the object header was not pointing to the displaced header,
+    // we do unlocking via runtime call
+    if (hdr_offset) {
+      lea(rscratch1, Address(obj, hdr_offset));
+      cmpxchgptr(disp_hdr, hdr, rscratch1, rscratch2, done, &slow_case);
+    } else {
+      cmpxchgptr(disp_hdr, hdr, obj, rscratch2, done, &slow_case);
+    }
+    // done
+    bind(done);
   }
-  // done
-  bind(done);
 }
 
 

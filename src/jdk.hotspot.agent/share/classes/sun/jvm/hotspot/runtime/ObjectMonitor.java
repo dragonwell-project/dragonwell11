@@ -53,6 +53,8 @@ public class ObjectMonitor extends VMObject {
     countField  = type.getJIntField("_count");
     waitersField = type.getJIntField("_waiters");
     recursionsField = type.getCIntegerField("_recursions");
+
+    ANONYMOUS_OWNER = db.lookupLongConstant("ObjectMonitor::ANONYMOUS_OWNER").longValue();
   }
 
   public ObjectMonitor(Address addr) {
@@ -73,6 +75,13 @@ public class ObjectMonitor extends VMObject {
     if (current.threadObjectAddress().equals(o) ||
         current.isLockOwned(o)) {
       return true;
+    }
+    return false;
+  }
+
+  public boolean isOwnedAnonymous() {
+    if (VM.getVM().getCommandLineBooleanFlag("UseAltFastLocking") && owner() != null) {
+      return addr.getAddressAt(ownerFieldOffset).asLongValue() == ANONYMOUS_OWNER;
     }
     return false;
   }
@@ -117,5 +126,7 @@ public class ObjectMonitor extends VMObject {
   private static JIntField     countField;
   private static JIntField     waitersField;
   private static CIntegerField recursionsField;
+  private static long          ANONYMOUS_OWNER;
+
   // FIXME: expose platform-dependent stuff
 }

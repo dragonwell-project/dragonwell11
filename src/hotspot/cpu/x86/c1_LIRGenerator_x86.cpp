@@ -312,6 +312,8 @@ void LIRGenerator::do_MonitorEnter(MonitorEnter* x) {
   LIR_Opr scratch = LIR_OprFact::illegalOpr;
   if (UseBiasedLocking) {
     scratch = new_register(T_INT);
+  } else if (UseAltFastLocking) {
+    scratch = new_register(T_ADDRESS);
   }
 
   CodeEmitInfo* info_for_exception = NULL;

@@ -2093,6 +2093,28 @@ bool Arguments::check_vm_args_consistency() {
       log_warning(arguments) ("NUMA support for Heap depends on the file system when AllocateHeapAt option is used.\n");
     }
   }
+
+  if (UseAltFastLocking) {
+#if !defined(_LP64) || !(defined(X86) || defined(AARCH64))
+    jio_fprintf(defaultStream::error_stream(), "Platform do not support UseAltFastLocking.\n");
+    status = false;
+#else
+    if (UseBiasedLocking) {
+      FLAG_SET_DEFAULT(UseBiasedLocking, false);
+    }
+
+    if (UseHeavyMonitors) {
+      FLAG_SET_DEFAULT(UseHeavyMonitors, false);
+    }
+#endif
+
+#if INCLUDE_JVMCI
+    if (EnableJVMCI || UseAOT) {
+      FLAG_SET_DEFAULT(UseAltFastLocking, false);
+    }
+#endif
+  }
+
   return status;
 }
 

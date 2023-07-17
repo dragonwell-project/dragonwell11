@@ -2444,44 +2444,50 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // Load the oop from the handle
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
 
-    if (UseBiasedLocking) {
-      __ biased_locking_enter(lock_reg, obj_reg, swap_reg, rscratch1, rscratch2, false, lock_done, &slow_path_lock);
+    if (UseAltFastLocking) {
+      // Load object header
+      __ movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      __ fast_lock_impl(obj_reg, swap_reg, r15_thread, rscratch1, slow_path_lock);
+    } else {
+      if (UseBiasedLocking) {
+        __ biased_locking_enter(lock_reg, obj_reg, swap_reg, rscratch1, rscratch2, false, lock_done, &slow_path_lock);
+      }
+
+      // Load immediate 1 into swap_reg %rax
+      __ movl(swap_reg, 1);
+
+      // Load (object->mark() | 1) into swap_reg %rax
+      __ orptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+
+      // Save (object->mark() | 1) into BasicLock's displaced header
+      __ movptr(Address(lock_reg, mark_word_offset), swap_reg);
+
+      if (os::is_MP()) {
+        __ lock();
+      }
+
+      // src -> dest iff dest == rax else rax <- dest
+      __ cmpxchgptr(lock_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      __ jcc(Assembler::equal, lock_done);
+
+      // Hmm should this move to the slow path code area???
+
+      // Test if the oopMark is an obvious stack pointer, i.e.,
+      //  1) (mark & 3) == 0, and
+      //  2) rsp <= mark < mark + os::pagesize()
+      // These 3 tests can be done by evaluating the following
+      // expression: ((mark - rsp) & (3 - os::vm_page_size())),
+      // assuming both stack pointer and pagesize have their
+      // least significant 2 bits clear.
+      // NOTE: the oopMark is in swap_reg %rax as the result of cmpxchg
+
+      __ subptr(swap_reg, rsp);
+      __ andptr(swap_reg, 3 - os::vm_page_size());
+
+      // Save the test result, for recursive case, the result is zero
+      __ movptr(Address(lock_reg, mark_word_offset), swap_reg);
+      __ jcc(Assembler::notEqual, slow_path_lock);
     }
-
-    // Load immediate 1 into swap_reg %rax
-    __ movl(swap_reg, 1);
-
-    // Load (object->mark() | 1) into swap_reg %rax
-    __ orptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-
-    // Save (object->mark() | 1) into BasicLock's displaced header
-    __ movptr(Address(lock_reg, mark_word_offset), swap_reg);
-
-    if (os::is_MP()) {
-      __ lock();
-    }
-
-    // src -> dest iff dest == rax else rax <- dest
-    __ cmpxchgptr(lock_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-    __ jcc(Assembler::equal, lock_done);
-
-    // Hmm should this move to the slow path code area???
-
-    // Test if the oopMark is an obvious stack pointer, i.e.,
-    //  1) (mark & 3) == 0, and
-    //  2) rsp <= mark < mark + os::pagesize()
-    // These 3 tests can be done by evaluating the following
-    // expression: ((mark - rsp) & (3 - os::vm_page_size())),
-    // assuming both stack pointer and pagesize have their
-    // least significant 2 bits clear.
-    // NOTE: the oopMark is in swap_reg %rax as the result of cmpxchg
-
-    __ subptr(swap_reg, rsp);
-    __ andptr(swap_reg, 3 - os::vm_page_size());
-
-    // Save the test result, for recursive case, the result is zero
-    __ movptr(Address(lock_reg, mark_word_offset), swap_reg);
-    __ jcc(Assembler::notEqual, slow_path_lock);
 
     // Slow path will re-enter here
 
@@ -2643,28 +2649,35 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
       __ biased_locking_exit(obj_reg, old_hdr, done);
     }
 
-    // Simple recursive lock?
+    if (!UseAltFastLocking) {
+      // Simple recursive lock?
 
-    __ cmpptr(Address(rsp, lock_slot_offset * VMRegImpl::stack_slot_size), (int32_t)NULL_WORD);
-    __ jcc(Assembler::equal, done);
+      __ cmpptr(Address(rsp, lock_slot_offset * VMRegImpl::stack_slot_size), (int32_t)NULL_WORD);
+      __ jcc(Assembler::equal, done);
+    }
 
     // Must save rax if if it is live now because cmpxchg must use it
     if (ret_type != T_FLOAT && ret_type != T_DOUBLE && ret_type != T_VOID) {
       save_native_result(masm, ret_type, stack_slots);
     }
 
+    if (UseAltFastLocking) {
+      __ movptr(swap_reg, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      __ andptr(swap_reg, ~(int32_t)markOopDesc::lock_mask_in_place);
+      __ fast_unlock_impl(obj_reg, swap_reg, lock_reg, slow_path_unlock);
+    } else {
+      // get address of the stack lock
+      __ lea(rax, Address(rsp, lock_slot_offset * VMRegImpl::stack_slot_size));
+      //  get old displaced header
+      __ movptr(old_hdr, Address(rax, 0));
 
-    // get address of the stack lock
-    __ lea(rax, Address(rsp, lock_slot_offset * VMRegImpl::stack_slot_size));
-    //  get old displaced header
-    __ movptr(old_hdr, Address(rax, 0));
-
-    // Atomic swap old header if oop still contains the stack lock
-    if (os::is_MP()) {
-      __ lock();
+      // Atomic swap old header if oop still contains the stack lock
+      if (os::is_MP()) {
+        __ lock();
+      }
+      __ cmpxchgptr(old_hdr, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
+      __ jcc(Assembler::notEqual, slow_path_unlock);
     }
-    __ cmpxchgptr(old_hdr, Address(obj_reg, oopDesc::mark_offset_in_bytes()));
-    __ jcc(Assembler::notEqual, slow_path_unlock);
 
     // slow path re-enters here
     __ bind(unlock_done);
