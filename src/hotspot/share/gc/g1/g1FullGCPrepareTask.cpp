@@ -34,6 +34,7 @@
 #include "gc/g1/heapRegion.inline.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/referenceProcessor.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "logging/log.hpp"
 #include "memory/iterator.inline.hpp"
 #include "oops/oop.inline.hpp"
@@ -44,7 +45,11 @@ bool G1FullGCPrepareTask::G1CalculatePointersClosure::do_heap_region(HeapRegion*
     oop obj = oop(hr->humongous_start_region()->bottom());
     if (_bitmap->is_marked(obj)) {
       if (hr->is_starts_humongous()) {
-        obj->forward_to(obj);
+        if (UseAltGCForwarding) {
+          SlidingForwarding::forward_to<true>(obj, obj);
+        } else {
+          obj->forward_to(obj);
+        }
       }
     } else {
       free_humongous_region(hr);
@@ -119,35 +124,54 @@ void G1FullGCPrepareTask::G1CalculatePointersClosure::reset_region_metadata(Heap
   }
 }
 
-G1FullGCPrepareTask::G1PrepareCompactLiveClosure::G1PrepareCompactLiveClosure(G1FullGCCompactionPoint* cp) :
+template <bool ALT_FWD>
+G1FullGCPrepareTask::G1PrepareCompactLiveClosure<ALT_FWD>::G1PrepareCompactLiveClosure(G1FullGCCompactionPoint* cp) :
     _cp(cp) { }
 
-size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure::apply(oop object) {
+template <bool ALT_FWD>
+size_t G1FullGCPrepareTask::G1PrepareCompactLiveClosure<ALT_FWD>::apply(oop object) {
   size_t size = object->size();
-  _cp->forward(object, size);
+  _cp->forward<ALT_FWD>(object, size);
   return size;
 }
 
-size_t G1FullGCPrepareTask::G1RePrepareClosure::apply(oop obj) {
+template <bool ALT_FWD>
+size_t G1FullGCPrepareTask::G1RePrepareClosure<ALT_FWD>::apply(oop obj) {
   // We only re-prepare objects forwarded within the current region, so
   // skip objects that are already forwarded to another region.
-  oop forwarded_to = obj->forwardee();
-  if (forwarded_to != NULL && !_current->is_in(forwarded_to)) {
-    return obj->size();
+  if (ALT_FWD) {
+    if (SlidingForwarding::is_forwarded(obj)) {
+      oop forwarded_to = SlidingForwarding::forwardee<true>(obj);
+      assert(forwarded_to != NULL, "must have forwardee");
+      if (!_current->is_in(forwarded_to)) {
+        return obj->size();
+      }
+    }
+  } else {
+    oop forwarded_to = obj->forwardee();
+    if (forwarded_to != NULL && !_current->is_in(forwarded_to)) {
+      return obj->size();
+    }
   }
 
   // Get size and forward.
   size_t size = obj->size();
-  _cp->forward(obj, size);
+  _cp->forward<ALT_FWD>(obj, size);
 
   return size;
 }
 
 void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction_work(G1FullGCCompactionPoint* cp,
                                                                                   HeapRegion* hr) {
-  G1PrepareCompactLiveClosure prepare_compact(cp);
-  hr->set_compaction_top(hr->bottom());
-  hr->apply_to_marked_objects(_bitmap, &prepare_compact);
+  if (UseAltGCForwarding) {
+    G1PrepareCompactLiveClosure<true> prepare_compact(cp);
+    hr->set_compaction_top(hr->bottom());
+    hr->apply_to_marked_objects(_bitmap, &prepare_compact);
+  } else {
+    G1PrepareCompactLiveClosure<false> prepare_compact(cp);
+    hr->set_compaction_top(hr->bottom());
+    hr->apply_to_marked_objects(_bitmap, &prepare_compact);
+  }
 }
 
 void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction(HeapRegion* hr) {
@@ -160,7 +184,8 @@ void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction(Hea
   prepare_for_compaction_work(_cp, hr);
 }
 
-void G1FullGCPrepareTask::prepare_serial_compaction() {
+template <bool ALT_FWD>
+void G1FullGCPrepareTask::prepare_serial_compaction_impl() {
   GCTraceTime(Debug, gc, phases) debug("Phase 2: Prepare Serial Compaction", collector()->scope()->timer());
   // At this point we know that no regions were completely freed by
   // the parallel compaction. That means that the last region of
@@ -184,12 +209,20 @@ void G1FullGCPrepareTask::prepare_serial_compaction() {
       cp->initialize(current, false);
     } else {
       assert(!current->is_humongous(), "Should be no humongous regions in compaction queue");
-      G1RePrepareClosure re_prepare(cp, current);
+      G1RePrepareClosure<ALT_FWD> re_prepare(cp, current);
       current->set_compaction_top(current->bottom());
       current->apply_to_marked_objects(collector()->mark_bitmap(), &re_prepare);
     }
   }
   cp->update();
+}
+
+void G1FullGCPrepareTask::prepare_serial_compaction() {
+  if (UseAltGCForwarding) {
+    prepare_serial_compaction_impl<true>();
+  } else {
+    prepare_serial_compaction_impl<false>();
+  }
 }
 
 void G1FullGCPrepareTask::G1CalculatePointersClosure::update_sets() {

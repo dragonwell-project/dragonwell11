@@ -30,6 +30,7 @@
 #include "gc/g1/g1FullGCCompactTask.hpp"
 #include "gc/g1/heapRegion.inline.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "logging/log.hpp"
 #include "oops/oop.inline.hpp"
 #include "utilities/ticks.hpp"
@@ -59,12 +60,21 @@ public:
   }
 };
 
-size_t G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj) {
+template <bool ALT_FWD>
+size_t G1FullGCCompactTask::G1CompactRegionClosure<ALT_FWD>::apply(oop obj) {
   size_t size = obj->size();
-  HeapWord* destination = (HeapWord*)obj->forwardee();
-  if (destination == NULL) {
-    // Object not moving
-    return size;
+  HeapWord* destination;
+  if (ALT_FWD) {
+    if (!SlidingForwarding::is_forwarded(obj)) {
+      return size;
+    }
+    destination = cast_from_oop<HeapWord*>(SlidingForwarding::forwardee<true>(obj));
+  } else {
+    destination = (HeapWord*)obj->forwardee();
+    if (destination == NULL) {
+      // Object not moving
+      return size;
+    }
   }
 
   // copy object and reinit its mark
@@ -79,8 +89,13 @@ size_t G1FullGCCompactTask::G1CompactRegionClosure::apply(oop obj) {
 
 void G1FullGCCompactTask::compact_region(HeapRegion* hr) {
   assert(!hr->is_humongous(), "Should be no humongous regions in compaction queue");
-  G1CompactRegionClosure compact(collector()->mark_bitmap());
-  hr->apply_to_marked_objects(collector()->mark_bitmap(), &compact);
+  if (UseAltGCForwarding) {
+    G1CompactRegionClosure<true> compact(collector()->mark_bitmap());
+    hr->apply_to_marked_objects(collector()->mark_bitmap(), &compact);
+  } else {
+    G1CompactRegionClosure<false> compact(collector()->mark_bitmap());
+    hr->apply_to_marked_objects(collector()->mark_bitmap(), &compact);
+  }
   // Once all objects have been moved the liveness information
   // needs be cleared.
   collector()->mark_bitmap()->clear_region(hr);

@@ -37,11 +37,11 @@ class G1CollectedHeap;
 class G1FullGCAdjustTask : public G1FullGCTask {
   G1RootProcessor          _root_processor;
   HeapRegionClaimer        _hrclaimer;
-  G1AdjustClosure          _adjust;
+  OopClosure*              _adjust;
   G1StringDedupUnlinkOrOopsDoClosure _adjust_string_dedup;
 
 public:
-  G1FullGCAdjustTask(G1FullCollector* collector);
+  G1FullGCAdjustTask(G1FullCollector* collector, OopClosure* adjust);
   void work(uint worker_id);
 };
 

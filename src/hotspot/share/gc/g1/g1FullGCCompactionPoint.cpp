@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/heapRegion.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "utilities/debug.hpp"
 
@@ -93,6 +94,7 @@ void G1FullGCCompactionPoint::switch_region() {
   initialize_values(true);
 }
 
+template <bool ALT_FWD>
 void G1FullGCCompactionPoint::forward(oop object, size_t size) {
   assert(_current_region != NULL, "Must have been initialized");
 
@@ -103,26 +105,34 @@ void G1FullGCCompactionPoint::forward(oop object, size_t size) {
 
   // Store a forwarding pointer if the object should be moved.
   if ((HeapWord*)object != _compaction_top) {
-    object->forward_to(oop(_compaction_top));
-  } else {
-    if (object->forwardee() != NULL) {
-      // Object should not move but mark-word is used so it looks like the
-      // object is forwarded. Need to clear the mark and it's no problem
-      // since it will be restored by preserved marks. There is an exception
-      // with BiasedLocking, in this case forwardee() will return NULL
-      // even if the mark-word is used. This is no problem since
-      // forwardee() will return NULL in the compaction phase as well.
-      object->init_mark_raw();
+    if (ALT_FWD) {
+      SlidingForwarding::forward_to<true>(object, cast_to_oop(_compaction_top));
     } else {
-      // Make sure object has the correct mark-word set or that it will be
-      // fixed when restoring the preserved marks.
-      assert(object->mark_raw() == markOopDesc::prototype_for_object(object) || // Correct mark
-             object->mark_raw()->must_be_preserved(object) || // Will be restored by PreservedMarksSet
-             (UseBiasedLocking && object->has_bias_pattern_raw()), // Will be restored by BiasedLocking
-             "should have correct prototype obj: " PTR_FORMAT " mark: " PTR_FORMAT " prototype: " PTR_FORMAT,
-             p2i(object), p2i(object->mark_raw()), p2i(markOopDesc::prototype_for_object(object)));
+      object->forward_to(oop(_compaction_top));
     }
-    assert(object->forwardee() == NULL, "should be forwarded to NULL");
+  } else {
+    if (ALT_FWD) {
+      assert(!SlidingForwarding::is_forwarded(object), "should not be forwarded");
+    } else {
+      if (object->forwardee() != NULL) {
+        // Object should not move but mark-word is used so it looks like the
+        // object is forwarded. Need to clear the mark and it's no problem
+        // since it will be restored by preserved marks. There is an exception
+        // with BiasedLocking, in this case forwardee() will return NULL
+        // even if the mark-word is used. This is no problem since
+        // forwardee() will return NULL in the compaction phase as well.
+        object->init_mark_raw();
+      } else {
+        // Make sure object has the correct mark-word set or that it will be
+        // fixed when restoring the preserved marks.
+        assert(object->mark_raw() == markOopDesc::prototype_for_object(object) || // Correct mark
+               object->mark_raw()->must_be_preserved(object) || // Will be restored by PreservedMarksSet
+               (UseBiasedLocking && object->has_bias_pattern_raw()), // Will be restored by BiasedLocking
+               "should have correct prototype obj: " PTR_FORMAT " mark: " PTR_FORMAT " prototype: " PTR_FORMAT,
+               p2i(object), p2i(object->mark_raw()), p2i(markOopDesc::prototype_for_object(object)));
+      }
+      assert(object->forwardee() == NULL, "should be forwarded to NULL");
+    }
   }
 
   // Update compaction values.
@@ -131,6 +141,9 @@ void G1FullGCCompactionPoint::forward(oop object, size_t size) {
     _threshold = _current_region->cross_threshold(_compaction_top - size, _compaction_top);
   }
 }
+
+template void G1FullGCCompactionPoint::forward<true>(oop object, size_t size);
+template void G1FullGCCompactionPoint::forward<false>(oop object, size_t size);
 
 void G1FullGCCompactionPoint::add(HeapRegion* hr) {
   _compaction_regions->append(hr);

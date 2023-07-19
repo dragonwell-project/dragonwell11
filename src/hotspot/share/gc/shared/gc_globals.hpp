@@ -854,6 +854,9 @@
   product(uintx, GCDrainStackTargetSize, 64,                                \
           "Number of entries we will try to leave on the stack "            \
           "during parallel gc")                                             \
-          range(0, max_juint)
+          range(0, max_juint)                                               \
+                                                                            \
+  diagnostic(bool, UseAltGCForwarding, false,                               \
+          "Use alternative GC forwarding that preserves object headers")    \
 
 #endif // SHARE_GC_SHARED_GC_GLOBALS_HPP

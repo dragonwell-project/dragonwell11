@@ -53,6 +53,9 @@ private:
 
   inline bool should_preserve_mark(oop obj, markOop m) const;
 
+  template <bool ALT_FWD>
+  void adjust_during_full_gc_impl();
+
 public:
   size_t size() const { return _stack.size(); }
   inline void push(oop obj, markOop m);

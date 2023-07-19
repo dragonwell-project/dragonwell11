@@ -71,6 +71,7 @@
 #include "gc/shared/isGCActiveMark.hpp"
 #include "gc/shared/oopStorageParState.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "gc/shared/referenceProcessor.inline.hpp"
 #include "gc/shared/taskqueue.inline.hpp"
@@ -1733,6 +1734,10 @@ jint G1CollectedHeap::initialize() {
   _preserved_marks_set.init(ParallelGCThreads);
 
   _collection_set.initialize(max_regions());
+
+  if (UseAltGCForwarding) {
+    SlidingForwarding::initialize(MemRegion((HeapWord*)heap_rs.base(), (HeapWord*)heap_rs.end()), HeapRegion::GrainWords);
+  }
 
   return JNI_OK;
 }

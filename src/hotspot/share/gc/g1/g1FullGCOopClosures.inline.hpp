@@ -30,6 +30,7 @@
 #include "gc/g1/g1FullGCMarker.inline.hpp"
 #include "gc/g1/g1FullGCOopClosures.hpp"
 #include "gc/g1/heapRegionRemSet.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "memory/iterator.inline.hpp"
 #include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
@@ -60,7 +61,8 @@ inline void G1MarkAndPushClosure::do_cld(ClassLoaderData* cld) {
   _marker->follow_cld(cld);
 }
 
-template <class T> inline void G1AdjustClosure::adjust_pointer(T* p) {
+template <bool ALT_FWD>
+template <class T> inline void G1AdjustClosure<ALT_FWD>::adjust_pointer(T* p) {
   T heap_oop = RawAccess<>::oop_load(p);
   if (CompressedOops::is_null(heap_oop)) {
     return;
@@ -73,15 +75,22 @@ template <class T> inline void G1AdjustClosure::adjust_pointer(T* p) {
     return;
   }
 
-  oop forwardee = obj->forwardee();
-  if (forwardee == NULL) {
-    // Not forwarded, return current reference.
-    assert(obj->mark_raw() == markOopDesc::prototype_for_object(obj) || // Correct mark
-           obj->mark_raw()->must_be_preserved(obj) || // Will be restored by PreservedMarksSet
-           (UseBiasedLocking && obj->has_bias_pattern_raw()), // Will be restored by BiasedLocking
-           "Must have correct prototype or be preserved, obj: " PTR_FORMAT ", mark: " PTR_FORMAT ", prototype: " PTR_FORMAT,
-           p2i(obj), p2i(obj->mark_raw()), p2i(markOopDesc::prototype_for_object(obj)));
-    return;
+  oop forwardee = NULL;
+  if (ALT_FWD) {
+    if (!SlidingForwarding::is_forwarded(obj)) {
+      return;
+    }
+    forwardee = SlidingForwarding::forwardee<true>(obj);
+  } else {
+    forwardee = obj->forwardee();
+    if (forwardee == NULL) {
+      assert(obj->mark_raw() == markOopDesc::prototype_for_object(obj) || // Correct mark
+             obj->mark_raw()->must_be_preserved(obj) || // Will be restored by PreservedMarksSet
+             (UseBiasedLocking && obj->has_bias_pattern_raw()), // Will be restored by BiasedLocking
+             "Must have correct prototype or be preserved, obj: " PTR_FORMAT ", mark: " PTR_FORMAT ", prototype: " PTR_FORMAT,
+             p2i(obj), p2i(obj->mark_raw()), p2i(markOopDesc::prototype_for_object(obj)));
+      return;
+    }
   }
 
   // Forwarded, just update.
@@ -89,8 +98,10 @@ template <class T> inline void G1AdjustClosure::adjust_pointer(T* p) {
   RawAccess<IS_NOT_NULL>::oop_store(p, forwardee);
 }
 
-inline void G1AdjustClosure::do_oop(oop* p)       { do_oop_work(p); }
-inline void G1AdjustClosure::do_oop(narrowOop* p) { do_oop_work(p); }
+template <bool ALT_FWD>
+inline void G1AdjustClosure<ALT_FWD>::do_oop(oop* p)       { do_oop_work(p); }
+template <bool ALT_FWD>
+inline void G1AdjustClosure<ALT_FWD>::do_oop(narrowOop* p) { do_oop_work(p); }
 
 inline bool G1IsAliveClosure::do_object_b(oop p) {
   return _bitmap->is_marked(p) || G1ArchiveAllocator::is_closed_archive_object(p);

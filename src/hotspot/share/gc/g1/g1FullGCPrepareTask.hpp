@@ -48,6 +48,10 @@ public:
   void prepare_serial_compaction();
   bool has_freed_regions();
 
+private:
+  template <bool ALT_FWD>
+  void prepare_serial_compaction_impl();
+
 protected:
   class G1CalculatePointersClosure : public HeapRegionClosure {
   protected:
@@ -70,6 +74,7 @@ protected:
     bool freed_regions();
   };
 
+  template <bool ALT_FWD>
   class G1PrepareCompactLiveClosure : public StackObj {
     G1FullGCCompactionPoint* _cp;
 
@@ -78,6 +83,7 @@ protected:
     size_t apply(oop object);
   };
 
+  template <bool ALT_FWD>
   class G1RePrepareClosure : public StackObj {
     G1FullGCCompactionPoint* _cp;
     HeapRegion* _current;

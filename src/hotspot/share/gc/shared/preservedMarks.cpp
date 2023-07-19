@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
+#include "gc/shared/slidingForwarding.inline.hpp"
 #include "gc/shared/workgroup.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
@@ -38,15 +39,30 @@ void PreservedMarks::restore() {
   assert_empty();
 }
 
-void PreservedMarks::adjust_during_full_gc() {
+template <bool ALT_FWD>
+void PreservedMarks::adjust_during_full_gc_impl() {
   StackIterator<OopAndMarkOop, mtGC> iter(_stack);
   while (!iter.is_empty()) {
     OopAndMarkOop* elem = iter.next_addr();
 
     oop obj = elem->get_oop();
-    if (obj->is_forwarded()) {
-      elem->set_oop(obj->forwardee());
+    if (ALT_FWD) {
+      if (SlidingForwarding::is_forwarded(obj)) {
+        elem->set_oop(SlidingForwarding::forwardee<true>(obj));
+      }
+    } else {
+      if (obj->is_forwarded()) {
+        elem->set_oop(obj->forwardee());
+      }
     }
+  }
+}
+
+void PreservedMarks::adjust_during_full_gc() {
+  if (UseAltGCForwarding) {
+    adjust_during_full_gc_impl<true>();
+  } else {
+    adjust_during_full_gc_impl<false>();
   }
 }
 
