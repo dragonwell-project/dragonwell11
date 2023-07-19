@@ -102,11 +102,10 @@ class ObjectMonitor;
 class JavaThread;
 
 class markOopDesc: public oopDesc {
- private:
+ public:
   // Conversion
   uintptr_t value() const { return (uintptr_t) this; }
 
- public:
   // Constants
   enum { age_bits                 = 4,
          lock_bits                = 2,

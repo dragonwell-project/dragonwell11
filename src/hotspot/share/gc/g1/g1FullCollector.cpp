@@ -41,6 +41,7 @@
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/preservedMarks.hpp"
 #include "gc/shared/referenceProcessor.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/weakProcessor.hpp"
 #include "logging/log.hpp"
 #include "runtime/biasedLocking.hpp"
@@ -171,11 +172,19 @@ void G1FullCollector::collect() {
   // Don't add any more derived pointers during later phases
   deactivate_derived_pointers();
 
+  if (UseAltGCForwarding) {
+    SlidingForwarding::begin();
+  }
+
   phase2_prepare_compaction();
 
   phase3_adjust_pointers();
 
   phase4_do_compaction();
+
+  if (UseAltGCForwarding) {
+    SlidingForwarding::end();
+  }
 }
 
 void G1FullCollector::complete_collection() {
@@ -248,8 +257,15 @@ void G1FullCollector::phase3_adjust_pointers() {
   // Adjust the pointers to reflect the new locations
   GCTraceTime(Info, gc, phases) info("Phase 3: Adjust pointers", scope()->timer());
 
-  G1FullGCAdjustTask task(this);
-  run_task(&task);
+  if (UseAltGCForwarding) {
+    G1AdjustClosure<true> adjust;
+    G1FullGCAdjustTask task(this, &adjust);
+    run_task(&task);
+  } else {
+    G1AdjustClosure<false> adjust;
+    G1FullGCAdjustTask task(this, &adjust);
+    run_task(&task);
+  }
 }
 
 void G1FullCollector::phase4_do_compaction() {
