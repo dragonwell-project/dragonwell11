@@ -350,6 +350,8 @@ module java.base {
         jdk.localedata;
     exports com.alibaba.rcm.internal to
             jdk.management;
+    exports jdk.internal.crac to
+            java.rmi;
 
     // the service types defined by the APIs in this module
 

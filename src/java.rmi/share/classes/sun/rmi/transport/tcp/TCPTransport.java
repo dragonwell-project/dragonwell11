@@ -65,6 +65,9 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import jdk.crac.Context;
+import jdk.crac.Resource;
+import jdk.internal.crac.JDKResource;
 import sun.rmi.runtime.Log;
 import sun.rmi.runtime.NewThreadAction;
 import sun.rmi.transport.Channel;
@@ -84,7 +87,7 @@ import sun.rmi.transport.TransportConstants;
  * @author Peter Jones
  */
 @SuppressWarnings("deprecation")
-public class TCPTransport extends Transport {
+public class TCPTransport extends Transport implements JDKResource {
 
     /* tcp package log */
     static final Log tcpLog = Log.getLog("sun.rmi.transport.tcp", "tcp",
@@ -162,6 +165,7 @@ public class TCPTransport extends Transport {
             tcpLog.log(Log.BRIEF, "Version = " +
                 TransportConstants.Version + ", ep = " + getEndpoint());
         }
+        jdk.internal.crac.Core.getJDKContext().register(this);
     }
 
     /**
@@ -344,6 +348,52 @@ public class TCPTransport extends Transport {
                 sm.checkListen(port);
             }
         }
+    }
+
+    @Override
+    public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
+        //close client connection
+        ConnectionHandler connectionHandler = threadConnectionHandler.get();
+        if (connectionHandler != null && connectionHandler.socket != null) {
+            try {
+                if (tcpLog.isLoggable(Log.BRIEF)) {
+                    tcpLog.log(Log.BRIEF, "client socket close: " + connectionHandler.socket);
+                }
+                connectionHandler.socket.close();
+                threadConnectionHandler.remove();
+            } catch (Exception e) {
+                if (tcpLog.isLoggable(Log.BRIEF)) {
+                    tcpLog.log(Log.BRIEF,
+                            "client socket close throws: " + e);
+                }
+            }
+        }
+        //close server socket.
+        if (server != null) {
+            ServerSocket ss = server;
+            server = null;
+            try {
+                if (tcpLog.isLoggable(Log.BRIEF)) {
+                    tcpLog.log(Log.BRIEF, "server socket close: " + ss);
+                }
+                ss.close();
+            } catch (IOException e) {
+                if (tcpLog.isLoggable(Log.BRIEF)) {
+                    tcpLog.log(Log.BRIEF,
+                            "server socket close throws: " + e);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void afterRestore(Context<? extends Resource> context) throws Exception {
+        listen();
+    }
+
+    @Override
+    public Priority getPriority() {
+        return Priority.NORMAL;
     }
 
     /**
