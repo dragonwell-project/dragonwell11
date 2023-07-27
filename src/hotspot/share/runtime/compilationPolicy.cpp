@@ -669,7 +669,7 @@ RFrame* StackWalkCompPolicy::findTopInlinableFrame(GrowableArray<RFrame*>* stack
 
     // Caller counts / call-site counts; i.e. is this call site
     // a hot call site for method next_m?
-    int freq = (invcnt) ? cnt/invcnt : cnt;
+    double freq = (invcnt) ? (double)cnt/(double)invcnt : (double)cnt;
 
     // Check size and frequency limits
     if ((msg = shouldInline(m, freq, cnt)) != NULL) {
@@ -716,7 +716,7 @@ RFrame* StackWalkCompPolicy::senderOf(RFrame* rf, GrowableArray<RFrame*>* stack)
 }
 
 
-const char* StackWalkCompPolicy::shouldInline(const methodHandle& m, float freq, int cnt) {
+const char* StackWalkCompPolicy::shouldInline(const methodHandle& m, double freq, int cnt) {
   // Allows targeted inlining
   // positive filter: should send be inlined?  returns NULL (--> yes)
   // or rejection msg
@@ -729,7 +729,7 @@ const char* StackWalkCompPolicy::shouldInline(const methodHandle& m, float freq,
   }
 
   // bump the max size if the call is frequent
-  if ((freq >= InlineFrequencyRatio) || (cnt >= InlineFrequencyCount)) {
+  if (freq >= InlineFrequencyRatio) {
     if (TraceFrequencyInlining) {
       tty->print("(Inlined frequent method)\n");
       m->print();

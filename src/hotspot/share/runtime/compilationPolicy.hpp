@@ -142,7 +142,7 @@ class StackWalkCompPolicy : public NonTieredCompPolicy {
   // they are used for performance debugging only (print better messages)
   static const char* _msg;            // reason for not inlining
 
-  static const char* shouldInline   (const methodHandle& callee, float frequency, int cnt);
+  static const char* shouldInline   (const methodHandle& callee, double frequency, int cnt);
   // positive filter: should send be inlined?  returns NULL (--> yes) or rejection msg
   static const char* shouldNotInline(const methodHandle& callee);
   // negative filter: should send NOT be inlined?  returns NULL (--> inline) or rejection msg

@@ -1789,9 +1789,9 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   experimental(intx, SpecTrapLimitExtraEntries,  3,                         \
           "Extra method data trap entries for speculation")                 \
                                                                             \
-  develop(intx, InlineFrequencyRatio,    20,                                \
+  develop(double, InlineFrequencyRatio, 0.25,                               \
           "Ratio of call site execution to caller method invocation")       \
-          range(0, max_jint)                                                \
+          range(0.0, DBL_MAX)                                               \
                                                                             \
   diagnostic_pd(intx, InlineFrequencyCount,                                 \
           "Count of call site execution necessary to trigger frequent "     \
