@@ -7267,6 +7267,7 @@ static int checkpoint_restore(int *shmid) {
 
   if (CRTraceStartupTime) {
     tty->print_cr("STARTUPTIME " JLONG_FORMAT " restore-native", os::javaTimeNanos());
+    tty->print_cr("STARTUPTIME " JLONG_FORMAT " restore-native-time", os::javaTimeMillis());
   }
 
   if (info.si_code != SI_QUEUE || info.si_int < 0) {
@@ -7508,6 +7509,10 @@ void VM_Crac::doit() {
     _restore_start_counter = os::javaTimeNanos();
   }
   PerfMemoryLinux::restore();
+
+  if (CRTraceStartupTime) {
+    tty->print_cr("STARTUPTIME " JLONG_FORMAT " restore-start-time", _restore_start_time);
+  }
 
   _ok = true;
 }

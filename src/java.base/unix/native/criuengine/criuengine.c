@@ -89,6 +89,10 @@ static int checkpoint(pid_t jvm,
         exit(0);
     }
 
+    //cppath must write before call criu. criuengine may be exit immediately if criu kill jvm when running in
+    // a container.
+    create_cppath(imagedir);
+
     char* leave_running = getenv("CRAC_CRIU_LEAVE_RUNNING");
 
     char jvmpidchar[32];
@@ -135,7 +139,6 @@ static int checkpoint(pid_t jvm,
         kickjvm(jvm, 0);
     }
 
-    create_cppath(imagedir);
     exit(0);
 }
 
