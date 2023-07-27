@@ -47,6 +47,10 @@ markOop  oopDesc::mark()      const {
   return HeapAccess<MO_VOLATILE>::load_at(as_oop(), mark_offset_in_bytes());
 }
 
+markOop oopDesc::mark_acquire() const {
+  return OrderAccess::load_acquire(&_mark);
+}
+
 markOop  oopDesc::mark_raw()  const {
   return _mark;
 }
@@ -71,6 +75,10 @@ void oopDesc::release_set_mark(markOop m) {
   HeapAccess<MO_RELEASE>::store_at(as_oop(), mark_offset_in_bytes(), m);
 }
 
+void oopDesc::release_set_mark(HeapWord* mem, markOop m) {
+  OrderAccess::release_store((markOop*)(((char*)mem) + mark_offset_in_bytes()), m);
+}
+
 markOop oopDesc::cas_set_mark(markOop new_mark, markOop old_mark) {
   return HeapAccess<>::atomic_cmpxchg_at(new_mark, as_oop(), mark_offset_in_bytes(), old_mark);
 }
@@ -79,15 +87,45 @@ markOop oopDesc::cas_set_mark_raw(markOop new_mark, markOop old_mark, atomic_mem
   return Atomic::cmpxchg(new_mark, &_mark, old_mark, order);
 }
 
+markOop oopDesc::resolve_mark() const {
+  assert(UseAltFastLocking, "Not safe with legacy stack-locking");
+  markOop hdr = mark();
+  if (hdr->has_displaced_mark_helper()) {
+    hdr = hdr->displaced_mark_helper();
+  }
+  return hdr;
+}
+
 void oopDesc::init_mark() {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    markOop header = resolve_mark();
+    assert(UseCompressedClassPointers, "expect compressed klass pointers");
+    set_mark(markOop((header->value() & markOopDesc::klass_mask_in_place) | markOopDesc::prototype()->value()));
+  } else
+#endif
   set_mark(markOopDesc::prototype_for_object(this));
 }
 
 void oopDesc::init_mark_raw() {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    markOop header = resolve_mark();
+    assert(UseCompressedClassPointers, "expect compressed klass pointers");
+    set_mark_raw(markOop((header->value() & markOopDesc::klass_mask_in_place) | markOopDesc::prototype()->value()));
+  } else
+#endif
   set_mark_raw(markOopDesc::prototype_for_object(this));
 }
 
 Klass* oopDesc::klass() const {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    assert(UseCompressedClassPointers, "only with compressed class pointers");
+    markOop header = resolve_mark();
+    return header->klass();
+  } else
+#endif
   if (UseCompressedClassPointers) {
     return Klass::decode_klass_not_null(_metadata._compressed_klass);
   } else {
@@ -95,7 +133,14 @@ Klass* oopDesc::klass() const {
   }
 }
 
-Klass* oopDesc::klass_or_null() const volatile {
+Klass* oopDesc::klass_or_null() const {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    assert(UseCompressedClassPointers, "only with compressed class pointers");
+    markOop header = resolve_mark();
+    return header->klass_or_null();
+  } else
+#endif
   if (UseCompressedClassPointers) {
     return Klass::decode_klass(_metadata._compressed_klass);
   } else {
@@ -103,7 +148,17 @@ Klass* oopDesc::klass_or_null() const volatile {
   }
 }
 
-Klass* oopDesc::klass_or_null_acquire() const volatile {
+Klass* oopDesc::klass_or_null_acquire() const {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    assert(UseCompressedClassPointers, "only with compressed class pointers");
+    markOop header = mark_acquire();
+    if (header->has_monitor()) {
+      header = header->displaced_mark_helper();
+    }
+    return header->klass_or_null();
+  } else
+#endif
   if (UseCompressedClassPointers) {
     // Workaround for non-const load_acquire parameter.
     const volatile narrowKlass* addr = &_metadata._compressed_klass;
@@ -143,6 +198,7 @@ narrowKlass* oopDesc::compressed_klass_addr() {
   } while (0)
 
 void oopDesc::set_klass(Klass* k) {
+  assert(!UseCompactObjectHeaders, "don't set Klass* with compact headers");
   CHECK_SET_KLASS(k);
   if (UseCompressedClassPointers) {
     *compressed_klass_addr() = Klass::encode_klass_not_null(k);
@@ -152,6 +208,7 @@ void oopDesc::set_klass(Klass* k) {
 }
 
 void oopDesc::release_set_klass(HeapWord* mem, Klass* klass) {
+  assert(!UseCompactObjectHeaders, "don't set Klass* with compact headers");
   CHECK_SET_KLASS(klass);
   if (UseCompressedClassPointers) {
     OrderAccess::release_store(compressed_klass_addr(mem),
@@ -164,16 +221,19 @@ void oopDesc::release_set_klass(HeapWord* mem, Klass* klass) {
 #undef CHECK_SET_KLASS
 
 int oopDesc::klass_gap() const {
+  assert(!UseCompactObjectHeaders, "don't get Klass* gap with compact headers");
   return *(int*)(((intptr_t)this) + klass_gap_offset_in_bytes());
 }
 
 void oopDesc::set_klass_gap(HeapWord* mem, int v) {
+  assert(!UseCompactObjectHeaders, "don't set Klass* gap with compact headers");
   if (UseCompressedClassPointers) {
     *(int*)(((char*)mem) + klass_gap_offset_in_bytes()) = v;
   }
 }
 
 void oopDesc::set_klass_gap(int v) {
+  assert(!UseCompactObjectHeaders, "don't set Klass* gap with compact headers");
   set_klass_gap((HeapWord*)this, v);
 }
 

@@ -44,6 +44,9 @@
 //  64 bits:
 //  --------
 //  unused:25 hash:31 -->| unused:1   age:4    biased_lock:1 lock:2 (normal object)
+//  Compact headers:
+//  nklass:32 hash:25 -->|  age:4  biased_lock/self-fwded:1  lock:2 (normal object)
+//
 //  JavaThread*:54 epoch:2 unused:1   age:4    biased_lock:1 lock:2 (biased object)
 //  PromotedObject*:61 --------------------->| promo_bits:3 ----->| (CMS promoted object)
 //  size:64 ----------------------------------------------------->| (CMS free block)
@@ -111,8 +114,12 @@ class markOopDesc: public oopDesc {
          biased_lock_bits         = 1,
          max_hash_bits            = BitsPerWord - age_bits - lock_bits - biased_lock_bits,
          hash_bits                = max_hash_bits > 31 ? 31 : max_hash_bits,
+         hash_bits_compact        = max_hash_bits > 25 ? 25 : max_hash_bits,
          cms_bits                 = LP64_ONLY(1) NOT_LP64(0),
          epoch_bits               = 2
+#ifdef _LP64
+         ,klass_bits               = 32
+#endif
   };
 
   // The biased locking code currently requires that the age bits be
@@ -122,6 +129,10 @@ class markOopDesc: public oopDesc {
          age_shift                = lock_bits + biased_lock_bits,
          cms_shift                = age_shift + age_bits,
          hash_shift               = cms_shift + cms_bits,
+         hash_shift_compact       = age_shift + age_bits,
+#ifdef _LP64
+         klass_shift              = hash_shift_compact + hash_bits_compact,
+#endif
          epoch_shift              = hash_shift
   };
 
@@ -143,6 +154,12 @@ class markOopDesc: public oopDesc {
 
   const static uintptr_t hash_mask = right_n_bits(hash_bits);
   const static uintptr_t hash_mask_in_place = hash_mask << hash_shift;
+  const static uintptr_t hash_mask_compact = right_n_bits(hash_bits_compact);
+  const static uintptr_t hash_mask_compact_in_place = hash_mask_compact << hash_shift_compact;
+#ifdef _LP64
+  const static uintptr_t klass_mask = right_n_bits(klass_bits);
+  const static uintptr_t klass_mask_in_place = klass_mask << klass_shift;
+#endif
 
   // Alignment of JavaThread pointers encoded in object header required by biased locking
   enum { biased_lock_alignment    = 2 << (epoch_shift + epoch_bits)
@@ -307,9 +324,15 @@ class markOopDesc: public oopDesc {
     *(markOop*)ptr = m;
   }
   markOop copy_set_hash(intptr_t hash) const {
-    intptr_t tmp = value() & (~hash_mask_in_place);
-    tmp |= ((hash & hash_mask) << hash_shift);
-    return (markOop)tmp;
+    if (UseCompactObjectHeaders) {
+      intptr_t tmp = value() & (~hash_mask_compact_in_place);
+      tmp |= ((hash & hash_mask_compact) << hash_shift_compact);
+      return (markOop)tmp;
+    } else {
+      intptr_t tmp = value() & (~hash_mask_in_place);
+      tmp |= ((hash & hash_mask) << hash_shift);
+      return (markOop)tmp;
+    }
   }
   // it is only used to be stored into BasicLock as the
   // indicator that the lock is using heavyweight monitor
@@ -349,12 +372,25 @@ class markOopDesc: public oopDesc {
 
   // hash operations
   intptr_t hash() const {
-    return mask_bits(value() >> hash_shift, hash_mask);
+    if (UseCompactObjectHeaders) {
+      return mask_bits(value() >> hash_shift_compact, hash_mask_compact);
+    } else {
+      return mask_bits(value() >> hash_shift, hash_mask);
+    }
   }
 
   bool has_no_hash() const {
     return hash() == no_hash;
   }
+
+#ifdef _LP64
+  inline Klass* klass() const;
+  inline Klass* klass_or_null() const;
+  inline Klass* safe_klass() const;
+  inline markOop set_klass(const Klass* klass) const;
+  inline narrowKlass narrow_klass() const;
+  inline markOop set_narrow_klass(const narrowKlass klass) const;
+#endif
 
   // Prototype mark for initialization
   static markOop prototype() {

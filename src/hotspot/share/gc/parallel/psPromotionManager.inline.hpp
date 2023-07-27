@@ -121,7 +121,16 @@ inline oop PSPromotionManager::copy_to_survivor_space(oop o) {
   // The same test as "o->is_forwarded()"
   if (!test_mark->is_marked()) {
     bool new_obj_is_tenured = false;
-    size_t new_obj_size = o->size();
+    Klass* klass;
+#ifdef _LP64
+    if (UseCompactObjectHeaders) {
+      klass = test_mark->safe_klass();
+    } else
+#endif
+    {
+      klass = o->klass();
+    }
+    size_t new_obj_size = o->size_given_klass(klass);
 
     // Find the objects age, MT safe.
     uint age = (test_mark->has_displaced_mark_helper() /* o->has_displaced_mark() */) ?

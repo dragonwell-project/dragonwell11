@@ -907,7 +907,7 @@ static inline intptr_t get_next_hash(Thread * Self, oop obj) {
     value = v;
   }
 
-  value &= markOopDesc::hash_mask;
+  value &= UseCompactObjectHeaders ? markOopDesc::hash_mask_compact : markOopDesc::hash_mask;
   if (value == 0) value = 0xBAD;
   assert(value != markOopDesc::no_hash, "invariant");
   TEVENT(hashCode: GENERATE);

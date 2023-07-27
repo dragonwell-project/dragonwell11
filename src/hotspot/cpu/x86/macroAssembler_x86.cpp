@@ -4704,12 +4704,29 @@ void MacroAssembler::eden_allocate(Register thread, Register obj,
 // Preserves the contents of address, destroys the contents length_in_bytes and temp.
 void MacroAssembler::zero_memory(Register address, Register length_in_bytes, int offset_in_bytes, Register temp) {
   assert(address != length_in_bytes && address != temp && temp != length_in_bytes, "registers must be different");
-  assert((offset_in_bytes & (BytesPerWord - 1)) == 0, "offset must be a multiple of BytesPerWord");
+  if (UseCompactObjectHeaders) {
+    assert((offset_in_bytes & (BytesPerInt - 1)) == 0, "offset must be a multiple of BytesPerInt");
+  } else {
+    assert((offset_in_bytes & (BytesPerWord - 1)) == 0, "offset must be a multiple of BytesPerWord");
+  }
   Label done;
 
   testptr(length_in_bytes, length_in_bytes);
   jcc(Assembler::zero, done);
 
+  if (UseCompactObjectHeaders) {
+    xorptr(temp, temp);    // use _zero reg to clear memory (shorter code)
+#ifdef _LP64
+    if (!is_aligned(offset_in_bytes, BytesPerWord)) {
+      movl(Address(address, offset_in_bytes), temp);
+      offset_in_bytes += BytesPerInt;
+      decrement(length_in_bytes, BytesPerInt);
+    }
+    assert((offset_in_bytes & (BytesPerWord - 1)) == 0, "offset must be a multiple of BytesPerWord");
+    testptr(length_in_bytes, length_in_bytes);
+    jcc(Assembler::zero, done);
+#endif
+  }
   // initialize topmost word, divide index by 2, check if odd and test if zero
   // note: for the remaining code to work, index must be a multiple of BytesPerWord
 #ifdef ASSERT
@@ -4722,7 +4739,9 @@ void MacroAssembler::zero_memory(Register address, Register length_in_bytes, int
   }
 #endif
   Register index = length_in_bytes;
-  xorptr(temp, temp);    // use _zero reg to clear memory (shorter code)
+  if (!UseCompactObjectHeaders) {
+    xorptr(temp, temp);    // use _zero reg to clear memory (shorter code)
+  }
   if (UseIncDec) {
     shrptr(index, 3);  // divide by 8/16 and set carry flag if bit 2 was set
   } else {
@@ -5646,12 +5665,46 @@ void MacroAssembler::load_mirror(Register mirror, Register method, Register tmp)
   resolve_oop_handle(mirror, tmp);
 }
 
-void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
+#ifdef _LP64
+void MacroAssembler::load_nklass(Register dst, Register src) {
+  assert(UseCompressedClassPointers, "expect compressed class pointers");
+
+  if (!UseCompactObjectHeaders) {
+    movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    return;
+  }
+
+  Label fast;
+  movq(dst, Address(src, oopDesc::mark_offset_in_bytes()));
+  testb(dst, markOopDesc::monitor_value);
+  jccb(Assembler::zero, fast);
+
+  // Fetch displaced header
+  movq(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
+
+  bind(fast);
+  shrq(dst, markOopDesc::klass_shift);
+}
+#endif
+
+void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool null_check_src) {
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
+
+  if (null_check_src) {
+    if (UseCompactObjectHeaders) {
+      null_check(src, oopDesc::mark_offset_in_bytes());
+    } else {
+      null_check(src, oopDesc::klass_offset_in_bytes());
+    }
+  }
 #ifdef _LP64
   if (UseCompressedClassPointers) {
-    movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    if (UseCompactObjectHeaders) {
+      load_nklass(dst, src);
+    } else {
+      movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    }
     decode_klass_not_null(dst, tmp);
   } else
 #endif
@@ -5664,6 +5717,7 @@ void MacroAssembler::load_prototype_header(Register dst, Register src, Register 
 }
 
 void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
+  assert(!UseCompactObjectHeaders, "not with compact headers");
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
 #ifdef _LP64
@@ -5673,6 +5727,45 @@ void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
   } else
 #endif
     movptr(Address(dst, oopDesc::klass_offset_in_bytes()), src);
+}
+
+void MacroAssembler::cmp_klass(Register klass, Register obj, Register tmp) {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    // NOTE: We need to deal with possible ObjectMonitor in object header.
+    // Eventually we might be able to do simple movl & cmpl like in
+    // the CCP path below.
+    load_nklass(tmp, obj);
+    cmpl(klass, tmp);
+  } else if (UseCompressedClassPointers) {
+    cmpl(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+  } else
+#endif
+  {
+    cmpptr(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+  }
+}
+
+void MacroAssembler::cmp_klass(Register src, Register dst, Register tmp1, Register tmp2) {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    // NOTE: We need to deal with possible ObjectMonitor in object header.
+    // Eventually we might be able to do simple movl & cmpl like in
+    // the CCP path below.
+    assert(tmp2 != noreg, "need tmp2");
+    assert_different_registers(src, dst, tmp1, tmp2);
+    load_nklass(tmp1, src);
+    load_nklass(tmp2, dst);
+    cmpl(tmp1, tmp2);
+  } else if (UseCompressedClassPointers) {
+    movl(tmp1, Address(src, oopDesc::klass_offset_in_bytes()));
+    cmpl(tmp1, Address(dst, oopDesc::klass_offset_in_bytes()));
+  } else
+#endif
+  {
+    movptr(tmp1, Address(src, oopDesc::klass_offset_in_bytes()));
+    cmpptr(tmp1, Address(dst, oopDesc::klass_offset_in_bytes()));
+  }
 }
 
 void MacroAssembler::access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,

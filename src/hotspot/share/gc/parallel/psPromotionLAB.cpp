@@ -46,7 +46,9 @@ void PSPromotionLAB::initialize(MemRegion lab) {
 
   // Initialize after VM starts up because header_size depends on compressed
   // oops.
-  filler_header_size = align_object_size(typeArrayOopDesc::header_size(T_INT));
+  filler_header_size = UseCompactObjectHeaders ?
+                        (arrayOopDesc::base_offset_in_bytes(T_INT) + BytesPerWord) / BytesPerWord
+                       : align_object_size(typeArrayOopDesc::header_size(T_INT));
 
   // We can be initialized to a zero size!
   if (free() > 0) {
@@ -82,17 +84,33 @@ void PSPromotionLAB::flush() {
   // so they can always fill with an array.
   HeapWord* tlab_end = end() + filler_header_size;
   typeArrayOop filler_oop = (typeArrayOop) top();
-  filler_oop->set_mark_raw(markOopDesc::prototype());
-  filler_oop->set_klass(Universe::intArrayKlassObj());
-  const size_t array_length =
-    pointer_delta(tlab_end, top()) - typeArrayOopDesc::header_size(T_INT);
-  assert( (array_length * (HeapWordSize/sizeof(jint))) < (size_t)max_jint, "array too big in PSPromotionLAB");
-  filler_oop->set_length((int)(array_length * (HeapWordSize/sizeof(jint))));
+  int header_size = 0;
+  size_t array_length = 0;
+  if (UseCompactObjectHeaders) {
+    filler_oop->set_mark(Universe::intArrayKlassObj()->prototype_header());
+    header_size = arrayOopDesc::base_offset_in_bytes(T_INT);
+    const size_t array_length_bytes = pointer_delta(tlab_end, top(), 1) - header_size;
+    assert((array_length_bytes / sizeof(jint)) < (size_t)max_jint, "array too big in PSPromotionLAB");
+    filler_oop->set_length((int)(array_length_bytes / sizeof(jint)));
+  } else {
+    filler_oop->set_mark_raw(markOopDesc::prototype());
+    filler_oop->set_klass(Universe::intArrayKlassObj());
+    array_length =
+      pointer_delta(tlab_end, top()) - typeArrayOopDesc::header_size(T_INT);
+    assert( (array_length * (HeapWordSize/sizeof(jint))) < (size_t)max_jint, "array too big in PSPromotionLAB");
+    filler_oop->set_length((int)(array_length * (HeapWordSize/sizeof(jint))));
+  }
 
 #ifdef ASSERT
   // Note that we actually DO NOT want to use the aligned header size!
-  HeapWord* elt_words = ((HeapWord*)filler_oop) + typeArrayOopDesc::header_size(T_INT);
-  Copy::fill_to_words(elt_words, array_length, 0xDEAABABE);
+  if (UseCompactObjectHeaders) {
+    const size_t array_length_words = pointer_delta(tlab_end, top()) - heap_word_size(header_size);
+    HeapWord* elt_words = cast_from_oop<HeapWord*>(filler_oop) + heap_word_size(header_size);
+    Copy::fill_to_words(elt_words, array_length_words, 0xDEAABABE);
+  } else {
+    HeapWord* elt_words = ((HeapWord*)filler_oop) + typeArrayOopDesc::header_size(T_INT);
+    Copy::fill_to_words(elt_words, array_length, 0xDEAABABE);
+  }
 #endif
 
   set_bottom(NULL);

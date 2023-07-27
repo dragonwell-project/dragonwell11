@@ -44,7 +44,10 @@ PLAB::PLAB(size_t desired_plab_sz_) :
   _end(NULL), _hard_end(NULL), _allocated(0), _wasted(0), _undo_wasted(0)
 {
   // ArrayOopDesc::header_size depends on command line initialization.
-  AlignmentReserve = oopDesc::header_size() > MinObjAlignment ? align_object_size(arrayOopDesc::header_size(T_INT)) : 0;
+  AlignmentReserve = oopDesc::header_size() > MinObjAlignment ? align_object_size(
+                       UseCompactObjectHeaders ?
+                         arrayOopDesc::base_offset_in_bytes(T_INT) / HeapWordSize :
+                         arrayOopDesc::header_size(T_INT)) : 0;
   assert(min_size() > AlignmentReserve,
          "Minimum PLAB size " SIZE_FORMAT " must be larger than alignment reserve " SIZE_FORMAT " "
          "to be able to contain objects", min_size(), AlignmentReserve);

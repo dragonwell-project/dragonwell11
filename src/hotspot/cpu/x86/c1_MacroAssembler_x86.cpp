@@ -182,7 +182,10 @@ void C1_MacroAssembler::try_allocate(Register obj, Register var_size_in_bytes, i
 void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register len, Register t1, Register t2) {
   assert_different_registers(obj, klass, len);
   Register tmp_encode_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
-  if (UseBiasedLocking && !len->is_valid()) {
+  if (UseCompactObjectHeaders) {
+    assert_different_registers(obj, klass, len, t1, t2);
+  }
+  if (UseCompactObjectHeaders || (UseBiasedLocking && !len->is_valid())) {
     assert_different_registers(obj, klass, len, t1, t2);
     movptr(t1, Address(klass, Klass::prototype_header_offset()));
     movptr(Address(obj, oopDesc::mark_offset_in_bytes()), t1);
@@ -190,22 +193,24 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
     // This assumes that all prototype bits fit in an int32_t
     movptr(Address(obj, oopDesc::mark_offset_in_bytes ()), (int32_t)(intptr_t)markOopDesc::prototype());
   }
+  if (!UseCompactObjectHeaders) {
 #ifdef _LP64
-  if (UseCompressedClassPointers) { // Take care not to kill klass
-    movptr(t1, klass);
-    encode_klass_not_null(t1, tmp_encode_klass);
-    movl(Address(obj, oopDesc::klass_offset_in_bytes()), t1);
-  } else
+    if (UseCompressedClassPointers) { // Take care not to kill klass
+      movptr(t1, klass);
+      encode_klass_not_null(t1, tmp_encode_klass);
+      movl(Address(obj, oopDesc::klass_offset_in_bytes()), t1);
+    } else
 #endif
-  {
-    movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
+    {
+      movptr(Address(obj, oopDesc::klass_offset_in_bytes()), klass);
+    }
   }
 
   if (len->is_valid()) {
     movl(Address(obj, arrayOopDesc::length_offset_in_bytes()), len);
   }
 #ifdef _LP64
-  else if (UseCompressedClassPointers) {
+  else if (UseCompressedClassPointers && !UseCompactObjectHeaders) {
     xorptr(t1, t1);
     store_klass_gap(obj, t1);
   }
@@ -248,6 +253,7 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
     const Register t1_zero = t1;
     const Register index = t2;
     const int threshold = 6 * BytesPerWord;   // approximate break even point for code size (see comments below)
+
     if (var_size_in_bytes != noreg) {
       mov(index, var_size_in_bytes);
       initialize_body(obj, index, hdr_size_in_bytes, t1_zero);
@@ -299,8 +305,9 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
   jcc(Assembler::above, slow_case);
 
   const Register arr_size = t2; // okay to be the same
+  int base_offset_in_bytes = UseCompactObjectHeaders ? header_size : header_size * BytesPerWord;
   // align object end
-  movptr(arr_size, (int32_t)header_size * BytesPerWord + MinObjAlignmentInBytesMask);
+  movptr(arr_size, (int32_t)base_offset_in_bytes + MinObjAlignmentInBytesMask);
   lea(arr_size, Address(arr_size, len, f));
   andptr(arr_size, ~MinObjAlignmentInBytesMask);
 
@@ -310,7 +317,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   // clear rest of allocated space
   const Register len_zero = len;
-  initialize_body(obj, arr_size, header_size * BytesPerWord, len_zero);
+  initialize_body(obj, arr_size, base_offset_in_bytes , len_zero);
 
   if (CURRENT_ENV->dtrace_alloc_probes()) {
     assert(obj == rax, "must be");

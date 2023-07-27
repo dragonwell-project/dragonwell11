@@ -3730,8 +3730,8 @@ bool LibraryCallKit::inline_native_hashcode(bool is_virtual, bool is_static) {
   // We depend on hash_mask being at most 32 bits and avoid the use of
   // hash_mask_in_place because it could be larger than 32 bits in a 64-bit
   // vm: see markOop.hpp.
-  Node *hash_mask      = _gvn.intcon(markOopDesc::hash_mask);
-  Node *hash_shift     = _gvn.intcon(markOopDesc::hash_shift);
+  Node *hash_mask      = _gvn.intcon(UseCompactObjectHeaders ? markOopDesc::hash_mask_compact : markOopDesc::hash_mask);
+  Node *hash_shift     = _gvn.intcon(UseCompactObjectHeaders ? markOopDesc::hash_shift_compact : markOopDesc::hash_shift);
   Node *hshifted_header= _gvn.transform(new URShiftXNode(header, hash_shift));
   // This hack lets the hash bits live anywhere in the mark object now, as long
   // as the shift drops the relevant bits into the low 32 bits.  Note that

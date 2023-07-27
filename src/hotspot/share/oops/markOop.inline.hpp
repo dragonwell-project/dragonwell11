@@ -29,6 +29,7 @@
 #include "oops/markOop.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/safepoint.hpp"
 
 // Should this header be preserved during GC (when biased locking is enabled)?
 inline bool markOopDesc::must_be_preserved_with_bias(oop obj_containing_mark) const {
@@ -110,5 +111,46 @@ inline markOop markOopDesc::prototype_for_object(oop obj) {
 #endif
   return obj->klass()->prototype_header();
 }
+
+#ifdef _LP64
+narrowKlass markOopDesc::narrow_klass() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  return narrowKlass(value() >> klass_shift);
+}
+
+Klass* markOopDesc::klass() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  assert(!Klass::is_null(narrow_klass()), "narrow klass must not be null: " INTPTR_FORMAT, value());
+  return Klass::decode_klass_not_null(narrow_klass());
+}
+
+Klass* markOopDesc::klass_or_null() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  return Klass::decode_klass(narrow_klass());
+}
+
+Klass* markOopDesc::safe_klass() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  assert(SafepointSynchronize::is_at_safepoint(), "only call at safepoint");
+  markOop m = markOop(value());
+  if (m->has_displaced_mark_helper()) {
+    m = m->displaced_mark_helper();
+  }
+  return Klass::decode_klass_not_null(m->narrow_klass());
+}
+
+markOop markOopDesc::set_narrow_klass(const narrowKlass nklass) const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  return markOop((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
+}
+
+markOop markOopDesc::set_klass(const Klass* klass) const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  assert(UseCompressedClassPointers, "expect compressed klass pointers");
+  // TODO: Don't cast to non-const, change CKP::encode() to accept const Klass* instead.
+  narrowKlass nklass = Klass::encode_klass(const_cast<Klass*>(klass));
+  return set_narrow_klass(nklass);
+}
+#endif
 
 #endif // SHARE_VM_OOPS_MARKOOP_INLINE_HPP

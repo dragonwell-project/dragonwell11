@@ -64,6 +64,7 @@ class oopDesc {
 
  public:
   inline markOop  mark()          const;
+  inline markOop  mark_acquire()  const;
   inline markOop  mark_raw()      const;
   inline markOop* mark_addr_raw() const;
 
@@ -72,8 +73,11 @@ class oopDesc {
   static inline void set_mark_raw(HeapWord* mem, markOop m);
 
   inline void release_set_mark(markOop m);
+  static inline void release_set_mark(HeapWord* mem, markOop m);
   inline markOop cas_set_mark(markOop new_mark, markOop old_mark);
   inline markOop cas_set_mark_raw(markOop new_mark, markOop old_mark, atomic_memory_order order = memory_order_conservative);
+
+  inline markOop resolve_mark() const;
 
   // Used only to re-initialize the mark word (e.g., of promoted
   // objects during a GC) -- requires a valid klass pointer
@@ -81,8 +85,8 @@ class oopDesc {
   inline void init_mark_raw();
 
   inline Klass* klass() const;
-  inline Klass* klass_or_null() const volatile;
-  inline Klass* klass_or_null_acquire() const volatile;
+  inline Klass* klass_or_null() const;
+  inline Klass* klass_or_null_acquire() const;
   static inline Klass** klass_addr(HeapWord* mem);
   static inline narrowKlass* compressed_klass_addr(HeapWord* mem);
   inline Klass** klass_addr();
@@ -100,7 +104,14 @@ class oopDesc {
   inline oop list_ptr_from_klass();
 
   // size of object header, aligned to platform wordSize
-  static int header_size() { return sizeof(oopDesc)/HeapWordSize; }
+  static int header_size() {
+#ifdef _LP64
+    if (UseCompactObjectHeaders) {
+      return sizeof(markOop) / HeapWordSize;
+    } else
+#endif
+    return sizeof(oopDesc)/HeapWordSize;
+  }
 
   // Returns whether this is an instance of k or an instance of a subclass of k
   inline bool is_a(Klass* k) const;
@@ -327,11 +338,36 @@ class oopDesc {
 
   // for code generation
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
-  static int klass_offset_in_bytes()     { return offset_of(oopDesc, _metadata._klass); }
+  static int klass_offset_in_bytes()     {
+#ifdef _LP64
+    if (UseCompactObjectHeaders) {
+      //STATIC_ASSERT(markOopDesc::klass_shift % 8 == 0);
+      //return mark_offset_in_bytes() + markOopDesc::klass_shift / 8;
+      return mark_offset_in_bytes() + 4; // Hard coded here
+    } else
+#endif
+    return offset_of(oopDesc, _metadata._klass);
+  }
   static int klass_gap_offset_in_bytes() {
     assert(has_klass_gap(), "only applicable to compressed klass pointers");
+    assert(!UseCompactObjectHeaders, "don't use klass_offset_in_bytes() with compact headers");
     return klass_offset_in_bytes() + sizeof(narrowKlass);
   }
+
+  static int base_offset_in_bytes() {
+#ifdef _LP64
+    if (UseCompactObjectHeaders) {
+      // With compact headers, the Klass* field is not used for the Klass*
+      // and is used for the object fields instead.
+      assert(sizeof(markOop) == 8, "sanity");
+      return sizeof(markOop);
+    } else if (UseCompressedClassPointers) {
+      return sizeof(markOop) + sizeof(narrowKlass);
+    } else
+#endif
+    return sizeof(oopDesc);
+  }
+
 
   // for error reporting
   static oop   decode_oop_raw(narrowOop narrow_oop);

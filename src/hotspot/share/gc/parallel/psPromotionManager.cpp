@@ -367,7 +367,7 @@ template <class T> void PSPromotionManager::process_array_chunk_work(
 
 void PSPromotionManager::process_array_chunk(oop old) {
   assert(PSChunkLargeArrays, "invariant");
-  assert(old->is_objArray(), "invariant");
+  assert(UseCompactObjectHeaders || old->is_objArray(), "invariant");
   assert(old->is_forwarded(), "invariant");
 
   TASKQUEUE_STATS_ONLY(++_array_chunks_processed);
@@ -478,7 +478,7 @@ void InstanceRefKlass::oop_ps_push_contents(oop obj, PSPromotionManager* pm) {
 }
 
 void ObjArrayKlass::oop_ps_push_contents(oop obj, PSPromotionManager* pm) {
-  assert(obj->is_objArray(), "obj must be obj array");
+  assert(UseCompactObjectHeaders || obj->is_objArray(), "obj must be obj array");
   PushContentsClosure cl(pm);
   if (UseCompressedOops) {
     oop_oop_iterate_elements<narrowOop>(objArrayOop(obj), &cl);

@@ -218,7 +218,7 @@ void G1ParScanThreadState::report_promotion_event(InCSetState const dest_state,
 oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
                                                  oop const old,
                                                  markOop const old_mark) {
-  const size_t word_sz = old->size();
+  const size_t word_sz = UseCompactObjectHeaders ? old->size_given_klass(old_mark->safe_klass()) : old->size();
   HeapRegion* const from_region = _g1h->heap_region_containing(old);
   // +1 to make the -1 indexes valid...
   const int young_index = from_region->young_index_in_cset()+1;
@@ -308,7 +308,8 @@ oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
 
     _surviving_young_words[young_index] += word_sz;
 
-    if (obj->is_objArray() && arrayOop(obj)->length() >= ParGCArrayScanChunk) {
+    bool is_obj_array = UseCompactObjectHeaders ? old_mark->safe_klass()->is_objArray_klass() : obj->is_objArray();
+    if (is_obj_array && arrayOop(obj)->length() >= ParGCArrayScanChunk) {
       // We keep track of the next start index in the length field of
       // the to-space object. The actual length can be found in the
       // length field of the from-space object.

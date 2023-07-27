@@ -319,8 +319,19 @@ class MacroAssembler: public Assembler {
   void load_mirror(Register mirror, Register method, Register tmp = rscratch2);
 
   // oop manipulations
-  void load_klass(Register dst, Register src, Register tmp);
+  void load_klass(Register dst, Register src, Register tmp, bool null_check_src = false);
+#ifdef _LP64
+  void load_nklass(Register dst, Register src);
+#endif
   void store_klass(Register dst, Register src, Register tmp);
+
+  // Compares the Klass pointer of an object to a given Klass (which might be narrow,
+  // depending on UseCompressedClassPointers).
+  void cmp_klass(Register klass, Register dst, Register tmp);
+
+  // Compares the Klass pointer of two objects o1 and o2. Result is in the condition flags.
+  // Uses t1 and t2 as temporary registers.
+  void cmp_klass(Register src, Register dst, Register tmp1, Register tmp2);
 
   void access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                       Register tmp1, Register thread_tmp);

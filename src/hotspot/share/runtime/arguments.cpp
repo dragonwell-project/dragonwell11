@@ -2094,6 +2094,22 @@ bool Arguments::check_vm_args_consistency() {
     }
   }
 
+  if (UseCompactObjectHeaders) {
+#if !defined(_LP64) || !(defined(X86) || defined(AARCH64))
+    jio_fprintf(defaultStream::error_stream(), "Platform do not support UseCompactObjectHeaders.\n");
+    status = false;
+#else
+    if (FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+    if (FLAG_IS_CMDLINE(UseBiasedLocking) && UseBiasedLocking) {
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+    FLAG_SET_DEFAULT(UseAltFastLocking, true);
+    FLAG_SET_DEFAULT(UseAltGCForwarding, true);
+#endif
+  }
+
   if (UseAltFastLocking) {
 #if !defined(_LP64) || !(defined(X86) || defined(AARCH64))
     jio_fprintf(defaultStream::error_stream(), "Platform do not support UseAltFastLocking.\n");

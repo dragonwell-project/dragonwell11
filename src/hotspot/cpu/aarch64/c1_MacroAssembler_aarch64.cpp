@@ -187,7 +187,7 @@ void C1_MacroAssembler::try_allocate(Register obj, Register var_size_in_bytes, i
 
 void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register len, Register t1, Register t2) {
   assert_different_registers(obj, klass, len);
-  if (UseBiasedLocking && !len->is_valid()) {
+  if (UseCompactObjectHeaders || (UseBiasedLocking && !len->is_valid())) {
     assert_different_registers(obj, klass, len, t1, t2);
     ldr(t1, Address(klass, Klass::prototype_header_offset()));
   } else {
@@ -196,16 +196,18 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
   }
   str(t1, Address(obj, oopDesc::mark_offset_in_bytes()));
 
-  if (UseCompressedClassPointers) { // Take care not to kill klass
-    encode_klass_not_null(t1, klass);
-    strw(t1, Address(obj, oopDesc::klass_offset_in_bytes()));
-  } else {
-    str(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+  if (!UseCompactObjectHeaders) {
+    if (UseCompressedClassPointers) { // Take care not to kill klass
+      encode_klass_not_null(t1, klass);
+      strw(t1, Address(obj, oopDesc::klass_offset_in_bytes()));
+    } else {
+      str(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+    }
   }
 
   if (len->is_valid()) {
     strw(len, Address(obj, arrayOopDesc::length_offset_in_bytes()));
-  } else if (UseCompressedClassPointers) {
+  } else if (UseCompressedClassPointers && !UseCompactObjectHeaders) {
     store_klass_gap(obj, zr);
   }
 }
@@ -218,6 +220,13 @@ void C1_MacroAssembler::initialize_body(Register obj, Register len_in_bytes, int
   // len_in_bytes is positive and ptr sized
   subs(len_in_bytes, len_in_bytes, hdr_size_in_bytes);
   br(Assembler::EQ, done);
+
+  // Zero first 4 bytes, if start offset is not word aligned.
+  if (UseCompactObjectHeaders && !is_aligned(hdr_size_in_bytes, BytesPerWord)) {
+    strw(zr, Address(obj, hdr_size_in_bytes));
+    hdr_size_in_bytes += BytesPerInt;
+    subs(len_in_bytes, len_in_bytes, BytesPerInt);
+  }
 
   // Preserve obj
   if (hdr_size_in_bytes)
@@ -312,8 +321,9 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
   br(Assembler::HS, slow_case);
 
   const Register arr_size = t2; // okay to be the same
+  int base_offset_in_bytes = UseCompactObjectHeaders ? header_size : header_size * BytesPerWord;
   // align object end
-  mov(arr_size, (int32_t)header_size * BytesPerWord + MinObjAlignmentInBytesMask);
+  mov(arr_size, (int32_t)base_offset_in_bytes + MinObjAlignmentInBytesMask);
   add(arr_size, arr_size, len, ext::uxtw, f);
   andr(arr_size, arr_size, ~MinObjAlignmentInBytesMask);
 
@@ -323,7 +333,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   // clear rest of allocated space
   const Register len_zero = len;
-  initialize_body(obj, arr_size, header_size * BytesPerWord, len_zero);
+  initialize_body(obj, arr_size, base_offset_in_bytes, len_zero);
 
   membar(StoreStore);
 
@@ -340,7 +350,11 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   verify_oop(receiver);
   // explicit NULL check not needed since load from [klass_offset] causes a trap
   // check against inline cache
-  assert(!MacroAssembler::needs_explicit_null_check(oopDesc::klass_offset_in_bytes()), "must add explicit null check");
+  if (UseCompactObjectHeaders) {
+    assert(!MacroAssembler::needs_explicit_null_check(oopDesc::mark_offset_in_bytes()), "must add explicit null check");
+  } else {
+    assert(!MacroAssembler::needs_explicit_null_check(oopDesc::klass_offset_in_bytes()), "must add explicit null check");
+  }
 
   cmp_klass(receiver, iCache, rscratch1);
 }

@@ -480,7 +480,9 @@ class VerifyObjectStartArrayClosure : public ObjectClosure {
     _old_gen(old_gen), _start_array(start_array) { }
 
   virtual void do_object(oop obj) {
-    HeapWord* test_addr = (HeapWord*)obj + 1;
+    // With compact headers, the objects can be one-word sized.
+    size_t int_off = UseCompactObjectHeaders ? MIN2(1, obj->size() - 1) : 1;
+    HeapWord* test_addr = (HeapWord*)obj + int_off;
     guarantee(_start_array->object_start(test_addr) == (HeapWord*)obj, "ObjectStartArray cannot find start of object");
     guarantee(_start_array->is_block_allocated((HeapWord*)obj), "ObjectStartArray missing block allocation");
   }

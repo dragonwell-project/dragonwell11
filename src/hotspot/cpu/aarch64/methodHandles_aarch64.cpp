@@ -296,8 +296,12 @@ void MethodHandles::generate_method_handle_dispatch(MacroAssembler* _masm,
         __ null_check(receiver_reg);
       } else {
         // load receiver klass itself
-        __ null_check(receiver_reg, oopDesc::klass_offset_in_bytes());
-        __ load_klass(temp1_recv_klass, receiver_reg);
+        if (UseCompactObjectHeaders) {
+          __ load_klass(temp1_recv_klass, receiver_reg, true);
+        } else {
+          __ null_check(receiver_reg, oopDesc::klass_offset_in_bytes());
+          __ load_klass(temp1_recv_klass, receiver_reg);
+        }
         __ verify_klass_ptr(temp1_recv_klass);
       }
       BLOCK_COMMENT("check_receiver {");

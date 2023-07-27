@@ -3784,9 +3784,46 @@ void MacroAssembler::cmpoop(Register obj1, Register obj2) {
   bs->obj_equals(this, obj1, obj2);
 }
 
-void MacroAssembler::load_klass(Register dst, Register src) {
-  if (UseCompressedClassPointers) {
+// Loads the obj's Klass* into dst.
+// src and dst must be distinct registers
+// Preserves all registers (incl src, rscratch1 and rscratch2), but clobbers condition flags
+void MacroAssembler::load_nklass(Register dst, Register src) {
+  assert(UseCompressedClassPointers, "expects UseCompressedClassPointers");
+
+  if (!UseCompactObjectHeaders) {
     ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    return;
+  }
+
+  Label fast;
+
+  // Check if we can take the (common) fast path, if obj is unlocked.
+  ldr(dst, Address(src, oopDesc::mark_offset_in_bytes()));
+  tbz(dst, exact_log2(markOopDesc::monitor_value), fast);
+
+  // Fetch displaced header
+  ldr(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
+
+  // Fast-path: shift and decode Klass*.
+  bind(fast);
+  lsr(dst, dst, markOopDesc::klass_shift);
+}
+
+void MacroAssembler::load_klass(Register dst, Register src, bool null_check_src) {
+  if (null_check_src) {
+    if (UseCompactObjectHeaders) {
+      null_check(src, oopDesc::mark_offset_in_bytes());
+    } else {
+      null_check(src, oopDesc::klass_offset_in_bytes());
+    }
+  }
+
+  if (UseCompressedClassPointers) {
+    if (UseCompactObjectHeaders) {
+      load_nklass(dst, src);
+    } else {
+      ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
+    }
     decode_klass_not_null(dst);
   } else {
     ldr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
@@ -3809,8 +3846,15 @@ void MacroAssembler::load_mirror(Register dst, Register method, Register tmp) {
 }
 
 void MacroAssembler::cmp_klass(Register oop, Register trial_klass, Register tmp) {
+  if (UseCompactObjectHeaders) {
+    assert_different_registers(oop, trial_klass, tmp);
+  }
   if (UseCompressedClassPointers) {
-    ldrw(tmp, Address(oop, oopDesc::klass_offset_in_bytes()));
+    if (UseCompactObjectHeaders) {
+      load_nklass(tmp, oop);
+    } else {
+      ldrw(tmp, Address(oop, oopDesc::klass_offset_in_bytes()));
+    }
     if (Universe::narrow_klass_base() == NULL) {
       cmp(trial_klass, tmp, LSL, Universe::narrow_klass_shift());
       return;
