@@ -343,4 +343,10 @@ public interface JavaLangAccess {
      * Get the reference to the thread's inherited {@code ResourceContainer}
      */
     AbstractResourceContainer getInheritedResourceContainer(Thread thread);
+
+    /**
+     * Returns '<loader-name>' @<id> if classloader has a name
+     * explicitly set otherwise <qualified-class-name> @<id>
+     */
+    String getLoaderNameID(ClassLoader loader);
 }
