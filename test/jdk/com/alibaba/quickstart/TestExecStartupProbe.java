@@ -69,7 +69,7 @@ public class TestExecStartupProbe implements SingleProjectProvider {
                         "        fw.write(\"%s\");\n" +
                         "        fw.close();\n" +
                         "        String debug = System.getProperty(\"jdk.debug\");\n" +
-                        "        int time = 10 + (debug.equals(\"release\") ? 0 : 10);\n"+
+                        "        int time = 15 + (debug.equals(\"release\") ? 0 : 10);\n"+
                         "        Thread.sleep(time * 1000);\n" +
                         "    }" +
                         " }";
