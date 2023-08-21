@@ -224,6 +224,8 @@ class Linux {
 
   static jlong fast_thread_cpu_time(clockid_t clockid);
 
+  static jlong sendfile(int out_fd, int in_fd, jlong* offset, jlong count);
+
   static void initialize_os_info();
   static bool os_version_is_known();
   static uint32_t os_version();
