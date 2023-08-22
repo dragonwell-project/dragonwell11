@@ -123,10 +123,7 @@ class HeapRegionManager: public CHeapObj<mtGC> {
 public:
   bool is_free(HeapRegion* hr) const;
 #endif
-  // Returns whether the given region is available for allocation.
-  bool is_available(uint region) const;
-
- public:
+public:
   // Empty constructor, we'll initialize it with the initialize() method.
   HeapRegionManager() : _regions(), _heap_mapper(NULL), _num_committed(0),
                     _next_bitmap_mapper(NULL), _prev_bitmap_mapper(NULL), _bot_mapper(NULL),
@@ -150,6 +147,13 @@ public:
   // Return the HeapRegion at the given index. Assume that the index
   // is valid.
   inline HeapRegion* at(uint index) const;
+
+  // Return the HeapRegion at the given index, NULL if the index
+  // is for an unavailable region.
+  inline HeapRegion* at_or_null(uint index) const;
+
+  // Returns whether the given region is available for allocation.
+  bool is_available(uint region) const;
 
   // Return the next region (by index) that is part of the same
   // humongous object that hr is part of.
