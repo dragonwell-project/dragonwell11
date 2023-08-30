@@ -114,7 +114,7 @@ static bool is_unboxing_method(ciMethod* callee_method, Compile* C) {
 // positive filter: should callee be inlined?
 bool InlineTree::should_inline(ciMethod* callee_method, ciMethod* caller_method,
                                int caller_bci, ciCallProfile& profile,
-                               WarmCallInfo* wci_result) {
+                               WarmCallInfo* wci_result, int receiver_index) {
   // Allows targeted inlining
   if (C->directive()->should_inline(callee_method)) {
     *wci_result = *(WarmCallInfo::always_hot());
@@ -165,6 +165,11 @@ bool InlineTree::should_inline(ciMethod* callee_method, ciMethod* caller_method,
 
   assert(invoke_count != 0, "require invocation count greater than zero");
   double freq = (double)call_site_count / (double)invoke_count;
+
+  if (InlineFreqOnReceiver && receiver_index != -1) {
+    guarantee(profile.has_receiver(receiver_index), "sanity");
+    freq = freq * profile.receiver_prob(receiver_index);
+  }
 
   // bump the max size if the call is frequent
   if ((freq >= InlineFrequencyRatio) ||
@@ -332,7 +337,7 @@ bool InlineTree::should_not_inline(ciMethod *callee_method,
 // Relocated from "InliningClosure::try_to_inline"
 bool InlineTree::try_to_inline(ciMethod* callee_method, ciMethod* caller_method,
                                int caller_bci, JVMState* jvms, ciCallProfile& profile,
-                               WarmCallInfo* wci_result, bool& should_delay) {
+                               WarmCallInfo* wci_result, bool& should_delay, int receiver_index) {
 
   if (ClipInlining && (int)count_inline_bcs() >= DesiredMethodLimit) {
     if (!callee_method->force_inline() || !IncrementalInline) {
@@ -345,7 +350,7 @@ bool InlineTree::try_to_inline(ciMethod* callee_method, ciMethod* caller_method,
 
   _forced_inline = false; // Reset
   if (!should_inline(callee_method, caller_method, caller_bci, profile,
-                     wci_result)) {
+                     wci_result, receiver_index)) {
     return false;
   }
   if (should_not_inline(callee_method, caller_method, jvms, wci_result)) {
@@ -543,7 +548,7 @@ void InlineTree::print_inlining(ciMethod* callee_method, int caller_bci,
 }
 
 //------------------------------ok_to_inline-----------------------------------
-WarmCallInfo* InlineTree::ok_to_inline(ciMethod* callee_method, JVMState* jvms, ciCallProfile& profile, WarmCallInfo* initial_wci, bool& should_delay) {
+WarmCallInfo* InlineTree::ok_to_inline(ciMethod* callee_method, JVMState* jvms, ciCallProfile& profile, WarmCallInfo* initial_wci, bool& should_delay, int receiver_index) {
   assert(callee_method != NULL, "caller checks for optimized virtual!");
   assert(!should_delay, "should be initialized to false");
 #ifdef ASSERT
@@ -576,7 +581,7 @@ WarmCallInfo* InlineTree::ok_to_inline(ciMethod* callee_method, JVMState* jvms, 
   // Check if inlining policy says no.
   WarmCallInfo wci = *(initial_wci);
   bool success = try_to_inline(callee_method, caller_method, caller_bci,
-                               jvms, profile, &wci, should_delay);
+                               jvms, profile, &wci, should_delay, receiver_index);
 
 #ifndef PRODUCT
   if (InlineWarmCalls && (PrintOpto || C->print_inlining())) {

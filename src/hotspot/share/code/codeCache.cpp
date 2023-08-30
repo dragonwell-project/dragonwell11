@@ -1678,9 +1678,9 @@ void CodeCache::print_summary(outputStream* st, bool detailed) {
   }
 
   if (detailed) {
-    st->print_cr(" total_blobs=" UINT32_FORMAT " nmethods=" UINT32_FORMAT
+    st->print_cr(" total_blobs=" UINT32_FORMAT " nmethods=" UINT32_FORMAT " nonprofiled nmethods=" UINT32_FORMAT
                        " adapters=" UINT32_FORMAT,
-                       blob_count(), nmethod_count(), adapter_count());
+                       blob_count(), nmethod_count(), nmethod_count(CodeBlobType::MethodNonProfiled), adapter_count());
     st->print_cr(" compilation: %s", CompileBroker::should_compile_new_jobs() ?
                  "enabled" : Arguments::mode() == Arguments::_int ?
                  "disabled (interpreter mode)" :

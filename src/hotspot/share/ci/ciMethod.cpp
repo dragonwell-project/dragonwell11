@@ -348,6 +348,12 @@ bool ciMethod::has_balanced_monitors() {
 }
 
 
+/*
+char* ciMethod::get_name() {
+  name()->
+}
+*/
+
 // ------------------------------------------------------------------
 // ciMethod::get_flow_analysis
 ciTypeFlow* ciMethod::get_flow_analysis() {
@@ -468,7 +474,7 @@ const BitMap& ciMethod::bci_block_start() {
 ciCallProfile ciMethod::call_profile_at_bci(int bci) {
   ResourceMark rm;
   ciCallProfile result;
-  if (method_data() != NULL && method_data()->is_mature()) {
+  if (method_data() != NULL && (method_data()->is_mature() || PolymorphicInlining)) {
     ciProfileData* data = method_data()->bci_to_data(bci);
     if (data != NULL && data->is_CounterData()) {
       // Every profiled call site has a counter.
@@ -515,8 +521,8 @@ ciCallProfile ciMethod::call_profile_at_bci(int bci) {
         // The call site count is > 0 in the case of a polymorphic virtual call.
         if (morphism > 0 && morphism == result._limit) {
            // The morphism <= MorphismLimit.
-           if ((morphism <  ciCallProfile::MorphismLimit) ||
-               (morphism == ciCallProfile::MorphismLimit && count == 0)) {
+           if ((morphism ==  1) ||
+               (morphism <= ciCallProfile::MorphismLimit && count == 0)) {
 #ifdef ASSERT
              if (count > 0) {
                this->print_short_name(tty);

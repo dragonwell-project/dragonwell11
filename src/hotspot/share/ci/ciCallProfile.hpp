@@ -38,7 +38,7 @@ private:
   friend class ciMethod;
   friend class ciMethodHandle;
 
-  enum { MorphismLimit = 2 }; // Max call site's morphism we care about
+  enum { MorphismLimit = 8 }; // Max call site's morphism we care about
   int  _limit;                // number of receivers have been determined
   int  _morphism;             // determined call site's morphism
   int  _count;                // # times has this call been executed

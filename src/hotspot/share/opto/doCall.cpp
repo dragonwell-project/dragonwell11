@@ -33,6 +33,7 @@
 #include "opto/callGenerator.hpp"
 #include "opto/castnode.hpp"
 #include "opto/cfgnode.hpp"
+#include "opto/library_call.hpp"
 #include "opto/mulnode.hpp"
 #include "opto/parse.hpp"
 #include "opto/rootnode.hpp"
@@ -65,7 +66,7 @@ void trace_type_profile(Compile* C, ciMethod *method, int depth, int bci, ciMeth
 CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool call_does_dispatch,
                                        JVMState* jvms, bool allow_inline,
                                        float prof_factor, ciKlass* speculative_receiver_type,
-                                       bool allow_intrinsics, bool delayed_forbidden) {
+                                       bool allow_intrinsics, bool delayed_forbidden, int receiver_index) {
   ciMethod*       caller   = jvms->method();
   int             bci      = jvms->bci();
   Bytecodes::Code bytecode = caller->java_code_at_bci(bci);
@@ -170,7 +171,7 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
       InlineTree* ilt = InlineTree::find_subtree_from_root(this->ilt(), jvms->caller(), jvms->method());
       WarmCallInfo scratch_ci;
       bool should_delay = false;
-      WarmCallInfo* ci = ilt->ok_to_inline(callee, jvms, profile, &scratch_ci, should_delay);
+      WarmCallInfo* ci = ilt->ok_to_inline(callee, jvms, profile, &scratch_ci, should_delay, receiver_index);
       assert(ci != &scratch_ci, "do not let this pointer escape");
       bool allow_inline   = (ci != NULL && !ci->is_cold());
       bool require_inline = (allow_inline && ci->is_hot());
@@ -209,9 +210,11 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
     if (call_does_dispatch && site_count > 0 && UseTypeProfile) {
       // The major receiver's count >= TypeProfileMajorReceiverPercent of site_count.
       bool have_major_receiver = profile.has_receiver(0) && (100.*profile.receiver_prob(0) >= (float)TypeProfileMajorReceiverPercent);
+
       ciMethod* receiver_method = NULL;
 
       int morphism = profile.morphism();
+
       if (speculative_receiver_type != NULL) {
         if (!too_many_traps_or_recompiles(caller, bci, Deoptimization::Reason_speculate_class_check)) {
           // We have a speculative type, we should be able to resolve
@@ -231,23 +234,76 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
           speculative_receiver_type = NULL;
         }
       }
+
+      bool inline0 = false;
+      bool inline1 = false;
+      bool devirtual0 = false;
+      bool devirtual1 = false;
+      bool devirtual2 = false;
+      bool devirtual3 = false;
+      bool devirtual4 = false;
+      bool devirtual5 = false;
+      bool devirtual6 = false;
+      bool devirtual7 = false;
+      if (PolymorphicInlining && morphism != 1) {
+        double site_ratio = (double)caller->scale_count(site_count)/ caller->interpreter_invocation_count();
+        if (site_ratio >= PolymorphicCallSiteRatio) {
+          inline0 = profile.has_receiver(0) && profile.receiver_prob(0) > PolymorphicRecv0InlineRatio;
+          inline1 = profile.has_receiver(1) && profile.receiver_prob(1) > PolymorphicRecv1InlineRatio;
+          if (morphism >= 2) {
+            devirtual0 = true;
+            devirtual1 = true;
+          }
+          if (morphism >= 3) { devirtual2 = true; }
+          if (morphism >= 4) { devirtual3 = true; }
+          if (morphism >= 5) { devirtual4 = true; }
+          if (morphism >= 6) { devirtual5 = true; }
+          if (morphism >= 7) { devirtual6 = true; }
+          if (morphism >= 8) { devirtual7 = true; }
+
+          if (morphism == 0) {
+            devirtual0 = profile.has_receiver(0) && profile.receiver_prob(0) > PolymorphicDevirtualizeRatio;
+            devirtual1 = profile.has_receiver(1) && profile.receiver_prob(1) > PolymorphicDevirtualizeRatio;
+            devirtual2 = profile.has_receiver(2) && profile.receiver_prob(2) > PolymorphicDevirtualizeRatio;
+            devirtual3 = profile.has_receiver(3) && profile.receiver_prob(3) > PolymorphicDevirtualizeRatio;
+            devirtual4 = profile.has_receiver(4) && profile.receiver_prob(4) > PolymorphicDevirtualizeRatio;
+            devirtual5 = profile.has_receiver(5) && profile.receiver_prob(5) > PolymorphicDevirtualizeRatio;
+            devirtual6 = profile.has_receiver(6) && profile.receiver_prob(6) > PolymorphicDevirtualizeRatio;
+            devirtual7 = profile.has_receiver(7) && profile.receiver_prob(7) > PolymorphicDevirtualizeRatio;
+          }
+          inline0 = (have_major_receiver || morphism == 2);
+        }
+      }
+
       if (receiver_method == NULL &&
-          (have_major_receiver || morphism == 1 ||
+          (have_major_receiver || morphism == 1 || inline0 || devirtual0 ||
            (morphism == 2 && UseBimorphicInlining))) {
         // receiver_method = profile.method();
         // Profiles do not suggest methods now.  Look it up in the major receiver.
         receiver_method = callee->resolve_invoke(jvms->method()->holder(),
                                                       profile.receiver(0));
       }
-      if (receiver_method != NULL) {
+
+      if (receiver_method != NULL && !(receiver_method->is_native() && cg_intrinsic)) {
         // The single majority receiver sufficiently outweighs the minority.
         CallGenerator* hit_cg = this->call_generator(receiver_method,
-              vtable_index, !call_does_dispatch, jvms, allow_inline, prof_factor);
+              vtable_index, !call_does_dispatch, jvms, allow_inline && !(!inline0 && devirtual0), prof_factor,
+              NULL, true, false, -1);
         if (hit_cg != NULL) {
           // Look up second receiver.
           CallGenerator* next_hit_cg = NULL;
           ciMethod* next_receiver_method = NULL;
-          if (morphism == 2 && UseBimorphicInlining) {
+
+          if (inline1 || devirtual1) {
+            next_receiver_method = callee->resolve_invoke(jvms->method()->holder(),
+                                                               profile.receiver(1));
+            if (next_receiver_method != NULL && !(next_receiver_method->is_native() && cg_intrinsic)) {
+              next_hit_cg = this->call_generator(next_receiver_method,
+                                  vtable_index, !call_does_dispatch, jvms,
+                                  allow_inline && inline1, prof_factor,
+                                  NULL, true, false, 1);
+            }
+          } else if (morphism == 2 && UseBimorphicInlining) {
             next_receiver_method = callee->resolve_invoke(jvms->method()->holder(),
                                                                profile.receiver(1));
             if (next_receiver_method != NULL) {
@@ -261,11 +317,101 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
               }
             }
           }
+          CallGenerator* hit_cg2 = NULL;
+          ciMethod* receiver_method2 = NULL;
+          if (devirtual2) {
+            receiver_method2 = callee->resolve_invoke(jvms->method()->holder(),
+                                                                 profile.receiver(2));
+            if (receiver_method2 != NULL && !(receiver_method2->is_native() && cg_intrinsic)) {
+              hit_cg2 = this->call_generator(receiver_method2,
+                                  vtable_index, !call_does_dispatch, jvms,
+                                  false, prof_factor,
+                                  NULL, true, false, 2);
+            }
+          }
+
+          CallGenerator* hit_cg3 = NULL;
+          ciMethod* receiver_method3 = NULL;
+          if (devirtual3) {
+            receiver_method3 = callee->resolve_invoke(jvms->method()->holder(),
+                                                                 profile.receiver(3));
+            if (receiver_method3 != NULL && !(receiver_method3->is_native() && cg_intrinsic)) {
+              hit_cg3 = this->call_generator(receiver_method3,
+                                  vtable_index, !call_does_dispatch, jvms,
+                                  false, prof_factor,
+                                  NULL, true, false, 3);
+            }
+          }
+          CallGenerator* hit_cg4 = NULL;
+          ciMethod* receiver_method4 = NULL;
+          if (devirtual4) {
+            receiver_method4 = callee->resolve_invoke(jvms->method()->holder(),
+                                                                 profile.receiver(4));
+            if (receiver_method4 != NULL && !(receiver_method4->is_native() && cg_intrinsic)) {
+              hit_cg4 = this->call_generator(receiver_method4,
+                                  vtable_index, !call_does_dispatch, jvms,
+                                  false, prof_factor,
+                                  NULL, true, false, 4);
+            }
+          }
+          CallGenerator* hit_cg5 = NULL;
+          ciMethod* receiver_method5 = NULL;
+          if (devirtual5) {
+            receiver_method5 = callee->resolve_invoke(jvms->method()->holder(),
+                                                                 profile.receiver(5));
+            if (receiver_method5 != NULL && !(receiver_method5->is_native() && cg_intrinsic)) {
+              hit_cg5 = this->call_generator(receiver_method5,
+                                  vtable_index, !call_does_dispatch, jvms,
+                                  false, prof_factor,
+                                  NULL, true, false, 5);
+            }
+          }
+          CallGenerator* hit_cg6 = NULL;
+          ciMethod* receiver_method6 = NULL;
+          if (devirtual6) {
+            receiver_method6 = callee->resolve_invoke(jvms->method()->holder(),
+                                                                 profile.receiver(6));
+            if (receiver_method6 != NULL && !(receiver_method6 != NULL && cg_intrinsic)) {
+              hit_cg6 = this->call_generator(receiver_method6,
+                                  vtable_index, !call_does_dispatch, jvms,
+                                  false, prof_factor,
+                                  NULL, true, false, 6);
+            }
+          }
+          CallGenerator* hit_cg7 = NULL;
+          ciMethod* receiver_method7 = NULL;
+          if (devirtual7) {
+            receiver_method7 = callee->resolve_invoke(jvms->method()->holder(),
+                                                                 profile.receiver(7));
+            if (receiver_method7 != NULL && !(receiver_method7 != NULL && cg_intrinsic)) {
+              hit_cg7 = this->call_generator(receiver_method7,
+                                  vtable_index, !call_does_dispatch, jvms,
+                                  false, prof_factor,
+                                  NULL, true, false, 7);
+            }
+          }
           CallGenerator* miss_cg;
           Deoptimization::DeoptReason reason = (morphism == 2
                                                ? Deoptimization::Reason_bimorphic
                                                : Deoptimization::reason_class_check(speculative_receiver_type != NULL));
-          if ((morphism == 1 || (morphism == 2 && next_hit_cg != NULL)) &&
+          bool polymorphic_recompile = false;
+          if (PolymorphicInlining) {
+            if (morphism == 3 && next_hit_cg != NULL && hit_cg2 != NULL) {
+              polymorphic_recompile = true;
+            } else if (morphism == 4 && next_hit_cg != NULL && hit_cg2 != NULL && hit_cg3 != NULL) {
+              polymorphic_recompile = true;
+            } else if (morphism == 5 && next_hit_cg != NULL && hit_cg2 != NULL && hit_cg3 != NULL && hit_cg4 != NULL) {
+              polymorphic_recompile = true;
+            } else if (morphism == 6 && next_hit_cg != NULL && hit_cg2 != NULL && hit_cg3 != NULL && hit_cg4 != NULL && hit_cg5 != NULL) {
+              polymorphic_recompile = true;
+            } else if (morphism == 7 && next_hit_cg != NULL && hit_cg2 != NULL && hit_cg3 != NULL && hit_cg4 != NULL && hit_cg5 != NULL && hit_cg6 != NULL) {
+              polymorphic_recompile = true;
+            } else if (morphism == 8 && next_hit_cg != NULL && hit_cg2 != NULL && hit_cg3 != NULL && hit_cg4 != NULL && hit_cg5 != NULL && hit_cg6 != NULL && hit_cg7 != NULL) {
+              polymorphic_recompile = true;
+            }
+          }
+
+          if ((morphism == 1 || (morphism == 2 && next_hit_cg != NULL) || polymorphic_recompile) &&
               !too_many_traps_or_recompiles(caller, bci, reason)
              ) {
             // Generate uncommon trap for class check failure path
@@ -275,9 +421,59 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
           } else {
             // Generate virtual call for class check failure path
             // in case of polymorphic virtual call site.
-            miss_cg = CallGenerator::for_virtual_call(callee, vtable_index);
+            if (PolymorphicInlining && cg_intrinsic != NULL) {
+              miss_cg = cg_intrinsic;
+            } else {
+              miss_cg = CallGenerator::for_virtual_call(callee, vtable_index);
+            }
           }
           if (miss_cg != NULL) {
+            if (hit_cg7 != NULL) {
+              assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
+              trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(7), site_count, profile.receiver_count(7));
+              // We don't need to record dependency on a receiver here and below.
+              // Whenever we inline, the dependency is added by Parse::Parse().
+              miss_cg = CallGenerator::for_predicted_call(profile.receiver(7), miss_cg, hit_cg7, PROB_MAX);
+            }
+            if (hit_cg6 != NULL) {
+              assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
+              trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(6), site_count, profile.receiver_count(6));
+              // We don't need to record dependency on a receiver here and below.
+              // Whenever we inline, the dependency is added by Parse::Parse().
+              miss_cg = CallGenerator::for_predicted_call(profile.receiver(6), miss_cg, hit_cg6, PROB_MAX);
+            }
+
+            if (hit_cg5 != NULL) {
+              assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
+              trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(5), site_count, profile.receiver_count(5));
+              // We don't need to record dependency on a receiver here and below.
+              // Whenever we inline, the dependency is added by Parse::Parse().
+              miss_cg = CallGenerator::for_predicted_call(profile.receiver(5), miss_cg, hit_cg5, PROB_MAX);
+            }
+            if (hit_cg4 != NULL) {
+              assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
+              trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(4), site_count, profile.receiver_count(4));
+              // We don't need to record dependency on a receiver here and below.
+              // Whenever we inline, the dependency is added by Parse::Parse().
+              miss_cg = CallGenerator::for_predicted_call(profile.receiver(4), miss_cg, hit_cg4, PROB_MAX);
+            }
+
+            if (hit_cg3 != NULL) {
+              assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
+              trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(3), site_count, profile.receiver_count(3));
+              // We don't need to record dependency on a receiver here and below.
+              // Whenever we inline, the dependency is added by Parse::Parse().
+              miss_cg = CallGenerator::for_predicted_call(profile.receiver(3), miss_cg, hit_cg3, PROB_MAX);
+            }
+
+            if (hit_cg2 != NULL) {
+              assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
+              trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(2), site_count, profile.receiver_count(2));
+              // We don't need to record dependency on a receiver here and below.
+              // Whenever we inline, the dependency is added by Parse::Parse().
+              miss_cg = CallGenerator::for_predicted_call(profile.receiver(2), miss_cg, hit_cg2, PROB_MAX);
+            }
+
             if (next_hit_cg != NULL) {
               assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
               trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(1), site_count, profile.receiver_count(1));
@@ -359,6 +555,9 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
     const char* msg = "virtual call";
     if (C->print_inlining()) {
       print_inlining(callee, jvms->depth() - 1, jvms->bci(), msg);
+      if (!profile.has_receiver(0)) {
+        print_inlining(callee, jvms->depth() - 1, jvms->bci(), "no receiver");
+      }
     }
     C->log_inline_failure(msg);
     return CallGenerator::for_virtual_call(callee, vtable_index);

@@ -96,6 +96,24 @@
     product(bool, UseBigDecimalOpt, true,                                   \
           "use binary search in zero stripping of BigDecimal")              \
                                                                             \
+  product(bool, InlineFreqOnReceiver, false,                                 \
+          "Verify classpath order between the dump phase and replay phase") \
+                                                                            \
+  product(bool, PolymorphicInlining, true,                             \
+          "Inline caching multiple type of receivers")                      \
+                                                                            \
+  product(double, PolymorphicCallSiteRatio, 0.0,                          \
+          "Call site calling ratio for polymorphic inline ")                \
+                                                                            \
+  product(double, PolymorphicRecv0InlineRatio, 0.15,                         \
+          "Receiver calling ratio for polymorphic inline ")                 \
+                                                                            \
+  product(double, PolymorphicRecv1InlineRatio, 0.35,                         \
+          "Receiver calling ratio for polymorphic inline ")                 \
+                                                                            \
+  product(double, PolymorphicDevirtualizeRatio, 0.15,                         \
+          "Receiver calling ratio for polymorphic inline ")                 \
+                                                                            \
   //add new AJDK specific flags here
 
 

@@ -1764,7 +1764,7 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
           "allocate (for testing only)")                                    \
           range(0, max_uintx)                                               \
                                                                             \
-  product(intx, TypeProfileWidth, 2,                                        \
+  product(intx, TypeProfileWidth, 8,                                        \
           "Number of receiver types to record in call/cast profile")        \
           range(0, 8)                                                       \
                                                                             \
@@ -1795,7 +1795,7 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   experimental(intx, SpecTrapLimitExtraEntries,  3,                         \
           "Extra method data trap entries for speculation")                 \
                                                                             \
-  develop(double, InlineFrequencyRatio, 0.25,                               \
+  product(double, InlineFrequencyRatio, 0.25,                               \
           "Ratio of call site execution to caller method invocation")       \
           range(0.0, DBL_MAX)                                               \
                                                                             \
