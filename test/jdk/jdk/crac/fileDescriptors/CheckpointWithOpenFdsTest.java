@@ -24,6 +24,7 @@
 import jdk.crac.Core;
 import jdk.test.lib.Utils;
 import jdk.test.lib.crac.CracBuilder;
+import jdk.test.lib.crac.CracLogger;
 import jdk.test.lib.crac.CracTest;
 import java.nio.file.Path;
 import java.util.*;
@@ -34,19 +35,19 @@ import java.util.*;
  * @build CheckpointWithOpenFdsTest
  * @run driver jdk.test.lib.crac.CracTest
  */
-public class CheckpointWithOpenFdsTest implements CracTest {
+public class CheckpointWithOpenFdsTest extends CracLogger implements CracTest {
     private static final String EXTRA_FD_WRAPPER = Path.of(Utils.TEST_SRC, "extra_fd_wrapper.sh").toString();
 
     @Override
     public void test() throws Exception {
         CracBuilder builder = new CracBuilder();
         builder.startCheckpoint(Arrays.asList(EXTRA_FD_WRAPPER, CracBuilder.JAVA)).waitForCheckpointed();
-        builder.captureOutput(true).doRestore().outputAnalyzer().shouldContain(RESTORED_MESSAGE);
+        builder.logToFile(true).doRestore().fileOutputAnalyser().shouldContain(RESTORED_MESSAGE);
     }
 
     @Override
     public void exec() throws Exception {
         Core.checkpointRestore();
-        System.out.println(RESTORED_MESSAGE);
+        writeLog(RESTORED_MESSAGE);
     }
 }

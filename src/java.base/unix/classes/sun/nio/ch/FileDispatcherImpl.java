@@ -61,12 +61,15 @@ class FileDispatcherImpl extends FileDispatcher {
     static boolean forceNonDeferedClose;
     static int closeCnt;
 
-    static ResourceProxy resourceProxy = new ResourceProxy();
+    static ResourceProxy resourceProxy;
 
     static {
         IOUtil.load();
         init();
-        Core.getJDKContext().register(resourceProxy);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            resourceProxy = new ResourceProxy();
+            Core.getJDKContext().register(resourceProxy);
+        }
     }
 
     private static final JavaIOFileDescriptorAccess fdAccess =

@@ -56,7 +56,9 @@ class JarFileFactory implements URLJarFile.URLJarFileCloseController, jdk.intern
     private static final JarFileFactory instance = new JarFileFactory();
 
     static {
-        jdk.internal.crac.Core.getJDKContext().register(instance);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            jdk.internal.crac.Core.getJDKContext().register(instance);
+        }
     }
 
     private JarFileFactory() { }

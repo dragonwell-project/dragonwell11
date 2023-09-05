@@ -1231,6 +1231,8 @@ JVM_GetEnclosingMethodInfo(JNIEnv* env, jclass ofClass);
 JNIEXPORT void JNICALL
 JVM_NotifyDump(JNIEnv *env, jclass ignored);
 
+JNIEXPORT jboolean JNICALL
+JVM_CheckpointEnabled(JNIEnv *env, jclass ignored);
 /* =========================================================================
  * The following defines a private JVM interface that the JDK can query
  * for the JVM version and capabilities.  sun.misc.Version defines

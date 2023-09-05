@@ -24,16 +24,17 @@
 import jdk.test.lib.Utils;
 import jdk.test.lib.containers.docker.Common;
 import jdk.test.lib.containers.docker.DockerTestUtils;
-import jdk.test.lib.crac.CracBuilder;
-import jdk.test.lib.crac.CracProcess;
-import jdk.test.lib.crac.CracTest;
-import jdk.test.lib.crac.CracTestArg;
+import jdk.test.lib.crac.*;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Date;
 import java.util.concurrent.*;
+
+import static jdk.test.lib.Asserts.fail;
 
 /*
  * @test
@@ -43,9 +44,10 @@ import java.util.concurrent.*;
  * @build ResolveTest
  * @run driver jdk.test.lib.crac.CracTest
  */
-public class ResolveTest implements CracTest {
+public class ResolveTest extends CracLogger implements CracTest {
     private static final String imageName = Common.imageName("inet-address");
     public static final String TEST_HOSTNAME = "some.test.hostname.example.com";
+    private static final long WAIT_TIMEOUT = 10 * 1000L;
 
     @CracTestArg(value = 0, optional = true)
     String ip;
@@ -58,36 +60,41 @@ public class ResolveTest implements CracTest {
         if (!DockerTestUtils.canTestDocker()) {
             return;
         }
+        //current ubuntu latest glibc version is 2.35, and the host glibc version is 2.32
+        //there is a crash when restore VMA. The root cause is unknown.
+        //Here low the ubuntu with 20.04 so that glibc version is 2.31, the crash disappeared.
+        //There also other solution: change the docker image with alinux3 that same as the host.
+        //
+        System.setProperty("jdk.test.docker.image.version", "20.04");
+
         CracBuilder builder = new CracBuilder()
                 .inDockerImage(imageName).dockerOptions("--add-host", TEST_HOSTNAME + ":192.168.12.34")
-                .captureOutput(true)
+                .logToFile(true)
+                .oneStopDockerRun(true)
+                .bumpPid(true)
                 .args(CracTest.args(TEST_HOSTNAME, "/second-run"));
 
         try {
-            CompletableFuture<?> firstOutputFuture = new CompletableFuture<Void>();
-            CracProcess checkpointed = builder.startCheckpoint().watch(line -> {
-                System.out.println("OUTPUT: " + line);
-                if (line.equals("192.168.12.34")) {
-                    firstOutputFuture.complete(null);
-                }
-            }, error -> {
-                System.err.println("ERROR: " + error);
-                firstOutputFuture.cancel(false);
-            });
-            firstOutputFuture.get(10, TimeUnit.SECONDS);
+            CracProcess crProcess = builder.startCheckpoint();
+            crProcess.watchFile(WAIT_TIMEOUT, "192.168.12.34");
             builder.checkpointViaJcmd();
-            checkpointed.waitForCheckpointed();
-
-            builder.recreateContainer(imageName,
-                    "--add-host", TEST_HOSTNAME + ":192.168.56.78",
-                    "--volume", Utils.TEST_CLASSES + ":/second-run"); // any file/dir suffices
-
-
-            builder.startRestore().outputAnalyzer()
-                    .shouldHaveExitValue(0)
-                    .shouldContain("192.168.56.78");
+            //builder.checkpointViaJcmd kill the process that run in container,but
+            //the container not exit immediately. There is an error that container
+            // "xxxx" exists if run immediately.
+            builder.waitUntilContainerExit(WAIT_TIMEOUT);
+            CracBuilder builderRestore = new CracBuilder()
+                    .inDockerImage(imageName).dockerOptions(
+                            "--add-host", TEST_HOSTNAME + ":192.168.56.78",
+                            "--volume", Utils.TEST_CLASSES + ":/second-run")
+                    .logToFile(true)
+                    .oneStopDockerRun(true);
+            CracProcess restoreProcess = builderRestore.startRestore();
+            restoreProcess.watchFile(WAIT_TIMEOUT, "192.168.56.78");
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail("Throw exception :" + e);
         } finally {
-            builder.ensureContainerKilled();
+            builder.deepClearContainer();
         }
     }
 
@@ -97,7 +104,7 @@ public class ResolveTest implements CracTest {
             System.err.println("Args: <ip address> <check file path>");
             return;
         }
-        printAddress(ip);
+        printAddress(ip, this);
         while (!Files.exists(Path.of(checkFile))) {
             try {
                 //noinspection BusyWait
@@ -107,22 +114,24 @@ public class ResolveTest implements CracTest {
                 return;
             }
         }
-        printAddress(ip);
+        printAddress(ip, this);
     }
 
-    private static void printAddress(String hostname) {
+    private static void printAddress(String hostname, CracLogger logger) throws IOException, InterruptedException {
+        StringBuilder sb = new StringBuilder();
         try {
             InetAddress address = InetAddress.getByName(hostname);
             // we will assume IPv4 address
             byte[] bytes = address.getAddress();
-            System.out.print(bytes[0] & 0xFF);
+            sb.append(bytes[0] & 0xFF);
             for (int i = 1; i < bytes.length; ++i) {
-                System.out.print('.');
-                System.out.print(bytes[i] & 0xFF);
+                sb.append('.');
+                sb.append(bytes[i] & 0xFF);
             }
-            System.out.println();
+            sb.append("\n");
         } catch (UnknownHostException e) {
-            System.out.println();
+            sb.append("\n");
         }
+        logger.writeLog(sb.toString());
     }
 }

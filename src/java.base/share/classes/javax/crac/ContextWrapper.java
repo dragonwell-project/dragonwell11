@@ -70,8 +70,10 @@ class ContextWrapper extends Context<Resource> {
 
     @Override
     public void register(Resource r) {
-        ResourceWrapper wrapper = new ResourceWrapper(this, r);
-        context.register(wrapper);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            ResourceWrapper wrapper = new ResourceWrapper(this, r);
+            context.register(wrapper);
+        }
     }
 
     @Override

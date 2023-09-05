@@ -3,8 +3,7 @@ package jdk.test.lib.crac;
 import jdk.test.lib.process.OutputAnalyzer;
 import jdk.test.lib.process.StreamPumper;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.file.*;
 import java.util.List;
 import java.util.function.Consumer;
@@ -25,6 +24,9 @@ public class CracProcess {
             pb.redirectError(ProcessBuilder.Redirect.PIPE);
         }
         pb.environment().putAll(builder.env);
+        if (builder.logToFile) {
+            pb.environment().put("CRAC_LOG_FILE", builder.cracLogFile);
+        }
         this.process = pb.command(cmd).start();
     }
 
@@ -88,6 +90,40 @@ public class CracProcess {
         assertTrue(builder.captureOutput, "Output must be captured with .captureOutput(true)");
         return new OutputAnalyzer(process);
     }
+
+    public OutputAnalyzer fileOutputAnalyser() throws IOException {
+        return new OutputAnalyzer(readFile());
+    }
+
+    private String readFile() throws IOException {
+        assertTrue(builder.logToFile, "logToFile must be true.");
+        assertNotNull(builder.cracLogFile, "cracLogFile should be not null.Maybe the process may not started!");
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new FileReader(builder.cracLogFile))) {
+            String line = reader.readLine();
+            while (line != null) {
+                sb.append(line);
+                line = reader.readLine();
+            }
+        }
+        return sb.toString();
+    }
+
+    public void watchFile(long timeout, String expectedString) throws RuntimeException{
+        try {
+            long start = System.currentTimeMillis();
+            while ((System.currentTimeMillis() - start) < timeout) {
+                if (new File(builder.cracLogFile).exists() && readFile().contains(expectedString)) {
+                    return;
+                }
+                Thread.sleep(100);
+            }
+            fail("Not found " + expectedString + " in file : " + builder.cracLogFile);
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 
     public CracProcess watch(Consumer<String> outputConsumer, Consumer<String> errorConsumer) {
         assertTrue(builder.captureOutput, "Output must be captured with .captureOutput(true)");
