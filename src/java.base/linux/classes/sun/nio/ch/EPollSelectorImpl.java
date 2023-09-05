@@ -135,7 +135,9 @@ class EPollSelectorImpl extends SelectorImpl implements JDKResource {
         initFDs();
         // trigger FileDispatcherImpl initialization
         new FileDispatcherImpl();
-        jdk.internal.crac.Core.getJDKContext().register(this);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            jdk.internal.crac.Core.getJDKContext().register(this);
+        }
     }
 
     private void ensureOpen() {

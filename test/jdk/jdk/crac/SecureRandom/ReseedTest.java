@@ -21,6 +21,7 @@
 import jdk.crac.*;
 import jdk.test.lib.crac.CracBuilder;
 import jdk.test.lib.crac.CracTest;
+import jdk.test.lib.crac.CracLogger;
 import jdk.test.lib.crac.CracTestArg;
 
 import java.security.SecureRandom;
@@ -36,7 +37,7 @@ import static jdk.test.lib.Asserts.assertNotEquals;
  * @run driver/timeout=60 jdk.test.lib.crac.CracTest true
  * @run driver/timeout=60 jdk.test.lib.crac.CracTest false
  */
-public class ReseedTest implements CracTest {
+public class ReseedTest extends CracLogger implements CracTest {
     @CracTestArg
     boolean reseed;
 
@@ -44,9 +45,9 @@ public class ReseedTest implements CracTest {
     public void test() throws Exception {
         CracBuilder builder = new CracBuilder();
         builder.doCheckpoint();
-        builder.captureOutput(true);
-        String e1 = builder.doRestore().outputAnalyzer().getStdout();
-        String e2 = builder.doRestore().outputAnalyzer().getStdout();
+        builder.logToFile(true);
+        String e1 = builder.doRestore().fileOutputAnalyser().getStdout();
+        String e2 = builder.doRestore().fileOutputAnalyser().getStdout();
         if (reseed) {
             assertEquals(e1, e2);
         } else {
@@ -71,6 +72,6 @@ public class ReseedTest implements CracTest {
             throw new RuntimeException("Restore ERROR " + e);
         }
 
-        System.out.println(sr.nextInt());
+        writeLog(String.valueOf(sr.nextInt()));
     }
 }

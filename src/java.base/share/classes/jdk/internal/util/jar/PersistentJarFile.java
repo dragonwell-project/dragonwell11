@@ -46,7 +46,9 @@ public class PersistentJarFile extends JarFile implements JDKResource {
 
     public PersistentJarFile(File file, boolean b, int openRead, Runtime.Version runtimeVersion) throws IOException {
         super(file, b, openRead, runtimeVersion);
-        Core.getJDKContext().register(this);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            Core.getJDKContext().register(this);
+        }
     }
 
     @Override

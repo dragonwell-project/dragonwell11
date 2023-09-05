@@ -22,6 +22,7 @@
  */
 
 import jdk.test.lib.crac.CracBuilder;
+import jdk.test.lib.crac.CracLogger;
 import jdk.test.lib.crac.CracTest;
 
 import java.io.IOException;
@@ -33,7 +34,7 @@ import java.io.IOException;
  * @build RestoreEnvironmentTest
  * @run driver/timeout=120 jdk.test.lib.crac.CracTest
  */
-public class RestoreEnvironmentTest implements CracTest {
+public class RestoreEnvironmentTest extends CracLogger implements CracTest {
     static final String TEST_VAR_NAME = "RESTORE_ENVIRONMENT_TEST_VAR";
     static final String BEFORE_CHECKPOINT = "BeforeCheckpoint";
     static final String AFTER_RESTORE = "AfterRestore";
@@ -42,13 +43,13 @@ public class RestoreEnvironmentTest implements CracTest {
 
     @Override
     public void test() throws Exception {
-        CracBuilder builder = new CracBuilder().captureOutput(true)
+        CracBuilder builder = new CracBuilder().logToFile(true)
                 .env(TEST_VAR_NAME + 0, BEFORE_CHECKPOINT)
                 .env(TEST_VAR_NAME + 1, BEFORE_CHECKPOINT);
         builder.doCheckpoint();
         builder.env(TEST_VAR_NAME + 1, AFTER_RESTORE);
         builder.env(TEST_VAR_NAME + 2, NEW_VALUE);
-        builder.doRestore().outputAnalyzer()
+        builder.doRestore().fileOutputAnalyser()
                 .shouldContain(PREFIX + TEST_VAR_NAME + "0=" + BEFORE_CHECKPOINT)
                 .shouldContain(PREFIX + TEST_VAR_NAME + "1=" + AFTER_RESTORE)
                 .shouldContain(PREFIX + TEST_VAR_NAME + "2=" + NEW_VALUE);
@@ -58,14 +59,14 @@ public class RestoreEnvironmentTest implements CracTest {
     public void exec() throws Exception {
         for (int i = 0; i < 3; ++i) {
             var testVar = java.lang.System.getenv(TEST_VAR_NAME + i);
-            System.out.println("(before checkpoint) " + TEST_VAR_NAME + i + "=" + testVar);
+            writeLog("(before checkpoint) " + TEST_VAR_NAME + i + "=" + testVar);
         }
 
         jdk.crac.Core.checkpointRestore();
 
         for (int i = 0; i < 3; ++i) {
             var testVar = java.lang.System.getenv(TEST_VAR_NAME + i);
-            System.out.println(PREFIX + TEST_VAR_NAME + i + "=" + testVar + "");
+            writeLog(PREFIX + TEST_VAR_NAME + i + "=" + testVar + "");
         }
     }
 }

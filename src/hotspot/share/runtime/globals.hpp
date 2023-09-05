@@ -2710,7 +2710,7 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   product(ccstr, CREngine, "criuengine", "Path or name of a program "       \
       "implementing checkpoint/restore")                                    \
                                                                             \
-  product(bool, CRaCIgnoreRestoreIfUnavailable, false, "Ignore "            \
+  product(bool, CRaCIgnoreRestoreIfUnavailable, true, "Ignore "             \
       "-XX:CRaCRestoreFrom and continue initialization if restore is "      \
       "unavailable")                                                        \
                                                                             \
