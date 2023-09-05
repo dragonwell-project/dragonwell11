@@ -92,7 +92,9 @@ public final class CleanerImpl implements Runnable, JDKResource {
         phantomCleanableList = new PhantomCleanableRef();
         weakCleanableList = new WeakCleanableRef();
         softCleanableList = new SoftCleanableRef();
-        jdk.internal.crac.Core.getJDKContext().register(this);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            jdk.internal.crac.Core.getJDKContext().register(this);
+        }
     }
 
     /**

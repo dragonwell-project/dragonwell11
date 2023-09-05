@@ -3942,6 +3942,11 @@ JVM_LEAF(void, JVM_CollectJVMConf(JNIEnv *env, jclass ignored))
   QuickStart::collect_jvm_conf();
 JVM_END
 
+JVM_ENTRY(jboolean, JVM_CheckpointEnabled(JNIEnv *env, jclass ignored))
+  JVMWrapper("JVM_CheckpointEnabled");
+  return CRaCCheckpointTo ? JNI_TRUE : JNI_FALSE;
+JVM_END
+
 JVM_ENTRY(jobjectArray, JVM_GetModuleNames(JNIEnv *env, jclass ignored))
   JVMWrapper("JVM_GetModuleNames");
 

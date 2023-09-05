@@ -305,7 +305,7 @@ class InetAddress implements java.io.Serializable {
     private static final long serialVersionUID = 3286316764910316507L;
 
     /* Resource registration uses weak references; we need to keep it locally. */
-    private static final JDKResource checkpointListener;
+    private static JDKResource checkpointListener;
 
     /*
      * Load net library into runtime, and perform initializations.
@@ -346,25 +346,27 @@ class InetAddress implements java.io.Serializable {
                 }
         );
         init();
-        // DNS cache is cleared before the checkpoint; application restored at a later point
-        // or in a different environment should query DNS again.
-        checkpointListener = new JDKResource() {
-            @Override
-            public Priority getPriority() {
-                return Priority.NORMAL;
-            }
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            // DNS cache is cleared before the checkpoint; application restored at a later point
+            // or in a different environment should query DNS again.
+            checkpointListener = new JDKResource() {
+                @Override
+                public Priority getPriority() {
+                    return Priority.NORMAL;
+                }
 
-            @Override
-            public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
-                cache.clear();
-                expirySet.clear();
-            }
+                @Override
+                public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
+                    cache.clear();
+                    expirySet.clear();
+                }
 
-            @Override
-            public void afterRestore(Context<? extends Resource> context) throws Exception {
-            }
-        };
-        Core.getJDKContext().register(checkpointListener);
+                @Override
+                public void afterRestore(Context<? extends Resource> context) throws Exception {
+                }
+            };
+            Core.getJDKContext().register(checkpointListener);
+        }
     }
 
     /**

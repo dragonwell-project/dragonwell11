@@ -121,7 +121,9 @@ implements java.io.Serializable, jdk.internal.crac.JDKResource {
         if (seed != null) {
            engineSetSeed(seed);
         }
-        jdk.internal.crac.Core.getJDKContext().register(this);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            jdk.internal.crac.Core.getJDKContext().register(this);
+        }
     }
 
     /**
@@ -257,7 +259,9 @@ implements java.io.Serializable, jdk.internal.crac.JDKResource {
             byte[] b = new byte[DIGEST_SIZE];
             SeedGenerator.generateSeed(b);
             seeder.engineSetSeed(b);
-            jdk.internal.crac.Core.getJDKContext().register(this);
+            if (jdk.crac.Configuration.checkpointEnabled()) {
+                jdk.internal.crac.Core.getJDKContext().register(this);
+            }
         }
 
         public static SecureRandom getSeeder() {

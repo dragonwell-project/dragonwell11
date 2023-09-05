@@ -24,6 +24,7 @@
 import jdk.crac.Core;
 import jdk.test.lib.Utils;
 import jdk.test.lib.crac.CracBuilder;
+import jdk.test.lib.crac.CracLogger;
 import jdk.test.lib.crac.CracTest;
 
 import java.io.IOException;
@@ -41,7 +42,7 @@ import java.util.stream.Collectors;
  * @build IgnoredFileDescriptorsTest
  * @run driver jdk.test.lib.crac.CracTest
  */
-public class IgnoredFileDescriptorsTest implements CracTest {
+public class IgnoredFileDescriptorsTest extends CracLogger implements CracTest {
     private static final String EXTRA_FD_WRAPPER = Path.of(Utils.TEST_SRC, "extra_fd_wrapper.sh").toString();
 
     @Override
@@ -55,7 +56,7 @@ public class IgnoredFileDescriptorsTest implements CracTest {
 
         CracBuilder builder = new CracBuilder();
         builder.startCheckpoint(prefix).waitForCheckpointed();
-        builder.captureOutput(true).doRestore().outputAnalyzer().shouldContain(RESTORED_MESSAGE);
+        builder.logToFile(true).doRestore().fileOutputAnalyser().shouldContain(RESTORED_MESSAGE);
     }
 
     @Override
@@ -82,6 +83,6 @@ public class IgnoredFileDescriptorsTest implements CracTest {
             }
         }
         Core.checkpointRestore();
-        System.out.println(RESTORED_MESSAGE);
+        writeLog(RESTORED_MESSAGE);
     }
 }

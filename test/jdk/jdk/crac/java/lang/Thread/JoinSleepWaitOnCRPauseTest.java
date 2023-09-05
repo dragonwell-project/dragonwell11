@@ -52,9 +52,9 @@ public class JoinSleepWaitOnCRPauseTest implements CracTest {
     @CracTestArg
     private TestType testType;
 
-    private final static long EPS_NS = Long.parseLong(System.getProperty(
+    private final static long EPS_MS = Long.parseLong(System.getProperty(
         "test.jdk.jdk.crac.java.lang.Thread.crac.JoinSleepWaitOnCRPauseTest.eps",
-        "100000000")); // default: 0.1s
+        "100")); // default: 0.1s
 
     private static final long CRPAUSE_MS = 4000;
 
@@ -113,7 +113,7 @@ public class JoinSleepWaitOnCRPauseTest implements CracTest {
                 throw new RuntimeException(ie);
             }
 
-            tDone = System.nanoTime();
+            tDone = System.currentTimeMillis();
         };
 
         Thread t = new Thread(r);
@@ -124,41 +124,41 @@ public class JoinSleepWaitOnCRPauseTest implements CracTest {
         // from "our" join or sleep
         checkpointLatch.await();
 
-        // it is expected that EPS_NS is enough to complete the join/sleep
-        // on restore => expecting that 5 * EPS_NS is enough to enter them
-        long dt = 5 * EPS_NS;
-        Thread.sleep(dt / 1_000_000);
+        // it is expected that EPS_MS is enough to complete the join/sleep
+        // on restore => expecting that 5 * EPS_MS is enough to enter them
+        long dt = 5 * EPS_MS;
+        Thread.sleep(dt);
 
         if (t.getState() != Thread.State.TIMED_WAITING) {
             throw new AssertionError("was not able to enter " + op
                 + " in " + dt + " ns");
         }
 
-        long tBeforeCheckpoint = System.nanoTime();
+        long tBeforeCheckpoint = System.currentTimeMillis();
 
         jdk.crac.Core.checkpointRestore();
 
-        long tAfterRestore = System.nanoTime();
+        long tAfterRestore = System.currentTimeMillis();
 
         t.join();
 
         long pause = tAfterRestore - tBeforeCheckpoint;
-        if (pause < 1_000_000 * CRPAUSE_MS - EPS_NS) {
+        if (pause < CRPAUSE_MS - EPS_MS) {
             throw new AssertionError(
                 "the CR pause was less than " + CRPAUSE_MS + " ms");
         }
 
-        if (tDone < tBeforeCheckpoint + EPS_NS) {
+        if (tDone < tBeforeCheckpoint + EPS_MS) {
             throw new AssertionError(
                 op + " has finished before the checkpoint");
         }
 
         long eps = Math.abs(tAfterRestore - tDone);
 
-        if (eps > EPS_NS) {
+        if (eps > T_MS) {
             throw new RuntimeException(
-                "the " + op + "ing thread has finished in " + eps + " ns "
-                + "after the restore (expected: " + EPS_NS + " ns)");
+                "the " + op + "ing thread has finished in " + eps + " ms "
+                + "after the restore (expected: " + T_MS + " ms)");
         }
     }
 

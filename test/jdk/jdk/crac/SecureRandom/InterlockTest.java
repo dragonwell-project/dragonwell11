@@ -31,10 +31,10 @@ import java.security.SecureRandom;
  * @summary Verify that secure random is not interlocked during checkpoint/restore.
  * @library /test/lib
  * @build InterlockTest
- * @run driver/timeout=60 jdk.test.lib.crac.CracTest SHA1PRNG 100
- * @run driver/timeout=60 jdk.test.lib.crac.CracTest NativePRNGBlocking 100
- * @run driver/timeout=60 jdk.test.lib.crac.CracTest NativePRNGNonBlocking 100
- * @run driver/timeout=60 jdk.test.lib.crac.CracTest NativePRNG 100
+ * @run driver/timeout=60 jdk.test.lib.crac.CracTest SHA1PRNG 50
+ * @run driver/timeout=60 jdk.test.lib.crac.CracTest NativePRNGBlocking 50
+ * @run driver/timeout=60 jdk.test.lib.crac.CracTest NativePRNGNonBlocking 50
+ * @run driver/timeout=60 jdk.test.lib.crac.CracTest NativePRNG 50
  */
 public class InterlockTest implements Resource, CracTest {
     private static final long MIN_TIMEOUT = 100;

@@ -66,11 +66,14 @@ class PlainSocketImpl extends AbstractPlainSocketImpl
     static boolean forceNonDeferedClose;
     static int closeCnt;
 
-    static JDKResource resourceProxy = new ResourceProxy();
+    static JDKResource resourceProxy;
 
     static {
         initProto();
-        Core.getJDKContext().register(resourceProxy);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            resourceProxy = new ResourceProxy();
+            Core.getJDKContext().register(resourceProxy);
+        }
     }
 
     /**

@@ -105,6 +105,11 @@ public class TCPTransport extends Transport implements JDKResource {
         AccessController.doPrivileged((PrivilegedAction<Long>) () ->
             Long.getLong("sun.rmi.transport.tcp.threadKeepAliveTime", 60000));
 
+    /** wait for socket close when do checkpoint */
+    private static final long cracSocketCloseWaitTime =
+            AccessController.doPrivileged((PrivilegedAction<Long>) () ->
+                    Long.getLong("sun.rmi.transport.tcp.cracSocketCloseWaitTime", 3000));
+
     /** thread pool for connection handlers */
     private static final ExecutorService connectionThreadPool =
         new ThreadPoolExecutor(0, maxConnectionThreads,
@@ -165,7 +170,9 @@ public class TCPTransport extends Transport implements JDKResource {
             tcpLog.log(Log.BRIEF, "Version = " +
                 TransportConstants.Version + ", ep = " + getEndpoint());
         }
-        jdk.internal.crac.Core.getJDKContext().register(this);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            jdk.internal.crac.Core.getJDKContext().register(this);
+        }
     }
 
     /**
@@ -352,22 +359,8 @@ public class TCPTransport extends Transport implements JDKResource {
 
     @Override
     public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
-        //close client connection
-        ConnectionHandler connectionHandler = threadConnectionHandler.get();
-        if (connectionHandler != null && connectionHandler.socket != null) {
-            try {
-                if (tcpLog.isLoggable(Log.BRIEF)) {
-                    tcpLog.log(Log.BRIEF, "client socket close: " + connectionHandler.socket);
-                }
-                connectionHandler.socket.close();
-                threadConnectionHandler.remove();
-            } catch (Exception e) {
-                if (tcpLog.isLoggable(Log.BRIEF)) {
-                    tcpLog.log(Log.BRIEF,
-                            "client socket close throws: " + e);
-                }
-            }
-        }
+        //close all connections for server side.
+        shedConnectionCaches();
         //close server socket.
         if (server != null) {
             ServerSocket ss = server;
@@ -384,6 +377,9 @@ public class TCPTransport extends Transport implements JDKResource {
                 }
             }
         }
+        //after close server side channels,the sockets is not close immediately.
+        //to make sure all sockets closed,wait for a few seconds.
+        Thread.sleep(cracSocketCloseWaitTime);
     }
 
     @Override

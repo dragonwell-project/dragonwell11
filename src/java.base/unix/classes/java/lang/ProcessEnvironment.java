@@ -84,7 +84,7 @@ final class ProcessEnvironment
 
     private static HashMap<Variable,Value> theEnvironment;
     private static Map<String,String> theUnmodifiableEnvironment;
-    private static final CracSubscriber theCracSubscriber;
+    private static CracSubscriber theCracSubscriber;
     static final int MIN_NAME_LENGTH = 0;
 
     static {
@@ -102,8 +102,10 @@ final class ProcessEnvironment
             = Collections.unmodifiableMap
             (new StringEnvironment(theEnvironment));
 
-        theCracSubscriber = new CracSubscriber();
-        jdk.internal.crac.Core.getJDKContext().register(theCracSubscriber);
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            theCracSubscriber = new CracSubscriber();
+            jdk.internal.crac.Core.getJDKContext().register(theCracSubscriber);
+        }
     }
 
     /* Only for use by System.getenv(String) */
