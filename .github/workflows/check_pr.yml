@@ -95,7 +95,7 @@ jobs:
           ${TEST_JDK_HOME}/bin/java -version
 
   build_release_riscv_jdk:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted , X64]
     container:
       image: docker.io/alibabadragonwelljdk/centos7_gcc7_build_image:latest
     steps:
