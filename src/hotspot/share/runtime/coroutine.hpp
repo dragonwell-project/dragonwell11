@@ -27,6 +27,7 @@
 
 #include "runtime/jniHandles.hpp"
 #include "runtime/handles.hpp"
+#include "runtime/lockStack.hpp"
 #include "memory/allocation.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/javaFrameAnchor.hpp"
@@ -476,7 +477,7 @@ public:
 
   static WispThread* current(Thread* thread) {
     assert(thread->is_Java_thread(), "invariant") ;
-    return thread->is_Wisp_thread() ? (WispThread*) thread : 
+    return thread->is_Wisp_thread() ? (WispThread*) thread :
       ((JavaThread*) thread)->current_coroutine()->wisp_thread();
   }
 

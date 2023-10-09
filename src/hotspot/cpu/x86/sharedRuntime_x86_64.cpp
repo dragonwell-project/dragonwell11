@@ -4154,6 +4154,9 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
     Register old_coroutine = r9;
     Register old_stack = r10;
     Register temp = r8;
+    Register temp2 = r11;
+    Register temp3 = rax;
+    Register temp4 = rcx;
 
     // check that we're dealing with sane objects...
     DEBUG_ONLY(stop_if_null(masm, old_coroutine_obj, "null old_coroutine"));
@@ -4198,6 +4201,45 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
     __ movbool(Address(old_coroutine, Coroutine::do_not_unlock_if_synchronized_offset()), temp);
 
     __ movptr(Address(old_stack, CoroutineStack::last_sp_offset()), rsp);
+
+    if (UseWispMonitor && UseAltFastLocking) {
+#ifdef ASSERT
+      assert(WispThread::lock_stack_top_offset() == JavaThread::lock_stack_top_offset(), "Should be");
+      assert(WispThread::lock_stack_base_offset() == JavaThread::lock_stack_base_offset(), "Should be");
+#endif
+      // temp2: WispThread*
+      __ movptr(temp2, Address(old_coroutine, Coroutine::wisp_thread_offset()));
+      __ movl(temp3, Address(thread, JavaThread::lock_stack_top_offset()));
+      __ movl(Address(temp2, WispThread::lock_stack_top_offset()), temp3);
+      __ addptr(temp3, thread);
+
+      __ lea(temp, Address(thread, JavaThread::lock_stack_base_offset()));
+      __ lea(temp2, Address(temp2, WispThread::lock_stack_base_offset()));
+
+      Label loop, test;
+      __ jmp(test);
+      __ bind(loop);
+      __ movptr(temp4, Address(temp, 0));
+      __ movptr(Address(temp2, 0), temp4);
+      __ addptr(temp, oopSize);
+      __ addptr(temp2, oopSize);
+      __ bind(test);
+      __ cmpptr(temp, temp3);
+      __ jcc(Assembler::below, loop);
+
+#ifdef ASSERT
+      __ movptr(temp3, Address(old_coroutine, Coroutine::wisp_thread_offset()));
+      __ addptr(temp3, static_cast<int32_t>(LockStack::end_offset()));
+      Label loop1, test1;
+      __ jmp(test1);
+      __ bind(loop1);
+      __ movptr(Address(temp2, 0), (intptr_t)NULL_WORD);
+      __ addptr(temp2, oopSize);
+      __ bind(test1);
+      __ cmpptr(temp2, temp3);
+      __ jcc(Assembler::below, loop1);
+#endif
+    }
   }
   Register target_stack = r12;
   __ movptr(target_stack, Address(target_coroutine, Coroutine::stack_offset()));
@@ -4212,6 +4254,8 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
 
     Register temp = r8;
     Register temp2 = r9;
+    Register temp3 = rax;
+    Register temp4 = r11;
     {
       Register thread = r15;
       __ movptr(Address(thread, JavaThread::current_coroutine_offset()), target_coroutine);
@@ -4241,6 +4285,41 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
       __ movptr(Address(thread, JavaThread::monitor_chunks_offset()), temp);
       __ movbool(temp, Address(target_coroutine, Coroutine::do_not_unlock_if_synchronized_offset()));
       __ movbool(Address(thread, JavaThread::do_not_unlock_if_synchronized_offset()), temp);
+
+      if (UseWispMonitor && UseAltFastLocking) {
+        // temp2: WispThread*
+        __ movptr(temp2, Address(target_coroutine, Coroutine::wisp_thread_offset()));
+        __ movl(temp, Address(temp2, WispThread::lock_stack_top_offset()));
+        __ movl(Address(thread, JavaThread::lock_stack_top_offset()), temp);
+        __ movl(temp3, temp);
+        __ addptr(temp3, temp2);
+
+        __ lea(temp, Address(temp2, WispThread::lock_stack_base_offset()));
+        __ lea(temp2, Address(thread, JavaThread::lock_stack_base_offset()));
+
+        Label loop, test;
+        __ jmp(test);
+        __ bind(loop);
+        __ movptr(temp4, Address(temp, 0));
+        __ movptr(Address(temp2, 0), temp4);
+        __ addptr(temp, oopSize);
+        __ addptr(temp2, oopSize);
+        __ bind(test);
+        __ cmpptr(temp, temp3);
+        __ jcc(Assembler::below, loop);
+#ifdef ASSERT
+        __ lea(temp3, Address(thread, LockStack::end_offset()));
+        Label loop1, test1;
+        __ jmp(test1);
+        __ bind(loop1);
+        __ movptr(Address(temp2, 0), (intptr_t)NULL_WORD);
+        __ addptr(temp2, oopSize);
+        __ bind(test1);
+        __ cmpptr(temp2, temp3);
+        __ jcc(Assembler::below, loop1);
+#endif
+      }
+
 #ifdef ASSERT
       __ movptr(Address(target_coroutine, Coroutine::handle_area_offset()), (intptr_t)NULL_WORD);
       __ movptr(Address(target_coroutine, Coroutine::resource_area_offset()), (intptr_t)NULL_WORD);

@@ -317,7 +317,11 @@ void ObjectSynchronizer::fast_exit(oop object, BasicLock* lock, TRAPS) {
         assert(old_mark->has_monitor(), "must have monitor");
         ObjectMonitor* monitor = old_mark->monitor();
         assert(monitor->is_owner_anonymous(), "must be anonymous owner");
-        monitor->set_owner_from_anonymous(THREAD);
+        if (UseWispMonitor) {
+          monitor->set_owner_from_anonymous(WispThread::current(THREAD));
+        } else {
+          monitor->set_owner_from_anonymous(THREAD);
+        }
         monitor->exit(true, THREAD);
       }
       assert(THREAD->is_Java_thread(), "sanity");
@@ -378,7 +382,11 @@ void ObjectSynchronizer::fast_exit(oop object, BasicLock* lock, TRAPS) {
       LockStack& lock_stack = jt->lock_stack();
       oop popped = lock_stack.pop();
       assert(popped == object, "must be owned by this thread");
-      monitor->set_owner_from_anonymous(THREAD);
+      if (UseWispMonitor) {
+        monitor->set_owner_from_anonymous(WispThread::current(THREAD));
+      } else {
+        monitor->set_owner_from_anonymous(THREAD);
+      }
     }
     monitor->exit(true, THREAD);
   } else {
@@ -408,7 +416,11 @@ void ObjectSynchronizer::fast_exit(Handle object, BasicLock* lock, TRAPS) {
         assert(old_mark->has_monitor(), "must have monitor");
         ObjectMonitor* monitor = old_mark->monitor();
         assert(monitor->is_owner_anonymous(), "must be anonymous owner");
-        monitor->set_owner_from_anonymous(THREAD);
+        if (UseWispMonitor) {
+          monitor->set_owner_from_anonymous(WispThread::current(THREAD));
+        } else {
+          monitor->set_owner_from_anonymous(THREAD);
+        }
         monitor->exit(true, THREAD);
       }
       assert(THREAD->is_Java_thread(), "sanity");
@@ -469,7 +481,11 @@ void ObjectSynchronizer::fast_exit(Handle object, BasicLock* lock, TRAPS) {
       LockStack& lock_stack = jt->lock_stack();
       oop popped = lock_stack.pop();
       assert(popped == object(), "must be owned by this thread");
-      monitor->set_owner_from_anonymous(THREAD);
+      if (UseWispMonitor) {
+        monitor->set_owner_from_anonymous(WispThread::current(THREAD));
+      } else {
+        monitor->set_owner_from_anonymous(THREAD);
+      }
     }
     monitor->exit(true, THREAD);
   } else {
@@ -1045,6 +1061,12 @@ bool ObjectSynchronizer::current_thread_holds_lock(JavaThread* thread,
 
   if (UseAltFastLocking && mark->is_fast_locked()) {
     // fast-locking case, see if lock is in current's lock stack
+    if (UseWispMonitor) {
+      if (thread == WispThread::current(JavaThread::current())) {
+        thread = ((WispThread*) thread)->thread();
+      }
+      assert(thread != NULL, "Should be");
+    }
     return thread->lock_stack().contains(h_obj());
   }
 
@@ -1099,6 +1121,9 @@ ObjectSynchronizer::LockOwnership ObjectSynchronizer::query_lock_ownership
   if (mark->has_monitor()) {
     void * owner = mark->monitor()->_owner;
     if (owner == NULL) return owner_none;
+    if (UseWispMonitor) {
+      self = WispThread::current(self);
+    }
     return (owner == self ||
             self->is_lock_owned((address)owner)) ? owner_self : owner_other;
   }
@@ -1645,7 +1670,11 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread * Self,
       assert(inf->object() == object, "invariant");
       assert(ObjectSynchronizer::verify_objmon_isinpool(inf), "monitor is invalid");
       if (UseAltFastLocking && inf->is_owner_anonymous() && is_lock_owned(Self, object)) {
-        inf->set_owner_from_anonymous(Self);
+        if (UseWispMonitor) {
+          inf->set_owner_from_anonymous(WispThread::current(Self));
+        } else {
+          inf->set_owner_from_anonymous(Self);
+        }
         assert(Self->is_Java_thread(), "must be Java thread");
         reinterpret_cast<JavaThread*>(Self)->lock_stack().remove(object);
       }
@@ -1685,7 +1714,11 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread * Self,
       bool own = is_lock_owned(Self, object);
       if (own) {
         // Owned by us.
-        monitor->set_owner(Self);
+        if (UseWispMonitor) {
+          monitor->set_owner(WispThread::current(Self));
+        } else {
+          monitor->set_owner(Self);
+        }
       } else {
         // Owned by somebody else.
         monitor->set_owner_anonymous();

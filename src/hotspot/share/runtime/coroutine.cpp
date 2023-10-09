@@ -648,18 +648,18 @@ void WispThread::set_wisp_booted(Thread* thread) {
 /*
  * Avoid coroutine switch in the following scenarios:
  *
- * - _wisp_booted: 
- *   We guarantee the classes referenced by WispTask.park(called in WispThread::park in native) 
+ * - _wisp_booted:
+ *   We guarantee the classes referenced by WispTask.park(called in WispThread::park in native)
  *   are already loaded after _wisp_booted is set(as true). Otherwise it might result in loading class during execution of WispTask.park.
  *   Coroutine switch caused by object monitors in class loading might lead to recursive deadlock.
  *
  * - !com_alibaba_wisp_engine_WispCarrier::is_critical(_coroutine->wisp_engine()):
- *   If the program is already running in kernel code of wisp engine(marked by WispEngine.isInCritical at Java level),  we don't expect 
+ *   If the program is already running in kernel code of wisp engine(marked by WispEngine.isInCritical at Java level),  we don't expect
  *   the switch while coroutine running into 'synchronized' block which is heavily used by Java NIO library.
  *   Otherwise, it might lead to potential recursive deadlock.
- * 
+ *
  * - monitor->object() != java_lang_ref_Reference::pending_list_lock():
- *   pending_list_lock(PLL) is special ObjectMonitor used in GC vm operation. 
+ *   pending_list_lock(PLL) is special ObjectMonitor used in GC vm operation.
  *   if we treated it as normal monitor(T10965418)
  *   - 'dead lock' in jni_critical case:
  *     Given coroutine A, B running in the same thread,
@@ -1002,6 +1002,9 @@ const char* WispThread::print_blocking_status(int status) {
 
 void WispThread::oops_do(OopClosure *f, CodeBlobClosure *cf) {
   f->do_oop((oop*) &_threadObj);
+  if (UseWispMonitor && UseAltFastLocking) {
+    lock_stack().oops_do(f);
+  }
 }
 
 void Coroutine::after_safepoint(JavaThread* thread) {
@@ -1048,7 +1051,7 @@ void Coroutine::after_safepoint(JavaThread* thread) {
   }
 
   coroutine->_is_yielding = true;
-  // "yield" will immediately switch context to execute other coroutines. 
+  // "yield" will immediately switch context to execute other coroutines.
   // After all the runnable coroutines has been executed, we'll switch back.
   //
   // - The preempt mechanism should be disabled when current coroutine is calling "yield"
