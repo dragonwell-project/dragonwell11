@@ -3156,17 +3156,18 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
   __ ldr(target_coroutine, Address(target_coroutine, java_dyn_CoroutineBase::get_data_offset()));
 
   Register temp = r4;
-  Register temp2 = r5;
+  Register temp2 = r9;
+  Register temp3 = r10;
+  Register temp4 = r11;
   {
     //////////////////////////////////////////////////////////////////////////
     // store information into the old coroutine's object
     //
-    // valid registers: rsi = old Coroutine, rdx = target Coroutine
+    // valid registers: r1 = old Coroutine, r2 = target Coroutine
 
     Register old_coroutine_obj = j_rarg0;
     Register old_coroutine = r5;
     Register old_stack = r6;
-
     // check that we're dealing with sane objects...
     __ ldr(old_coroutine, Address(old_coroutine_obj, java_dyn_CoroutineBase::get_data_offset()));
     __ ldr(old_stack, Address(old_coroutine, Coroutine::stack_offset()));
@@ -3203,6 +3204,43 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
 
     __ mov(temp, sp);
     __ str(temp, Address(old_stack, CoroutineStack::last_sp_offset())); // str cannot use sp as an argument
+
+    if (UseWispMonitor && UseAltFastLocking) {
+#ifdef ASSERT
+      assert(WispThread::lock_stack_top_offset() == JavaThread::lock_stack_top_offset(), "Should be");
+      assert(WispThread::lock_stack_base_offset() == JavaThread::lock_stack_base_offset(), "Should be");
+#endif
+      __ ldr(temp2, Address(old_coroutine, Coroutine::wisp_thread_offset()));
+      __ ldrw(temp3, Address(thread, JavaThread::lock_stack_top_offset()));
+      __ strw(temp3, Address(temp2, WispThread::lock_stack_top_offset()));
+      __ add(temp3, temp3, thread);
+
+      __ lea(temp, Address(thread, JavaThread::lock_stack_base_offset()));
+      __ lea(temp2, Address(temp2, WispThread::lock_stack_base_offset()));
+
+      Label loop, test;
+      __ br(Assembler::AL, test);
+      __ bind(loop);
+      __ ldr(temp4, Address(temp, 0));
+      __ str(temp4, Address(temp2, 0));
+      __ add(temp, temp, oopSize);
+      __ add(temp2, temp2, oopSize);
+      __ bind(test);
+      __ cmp(temp, temp3);
+      __ br(Assembler::LO, loop);
+#ifdef ASSERT
+      __ ldr(temp3, Address(old_coroutine, Coroutine::wisp_thread_offset()));
+      __ add(temp3, temp3, static_cast<int32_t>(LockStack::end_offset()));
+      Label loop1, test1;
+      __ br(Assembler::AL, test1);
+      __ bind(loop1);
+      __ str(zr, Address(temp2, 0));
+      __ add(temp2, temp2, oopSize);
+      __ bind(test1);
+      __ cmp(temp2, temp3);
+      __ br(Assembler::LO, loop1);
+#endif
+    }
   }
   Register target_stack = rheapbase;
   __ ldr(target_stack, Address(target_coroutine, Coroutine::stack_offset()));
@@ -3211,8 +3249,7 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
     //////////////////////////////////////////////////////////////////////////
     // perform the switch to the new stack
     //
-    // valid registers: rdx = target Coroutine
-
+    // valid registers: r2 = target Coroutine
     __ movw(temp, Coroutine::_current);
     __ strw(temp, Address(target_coroutine, Coroutine::state_offset()));
     {
@@ -3244,6 +3281,39 @@ void create_switchTo_contents(MacroAssembler *masm, int start, OopMapSet* oop_ma
       __ str(temp, Address(thread, JavaThread::monitor_chunks_offset()));
       __ ldrb(temp, Address(target_coroutine, Coroutine::do_not_unlock_if_synchronized_offset()));
       __ strb(temp, Address(thread, JavaThread::do_not_unlock_if_synchronized_offset()));
+
+      if (UseWispMonitor && UseAltFastLocking) {
+        __ ldr(temp2, Address(target_coroutine, Coroutine::wisp_thread_offset()));
+        __ ldrw(temp, Address(temp2, WispThread::lock_stack_top_offset()));
+        __ strw(temp, Address(thread, JavaThread::lock_stack_top_offset()));
+        __ mov(temp3, temp);
+        __ add(temp3, temp3, temp2);
+
+        __ lea(temp, Address(temp2, WispThread::lock_stack_base_offset()));
+        __ lea(temp2, Address(thread, JavaThread::lock_stack_base_offset()));
+
+        Label loop, test;
+        __ br(Assembler::AL, test);
+        __ bind(loop);
+        __ ldr(temp4, Address(temp, 0));
+        __ str(temp4, Address(temp2, 0));
+        __ add(temp, temp, oopSize);
+        __ add(temp2, temp2, oopSize);
+        __ bind(test);
+        __ cmp(temp, temp3);
+        __ br(Assembler::LO, loop);
+#ifdef ASSERT
+        __ lea(temp3, Address(thread, LockStack::end_offset()));
+        Label loop1, test1;
+        __ br(Assembler::AL, test1);
+        __ bind(loop1);
+        __ str(zr, Address(temp2, 0));
+        __ add(temp2, temp2, oopSize);
+        __ bind(test1);
+        __ cmp(temp2, temp3);
+        __ br(Assembler::LO, loop1);
+#endif
+      }
 #ifdef ASSERT
       __ str(zr, Address(target_coroutine, Coroutine::handle_area_offset()));
       __ str(zr, Address(target_coroutine, Coroutine::resource_area_offset()));

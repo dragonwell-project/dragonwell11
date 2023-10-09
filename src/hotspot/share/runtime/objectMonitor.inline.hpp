@@ -34,7 +34,12 @@ inline intptr_t ObjectMonitor::is_entered(TRAPS) const {
   if (UseAltFastLocking) {
     if (is_owner_anonymous()) {
       assert(THREAD->is_Java_thread(), "sanity");
-      JavaThread* jt = (JavaThread*)THREAD;
+      JavaThread* jt;
+      if (UseWispMonitor) {
+        jt = ((WispThread*) THREAD)->thread();
+      } else {
+        jt = (JavaThread*)THREAD;
+      }
       return jt->lock_stack().contains((oop)object()) ? 1 : 0;
     } else {
       return THREAD == _owner ? 1 : 0;
