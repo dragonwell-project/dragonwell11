@@ -251,7 +251,7 @@ void G1ParCopyClosure<barrier, do_mark_object>::do_oop_work(T* p) {
     oop forwardee;
     markOop m = obj->mark_raw();
     if (m->is_marked()) {
-      forwardee = (oop) m->decode_pointer();
+      forwardee = UseAltGCForwarding ? obj->forwardee(m) : (oop) m->decode_pointer();
     } else {
       forwardee = _par_scan_state->copy_to_survivor_space(state, obj, m);
     }

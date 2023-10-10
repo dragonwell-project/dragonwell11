@@ -4179,6 +4179,14 @@ jint Arguments::apply_ergo() {
     UseBiasedLocking = false;
   }
 
+  if (UseAltGCForwarding) {
+    if (!(UseG1GC || (UseParallelGC && UseParallelOldGC))) {
+      warning("UseAltGCForwarding is not supported with current GC setting"
+              "; ignoring UseAltGCForwarding flag.");
+      FLAG_SET_DEFAULT(UseAltGCForwarding, false);
+    }
+  }
+
 #ifdef CC_INTERP
   // Clear flags not supported on zero.
   FLAG_SET_DEFAULT(ProfileInterpreter, false);
