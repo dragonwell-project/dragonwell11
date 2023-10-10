@@ -268,9 +268,12 @@ class oopDesc {
   // this call returns "NULL" for that thread; any other thread has the
   // value of the forwarding pointer returned and does not modify "this".
   inline oop forward_to_atomic(oop p, atomic_memory_order order = memory_order_conservative);
+  inline oop forward_to_self_atomic(markOop m, atomic_memory_order order = memory_order_conservative);
 
   inline oop forwardee() const;
   inline oop forwardee_acquire() const;
+
+  inline oop forwardee(markOop header) const;
 
   // Age of object during scavenge
   inline uint age() const;

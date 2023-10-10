@@ -43,7 +43,7 @@ template <class T> void G1ParScanThreadState::do_oop_evac(T* p) {
   if (in_cset_state.is_in_cset()) {
     markOop m = obj->mark_raw();
     if (m->is_marked()) {
-      obj = (oop) m->decode_pointer();
+      obj = UseAltGCForwarding ? obj->forwardee(m) : (oop) m->decode_pointer();
     } else {
       obj = copy_to_survivor_space(in_cset_state, obj, m);
     }

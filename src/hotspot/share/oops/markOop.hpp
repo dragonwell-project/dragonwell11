@@ -131,6 +131,9 @@ class markOopDesc: public oopDesc {
          biased_lock_mask         = right_n_bits(lock_bits + biased_lock_bits),
          biased_lock_mask_in_place= biased_lock_mask << lock_shift,
          biased_lock_bit_in_place = 1 << biased_lock_shift,
+         // self forward bit has the same position of biased lock bit
+         self_forwarded_mask      = right_n_bits(biased_lock_bits),
+         self_forwarded_mask_in_place = self_forwarded_mask << biased_lock_shift,
          age_mask                 = right_n_bits(age_bits),
          age_mask_in_place        = age_mask << age_shift,
          epoch_mask               = right_n_bits(epoch_bits),
@@ -370,6 +373,19 @@ class markOopDesc: public oopDesc {
 
   // Recover address of oop from encoded form used in mark
   inline void* decode_pointer() { if (UseBiasedLocking && has_bias_pattern()) return NULL; return clear_lock_bits(); }
+
+#ifdef _LP64
+  inline bool self_forwarded() const {
+    bool self_fwd = mask_bits(value(), self_forwarded_mask_in_place) != 0;
+    assert(!self_fwd || UseAltGCForwarding, "Only set self-fwd bit when using alt GC forwarding");
+    return self_fwd;
+  }
+
+  inline markOop set_self_forwarded() const {
+    assert(UseAltGCForwarding, "Only call this with alt GC forwarding");
+    return markOop(value() | self_forwarded_mask_in_place | marked_value);
+  }
+#endif
 
   // These markOops indicate cms free chunk blocks and not objects.
   // In 64 bit, the markOop is set to distinguish them from oops.

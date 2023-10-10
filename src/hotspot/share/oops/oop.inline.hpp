@@ -392,11 +392,52 @@ oop oopDesc::forward_to_atomic(oop p, atomic_memory_order order) {
   return forwardee();
 }
 
+oop oopDesc::forward_to_self_atomic(markOop compare, atomic_memory_order order) {
+  assert(UseAltGCForwarding, "sanity");
+#ifdef _LP64
+  markOop m = compare;
+  // If mark is displaced, we need to preserve the real header during GC.
+  // It will be restored to the displaced header after GC.
+  assert(SafepointSynchronize::is_at_safepoint(), "we can only safely fetch the displaced header at safepoint");
+  if (m->has_displaced_mark_helper()) {
+    m = m->displaced_mark_helper();
+  }
+  m = m->set_self_forwarded();
+  assert(forwardee(m) == cast_to_oop(this), "encoding must be reversible");
+  markOop old_mark = cas_set_mark_raw(m, compare, order);
+  if (old_mark == compare) {
+    return NULL;
+  } else {
+    assert(old_mark->is_marked(), "must be marked here");
+    return forwardee(old_mark);
+  }
+#else
+  return forward_to_atomic(cast_to_oop(this), order);
+#endif
+}
+
 // Note that the forwardee is not the same thing as the displaced_mark.
 // The forwardee is used when copying during scavenge and mark-sweep.
 // It does need to clear the low two locking- and GC-related bits.
 oop oopDesc::forwardee() const {
-  return (oop) mark_raw()->decode_pointer();
+  if (UseAltGCForwarding) {
+    return forwardee(mark());
+  } else {
+    return (oop) mark_raw()->decode_pointer();
+  }
+}
+
+oop oopDesc::forwardee(markOop header) const {
+  assert(UseAltGCForwarding, "sanity");
+  assert(header->is_marked(), "only decode when actually forwarded");
+#ifdef _LP64
+  if (header->self_forwarded()) {
+    return cast_to_oop(this);
+  } else
+#endif
+  {
+    return cast_to_oop(header->decode_pointer());
+  }
 }
 
 // Note that the forwardee is not the same thing as the displaced_mark.
@@ -404,7 +445,11 @@ oop oopDesc::forwardee() const {
 // It does need to clear the low two locking- and GC-related bits.
 oop oopDesc::forwardee_acquire() const {
   markOop m = OrderAccess::load_acquire(&_mark);
-  return (oop) m->decode_pointer();
+  if (UseAltGCForwarding) {
+    return forwardee(m);
+  } else {
+    return (oop) m->decode_pointer();
+  }
 }
 
 // The following method needs to be MT safe.
