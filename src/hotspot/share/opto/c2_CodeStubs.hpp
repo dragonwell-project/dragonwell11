@@ -50,7 +50,7 @@ public:
   virtual int max_size() const = 0;
 };
 
-class C2CodeStubList {
+class C2CodeStubList : public ResourceObj {
 private:
   GrowableArray<C2CodeStub*>* _stubs;
 
