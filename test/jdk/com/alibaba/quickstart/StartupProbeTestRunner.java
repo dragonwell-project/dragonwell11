@@ -85,6 +85,8 @@ public class StartupProbeTestRunner extends QuickStartTestRunner {
         ProcessBuilder pb = createJavaProcessBuilder(cp, merge(new String[][]{
                 getProfileOptions(workDir.getCacheDir()), commands}));
         pb.environment().put("DRAGONWELL_QUICKSTART_STARTUP_PROBE",base64StartupProbe);
+        //set a file flag that indicate CDS dump successful
+        pb.environment().put("CDS_DUMP_FINISH_FILE", workDir.getCacheDir() + File.separator + "metadata");
         jdk.test.lib.process.OutputAnalyzer output = new jdk.test.lib.process.OutputAnalyzer(pb.start());
         output.shouldContain("Running as profiler");
         output.shouldHaveExitValue(0);
