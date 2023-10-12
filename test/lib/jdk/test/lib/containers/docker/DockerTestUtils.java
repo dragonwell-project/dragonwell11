@@ -122,6 +122,17 @@ public class DockerTestUtils {
         return true;
     }
 
+    /**
+     * Build a container image that contains JDK under test.
+     * The jdk will be placed under the "/jdk/" folder inside the image/container file system.
+     *
+     * @param imageName name of the image to be created, including version tag
+     * @throws Exception
+     */
+    public static void buildJdkContainerImage(String imageName) throws Exception {
+        buildJdkContainerImage(imageName, "jdk-docker");
+    }
+
      /**
      * Build a container image that contains JDK under test.
      * The jdk will be placed under the "/jdk/" folder inside the image/container file system.
