@@ -54,25 +54,39 @@ public class TestExecStartupProbe implements SingleProjectProvider {
                 "}", succKeyWord, logFile);
 
         String probeBase64 = Base64.getEncoder().encodeToString(probeJSON.getBytes(StandardCharsets.UTF_8));
-        new StartupProbeTestRunner(QuickStartFeature.FULL, probeBase64).run(new TestExecStartupProbe(succKeyWord, logFile));
+        new StartupProbeTestRunner(QuickStartFeature.EAGER_APPCDS, probeBase64).run(new TestExecStartupProbe(succKeyWord, logFile));
     }
 
     @Override
     public Project getProject() {
         final String mainClass = "com.App1";
+        //when run with 'trace' or 'profile' role, there must sleep until the probe process
+        //launch other helper process execute CDS dump.
+        //but when run with 'replayer' role, no need wait anything.
         String sourceTemplate =
                 "package com;\n" +
+                        "import java.io.File;\n" +
                         "import java.io.FileWriter;\n" +
                         "public class App1{ \n" +
                         "    public static void main(String[] args) throws Exception {\n" +
                         "        FileWriter fw = new FileWriter(\"%s\");\n" +
                         "        fw.write(\"%s\");\n" +
                         "        fw.close();\n" +
-                        "        String debug = System.getProperty(\"jdk.debug\");\n" +
-                        "        int time = 15 + (debug.equals(\"release\") ? 0 : 10);\n"+
-                        "        Thread.sleep(time * 1000);\n" +
-                        "    }" +
-                        " }";
+                        "        String role = System.getenv(\"ALIBABA_QUICKSTART_ROLE\");\n" +
+                        "        if (!\"REPLAYER\".equals(role)) {\n" +
+                        "           long startTime = System.currentTimeMillis();\n" +
+                        "           String cdsFinishFile = System.getenv(\"CDS_DUMP_FINISH_FILE\");\n" +
+                        "           System.out.println(\"CDS finish file: \" + cdsFinishFile);\n" +
+                        "           while (System.currentTimeMillis() - startTime <= 60*1000) {\n" +
+                        "               if (new File(cdsFinishFile).exists()) {\n" +
+                        "                   break;\n" +
+                        "               } else {\n" +
+                        "                   Thread.sleep(1*1000L);\n" +
+                        "               }\n" +
+                        "           }\n" +
+                        "        }\n" +
+                        "    }\n" +
+                        " }\n";
 
 
         Project project = new Project(new RunWithURLClassLoaderConf(mainClass),
