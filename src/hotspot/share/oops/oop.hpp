@@ -78,6 +78,8 @@ class oopDesc {
   inline markOop cas_set_mark_raw(markOop new_mark, markOop old_mark, atomic_memory_order order = memory_order_conservative);
 
   inline markOop resolve_mark() const;
+  // Returns the prototype mark that should be used for this object.
+  inline markOop prototype_mark() const;
 
   // Used only to re-initialize the mark word (e.g., of promoted
   // objects during a GC) -- requires a valid klass pointer
@@ -122,6 +124,20 @@ class oopDesc {
   // Sometimes (for complicated concurrency-related reasons), it is useful
   // to be able to figure out the size of an object knowing its klass.
   inline int size_given_klass(Klass* klass);
+
+   // The following set of methods is used to access the markOop and related
+  // properties when the object may be forwarded. Be careful where and when
+  // using this method. It assumes that the forwardee is installed in
+  // the header as a plain pointer (or self-forwarded). In particular,
+  // those methods can not deal with the sliding-forwarding that is used
+  // in Parallel, G1 full-GCs.
+private:
+  inline Klass*   forward_safe_klass_impl(markOop m) const;
+public:
+  inline Klass*   forward_safe_klass() const;
+  inline Klass*   forward_safe_klass(markOop m) const;
+  inline size_t   forward_safe_size();
+  inline void     forward_safe_init_mark();
 
   // type test operations (inlined in oop.inline.hpp)
   inline bool is_instance()            const;
@@ -341,12 +357,13 @@ class oopDesc {
   static int klass_offset_in_bytes()     {
 #ifdef _LP64
     if (UseCompactObjectHeaders) {
-      //STATIC_ASSERT(markOopDesc::klass_shift % 8 == 0);
-      //return mark_offset_in_bytes() + markOopDesc::klass_shift / 8;
-      return mark_offset_in_bytes() + 4; // Hard coded here
+      // return mark_offset_in_bytes() + markOopDesc::klass_shift / 8;
+      return mark_offset_in_bytes() + 4; // Hard coded here markOopDesc::klass_shift / 8 = 4
     } else
 #endif
-    return offset_of(oopDesc, _metadata._klass);
+    {
+      return offset_of(oopDesc, _metadata._klass);
+    }
   }
   static int klass_gap_offset_in_bytes() {
     assert(has_klass_gap(), "only applicable to compressed klass pointers");

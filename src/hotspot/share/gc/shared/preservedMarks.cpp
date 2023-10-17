@@ -87,18 +87,6 @@ void PreservedMarks::assert_empty() {
 
 void RemoveForwardedPointerClosure::do_object(oop obj) {
   if (obj->is_forwarded()) {
-#ifdef _LP64
-    if (UseCompactObjectHeaders) {
-      oop forwardee = obj->forwardee();
-      markOop header = forwardee->mark();
-      if (header->has_displaced_mark_helper()) {
-        header = header->displaced_mark_helper();
-      }
-      assert(UseCompressedClassPointers, "assume +UseCompressedClassPointers");
-      narrowKlass nklass = header->narrow_klass();
-      obj->set_mark(markOopDesc::prototype()->set_narrow_klass(nklass));
-    } else
-#endif
     PreservedMarks::init_forwarded_mark(obj);
   }
 }

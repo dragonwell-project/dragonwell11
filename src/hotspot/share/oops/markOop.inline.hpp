@@ -113,9 +113,13 @@ inline markOop markOopDesc::prototype_for_object(oop obj) {
 }
 
 #ifdef _LP64
-narrowKlass markOopDesc::narrow_klass() const {
-  assert(UseCompactObjectHeaders, "only used with compact object headers");
-  return narrowKlass(value() >> klass_shift);
+markOop markOopDesc::actual_mark() const {
+  assert(UseCompactObjectHeaders, "only safe when using compact headers");
+  if (has_displaced_mark_helper()) {
+    return displaced_mark_helper();
+  } else {
+    return (markOop)value();
+  }
 }
 
 Klass* markOopDesc::klass() const {
@@ -129,14 +133,9 @@ Klass* markOopDesc::klass_or_null() const {
   return Klass::decode_klass(narrow_klass());
 }
 
-Klass* markOopDesc::safe_klass() const {
+narrowKlass markOopDesc::narrow_klass() const {
   assert(UseCompactObjectHeaders, "only used with compact object headers");
-  assert(SafepointSynchronize::is_at_safepoint(), "only call at safepoint");
-  markOop m = markOop(value());
-  if (m->has_displaced_mark_helper()) {
-    m = m->displaced_mark_helper();
-  }
-  return Klass::decode_klass_not_null(m->narrow_klass());
+  return narrowKlass(value() >> klass_shift);
 }
 
 markOop markOopDesc::set_narrow_klass(const narrowKlass nklass) const {
@@ -144,13 +143,13 @@ markOop markOopDesc::set_narrow_klass(const narrowKlass nklass) const {
   return markOop((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
 }
 
-markOop markOopDesc::set_klass(const Klass* klass) const {
+markOop markOopDesc::set_klass(Klass* klass) const {
   assert(UseCompactObjectHeaders, "only used with compact object headers");
   assert(UseCompressedClassPointers, "expect compressed klass pointers");
   // TODO: Don't cast to non-const, change CKP::encode() to accept const Klass* instead.
   narrowKlass nklass = Klass::encode_klass(const_cast<Klass*>(klass));
   return set_narrow_klass(nklass);
 }
-#endif
+#endif // _LP64
 
 #endif // SHARE_VM_OOPS_MARKOOP_INLINE_HPP

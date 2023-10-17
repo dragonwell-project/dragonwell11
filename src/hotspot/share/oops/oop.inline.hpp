@@ -96,15 +96,20 @@ markOop oopDesc::resolve_mark() const {
   return hdr;
 }
 
-void oopDesc::init_mark() {
-#ifdef _LP64
+markOop oopDesc::prototype_mark() const {
   if (UseCompactObjectHeaders) {
-    markOop header = resolve_mark();
-    assert(UseCompressedClassPointers, "expect compressed klass pointers");
-    set_mark(markOop((header->value() & markOopDesc::klass_mask_in_place) | markOopDesc::prototype()->value()));
-  } else
-#endif
-  set_mark(markOopDesc::prototype_for_object(this));
+    return klass()->prototype_header();
+  } else {
+    return markOopDesc::prototype();
+  }
+}
+
+void oopDesc::init_mark() {
+  if (UseCompactObjectHeaders) {
+    set_mark(prototype_mark());
+  } else {
+    set_mark(markOopDesc::prototype_for_object(this));
+  }
 }
 
 void oopDesc::init_mark_raw() {
@@ -122,8 +127,8 @@ Klass* oopDesc::klass() const {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     assert(UseCompressedClassPointers, "only with compressed class pointers");
-    markOop header = resolve_mark();
-    return header->klass();
+    markOop m = resolve_mark();
+    return m->klass();
   } else
 #endif
   if (UseCompressedClassPointers) {
@@ -137,8 +142,8 @@ Klass* oopDesc::klass_or_null() const {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     assert(UseCompressedClassPointers, "only with compressed class pointers");
-    markOop header = resolve_mark();
-    return header->klass_or_null();
+    markOop m = resolve_mark();
+    return m->klass_or_null();
   } else
 #endif
   if (UseCompressedClassPointers) {
@@ -152,11 +157,11 @@ Klass* oopDesc::klass_or_null_acquire() const {
 #ifdef _LP64
   if (UseCompactObjectHeaders) {
     assert(UseCompressedClassPointers, "only with compressed class pointers");
-    markOop header = mark_acquire();
-    if (header->has_monitor()) {
-      header = header->displaced_mark_helper();
+    markOop m = mark_acquire();
+    if (m->has_displaced_mark_helper()) {
+      m = m->displaced_mark_helper();
     }
-    return header->klass_or_null();
+    return m->klass_or_null();
   } else
 #endif
   if (UseCompressedClassPointers) {
@@ -331,6 +336,53 @@ int oopDesc::size_given_klass(Klass* klass)  {
   assert(s > 0, "Oop size must be greater than zero, not %d", s);
   assert(is_object_aligned(s), "Oop size is not properly aligned: %d", s);
   return s;
+}
+
+#ifdef _LP64
+Klass* oopDesc::forward_safe_klass_impl(markOop m) const {
+  assert(UseCompactObjectHeaders, "Only get here with compact headers");
+  if (m->is_marked()) {
+    oop fwd = forwardee(m);
+    markOop m2 = fwd->mark();
+    assert(!m2->is_marked() || m2->self_forwarded(), "no double forwarding: this: " PTR_FORMAT " (" INTPTR_FORMAT "), fwd: " PTR_FORMAT " (" INTPTR_FORMAT ")", p2i(this), m->value(), p2i(fwd), m2->value());
+    m = m2;
+  }
+  return m->actual_mark()->klass();
+}
+#endif
+
+Klass* oopDesc::forward_safe_klass(markOop m) const {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    return forward_safe_klass_impl(m);
+  } else
+#endif
+  {
+    return klass();
+  }
+}
+
+Klass* oopDesc::forward_safe_klass() const {
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    return forward_safe_klass_impl(mark());
+  } else
+#endif
+  {
+    return klass();
+  }
+}
+
+size_t oopDesc::forward_safe_size() {
+  return size_given_klass(forward_safe_klass());
+}
+
+void oopDesc::forward_safe_init_mark() {
+  if (UseCompactObjectHeaders) {
+    set_mark(forward_safe_klass()->prototype_header());
+  } else {
+    set_mark(markOopDesc::prototype());
+  }
 }
 
 bool oopDesc::is_instance()  const { return klass()->is_instance_klass();  }

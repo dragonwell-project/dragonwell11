@@ -992,17 +992,13 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
       __ ldr(dest->as_register(), as_Address(from_addr));
       break;
     case T_ADDRESS:
-      if (UseCompactObjectHeaders) {
-        __ ldr(dest->as_register(), as_Address(from_addr));
+      // FIXME: OMG this is a horrible kludge.  Any offset from an
+      // address that matches klass_offset_in_bytes() will be loaded
+      // as a word, not a long.
+      if (UseCompressedClassPointers && addr->disp() == oopDesc::klass_offset_in_bytes() && !UseCompactObjectHeaders) {
+        __ ldrw(dest->as_register(), as_Address(from_addr));
       } else {
-        // FIXME: OMG this is a horrible kludge.  Any offset from an
-        // address that matches klass_offset_in_bytes() will be loaded
-        // as a word, not a long.
-        if (UseCompressedClassPointers && addr->disp() == oopDesc::klass_offset_in_bytes()) {
-          __ ldrw(dest->as_register(), as_Address(from_addr));
-        } else {
-          __ ldr(dest->as_register(), as_Address(from_addr));
-        }
+        __ ldr(dest->as_register(), as_Address(from_addr));
       }
       break;
     case T_INT:
@@ -2395,23 +2391,15 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     // We don't know the array types are compatible
     if (basic_type != T_OBJECT) {
       // Simple test for basic type arrays
-      if (UseCompressedClassPointers) {
-        if (UseCompactObjectHeaders) {
-          __ load_nklass(tmp, src);
-          __ load_nklass(rscratch1, dst);
-        } else {
-          __ ldrw(tmp, src_klass_addr);
-          __ ldrw(rscratch1, dst_klass_addr);
-        }
+      if (UseCompactObjectHeaders) {
+        __ cmp_klass(src, dst, tmp, rscratch1);
+      } else if (UseCompressedClassPointers) {
+        __ ldrw(tmp, src_klass_addr);
+        __ ldrw(rscratch1, dst_klass_addr);
         __ cmpw(tmp, rscratch1);
       } else {
-        if (UseCompactObjectHeaders) {
-          __ ldr(tmp, Address(src, oopDesc::klass_offset_in_bytes()));
-          __ ldr(rscratch1, Address(dst, oopDesc::klass_offset_in_bytes()));
-        } else {
-          __ ldr(tmp, src_klass_addr);
-          __ ldr(rscratch1, dst_klass_addr);
-        }
+        __ ldr(tmp, src_klass_addr);
+        __ ldr(rscratch1, dst_klass_addr);
         __ cmp(tmp, rscratch1);
       }
       __ br(Assembler::NE, *stub->entry());
@@ -2543,39 +2531,33 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
       if (UseCompactObjectHeaders) {
         __ cmp_klass(dst, tmp, rscratch1);
+      } else if (UseCompressedClassPointers) {
+        __ ldrw(rscratch1, dst_klass_addr);
+        __ cmpw(tmp, rscratch1);
       } else {
-        if (UseCompressedClassPointers) {
-          __ ldrw(rscratch1, dst_klass_addr);
-          __ cmpw(tmp, rscratch1);
-        } else {
-          __ ldr(rscratch1, dst_klass_addr);
-          __ cmp(tmp, rscratch1);
-        }
+        __ ldr(rscratch1, dst_klass_addr);
+        __ cmp(tmp, rscratch1);
       }
       __ br(Assembler::NE, halt);
       if (UseCompactObjectHeaders) {
         __ cmp_klass(src, tmp, rscratch1);
+      } else if (UseCompressedClassPointers) {
+        __ ldrw(rscratch1, src_klass_addr);
+        __ cmpw(tmp, rscratch1);
       } else {
-        if (UseCompressedClassPointers) {
-          __ ldrw(rscratch1, src_klass_addr);
-          __ cmpw(tmp, rscratch1);
-        } else {
-          __ ldr(rscratch1, src_klass_addr);
-          __ cmp(tmp, rscratch1);
-        }
+        __ ldr(rscratch1, src_klass_addr);
+        __ cmp(tmp, rscratch1);
       }
       __ br(Assembler::EQ, known_ok);
     } else {
       if (UseCompactObjectHeaders) {
         __ cmp_klass(dst, tmp, rscratch1);
+      } else if (UseCompressedClassPointers) {
+        __ ldrw(rscratch1, dst_klass_addr);
+        __ cmpw(tmp, rscratch1);
       } else {
-        if (UseCompressedClassPointers) {
-          __ ldrw(rscratch1, dst_klass_addr);
-          __ cmpw(tmp, rscratch1);
-        } else {
-          __ ldr(rscratch1, dst_klass_addr);
-          __ cmp(tmp, rscratch1);
-        }
+        __ ldr(rscratch1, dst_klass_addr);
+        __ cmp(tmp, rscratch1);
       }
       __ br(Assembler::EQ, known_ok);
       __ cmp(src, dst);

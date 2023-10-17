@@ -79,20 +79,20 @@ inline void PSPromotionManager::promotion_trace_event(oop new_obj, oop old_obj,
   // Skip if memory allocation failed
   if (new_obj != NULL) {
     const ParallelScavengeTracer* gc_tracer = PSScavenge::gc_tracer();
-
+    Klass* klass = UseCompactObjectHeaders ? old_obj->forward_safe_klass() : old_obj->klass();
     if (lab != NULL) {
       // Promotion of object through newly allocated PLAB
       if (gc_tracer->should_report_promotion_in_new_plab_event()) {
         size_t obj_bytes = obj_size * HeapWordSize;
         size_t lab_size = lab->capacity();
-        gc_tracer->report_promotion_in_new_plab_event(old_obj->klass(), obj_bytes,
+        gc_tracer->report_promotion_in_new_plab_event(klass, obj_bytes,
                                                       age, tenured, lab_size);
       }
     } else {
       // Promotion of object directly to heap
       if (gc_tracer->should_report_promotion_outside_plab_event()) {
         size_t obj_bytes = obj_size * HeapWordSize;
-        gc_tracer->report_promotion_outside_plab_event(old_obj->klass(), obj_bytes,
+        gc_tracer->report_promotion_outside_plab_event(klass, obj_bytes,
                                                        age, tenured);
       }
     }
@@ -121,16 +121,8 @@ inline oop PSPromotionManager::copy_to_survivor_space(oop o) {
   // The same test as "o->is_forwarded()"
   if (!test_mark->is_marked()) {
     bool new_obj_is_tenured = false;
-    Klass* klass;
-#ifdef _LP64
-    if (UseCompactObjectHeaders) {
-      klass = test_mark->safe_klass();
-    } else
-#endif
-    {
-      klass = o->klass();
-    }
-    size_t new_obj_size = o->size_given_klass(klass);
+    size_t new_obj_size = UseCompactObjectHeaders ?
+                          o->size_given_klass(o->forward_safe_klass(test_mark)) : o->size();
 
     // Find the objects age, MT safe.
     uint age = (test_mark->has_displaced_mark_helper() /* o->has_displaced_mark() */) ?

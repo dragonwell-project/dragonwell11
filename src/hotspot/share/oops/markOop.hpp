@@ -384,12 +384,12 @@ class markOopDesc: public oopDesc {
   }
 
 #ifdef _LP64
+  inline markOop actual_mark() const;
   inline Klass* klass() const;
   inline Klass* klass_or_null() const;
-  inline Klass* safe_klass() const;
-  inline markOop set_klass(const Klass* klass) const;
   inline narrowKlass narrow_klass() const;
   inline markOop set_narrow_klass(const narrowKlass klass) const;
+  inline markOop set_klass(Klass* klass) const;
 #endif
 
   // Prototype mark for initialization
