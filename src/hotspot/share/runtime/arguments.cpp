@@ -2102,11 +2102,25 @@ bool Arguments::check_vm_args_consistency() {
     if (FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
       FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
     }
-    if (FLAG_IS_CMDLINE(UseBiasedLocking) && UseBiasedLocking) {
+    if (UseSerialGC || UseConcMarkSweepGC || UseEpsilonGC || UseZGC) {
       FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
     }
-    FLAG_SET_DEFAULT(UseAltFastLocking, true);
-    FLAG_SET_DEFAULT(UseAltGCForwarding, true);
+#if INCLUDE_SHENANDOAHGC
+    if (UseShenandoahGC) {
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+#endif
+    if (EnableJVMCI || UseAOT) {
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+
+    if (DumpSharedSpaces || UseSharedSpaces) {
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+    if (UseCompactObjectHeaders) {
+      FLAG_SET_DEFAULT(UseAltFastLocking, true);
+      FLAG_SET_DEFAULT(UseAltGCForwarding, true);
+    }
 #endif
   }
 

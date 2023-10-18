@@ -134,6 +134,7 @@ public class VM {
   private Boolean sharingEnabled;
   private Boolean compressedOopsEnabled;
   private Boolean compressedKlassPointersEnabled;
+  private Boolean compactObjectHeadersEnabled;
 
   // command line flags supplied to VM - see struct JVMFlag in jvmFlag.hpp
   public static final class Flag {
@@ -855,6 +856,15 @@ public class VM {
              (flag.getBool()? Boolean.TRUE: Boolean.FALSE);
     }
     return compressedKlassPointersEnabled.booleanValue();
+  }
+
+  public boolean isCompactObjectHeadersEnabled() {
+    if (compactObjectHeadersEnabled == null) {
+        Flag flag = getCommandLineFlag("UseCompactObjectHeaders");
+        compactObjectHeadersEnabled = (flag == null) ? Boolean.FALSE:
+             (flag.getBool()? Boolean.TRUE: Boolean.FALSE);
+    }
+    return compactObjectHeadersEnabled.booleanValue();
   }
 
   public int getObjectAlignmentInBytes() {

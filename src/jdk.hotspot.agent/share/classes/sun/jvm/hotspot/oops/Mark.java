@@ -56,10 +56,15 @@ public class Mark extends VMObject {
     biasedLockBits      = db.lookupLongConstant("markOopDesc::biased_lock_bits").longValue();
     maxHashBits         = db.lookupLongConstant("markOopDesc::max_hash_bits").longValue();
     hashBits            = db.lookupLongConstant("markOopDesc::hash_bits").longValue();
+    hashBitsCompact     = db.lookupLongConstant("markOopDesc::hash_bits_compact").longValue();
     lockShift           = db.lookupLongConstant("markOopDesc::lock_shift").longValue();
     biasedLockShift     = db.lookupLongConstant("markOopDesc::biased_lock_shift").longValue();
     ageShift            = db.lookupLongConstant("markOopDesc::age_shift").longValue();
     hashShift           = db.lookupLongConstant("markOopDesc::hash_shift").longValue();
+    hashShiftCompact    = db.lookupLongConstant("markOopDesc::hash_shift_compact").longValue();
+    if (VM.getVM().isLP64()) {
+      klassShift        = db.lookupLongConstant("markOopDesc::klass_shift").longValue();
+    }
     lockMask            = db.lookupLongConstant("markOopDesc::lock_mask").longValue();
     lockMaskInPlace     = db.lookupLongConstant("markOopDesc::lock_mask_in_place").longValue();
     biasedLockMask      = db.lookupLongConstant("markOopDesc::biased_lock_mask").longValue();
@@ -69,6 +74,8 @@ public class Mark extends VMObject {
     ageMaskInPlace      = db.lookupLongConstant("markOopDesc::age_mask_in_place").longValue();
     hashMask            = db.lookupLongConstant("markOopDesc::hash_mask").longValue();
     hashMaskInPlace     = db.lookupLongConstant("markOopDesc::hash_mask_in_place").longValue();
+    hashMaskCompact     = db.lookupLongConstant("markOopDesc::hash_mask_compact").longValue();
+    hashMaskCompactInPlace = db.lookupLongConstant("markOopDesc::hash_mask_compact_in_place").longValue();
     biasedLockAlignment  = db.lookupLongConstant("markOopDesc::biased_lock_alignment").longValue();
     lockedValue         = db.lookupLongConstant("markOopDesc::locked_value").longValue();
     unlockedValue       = db.lookupLongConstant("markOopDesc::unlocked_value").longValue();
@@ -95,11 +102,14 @@ public class Mark extends VMObject {
   private static long biasedLockBits;
   private static long maxHashBits;
   private static long hashBits;
+  private static long hashBitsCompact;
 
   private static long lockShift;
   private static long biasedLockShift;
   private static long ageShift;
   private static long hashShift;
+  private static long hashShiftCompact;
+  private static long klassShift;
 
   private static long lockMask;
   private static long lockMaskInPlace;
@@ -110,6 +120,8 @@ public class Mark extends VMObject {
   private static long ageMaskInPlace;
   private static long hashMask;
   private static long hashMaskInPlace;
+  private static long hashMaskCompact;
+  private static long hashMaskCompactInPlace;
   private static long biasedLockAlignment;
 
   private static long lockedValue;
@@ -129,6 +141,10 @@ public class Mark extends VMObject {
   private static long cmsShift;
   private static long cmsMask;
   private static long sizeShift;
+
+  public static long getKlassShift() {
+    return klassShift;
+  }
 
   public Mark(Address addr) {
     super(addr);
@@ -265,11 +281,21 @@ public class Mark extends VMObject {
 
   // hash operations
   public long hash() {
-    return Bits.maskBitsLong(value() >> hashShift, hashMask);
+    if (VM.getVM().isCompactObjectHeadersEnabled()) {
+      return Bits.maskBitsLong(value() >> hashShiftCompact, hashMaskCompact);
+    } else {
+      return Bits.maskBitsLong(value() >> hashShift, hashMask);
+    }
   }
 
   public boolean hasNoHash() {
     return hash() == noHash;
+  }
+
+  public Klass getKlass() {
+    assert(VM.getVM().isCompactObjectHeadersEnabled());
+    assert(!hasMonitor());
+    return (Klass)Metadata.instantiateWrapperFor(addr.getCompKlassAddressAt(0));
   }
 
   // FIXME

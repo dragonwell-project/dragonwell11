@@ -2686,11 +2686,14 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_constant(markOopDesc::biased_lock_bits)                         \
   declare_constant(markOopDesc::max_hash_bits)                            \
   declare_constant(markOopDesc::hash_bits)                                \
+  declare_constant(markOopDesc::hash_bits_compact)                        \
                                                                           \
   declare_constant(markOopDesc::lock_shift)                               \
   declare_constant(markOopDesc::biased_lock_shift)                        \
   declare_constant(markOopDesc::age_shift)                                \
   declare_constant(markOopDesc::hash_shift)                               \
+  declare_constant(markOopDesc::hash_shift_compact)                       \
+  LP64_ONLY(declare_constant(markOopDesc::klass_shift))                   \
                                                                           \
   declare_constant(markOopDesc::lock_mask)                                \
   declare_constant(markOopDesc::lock_mask_in_place)                       \
@@ -2703,6 +2706,8 @@ typedef PaddedEnd<ObjectMonitor>              PaddedObjectMonitor;
   declare_constant(markOopDesc::epoch_mask_in_place)                      \
   declare_constant(markOopDesc::hash_mask)                                \
   declare_constant(markOopDesc::hash_mask_in_place)                       \
+  declare_constant(markOopDesc::hash_mask_compact)                        \
+  declare_constant(markOopDesc::hash_mask_compact_in_place)               \
   declare_constant(markOopDesc::biased_lock_alignment)                    \
                                                                           \
   declare_constant(markOopDesc::locked_value)                             \
