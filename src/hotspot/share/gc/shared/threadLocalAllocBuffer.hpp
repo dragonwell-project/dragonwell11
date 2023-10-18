@@ -143,7 +143,7 @@ public:
 
   // Reserve space at the end of TLAB
   static size_t end_reserve() {
-    int reserve_size = UseCompactObjectHeaders ? arrayOopDesc::base_offset_in_bytes(T_INT) / HeapWordSize : typeArrayOopDesc::header_size(T_INT);
+    int reserve_size = typeArrayOopDesc::header_size(T_INT);
     return MAX2(reserve_size, _reserve_for_allocation_prefetch);
   }
   static size_t alignment_reserve()              { return align_object_size(end_reserve()); }

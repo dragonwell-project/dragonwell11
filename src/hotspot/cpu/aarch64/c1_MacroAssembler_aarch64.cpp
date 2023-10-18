@@ -207,6 +207,11 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
 
   if (len->is_valid()) {
     strw(len, Address(obj, arrayOopDesc::length_offset_in_bytes()));
+    if (UseCompactObjectHeaders) {
+      // With compact headers, arrays have a 32bit alignment gap after the length.
+      assert(arrayOopDesc::length_offset_in_bytes() == 8, "check length offset");
+      strw(zr, Address(obj, arrayOopDesc::length_offset_in_bytes() + sizeof(jint)));
+    }
   } else if (UseCompressedClassPointers && !UseCompactObjectHeaders) {
     store_klass_gap(obj, zr);
   }
@@ -220,13 +225,6 @@ void C1_MacroAssembler::initialize_body(Register obj, Register len_in_bytes, int
   // len_in_bytes is positive and ptr sized
   subs(len_in_bytes, len_in_bytes, hdr_size_in_bytes);
   br(Assembler::EQ, done);
-
-  // Zero first 4 bytes, if start offset is not word aligned.
-  if (UseCompactObjectHeaders && !is_aligned(hdr_size_in_bytes, BytesPerWord)) {
-    strw(zr, Address(obj, hdr_size_in_bytes));
-    hdr_size_in_bytes += BytesPerInt;
-    subs(len_in_bytes, len_in_bytes, BytesPerInt);
-  }
 
   // Preserve obj
   if (hdr_size_in_bytes)
@@ -321,9 +319,8 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
   br(Assembler::HS, slow_case);
 
   const Register arr_size = t2; // okay to be the same
-  int base_offset_in_bytes = UseCompactObjectHeaders ? header_size : header_size * BytesPerWord;
   // align object end
-  mov(arr_size, (int32_t)base_offset_in_bytes + MinObjAlignmentInBytesMask);
+  mov(arr_size, (int32_t)header_size * BytesPerWord + MinObjAlignmentInBytesMask);
   add(arr_size, arr_size, len, ext::uxtw, f);
   andr(arr_size, arr_size, ~MinObjAlignmentInBytesMask);
 
@@ -333,7 +330,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   // clear rest of allocated space
   const Register len_zero = len;
-  initialize_body(obj, arr_size, base_offset_in_bytes, len_zero);
+  initialize_body(obj, arr_size, header_size * BytesPerWord, len_zero);
 
   membar(StoreStore);
 

@@ -51,7 +51,6 @@ class objArrayOopDesc : public arrayOopDesc {
 private:
   // Give size of objArrayOop in HeapWords minus the header
   static int array_size(int length) {
-    assert(!UseCompactObjectHeaders, "sanity");
     const uint OopsPerHeapWord = HeapWordSize/heapOopSize;
     assert(OopsPerHeapWord >= 1 && (HeapWordSize % heapOopSize == 0),
            "Else the following (new) computation would be in error");
@@ -75,11 +74,6 @@ private:
     return res;
   }
 
-  // Give size of objArrayOop in bytes minus the header
-  static size_t array_size_in_bytes(int length) {
-    return (size_t)length * heapOopSize;
-  }
-
  public:
   // Returns the offset of the first element.
   static int base_offset_in_bytes() {
@@ -98,27 +92,16 @@ private:
   oop atomic_compare_exchange_oop(int index, oop exchange_value, oop compare_value);
 
   // Sizing
-  static int header_size()    {
-    assert(!UseCompactObjectHeaders, "sanity");
-    return arrayOopDesc::header_size(T_OBJECT);
-  }
+  static int header_size()    { return arrayOopDesc::header_size(T_OBJECT); }
   int object_size()           { return object_size(length()); }
 
   static int object_size(int length) {
     // This returns the object size in HeapWords.
-    if (UseCompactObjectHeaders) {
-      size_t asz = array_size_in_bytes(length);
-      size_t size_words = align_up(base_offset_in_bytes() + asz, HeapWordSize) / HeapWordSize;
-      size_t osz = align_object_size(size_words);
-      assert(osz < max_jint, "no overflow");
-      return checked_cast<int>(osz);
-    } else {
-      uint asz = array_size(length);
-      uint osz = align_object_size(header_size() + asz);
-      assert(osz >= asz,   "no overflow");
-      assert((int)osz > 0, "no overflow");
-      return (int)osz;
-    }
+    uint asz = array_size(length);
+    uint osz = align_object_size(header_size() + asz);
+    assert(osz >= asz,   "no overflow");
+    assert((int)osz > 0, "no overflow");
+    return (int)osz;
   }
 
   Klass* element_klass();
