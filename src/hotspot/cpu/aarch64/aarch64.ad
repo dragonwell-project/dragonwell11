@@ -991,7 +991,6 @@ reg_class v7_reg(
     V7, V7_H
 );
 
-<<<<<<< HEAD
 // Class for 128 bit register v8
 reg_class v8_reg(
     V8, V8_H
@@ -1112,8 +1111,6 @@ reg_class v31_reg(
     V31, V31_H
 );
 
-=======
->>>>>>> dragonwell_extended_upstream/master
 // Singleton class for condition codes
 reg_class int_flags(RFLAGS);
 
@@ -5124,7 +5121,6 @@ operand vRegD_V7()
   interface(REG_INTER);
 %}
 
-<<<<<<< HEAD
 operand vRegD_V8()
 %{
   constraint(ALLOC_IN_RC(v8_reg));
@@ -5341,8 +5337,6 @@ operand vRegD_V31()
   interface(REG_INTER);
 %}
 
-=======
->>>>>>> dragonwell_extended_upstream/master
 // Flags register, used as output of signed compare instructions
 
 // note that on AArch64 we also use this register as the output for
