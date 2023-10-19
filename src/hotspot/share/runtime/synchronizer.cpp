@@ -1702,6 +1702,14 @@ ObjectMonitor* ObjectSynchronizer::inflate(Thread * Self,
         // Hopefully the performance counters are allocated on distinct
         // cache lines to avoid false sharing on MP systems ...
         OM_PERFDATA_OP(Inflations, inc());
+        if (log_is_enabled(Debug, monitorinflation)) {
+          if (object->is_instance()) {
+            ResourceMark rm;
+            log_debug(monitorinflation)("Inflating object " INTPTR_FORMAT " , mark " INTPTR_FORMAT " , type %s",
+                                        p2i(object), p2i(object->mark()),
+                                        object->klass()->external_name());
+          }
+        }
         if (event.should_commit()) {
           post_monitor_inflate_event(&event, object, cause);
         }
