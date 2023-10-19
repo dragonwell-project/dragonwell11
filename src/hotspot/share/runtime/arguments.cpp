@@ -2114,9 +2114,6 @@ bool Arguments::check_vm_args_consistency() {
       FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
     }
 
-    if (DumpSharedSpaces || UseSharedSpaces) {
-      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-    }
     if (UseCompactObjectHeaders) {
       FLAG_SET_DEFAULT(UseAltFastLocking, true);
       FLAG_SET_DEFAULT(UseAltGCForwarding, true);
