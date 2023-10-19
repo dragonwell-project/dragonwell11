@@ -319,9 +319,10 @@ class MacroAssembler: public Assembler {
   void load_mirror(Register mirror, Register method, Register tmp = rscratch2);
 
   // oop manipulations
-  void load_klass(Register dst, Register src, Register tmp, bool null_check_src = false);
+  void load_klass(Register dst, Register src, Register tmp);
 #ifdef _LP64
-  void load_nklass(Register dst, Register src);
+  void load_nklass_compact(Register dst, Register src);
+  void load_nklass_compact_c2(Register dst, Register obj, Register index, Address::ScaleFactor scale, int disp);
 #endif
   void store_klass(Register dst, Register src, Register tmp);
 

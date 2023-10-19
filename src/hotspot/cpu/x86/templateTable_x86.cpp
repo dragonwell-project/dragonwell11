@@ -3732,13 +3732,13 @@ void TemplateTable::invokevirtual_helper(Register index,
   __ bind(notFinal);
 
   // get receiver klass
-  Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
   if (UseCompactObjectHeaders) {
-    __ load_klass(rax, recv, tmp_load_klass, true);
+    __ null_check(recv, oopDesc::mark_offset_in_bytes());
   } else {
     __ null_check(recv, oopDesc::klass_offset_in_bytes());
-    __ load_klass(rax, recv, tmp_load_klass);
   }
+  Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
+  __ load_klass(rax, recv, tmp_load_klass);
 
   // profile this call
   __ profile_virtual_call(rax, rlocals, rdx);
@@ -3830,13 +3830,13 @@ void TemplateTable::invokeinterface(int byte_no) {
   __ jcc(Assembler::zero, notVFinal);
 
   // Get receiver klass into rlocals - also a null check
-  Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
   if (UseCompactObjectHeaders) {
-    __ load_klass(rlocals, rcx, tmp_load_klass, true);
+    __ null_check(rcx, oopDesc::mark_offset_in_bytes());
   } else {
     __ null_check(rcx, oopDesc::klass_offset_in_bytes());
-    __ load_klass(rlocals, rcx, tmp_load_klass);
   }
+  Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
+  __ load_klass(rlocals, rcx, tmp_load_klass);
 
   Label subtype;
   __ check_klass_subtype(rlocals, rax, rbcp, subtype);
@@ -3859,11 +3859,11 @@ void TemplateTable::invokeinterface(int byte_no) {
   // Get receiver klass into rdx - also a null check
   __ restore_locals();  // restore r14
   if (UseCompactObjectHeaders) {
-    __ load_klass(rdx, rcx, tmp_load_klass, true);
+    __ null_check(rcx, oopDesc::mark_offset_in_bytes());
   } else {
     __ null_check(rcx, oopDesc::klass_offset_in_bytes());
-    __ load_klass(rdx, rcx, tmp_load_klass);
   }
+  __ load_klass(rdx, rcx, tmp_load_klass);
 
   Label no_such_method;
 
@@ -4084,10 +4084,9 @@ void TemplateTable::_new() {
     // The object is initialized before the header.  If the object size is
     // zero, go directly to the header initialization.
     __ bind(initialize_object);
-    int header_size = 0;
     if (UseCompactObjectHeaders) {
-      header_size = align_up(oopDesc::base_offset_in_bytes(), BytesPerLong);
-      __ decrement(rdx, header_size);
+      assert(is_aligned(oopDesc::base_offset_in_bytes(), BytesPerLong), "oop base offset must be 8-byte-aligned");
+      __ decrement(rdx, oopDesc::base_offset_in_bytes());
     } else {
       __ decrement(rdx, sizeof(oopDesc));
     }
@@ -4113,6 +4112,8 @@ void TemplateTable::_new() {
     { Label loop;
     __ bind(loop);
     if (UseCompactObjectHeaders) {
+      assert(is_aligned(oopDesc::base_offset_in_bytes(), BytesPerLong), "oop base offset must be 8-byte-aligned");
+      int header_size = oopDesc::base_offset_in_bytes();
       __ movptr(Address(rax, rdx, Address::times_8, header_size - 1*oopSize), rcx);
       NOT_LP64(__ movptr(Address(rax, rdx, Address::times_8, header_size - 2*oopSize), rcx));
     } else {

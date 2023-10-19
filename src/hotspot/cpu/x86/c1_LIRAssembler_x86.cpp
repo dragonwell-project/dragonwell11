@@ -1241,9 +1241,7 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
       break;
 
     case T_ADDRESS:
-      if (UseCompactObjectHeaders) {
-        __ movptr(dest->as_register(), from_addr);
-      } else if (UseCompressedClassPointers && addr->disp() == oopDesc::klass_offset_in_bytes()) {
+      if (UseCompressedClassPointers && addr->disp() == oopDesc::klass_offset_in_bytes() && !UseCompactObjectHeaders) {
         __ movl(dest->as_register(), from_addr);
       } else {
         __ movptr(dest->as_register(), from_addr);
@@ -1600,7 +1598,7 @@ void LIR_Assembler::emit_alloc_array(LIR_OpAllocArray* op) {
                       len,
                       tmp1,
                       tmp2,
-                      UseCompactObjectHeaders ? arrayOopDesc::base_offset_in_bytes(op->type()) : arrayOopDesc::header_size(op->type()),
+                      arrayOopDesc::header_size(op->type()),
                       array_element_size(op->type()),
                       op->klass()->as_register(),
                       *op->stub()->entry());
@@ -3554,7 +3552,9 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
     __ decode_klass_not_null(result, rscratch1);
   } else
 #endif
-  __ movptr(result, Address(obj, oopDesc::klass_offset_in_bytes()));
+  {
+    __ movptr(result, Address(obj, oopDesc::klass_offset_in_bytes()));
+  }
 }
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
