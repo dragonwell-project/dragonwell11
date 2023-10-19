@@ -2103,9 +2103,6 @@ bool Arguments::check_vm_args_consistency() {
       FLAG_SET_DEFAULT(UseBiasedLocking, false);
     }
 
-    if (UseHeavyMonitors) {
-      FLAG_SET_DEFAULT(UseHeavyMonitors, false);
-    }
 #endif
 
 #if INCLUDE_JVMCI
