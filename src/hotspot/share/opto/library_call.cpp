@@ -57,8 +57,6 @@
 #include "utilities/macros.hpp"
 
 
-<<<<<<< HEAD
-=======
 class LibraryIntrinsic : public InlineCallGenerator {
   // Extend the set of intrinsics known to the runtime:
  public:
@@ -346,7 +344,6 @@ class LibraryCallKit : public GraphKit {
   }
 };
 
->>>>>>> dragonwell_extended_upstream/master
 //---------------------------make_vm_intrinsic----------------------------
 CallGenerator* Compile::make_vm_intrinsic(ciMethod* m, bool is_virtual) {
   vmIntrinsics::ID id = m->intrinsic_id();
