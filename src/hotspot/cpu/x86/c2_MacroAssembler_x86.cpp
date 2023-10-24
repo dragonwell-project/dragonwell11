@@ -987,6 +987,12 @@ void C2_MacroAssembler::reduce8L(int opcode, Register dst, Register src1, XMMReg
   reduce_operation_256(T_LONG, opcode, vtmp2, vtmp2, src2);
   reduce4L(opcode, dst, src1, vtmp2, vtmp1, vtmp2);
 }
+
+void C2_MacroAssembler::genmask(Register dst, Register len, Register temp) {
+  assert(ArrayCopyPartialInlineSize <= 64,"");
+  mov64(dst, -1L);
+  bzhiq(dst, dst, len);
+}
 #endif // _LP64
 
 void C2_MacroAssembler::reduce2F(int opcode, XMMRegister dst, XMMRegister src, XMMRegister vtmp) {
