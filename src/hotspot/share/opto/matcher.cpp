@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -87,6 +87,7 @@ Matcher::Matcher()
   idealreg2spillmask  [Op_VecY] = NULL;
   idealreg2spillmask  [Op_VecZ] = NULL;
   idealreg2spillmask  [Op_RegFlags] = NULL;
+  idealreg2spillmask  [Op_RegVectMask] = NULL;
 
   idealreg2debugmask  [Op_RegI] = NULL;
   idealreg2debugmask  [Op_RegN] = NULL;
@@ -100,6 +101,7 @@ Matcher::Matcher()
   idealreg2debugmask  [Op_VecY] = NULL;
   idealreg2debugmask  [Op_VecZ] = NULL;
   idealreg2debugmask  [Op_RegFlags] = NULL;
+  idealreg2debugmask  [Op_RegVectMask] = NULL;
 
   idealreg2mhdebugmask[Op_RegI] = NULL;
   idealreg2mhdebugmask[Op_RegN] = NULL;
@@ -113,6 +115,7 @@ Matcher::Matcher()
   idealreg2mhdebugmask[Op_VecY] = NULL;
   idealreg2mhdebugmask[Op_VecZ] = NULL;
   idealreg2mhdebugmask[Op_RegFlags] = NULL;
+  idealreg2mhdebugmask[Op_RegVectMask] = NULL;
 
   debug_only(_mem_node = NULL;)   // Ideal memory node consumed by mach node
 }
@@ -427,7 +430,7 @@ static RegMask *init_input_masks( uint size, RegMask &ret_adr, RegMask &fp ) {
 void Matcher::init_first_stack_mask() {
 
   // Allocate storage for spill masks as masks for the appropriate load type.
-  RegMask *rms = (RegMask*)C->comp_arena()->Amalloc_D(sizeof(RegMask) * (3*11));
+  RegMask *rms = (RegMask*)C->comp_arena()->Amalloc_D(sizeof(RegMask) * (3*12));
 
   idealreg2spillmask  [Op_RegN] = &rms[0];
   idealreg2spillmask  [Op_RegI] = &rms[1];
@@ -467,6 +470,10 @@ void Matcher::init_first_stack_mask() {
   idealreg2mhdebugmask[Op_VecX] = &rms[30];
   idealreg2mhdebugmask[Op_VecY] = &rms[31];
   idealreg2mhdebugmask[Op_VecZ] = &rms[32];
+
+  idealreg2spillmask  [Op_RegVectMask] = &rms[33];
+  idealreg2debugmask  [Op_RegVectMask] = &rms[34];
+  idealreg2mhdebugmask[Op_RegVectMask] = &rms[35];
 
   OptoReg::Name i;
 
@@ -510,6 +517,11 @@ void Matcher::init_first_stack_mask() {
    idealreg2spillmask[Op_RegF]->OR(C->FIRST_STACK_mask());
   *idealreg2spillmask[Op_RegD] = *idealreg2regmask[Op_RegD];
    idealreg2spillmask[Op_RegD]->OR(aligned_stack_mask);
+
+  if (Matcher::has_predicated_vectors()) {
+    *idealreg2spillmask[Op_RegVectMask] = *idealreg2regmask[Op_RegVectMask];
+     idealreg2spillmask[Op_RegVectMask]->OR(aligned_stack_mask);
+  }
 
   if (Matcher::vector_size_supported(T_BYTE,4)) {
     *idealreg2spillmask[Op_VecS] = *idealreg2regmask[Op_VecS];
@@ -609,6 +621,7 @@ void Matcher::init_first_stack_mask() {
   *idealreg2debugmask  [Op_RegF] = *idealreg2spillmask[Op_RegF];
   *idealreg2debugmask  [Op_RegD] = *idealreg2spillmask[Op_RegD];
   *idealreg2debugmask  [Op_RegP] = *idealreg2spillmask[Op_RegP];
+  *idealreg2debugmask  [Op_RegVectMask] = *idealreg2spillmask[Op_RegVectMask];
 
   *idealreg2debugmask  [Op_VecS] = *idealreg2spillmask[Op_VecS];
   *idealreg2debugmask  [Op_VecD] = *idealreg2spillmask[Op_VecD];
@@ -622,6 +635,7 @@ void Matcher::init_first_stack_mask() {
   *idealreg2mhdebugmask[Op_RegF] = *idealreg2spillmask[Op_RegF];
   *idealreg2mhdebugmask[Op_RegD] = *idealreg2spillmask[Op_RegD];
   *idealreg2mhdebugmask[Op_RegP] = *idealreg2spillmask[Op_RegP];
+  *idealreg2mhdebugmask[Op_RegVectMask] = *idealreg2spillmask[Op_RegVectMask];
 
   *idealreg2mhdebugmask[Op_VecS] = *idealreg2spillmask[Op_VecS];
   *idealreg2mhdebugmask[Op_VecD] = *idealreg2spillmask[Op_VecD];
@@ -644,6 +658,7 @@ void Matcher::init_first_stack_mask() {
       idealreg2debugmask  [Op_RegF]->Remove(i); // masks
       idealreg2debugmask  [Op_RegD]->Remove(i);
       idealreg2debugmask  [Op_RegP]->Remove(i);
+      idealreg2debugmask  [Op_RegVectMask]->Remove(i);
 
       idealreg2debugmask  [Op_VecS]->Remove(i);
       idealreg2debugmask  [Op_VecD]->Remove(i);
@@ -657,6 +672,7 @@ void Matcher::init_first_stack_mask() {
       idealreg2mhdebugmask[Op_RegF]->Remove(i);
       idealreg2mhdebugmask[Op_RegD]->Remove(i);
       idealreg2mhdebugmask[Op_RegP]->Remove(i);
+      idealreg2mhdebugmask[Op_RegVectMask]->Remove(i);
 
       idealreg2mhdebugmask[Op_VecS]->Remove(i);
       idealreg2mhdebugmask[Op_VecD]->Remove(i);
@@ -923,6 +939,7 @@ void Matcher::init_spill_mask( Node *ret ) {
   idealreg2regmask[Op_VecX] = regmask_for_ideal_register(Op_VecX, ret);
   idealreg2regmask[Op_VecY] = regmask_for_ideal_register(Op_VecY, ret);
   idealreg2regmask[Op_VecZ] = regmask_for_ideal_register(Op_VecZ, ret);
+  idealreg2regmask[Op_RegVectMask] = regmask_for_ideal_register(Op_RegVectMask, ret);
 }
 
 #ifdef ASSERT
@@ -2209,6 +2226,7 @@ void Matcher::find_shared( Node *n ) {
       case Op_FmaVD:
       case Op_FmaVF:
       case Op_MacroLogicV:
+      case Op_LoadVectorMasked:
       case Op_ThreadRefetch:      // This must be added, otherwise we couldn't match the ThreadRefetchNode.
         set_shared(n); // Force result into register (it will be anyways)
         break;
@@ -2377,6 +2395,12 @@ void Matcher::find_shared( Node *n ) {
         n->set_req(2, pair2);
         n->del_req(4);
         n->del_req(3);
+        break;
+      }
+      case Op_StoreVectorMasked: {
+        Node* pair = new BinaryNode(n->in(3), n->in(4));
+        n->set_req(3, pair);
+        n->del_req(4);
         break;
       }
       case Op_LoopLimit: {
@@ -2597,6 +2621,7 @@ const RegMask* Matcher::regmask_for_ideal_register(uint ideal_reg, Node* ret) {
     case Op_VecX: // fall-through
     case Op_VecY: // fall-through
     case Op_VecZ: spill = new LoadVectorNode(NULL, mem, fp, atp, t->is_vect()); break;
+    case Op_RegVectMask: return Matcher::predicate_reg_mask();
 
     default: ShouldNotReachHere(); spill = NULL;
   }

@@ -988,10 +988,11 @@ void C2_MacroAssembler::reduce8L(int opcode, Register dst, Register src1, XMMReg
   reduce4L(opcode, dst, src1, vtmp2, vtmp1, vtmp2);
 }
 
-void C2_MacroAssembler::genmask(Register dst, Register len, Register temp) {
-  assert(ArrayCopyPartialInlineSize <= 64,"");
-  mov64(dst, -1L);
-  bzhiq(dst, dst, len);
+void C2_MacroAssembler::genmask(KRegister dst, Register len, Register temp) {
+  // assert(ArrayCopyPartialInlineSize <= 64,""); JDK-8261553 not introduced
+  mov64(temp, -1L);
+  bzhiq(temp, temp, len);
+  kmovql(dst, temp);
 }
 #endif // _LP64
 
@@ -1038,6 +1039,15 @@ void C2_MacroAssembler::reduce8D(int opcode, XMMRegister dst, XMMRegister src, X
   vextracti64x4_high(vtmp1, src);
   reduce4D(opcode, dst, vtmp1, vtmp1, vtmp2);
 }
+
+void C2_MacroAssembler::evmovdqu(BasicType type, KRegister kmask, XMMRegister dst, Address src, int vector_len) {
+  MacroAssembler::evmovdqu(type, kmask, dst, src, vector_len);
+}
+
+void C2_MacroAssembler::evmovdqu(BasicType type, KRegister kmask, Address dst, XMMRegister src, int vector_len) {
+  MacroAssembler::evmovdqu(type, kmask, dst, src, vector_len);
+}
+
 
 void C2_MacroAssembler::reduceFloatMinMax(int opcode, int vlen, bool is_dst_valid,
                                           XMMRegister dst, XMMRegister src,
@@ -1240,7 +1250,8 @@ void C2_MacroAssembler::evpblend(BasicType typ, XMMRegister dst, KRegister kmask
   }
 }
 
-void C2_MacroAssembler::vectortest(int bt, int vlen, XMMRegister src1, XMMRegister src2, XMMRegister vtmp1, XMMRegister vtmp2) {
+void C2_MacroAssembler::vectortest(int bt, int vlen, XMMRegister src1, XMMRegister src2,
+                                   XMMRegister vtmp1, XMMRegister vtmp2, KRegister mask) {
   switch(vlen) {
     case 4:
       assert(vtmp1 != xnoreg, "required.");
@@ -1278,14 +1289,13 @@ void C2_MacroAssembler::vectortest(int bt, int vlen, XMMRegister src1, XMMRegist
       break;
     case 64:
       {
-        KRegister ktemp = k2; // Use a hardcoded temp due to no k register allocation.
         assert((vtmp1 == xnoreg) && (vtmp2 == xnoreg), "required.");
-        evpcmpeqb(ktemp, src1, src2, Assembler::AVX_512bit);
+        evpcmpeqb(mask, src1, src2, Assembler::AVX_512bit);
         if (bt == BoolTest::ne) {
-          ktestql(ktemp, ktemp);
+          ktestql(mask, mask);
         } else {
           assert(bt == BoolTest::overflow, "required");
-          kortestql(ktemp, ktemp);
+          kortestql(mask, mask);
         }
       }
       break;

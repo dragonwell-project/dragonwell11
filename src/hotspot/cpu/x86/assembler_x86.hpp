@@ -1494,6 +1494,8 @@ private:
   void kmovwl(KRegister dst, Register src);
   void kmovwl(KRegister dst, Address src);
   void kmovwl(Register dst, KRegister src);
+  void kmovwl(Address dst, KRegister src);
+  void kmovwl(KRegister dst, KRegister src);
   void kmovdl(KRegister dst, Register src);
   void kmovdl(Register dst, KRegister src);
   void kmovql(KRegister dst, KRegister src);
@@ -1542,6 +1544,7 @@ private:
   void evmovdqub(XMMRegister dst, Address src, bool merge, int vector_len);
   void evmovdqub(XMMRegister dst, XMMRegister src, bool merge, int vector_len);
   void evmovdqub(XMMRegister dst, KRegister mask, Address src, bool merge, int vector_len);
+  void evmovdqub(Address dst, KRegister mask, XMMRegister src, bool merge, int vector_len);
   void evmovdquw(Address dst, XMMRegister src, bool merge, int vector_len);
   void evmovdquw(Address dst, KRegister mask, XMMRegister src, bool merge, int vector_len);
   void evmovdquw(XMMRegister dst, Address src, bool merge, int vector_len);

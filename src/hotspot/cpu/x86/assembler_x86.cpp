@@ -2495,6 +2495,22 @@ void Assembler::kmovwl(KRegister dst, Address src) {
   emit_operand((Register)dst, src);
 }
 
+void Assembler::kmovwl(Address dst, KRegister src) {
+  assert(VM_Version::supports_evex(), "");
+  InstructionMark im(this);
+  InstructionAttr attributes(AVX_128bit, /* vex_w */ false, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
+  vex_prefix(dst, 0, src->encoding(), VEX_SIMD_NONE, VEX_OPCODE_0F, &attributes);
+  emit_int8((unsigned char)0x91);
+  emit_operand((Register)src, dst);
+}
+
+void Assembler::kmovwl(KRegister dst, KRegister src) {
+  assert(VM_Version::supports_avx512bw(), "");
+  InstructionAttr attributes(AVX_128bit, /* rex_w */ false, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
+  int encode = vex_prefix_and_encode(dst->encoding(), 0, src->encoding(), VEX_SIMD_NONE, VEX_OPCODE_0F, &attributes);
+  emit_int16((unsigned char)0x90, (0xC0 | encode));
+}
+
 void Assembler::kmovdl(KRegister dst, Register src) {
   assert(VM_Version::supports_avx512bw(), "");
   InstructionAttr attributes(AVX_128bit, /* rex_w */ false, /* legacy_mode */ true, /* no_mask_reg */ true, /* uses_vl */ false);
@@ -2813,6 +2829,22 @@ void Assembler::evmovdqub(XMMRegister dst, KRegister mask, Address src, bool mer
   vex_prefix(src, 0, dst->encoding(), VEX_SIMD_F2, VEX_OPCODE_0F, &attributes);
   emit_int8(0x6F);
   emit_operand(dst, src);
+}
+
+void Assembler::evmovdqub(Address dst, KRegister mask, XMMRegister src, bool merge, int vector_len) {
+  assert(VM_Version::supports_avx512vlbw(), "");
+  assert(src != xnoreg, "sanity");
+  InstructionMark im(this);
+  InstructionAttr attributes(vector_len, /* vex_w */ false, /* legacy_mode */ false, /* no_mask_reg */ false, /* uses_vl */ true);
+  attributes.set_address_attributes(/* tuple_type */ EVEX_FVM, /* input_size_in_bits */ EVEX_NObit);
+  attributes.set_embedded_opmask_register_specifier(mask);
+  attributes.set_is_evex_instruction();
+  if (merge) {
+    attributes.reset_is_clear_context();
+  }
+  vex_prefix(dst, 0, src->encoding(), VEX_SIMD_F2, VEX_OPCODE_0F, &attributes);
+  emit_int8(0x7F);
+  emit_operand(src, dst);
 }
 
 void Assembler::evmovdquw(XMMRegister dst, Address src, bool merge, int vector_len) {

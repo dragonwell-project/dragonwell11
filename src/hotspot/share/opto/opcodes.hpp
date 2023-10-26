@@ -42,6 +42,7 @@ enum Opcodes {
   macro(VecX)                   // Machine vectorx register
   macro(VecY)                   // Machine vectory register
   macro(VecZ)                   // Machine vectorz register
+  macro(RegVectMask)            // Vector mask/predicate register
   macro(RegFlags)               // Machine flags   register
   _last_machine_leaf,           // Split between regular opcodes and machine
 #include "classes.hpp"
