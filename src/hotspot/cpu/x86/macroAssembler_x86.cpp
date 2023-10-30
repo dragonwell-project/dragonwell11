@@ -3498,18 +3498,18 @@ void MacroAssembler::movq(XMMRegister dst, AddressLiteral src) {
 }
 
 #ifdef COMPILER2
-void MacroAssembler::setvectmask(Register dst, Register src) {
+void MacroAssembler::setvectmask(Register dst, Register src, KRegister mask) {
   guarantee(PostLoopMultiversioning, "must be");
   Assembler::movl(dst, 1);
   Assembler::shlxl(dst, dst, src);
   Assembler::decl(dst);
-  Assembler::kmovdl(k1, dst);
+  Assembler::kmovdl(mask, dst);
   Assembler::movl(dst, src);
 }
 
-void MacroAssembler::restorevectmask() {
+void MacroAssembler::restorevectmask(KRegister mask) {
   guarantee(PostLoopMultiversioning, "must be");
-  Assembler::knotwl(k1, k0);
+  Assembler::knotwl(mask, k0);
 }
 #endif // COMPILER2
 
@@ -3605,6 +3605,59 @@ void MacroAssembler::vmovdqu(XMMRegister dst, AddressLiteral src, Register scrat
   }
 }
 
+void MacroAssembler::kmov(KRegister dst, Address src) {
+  if (VM_Version::supports_avx512bw()) {
+    kmovql(dst, src);
+  } else {
+    assert(VM_Version::supports_evex(), "");
+    kmovwl(dst, src);
+  }
+}
+
+void MacroAssembler::kmov(Address dst, KRegister src) {
+  if (VM_Version::supports_avx512bw()) {
+    kmovql(dst, src);
+  } else {
+    assert(VM_Version::supports_evex(), "");
+    kmovwl(dst, src);
+  }
+}
+
+void MacroAssembler::kmov(KRegister dst, KRegister src) {
+  if (VM_Version::supports_avx512bw()) {
+    kmovql(dst, src);
+  } else {
+    assert(VM_Version::supports_evex(), "");
+    kmovwl(dst, src);
+  }
+}
+
+void MacroAssembler::kmov(Register dst, KRegister src) {
+  if (VM_Version::supports_avx512bw()) {
+    kmovql(dst, src);
+  } else {
+    assert(VM_Version::supports_evex(), "");
+    kmovwl(dst, src);
+  }
+}
+
+void MacroAssembler::kmov(KRegister dst, Register src) {
+  if (VM_Version::supports_avx512bw()) {
+    kmovql(dst, src);
+  } else {
+    assert(VM_Version::supports_evex(), "");
+    kmovwl(dst, src);
+  }
+}
+
+void MacroAssembler::kmovql(KRegister dst, AddressLiteral src, Register scratch_reg) {
+  if (reachable(src)) {
+    kmovql(dst, as_Address(src));
+  } else {
+    lea(scratch_reg, src);
+    kmovql(dst, Address(scratch_reg, 0));
+  }
+}
 
 void MacroAssembler::kmovwl(KRegister dst, AddressLiteral src, Register scratch_reg) {
   if (reachable(src)) {
@@ -6141,7 +6194,79 @@ void MacroAssembler::xmm_clear_mem(Register base, Register cnt, XMMRegister xtmp
   BIND(L_end);
 }
 
-void MacroAssembler::clear_mem(Register base, Register cnt, Register tmp, XMMRegister xtmp, bool is_large) {
+// Clearing constant sized memory using YMM/ZMM registers.
+void MacroAssembler::clear_mem(Register base, int cnt, Register rtmp, XMMRegister xtmp, KRegister mask) {
+  assert(UseAVX > 2 && VM_Version::supports_avx512vlbw(), "");
+  bool use64byteVector = MaxVectorSize > 32 && AVX3Threshold == 0;
+
+  int vector64_count = (cnt & (~0x7)) >> 3;
+  cnt = cnt & 0x7;
+
+  // 64 byte initialization loop.
+  vpxor(xtmp, xtmp, xtmp, use64byteVector ? AVX_512bit : AVX_256bit);
+  for (int i = 0; i < vector64_count; i++) {
+    fill64_avx(base, i * 64, xtmp, use64byteVector);
+  }
+
+  // Clear remaining 64 byte tail.
+  int disp = vector64_count * 64;
+  if (cnt) {
+    switch (cnt) {
+      case 1:
+        movq(Address(base, disp), xtmp);
+        break;
+      case 2:
+        evmovdqu(T_LONG, k0, Address(base, disp), xtmp, Assembler::AVX_128bit);
+        break;
+      case 3:
+        movl(rtmp, 0x7);
+        kmovwl(mask, rtmp);
+        evmovdqu(T_LONG, mask, Address(base, disp), xtmp, Assembler::AVX_256bit);
+        break;
+      case 4:
+        evmovdqu(T_LONG, k0, Address(base, disp), xtmp, Assembler::AVX_256bit);
+        break;
+      case 5:
+        if (use64byteVector) {
+          movl(rtmp, 0x1F);
+          kmovwl(mask, rtmp);
+          evmovdqu(T_LONG, mask, Address(base, disp), xtmp, Assembler::AVX_512bit);
+        } else {
+          evmovdqu(T_LONG, k0, Address(base, disp), xtmp, Assembler::AVX_256bit);
+          movq(Address(base, disp + 32), xtmp);
+        }
+        break;
+      case 6:
+        if (use64byteVector) {
+          movl(rtmp, 0x3F);
+          kmovwl(mask, rtmp);
+          evmovdqu(T_LONG, mask, Address(base, disp), xtmp, Assembler::AVX_512bit);
+        } else {
+          evmovdqu(T_LONG, k0, Address(base, disp), xtmp, Assembler::AVX_256bit);
+          evmovdqu(T_LONG, k0, Address(base, disp + 32), xtmp, Assembler::AVX_128bit);
+        }
+        break;
+      case 7:
+        if (use64byteVector) {
+          movl(rtmp, 0x7F);
+          kmovwl(mask, rtmp);
+          evmovdqu(T_LONG, mask, Address(base, disp), xtmp, Assembler::AVX_512bit);
+        } else {
+          evmovdqu(T_LONG, k0, Address(base, disp), xtmp, Assembler::AVX_256bit);
+          movl(rtmp, 0x7);
+          kmovwl(mask, rtmp);
+          evmovdqu(T_LONG, mask, Address(base, disp + 32), xtmp, Assembler::AVX_256bit);
+        }
+        break;
+      default:
+        fatal("Unexpected length : %d\n",cnt);
+        break;
+    }
+  }
+}
+
+void MacroAssembler::clear_mem(Register base, Register cnt, Register tmp, XMMRegister xtmp,
+                               bool is_large, KRegister mask) {
   // cnt - number of qwords (8-byte words).
   // base - start address, qword aligned.
   // is_large - if optimizers know cnt is larger than InitArrayShortSize
@@ -6806,7 +6931,7 @@ void MacroAssembler::load_next_elements(Register elem1, Register elem2, Register
 // Compare strings, used for char[] and byte[].
 void MacroAssembler::string_compare(Register str1, Register str2,
                                     Register cnt1, Register cnt2, Register result,
-                                    XMMRegister vec1, int ae) {
+                                    XMMRegister vec1, int ae, KRegister mask) {
   ShortBranchVerifier sbv(this);
   Label LENGTH_DIFF_LABEL, POP_LABEL, DONE_LABEL, WHILE_HEAD_LABEL;
   Label COMPARE_WIDE_VECTORS_LOOP_FAILED;  // used only _LP64 && AVX3
@@ -6959,12 +7084,12 @@ void MacroAssembler::string_compare(Register str1, Register str2,
       bind(COMPARE_WIDE_VECTORS_LOOP_AVX3); // the hottest loop
       if (ae == StrIntrinsicNode::LL || ae == StrIntrinsicNode::UU) {
         evmovdquq(vec1, Address(str1, result, scale), Assembler::AVX_512bit);
-        evpcmpeqb(k7, vec1, Address(str2, result, scale), Assembler::AVX_512bit); // k7 == 11..11, if operands equal, otherwise k7 has some 0
+        evpcmpeqb(mask, vec1, Address(str2, result, scale), Assembler::AVX_512bit); // k7 == 11..11, if operands equal, otherwise k7 has some 0
       } else {
         vpmovzxbw(vec1, Address(str1, result, scale1), Assembler::AVX_512bit);
-        evpcmpeqb(k7, vec1, Address(str2, result, scale2), Assembler::AVX_512bit); // k7 == 11..11, if operands equal, otherwise k7 has some 0
+        evpcmpeqb(mask, vec1, Address(str2, result, scale2), Assembler::AVX_512bit); // k7 == 11..11, if operands equal, otherwise k7 has some 0
       }
-      kortestql(k7, k7);
+      kortestql(mask, mask);
       jcc(Assembler::aboveEqual, COMPARE_WIDE_VECTORS_LOOP_FAILED);     // miscompare
       addptr(result, stride2x2);  // update since we already compared at this addr
       subl(cnt2, stride2x2);      // and sub the size too
@@ -7148,7 +7273,7 @@ void MacroAssembler::string_compare(Register str1, Register str2,
 
     bind(COMPARE_WIDE_VECTORS_LOOP_FAILED);
 
-    kmovql(cnt1, k7);
+    kmovql(cnt1, mask);
     notq(cnt1);
     bsfq(cnt2, cnt1);
     if (ae != StrIntrinsicNode::LL) {
@@ -7197,7 +7322,7 @@ void MacroAssembler::string_compare(Register str1, Register str2,
 //   }
 void MacroAssembler::has_negatives(Register ary1, Register len,
   Register result, Register tmp1,
-  XMMRegister vec1, XMMRegister vec2) {
+  XMMRegister vec1, XMMRegister vec2, KRegister mask1, KRegister mask2) {
   // rsi: byte array
   // rcx: len
   // rax: result
@@ -7229,8 +7354,8 @@ void MacroAssembler::has_negatives(Register ary1, Register len,
 
     bind(test_64_loop);
     // Check whether our 64 elements of size byte contain negatives
-    evpcmpgtb(k2, vec2, Address(ary1, len, Address::times_1), Assembler::AVX_512bit);
-    kortestql(k2, k2);
+    evpcmpgtb(mask1, vec2, Address(ary1, len, Address::times_1), Assembler::AVX_512bit);
+    kortestql(mask1, mask1);
     jcc(Assembler::notZero, TRUE_LABEL);
 
     addptr(len, 64);
@@ -7247,7 +7372,7 @@ void MacroAssembler::has_negatives(Register ary1, Register len,
     mov64(tmp3_aliased, 0xFFFFFFFFFFFFFFFF);
     shlxq(tmp3_aliased, tmp3_aliased, tmp1);
     notq(tmp3_aliased);
-    kmovql(k3, tmp3_aliased);
+    kmovql(mask2, tmp3_aliased);
 #else
     Label k_init;
     jmp(k_init);
@@ -7272,11 +7397,11 @@ void MacroAssembler::has_negatives(Register ary1, Register len,
     lea(len, InternalAddress(tmp));
     // create mask to test for negative byte inside a vector
     evpbroadcastb(vec1, tmp1, Assembler::AVX_512bit);
-    evpcmpgtb(k3, vec1, Address(len, 0), Assembler::AVX_512bit);
+    evpcmpgtb(mask2, vec1, Address(len, 0), Assembler::AVX_512bit);
 
 #endif
-    evpcmpgtb(k2, k3, vec2, Address(ary1, 0), Assembler::AVX_512bit);
-    ktestq(k2, k3);
+    evpcmpgtb(mask1, mask2, vec2, Address(ary1, 0), Assembler::AVX_512bit);
+    ktestq(mask1, mask2);
     jcc(Assembler::notZero, TRUE_LABEL);
 
     jmp(FALSE_LABEL);
@@ -7403,7 +7528,7 @@ void MacroAssembler::has_negatives(Register ary1, Register len,
 // Compare char[] or byte[] arrays aligned to 4 bytes or substrings.
 void MacroAssembler::arrays_equals(bool is_array_equ, Register ary1, Register ary2,
                                    Register limit, Register result, Register chr,
-                                   XMMRegister vec1, XMMRegister vec2, bool is_char) {
+                                   XMMRegister vec1, XMMRegister vec2, bool is_char, KRegister mask) {
   ShortBranchVerifier sbv(this);
   Label TRUE_LABEL, FALSE_LABEL, DONE, COMPARE_VECTORS, COMPARE_CHAR, COMPARE_BYTE;
 
@@ -7466,8 +7591,8 @@ void MacroAssembler::arrays_equals(bool is_array_equ, Register ary1, Register ar
       bind(COMPARE_WIDE_VECTORS_LOOP_AVX3); // the hottest loop
 
       evmovdquq(vec1, Address(ary1, limit, Address::times_1), Assembler::AVX_512bit);
-      evpcmpeqb(k7, vec1, Address(ary2, limit, Address::times_1), Assembler::AVX_512bit);
-      kortestql(k7, k7);
+      evpcmpeqb(mask, vec1, Address(ary2, limit, Address::times_1), Assembler::AVX_512bit);
+      kortestql(mask, mask);
       jcc(Assembler::aboveEqual, FALSE_LABEL);     // miscompare
       addptr(limit, 64);  // update since we already compared at this addr
       cmpl(limit, -64);
@@ -7484,8 +7609,8 @@ void MacroAssembler::arrays_equals(bool is_array_equ, Register ary1, Register ar
       //
       addptr(result, -64);   // it is safe, bc we just came from this area
       evmovdquq(vec1, Address(ary1, result, Address::times_1), Assembler::AVX_512bit);
-      evpcmpeqb(k7, vec1, Address(ary2, result, Address::times_1), Assembler::AVX_512bit);
-      kortestql(k7, k7);
+      evpcmpeqb(mask, vec1, Address(ary2, result, Address::times_1), Assembler::AVX_512bit);
+      kortestql(mask, mask);
       jcc(Assembler::aboveEqual, FALSE_LABEL);     // miscompare
 
       jmp(TRUE_LABEL);
@@ -10228,7 +10353,7 @@ void MacroAssembler::crc32c_ipl_alg2_alt2(Register in_out, Register in1, Registe
 void MacroAssembler::char_array_compress(Register src, Register dst, Register len,
   XMMRegister tmp1Reg, XMMRegister tmp2Reg,
   XMMRegister tmp3Reg, XMMRegister tmp4Reg,
-  Register tmp5, Register result) {
+  Register tmp5, Register result, KRegister mask1, KRegister mask2) {
   Label copy_chars_loop, return_length, return_zero, done;
 
   // rsi: src
@@ -10280,14 +10405,14 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
     movl(result, 0xFFFFFFFF);
     shlxl(result, result, tmp5);
     notl(result);
-    kmovdl(k3, result);
+    kmovdl(mask2, result);
 
-    evmovdquw(tmp1Reg, k3, Address(src, 0), /*merge*/ false, Assembler::AVX_512bit);
-    evpcmpuw(k2, k3, tmp1Reg, tmp2Reg, Assembler::le, Assembler::AVX_512bit);
-    ktestd(k2, k3);
+    evmovdquw(tmp1Reg, mask2, Address(src, 0), /*merge*/ false, Assembler::AVX_512bit);
+    evpcmpuw(mask1, mask2, tmp1Reg, tmp2Reg, Assembler::le, Assembler::AVX_512bit);
+    ktestd(mask1, mask2);
     jcc(Assembler::carryClear, return_zero);
 
-    evpmovwb(Address(dst, 0), k3, tmp1Reg, Assembler::AVX_512bit);
+    evpmovwb(Address(dst, 0), mask2, tmp1Reg, Assembler::AVX_512bit);
 
     addptr(src, tmp5);
     addptr(src, tmp5);
@@ -10308,8 +10433,8 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
 
     bind(copy_32_loop);
     evmovdquw(tmp1Reg, Address(src, len, Address::times_2), /*merge*/ false, Assembler::AVX_512bit);
-    evpcmpuw(k2, tmp1Reg, tmp2Reg, Assembler::le, Assembler::AVX_512bit);
-    kortestdl(k2, k2);
+    evpcmpuw(mask1, tmp1Reg, tmp2Reg, Assembler::le, Assembler::AVX_512bit);
+    kortestdl(mask1, mask1);
     jcc(Assembler::carryClear, return_zero);
 
     // All elements in current processed chunk are valid candidates for
@@ -10330,14 +10455,14 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
     shlxl(result, result, len);
     notl(result);
 
-    kmovdl(k3, result);
+    kmovdl(mask2, result);
 
-    evmovdquw(tmp1Reg, k3, Address(src, 0), /*merge*/ false, Assembler::AVX_512bit);
-    evpcmpuw(k2, k3, tmp1Reg, tmp2Reg, Assembler::le, Assembler::AVX_512bit);
-    ktestd(k2, k3);
+    evmovdquw(tmp1Reg, mask2, Address(src, 0), /*merge*/ false, Assembler::AVX_512bit);
+    evpcmpuw(mask1, mask2, tmp1Reg, tmp2Reg, Assembler::le, Assembler::AVX_512bit);
+    ktestd(mask1, mask2);
     jcc(Assembler::carryClear, return_zero);
 
-    evpmovwb(Address(dst, 0), k3, tmp1Reg, Assembler::AVX_512bit);
+    evpmovwb(Address(dst, 0), mask2, tmp1Reg, Assembler::AVX_512bit);
     jmp(return_length);
 
     bind(below_threshold);
@@ -10437,7 +10562,7 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
 //     }
 //   }
 void MacroAssembler::byte_array_inflate(Register src, Register dst, Register len,
-  XMMRegister tmp1, Register tmp2) {
+  XMMRegister tmp1, Register tmp2, KRegister mask) {
   Label copy_chars_loop, done, below_threshold, avx3_threshold;
   // rsi: src
   // rdi: dst
@@ -10490,9 +10615,9 @@ void MacroAssembler::byte_array_inflate(Register src, Register dst, Register len
     movl(tmp3_aliased, -1);
     shlxl(tmp3_aliased, tmp3_aliased, tmp2);
     notl(tmp3_aliased);
-    kmovdl(k2, tmp3_aliased);
-    evpmovzxbw(tmp1, k2, Address(src, 0), Assembler::AVX_512bit);
-    evmovdquw(Address(dst, 0), k2, tmp1, /*merge*/ true, Assembler::AVX_512bit);
+    kmovdl(mask, tmp3_aliased);
+    evpmovzxbw(tmp1, mask, Address(src, 0), Assembler::AVX_512bit);
+    evmovdquw(Address(dst, 0), mask, tmp1, /*merge*/ true, Assembler::AVX_512bit);
 
     jmp(done);
     bind(avx3_threshold);
@@ -10626,6 +10751,63 @@ void MacroAssembler::evmovdqu(BasicType type, KRegister kmask, Address dst, XMMR
       break;
   }
 }
+
+#if COMPILER2_OR_JVMCI
+
+
+// Set memory operation for length "less than" 64 bytes.
+void MacroAssembler::fill64_masked_avx(uint shift, Register dst, int disp,
+                                       XMMRegister xmm, KRegister mask, Register length,
+                                       Register temp, bool use64byteVector) {
+  assert(MaxVectorSize >= 32, "vector length should be >= 32");
+  assert(shift != 0, "shift value should be 1 (short),2(int) or 3(long)");
+  BasicType type[] = { T_BYTE, T_SHORT,  T_INT,   T_LONG};
+  if (!use64byteVector) {
+    fill32_avx(dst, disp, xmm);
+    subptr(length, 32 >> shift);
+    fill32_masked_avx(shift, dst, disp + 32, xmm, mask, length, temp);
+  } else {
+    assert(MaxVectorSize == 64, "vector length != 64");
+    movl(temp, 1);
+    shlxl(temp, temp, length);
+    subptr(temp, 1);
+    kmovwl(mask, temp);
+    evmovdqu(type[shift], mask, Address(dst, disp), xmm, Assembler::AVX_512bit);
+  }
+}
+
+
+void MacroAssembler::fill32_masked_avx(uint shift, Register dst, int disp,
+                                       XMMRegister xmm, KRegister mask, Register length,
+                                       Register temp) {
+  assert(MaxVectorSize >= 32, "vector length should be >= 32");
+  assert(shift != 0, "shift value should be 1 (short), 2(int) or 3(long)");
+  BasicType type[] = { T_BYTE, T_SHORT,  T_INT,   T_LONG};
+  movl(temp, 1);
+  shlxl(temp, temp, length);
+  subptr(temp, 1);
+  kmovwl(mask, temp);
+  evmovdqu(type[shift], mask, Address(dst, disp), xmm, Assembler::AVX_256bit);
+}
+
+
+void MacroAssembler::fill32_avx(Register dst, int disp, XMMRegister xmm) {
+  assert(MaxVectorSize >= 32, "vector length should be >= 32");
+  vmovdqu(Address(dst, disp), xmm);
+}
+
+void MacroAssembler::fill64_avx(Register dst, int disp, XMMRegister xmm, bool use64byteVector) {
+  assert(MaxVectorSize >= 32, "vector length should be >= 32");
+  BasicType type[] = {T_BYTE,  T_SHORT,  T_INT,   T_LONG};
+  if (!use64byteVector) {
+    fill32_avx(dst, disp, xmm);
+    fill32_avx(dst, disp + 32, xmm);
+  } else {
+    evmovdquq(Address(dst, disp), xmm, Assembler::AVX_512bit);
+  }
+}
+
+#endif //COMPILER2_OR_JVMCI
 
 Assembler::Condition MacroAssembler::negate_condition(Assembler::Condition cond) {
   switch (cond) {

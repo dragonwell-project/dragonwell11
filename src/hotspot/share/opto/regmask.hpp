@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -99,7 +99,9 @@ public:
          SlotsPerVecD = 2,
          SlotsPerVecX = 4,
          SlotsPerVecY = 8,
-         SlotsPerVecZ = 16 };
+         SlotsPerVecZ = 16,
+         SlotsPerRegVectMask = X86_ONLY(2) NOT_X86(1)
+         };
 
   // A constructor only used by the ADLC output.  All mask fields are filled
   // in directly.  Calls to this look something like RM(1,2,3,4);
