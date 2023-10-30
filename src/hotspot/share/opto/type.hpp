@@ -58,6 +58,7 @@ class     TypeVectD;
 class     TypeVectX;
 class     TypeVectY;
 class     TypeVectZ;
+class     TypeVectMask;
 class   TypePtr;
 class     TypeRawPtr;
 class     TypeOopPtr;
@@ -87,6 +88,8 @@ public:
 
     Tuple,                      // Method signature or object layout
     Array,                      // Array types
+
+    VectorMask,                 // Vector predicate/mask type
     VectorS,                    //  32bit Vector types
     VectorD,                    //  64bit Vector types
     VectorX,                    // 128bit Vector types
@@ -295,6 +298,8 @@ public:
   const TypeAry    *is_ary() const;              // Array, NOT array pointer
   const TypeVect   *is_vect() const;             // Vector
   const TypeVect   *isa_vect() const;            // Returns NULL if not a Vector
+  const TypeVectMask *is_vectmask() const;       // Predicate/Mask Vector
+  const TypeVectMask *isa_vectmask() const;      // Returns NULL if not a Vector Predicate/Mask
   const TypePtr    *is_ptr() const;              // Asserts it is a ptr type
   const TypePtr    *isa_ptr() const;             // Returns NULL if not ptr type
   const TypeRawPtr *isa_rawptr() const;          // NOT Java oop
@@ -774,6 +779,13 @@ public:
   // Used directly by Replicate nodes to construct singleton vector.
   static const TypeVect *make(const Type* elem, uint length);
 
+  static const TypeVect *makemask(const BasicType elem_bt, uint length) {
+    // Use bottom primitive type.
+    return makemask(get_const_basic_type(elem_bt), length);
+  }
+  static const TypeVect *makemask(const Type* elem, uint length);
+
+
   virtual const Type *xmeet( const Type *t) const;
   virtual const Type *xdual() const;     // Compute dual right now.
 
@@ -782,6 +794,7 @@ public:
   static const TypeVect *VECTX;
   static const TypeVect *VECTY;
   static const TypeVect *VECTZ;
+  static const TypeVect *VECTMASK;
 
 #ifndef PRODUCT
   virtual void dump2(Dict &d, uint, outputStream *st) const; // Specialized per-Type dumping
@@ -811,6 +824,14 @@ class TypeVectY : public TypeVect {
 class TypeVectZ : public TypeVect {
   friend class TypeVect;
   TypeVectZ(const Type* elem, uint length) : TypeVect(VectorZ, elem, length) {}
+};
+
+class TypeVectMask : public TypeVect {
+public:
+  friend class TypeVect;
+  TypeVectMask(const Type* elem, uint length) : TypeVect(VectorMask, elem, length) {}
+  virtual bool eq(const Type *t) const;
+  virtual const Type *xdual() const;
 };
 
 //------------------------------TypePtr----------------------------------------
@@ -1637,13 +1658,22 @@ inline const TypeAry *Type::is_ary() const {
   return (TypeAry*)this;
 }
 
+inline const TypeVectMask *Type::is_vectmask() const {
+  assert( _base == VectorMask, "Not a Vector Mask" );
+  return (TypeVectMask*)this;
+}
+
+inline const TypeVectMask *Type::isa_vectmask() const {
+  return (_base == VectorMask) ? (TypeVectMask*)this : NULL;
+}
+
 inline const TypeVect *Type::is_vect() const {
-  assert( _base >= VectorS && _base <= VectorZ, "Not a Vector" );
+  assert( _base >= VectorMask && _base <= VectorZ, "Not a Vector" );
   return (TypeVect*)this;
 }
 
 inline const TypeVect *Type::isa_vect() const {
-  return (_base >= VectorS && _base <= VectorZ) ? (TypeVect*)this : NULL;
+  return (_base >= VectorMask && _base <= VectorZ) ? (TypeVect*)this : NULL;
 }
 
 inline const TypePtr *Type::is_ptr() const {
