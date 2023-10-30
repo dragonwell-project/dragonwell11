@@ -1542,6 +1542,7 @@ private:
   void evmovdqub(XMMRegister dst, Address src, bool merge, int vector_len);
   void evmovdqub(XMMRegister dst, XMMRegister src, bool merge, int vector_len);
   void evmovdqub(XMMRegister dst, KRegister mask, Address src, bool merge, int vector_len);
+  void evmovdqub(Address dst, KRegister mask, XMMRegister src, bool merge, int vector_len);
   void evmovdquw(Address dst, XMMRegister src, bool merge, int vector_len);
   void evmovdquw(Address dst, KRegister mask, XMMRegister src, bool merge, int vector_len);
   void evmovdquw(XMMRegister dst, Address src, bool merge, int vector_len);
