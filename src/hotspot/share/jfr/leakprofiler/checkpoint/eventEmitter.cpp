@@ -111,8 +111,8 @@ void EventEmitter::write_event(const ObjectSample* sample, EdgeStore* edge_store
   traceid gc_root_id = 0;
   const Edge* edge = NULL;
   if (SafepointSynchronize::is_at_safepoint()) {
-    if (!(*object_addr)->mark()->is_marked()) {
-      edge = (const Edge*)(*object_addr)->mark();
+    if (edge_store->has_leak_context(sample)) {
+      edge = edge_store->get(sample);
     }
   }
   if (edge == NULL) {
@@ -125,6 +125,7 @@ void EventEmitter::write_event(const ObjectSample* sample, EdgeStore* edge_store
   }
 
   assert(edge != NULL, "invariant");
+  assert(edge->pointee() == sample->object(), "invariant");
   const traceid object_id = edge_store->get_id(edge);
   assert(object_id != 0, "invariant");
 

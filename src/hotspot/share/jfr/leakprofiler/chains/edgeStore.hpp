@@ -30,6 +30,7 @@
 #include "memory/allocation.hpp"
 
 typedef u8 traceid;
+class ObjectSample;
 
 class StoredEdge : public Edge {
  private:
@@ -79,6 +80,7 @@ class EdgeStore : public CHeapObj<mtTracing> {
   void on_unlink(EdgeEntry* entry);
 
   StoredEdge* get(const oop* reference) const;
+  const StoredEdge* get(const ObjectSample* sample) const;
   StoredEdge* put(const oop* reference);
   traceid gc_root_id(const Edge* edge) const;
 
@@ -90,6 +92,7 @@ class EdgeStore : public CHeapObj<mtTracing> {
   void store_gc_root_id_in_leak_context_edge(StoredEdge* leak_context_edge, const Edge* root) const;
   StoredEdge* link_new_edge(StoredEdge** previous, const Edge** current);
   void link_with_existing_chain(const StoredEdge* current_stored, StoredEdge** previous, size_t previous_length);
+  bool has_leak_context(const ObjectSample* sample) const;
 
   template <typename T>
   void iterate(T& functor) const { _edges->iterate_value<T>(functor); }
