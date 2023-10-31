@@ -111,7 +111,9 @@ void EventEmitter::write_event(const ObjectSample* sample, EdgeStore* edge_store
   traceid gc_root_id = 0;
   const Edge* edge = NULL;
   if (SafepointSynchronize::is_at_safepoint()) {
-    edge = (const Edge*)(*object_addr)->mark();
+    if (!(*object_addr)->mark()->is_marked()) {
+      edge = (const Edge*)(*object_addr)->mark();
+    }
   }
   if (edge == NULL) {
     // In order to dump out a representation of the event
