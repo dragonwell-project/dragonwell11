@@ -92,8 +92,7 @@
 //    [ptr             | 00]  locked             ptr points to real header on stack
 //    [header      | 0 | 01]  unlocked           regular object header
 //    [ptr             | 10]  monitor            inflated lock (header is wapped out)
-//    [ptr             | 11]  marked             used by markSweep to mark an object
-//                                               not valid at any other time
+//    [ptr             | 11]  marked             used to mark an object
 //
 //    We assume that stack/thread pointers have the lowest two bits cleared.
 

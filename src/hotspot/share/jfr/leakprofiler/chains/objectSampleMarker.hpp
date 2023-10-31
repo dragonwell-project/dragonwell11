@@ -67,14 +67,11 @@ class ObjectSampleMarker : public StackObj {
     assert(obj != NULL, "invariant");
     // save the original markOop
     _store->push(ObjectSampleMarkOop(obj, obj->mark()));
-    // now we will "poison" the mark word of the sample object
-    // to the intermediate monitor INFLATING state.
-    // This is an "impossible" state during a safepoint,
-    // hence we will use it to quickly identify sample objects
-    // during the reachability search from gc roots.
-    assert(NULL == markOopDesc::INFLATING(), "invariant");
-    obj->set_mark(markOopDesc::INFLATING());
-    assert(NULL == obj->mark(), "invariant");
+    // now we will set the mark word to "marked" in order to quickly
+    // identify sample objects during the reachability search from gc roots.
+    assert(!obj->mark()->is_marked(), "should only mark an object once");
+    obj->set_mark(markOopDesc::prototype()->set_marked());
+    assert(obj->mark()->is_marked(), "invariant");
   }
 };
 
