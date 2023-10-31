@@ -96,6 +96,8 @@
     product(bool, UseBigDecimalOpt, true,                                   \
           "use binary search in zero stripping of BigDecimal")              \
                                                                             \
+  product(bool, CRaCValidateBeforeRestore, true,                            \
+          "Validate OS,JVM,CPU before restore")                             \
   //add new AJDK specific flags here
 
 

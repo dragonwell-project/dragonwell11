@@ -175,6 +175,8 @@ public class Core {
             }
         }
 
+        /**
+         * We need fail back to normal startup.
         if (newArguments != null && newArguments.length() > 0) {
             String[] args = newArguments.split(" ");
             if (args.length > 0) {
@@ -204,6 +206,7 @@ public class Core {
                 }
             }
         }
+        */
 
         assert checkpointException == null || restoreException == null;
         if (checkpointException != null) {
