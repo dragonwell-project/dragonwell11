@@ -7207,7 +7207,9 @@ static int call_crengine() {
     return -1;
   }
   if (pid == 0) {
-    execl(_crengine, _crengine, "checkpoint", CRaCCheckpointTo, NULL);
+    execl(_crengine, _crengine, "checkpoint", CRaCCheckpointTo,
+          CRaCValidateBeforeRestore ? "true" : "false",
+          VM_Version::internal_vm_info_string(), NULL);
     perror("execl");
     exit(1);
   }
@@ -7664,6 +7666,33 @@ void os::Linux::restore() {
   jlong restore_counter = javaTimeNanos();
 
   compute_crengine();
+
+  if (CRaCValidateBeforeRestore) {
+    pid_t pid = fork();
+    if (pid == -1) {
+      perror("cannot fork for criuengine");
+      return;
+    }
+    if (pid == 0) {
+      execl(_crengine, _crengine, "restorevalidate", CRaCRestoreFrom,
+            VM_Version::internal_vm_info_string(), NULL);
+      perror("execl");
+      exit(1);
+    }
+
+    int status;
+    int ret;
+    do {
+      ret = waitpid(pid, &status, 0);
+    } while (ret == -1 && errno == EINTR);
+
+    if (ret == -1 || !WIFEXITED(status)) {
+      return;
+    }
+    if (WEXITSTATUS(status) != 0) {
+      return;
+    }
+  }
 
   int id = getpid();
   CracSHM shm(id);

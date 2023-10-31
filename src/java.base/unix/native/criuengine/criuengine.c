@@ -25,25 +25,34 @@
  */
 
 #include <assert.h>
-#include <string.h>
-#include <stdio.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <signal.h>
-#include <sys/wait.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define RESTORE_SIGNAL   (SIGRTMIN + 2)
 
 #define PERFDATA_NAME "perfdata"
+#define METADATA "metadata"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
 static int create_cppath(const char *imagedir);
+
+static int restore_validate(char *criu, char *image_dir, char *jvm_version);
+static int check_metadata(char *image_dir, char *jvm_version);
+static int check_os(char *checkpoint_os);
+static int create_metadata(const char *image_dir, const char *jvm_version);
+static int exec_criu_command(const char *criu, const char *args[]);
 
 static int g_pid;
 
@@ -56,90 +65,112 @@ static int kickjvm(pid_t jvm, int code) {
     return 0;
 }
 
-static int checkpoint(pid_t jvm,
-        const char *basedir,
-        const char *self,
-        const char *criu,
-        const char *imagedir) {
+static int checkpoint(pid_t jvm, const char *basedir, const char *self,
+                      const char *criu, const char *imagedir,
+                      const char *validate_before_restore,
+                      const char *jvm_version) {
+  const char *dump_cpuinfo[32] = {criu, "cpuinfo", "dump",
+                                  "-D", imagedir,  NULL};
+  pid_t pid = fork();
+  if (pid < 0) {
+    perror("cannot fork() for checkpoint.");
+    return 1;
+  } else if (pid) {
+    // main process
+    wait(NULL);
+    return 0;
+  }
 
-    if (fork()) {
-        // main process
-        wait(NULL);
-        return 0;
-    }
+  pid_t parent_before = getpid();
 
-    pid_t parent_before = getpid();
-
-    // child
-    if (fork()) {
-        exit(0);
-    }
-
-    // grand-child
-    pid_t parent = getppid();
-    int tries = 300;
-    while (parent != 1 && 0 < tries--) {
-        usleep(10);
-        parent = getppid();
-    }
-
-    if (parent == parent_before) {
-        fprintf(stderr, "can't move out of JVM process hierarchy");
-        kickjvm(jvm, -1);
-        exit(0);
-    }
-
-    //cppath must write before call criu. criuengine may be exit immediately if criu kill jvm when running in
-    // a container.
-    create_cppath(imagedir);
-
-    char* leave_running = getenv("CRAC_CRIU_LEAVE_RUNNING");
-
-    char jvmpidchar[32];
-    snprintf(jvmpidchar, sizeof(jvmpidchar), "%d", jvm);
-
-    pid_t child = fork();
-    if (!child) {
-        const char* args[32] = {
-            criu,
-            "dump",
-            "-t", jvmpidchar,
-            "-D", imagedir,
-            "--shell-job",
-            "-v4", "-o", "dump4.log", // -D without -W makes criu cd to image dir for logs
-        };
-        const char** arg = args + 10;
-
-        if (leave_running) {
-            *arg++ = "-R";
-        }
-
-        char *criuopts = getenv("CRAC_CRIU_OPTS");
-        if (criuopts) {
-            char* criuopt = strtok(criuopts, " ");
-            while (criuopt && ARRAY_SIZE(args) >= (size_t)(arg - args) + 1/* account for trailing NULL */) {
-                *arg++ = criuopt;
-                criuopt = strtok(NULL, " ");
-            }
-            if (criuopt) {
-                fprintf(stderr, "Warning: too many arguments in CRAC_CRIU_OPTS (dropped from '%s')\n", criuopt);
-            }
-        }
-        *arg++ = NULL;
-
-        execv(criu, (char**)args);
-        perror("criu dump");
-        exit(1);
-    }
-
-    int status;
-    if (child != wait(&status) || !WIFEXITED(status) || WEXITSTATUS(status)) {
-        kickjvm(jvm, -1);
-    } else if (leave_running) {
-        kickjvm(jvm, 0);
-    }
-
+  // child
+  pid = fork();
+  if (pid < 0) {
+    perror("cannot fork() for move out of JVM process hierarchy");
+    return 1;
+  } else if (pid) {
     exit(0);
+  }
+
+  // grand-child
+  pid_t parent = getppid();
+  int tries = 300;
+  while (parent != 1 && 0 < tries--) {
+    usleep(10);
+    parent = getppid();
+  }
+
+  if (parent == parent_before) {
+    fprintf(stderr, "can't move out of JVM process hierarchy");
+    kickjvm(jvm, -1);
+    exit(0);
+  }
+
+  // cppath must write before call criu. criuengine may be exit immediately if
+  // criu kill jvm when running in
+  // a container.
+  create_cppath(imagedir);
+  if (!strcmp("true", validate_before_restore)) {
+    if (create_metadata(imagedir, jvm_version)) {
+      return 1;
+    }
+    if (exec_criu_command(criu, dump_cpuinfo)) {
+      return 1;
+    }
+  }
+
+  char *leave_running = getenv("CRAC_CRIU_LEAVE_RUNNING");
+
+  char jvmpidchar[32];
+  snprintf(jvmpidchar, sizeof(jvmpidchar), "%d", jvm);
+
+  pid_t child = fork();
+  if (child < 0) {
+    perror("cannot fork() for criu");
+    return 1;
+  } else if (!child) {
+    const char *args[32] = {
+        criu,          "dump", "-t", jvmpidchar,  "-D", imagedir,
+        "--shell-job", "-v4",  "-o", "dump4.log", // -D without -W makes criu cd
+                                                  // to image dir for logs
+    };
+    const char **arg = args + 10;
+
+    if (leave_running) {
+      *arg++ = "-R";
+    }
+
+    char *criuopts = getenv("CRAC_CRIU_OPTS");
+    if (criuopts) {
+      char *criuopt = strtok(criuopts, " ");
+      while (criuopt &&
+             ARRAY_SIZE(args) >=
+                 (size_t)(arg - args) + 1 /* account for trailing NULL */) {
+        *arg++ = criuopt;
+        criuopt = strtok(NULL, " ");
+      }
+      if (criuopt) {
+        fprintf(stderr,
+                "Warning: too many arguments in CRAC_CRIU_OPTS (dropped from "
+                "'%s')\n",
+                criuopt);
+      }
+    }
+    *arg++ = NULL;
+
+    execv(criu, (char **)args);
+    perror("criu dump");
+    exit(1);
+  }
+
+  int status;
+  if (child != wait(&status) || !WIFEXITED(status) || WEXITSTATUS(status)) {
+    kickjvm(jvm, -1);
+  } else if (leave_running) {
+    kickjvm(jvm, 0);
+  }
+
+  exit(0);
 }
 
 static int restore(const char *basedir,
@@ -352,17 +383,20 @@ int main(int argc, char *argv[]) {
             }
         }
 
-
         if (!strcmp(action, "checkpoint")) {
-            pid_t jvm = getppid();
-            return checkpoint(jvm, basedir, argv[0], criu, imagedir);
+          pid_t jvm = getppid();
+          return checkpoint(jvm, basedir, argv[0], criu, imagedir, argv[3],
+                            argv[4]);
         } else if (!strcmp(action, "restore")) {
-            return restore(basedir, argv[0], criu, imagedir);
-        } else if (!strcmp(action, "restorewait")) { // called by CRIU --exec-cmd
-            return restorewait();
+          return restore(basedir, argv[0], criu, imagedir);
+        } else if (!strcmp(action,
+                           "restorewait")) { // called by CRIU --exec-cmd
+          return restorewait();
+        } else if (!strcmp(action, "restorevalidate")) {
+          return restore_validate(criu, imagedir, argv[3]);
         } else {
-            fprintf(stderr, "unknown command-line action: %s\n", action);
-            return 1;
+          fprintf(stderr, "unknown command-line action: %s\n", action);
+          return 1;
         }
     } else if ((action = getenv("CRTOOLS_SCRIPT_ACTION"))) { // called by CRIU --action-script
         if (!strcmp(action, "post-resume")) {
@@ -376,4 +410,133 @@ int main(int argc, char *argv[]) {
     }
 
     return 1;
+}
+
+static int restore_validate(char *criu, char *image_dir, char *jvm_version) {
+  const char *args[32] = {criu, "cpuinfo", "check", "--cpu-cap=jvm",
+                          "-D", image_dir, NULL};
+  if (!check_metadata(image_dir, jvm_version)) {
+    return exec_criu_command(criu, args);
+  }
+  return -1;
+}
+
+static int check_metadata(char *image_dir, char *jvm_version) {
+  char *metadata_path;
+  char buff[1024];
+  int status = 1; // 1 : check os , 2: check vm version, others ignore
+  int ret = -1;
+  if (-1 == asprintf(&metadata_path, "%s/" METADATA, image_dir)) {
+    return -1;
+  }
+  FILE *f = fopen(metadata_path, "r");
+  if (f == NULL) {
+    fprintf(stderr, "open file: %s for read failed, error: %s \n",
+            metadata_path, strerror(errno));
+    free(metadata_path);
+    return -1;
+  }
+
+  while (fgets(buff, sizeof(buff), f) != NULL) {
+    if (status == 1) {
+      if (!check_os(buff)) {
+        status = 2;
+      } else {
+        fprintf(stderr, "os version check failed\n");
+        break;
+      }
+    } else if (status == 2) {
+      ret = strncmp(jvm_version, buff, strlen(jvm_version));
+      if (ret) {
+        fprintf(stderr, "vm version %s != %s\n", buff, jvm_version);
+      }
+      break;
+    }
+  }
+  fclose(f);
+  free(metadata_path);
+  return ret;
+}
+
+static int check_os(char *checkpoint_os) {
+  struct utsname _uname;
+  uint32_t r_major;
+  uint32_t r_minor;
+  uint32_t r_fix;
+  uint32_t c_major;
+  uint32_t c_minor;
+  uint32_t c_fix;
+
+  if (uname(&_uname) != -1 &&
+      sscanf(_uname.release, "%d.%d.%d", &r_major, &r_minor, &r_fix) == 3 &&
+      sscanf(checkpoint_os, "%d.%d.%d", &c_major, &c_minor, &c_fix) == 3 &&
+      ((r_major == c_major) && (r_minor == c_minor))) {
+    return 0;
+  }
+  return -1;
+}
+
+static int create_metadata(const char *image_dir, const char *jvm_version) {
+  char *metadata_path;
+  char buff[1024];
+  struct utsname _uname;
+  uint32_t major;
+  uint32_t minor;
+  uint32_t fix;
+  int ret = -1;
+
+  if (-1 == asprintf(&metadata_path, "%s/" METADATA, image_dir)) {
+    return -1;
+  }
+  FILE *f = fopen(metadata_path, "w");
+  if (f == NULL) {
+    fprintf(stderr, "open file: %s for write failed, error: %s\n",
+            metadata_path, strerror(errno));
+    free(metadata_path);
+    return -1;
+  }
+
+  if (uname(&_uname) != -1 &&
+      sscanf(_uname.release, "%d.%d.%d", &major, &minor, &fix) == 3) {
+    snprintf(buff, sizeof(buff), "%d.%d.%d\n", major, minor, fix);
+    if (fputs(buff, f) < 0) {
+      fprintf(stderr, "write os version to metadata failed!");
+    } else {
+      snprintf(buff, sizeof(buff), "%s\n", jvm_version);
+      if (fputs(buff, f) < 0) {
+        fprintf(stderr, "write jvm version to metadata failed!\n");
+      } else {
+        ret = 0;
+      }
+    }
+  } else {
+    fprintf(stderr, "get os version for write metadata failed!\n");
+  }
+
+  fclose(f);
+  free(metadata_path);
+  return ret;
+}
+
+static int exec_criu_command(const char *criu, const char *args[]) {
+  pid_t pid = fork();
+  if (pid < 0) {
+    perror("cannot fork for criu");
+    return -1;
+  } else if (pid == 0) {
+    execv(criu, (char **)args);
+    perror("execv");
+    exit(1);
+  }
+
+  int status;
+  int ret;
+  do {
+    ret = waitpid(pid, &status, 0);
+  } while (ret == -1 && errno == EINTR);
+
+  if (ret == -1 || !WIFEXITED(status)) {
+    return -1;
+  }
+  return WEXITSTATUS(status) == 0 ? 0 : -1;
 }
