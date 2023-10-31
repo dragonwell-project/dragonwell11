@@ -202,10 +202,9 @@ InCSetState G1ParScanThreadState::next_state(InCSetState const state, markOop co
 }
 
 void G1ParScanThreadState::report_promotion_event(InCSetState const dest_state,
-                                                  oop const old, size_t word_sz, uint age,
+                                                  Klass* klass, size_t word_sz, uint age,
                                                   HeapWord * const obj_ptr) const {
   PLAB* alloc_buf = _plab_allocator->alloc_buffer(dest_state);
-  Klass* klass = UseCompactObjectHeaders ? old->forward_safe_klass() : old->klass();
   if (alloc_buf->contains(obj_ptr)) {
     _g1h->_gc_tracer_stw->report_promotion_in_new_plab_event(klass, word_sz, age,
                                                              dest_state.value() == InCSetState::Old,
@@ -219,14 +218,15 @@ void G1ParScanThreadState::report_promotion_event(InCSetState const dest_state,
 oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
                                                  oop const old,
                                                  markOop const old_mark) {
-  // NOTE: With compact headers, it is not safe to load the Klass* from o, because
+  // NOTE: With compact headers, it is not safe to load the Klass* from old, because
   // that would access the mark-word, and the mark-word might change at any time by
   // concurrent promotion. The promoted mark-word would point to the forwardee, which
   // may not yet have completed copying. Therefore we must load the Klass* from
   // the mark-word that we have already loaded. This is safe, because we have checked
   // that this is not yet forwarded in the caller.
+  Klass* klass = old->forward_safe_klass(old_mark);
   const size_t word_sz = UseCompactObjectHeaders ?
-                         old->size_given_klass(old->forward_safe_klass(old_mark)) : old->size();
+                         old->size_given_klass(klass) : old->size();
   HeapRegion* const from_region = _g1h->heap_region_containing(old);
   // +1 to make the -1 indexes valid...
   const int young_index = from_region->young_index_in_cset()+1;
@@ -257,7 +257,7 @@ oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
     }
     if (_g1h->_gc_tracer_stw->should_report_promotion_events()) {
       // The events are checked individually as part of the actual commit
-      report_promotion_event(dest_state, old, word_sz, age, obj_ptr);
+      report_promotion_event(dest_state, klass, word_sz, age, obj_ptr);
     }
   }
 
@@ -316,8 +316,7 @@ oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
 
     _surviving_young_words[young_index] += word_sz;
 
-    bool is_obj_array = UseCompactObjectHeaders ? obj->forward_safe_klass()->is_objArray_klass() : obj->is_objArray();
-    if (is_obj_array && arrayOop(obj)->length() >= ParGCArrayScanChunk) {
+    if (obj->is_objArray() && arrayOop(obj)->length() >= ParGCArrayScanChunk) {
       // We keep track of the next start index in the length field of
       // the to-space object. The actual length can be found in the
       // length field of the from-space object.
