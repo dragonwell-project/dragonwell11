@@ -23,10 +23,10 @@
  */
 
 #include "precompiled.hpp"
-#include "jfr/leakprofiler/chains/bitset.hpp"
 #include "jfr/leakprofiler/chains/dfsClosure.hpp"
 #include "jfr/leakprofiler/chains/edge.hpp"
 #include "jfr/leakprofiler/chains/edgeStore.hpp"
+#include "jfr/leakprofiler/chains/jfrbitset.hpp"
 #include "jfr/leakprofiler/chains/rootSetClosure.hpp"
 #include "jfr/leakprofiler/utilities/granularTimer.hpp"
 #include "jfr/leakprofiler/utilities/rootType.hpp"
@@ -41,7 +41,7 @@
 static const size_t max_dfs_depth = 5000;
 
 EdgeStore* DFSClosure::_edge_store = NULL;
-BitSet* DFSClosure::_mark_bits = NULL;
+JFRBitSet* DFSClosure::_mark_bits = NULL;
 const Edge* DFSClosure::_start_edge = NULL;
 size_t DFSClosure::_max_depth = max_dfs_depth;
 bool DFSClosure::_ignore_root_set = false;
@@ -59,7 +59,7 @@ DFSClosure::DFSClosure(DFSClosure* parent, size_t depth) :
 }
 
 void DFSClosure::find_leaks_from_edge(EdgeStore* edge_store,
-                                      BitSet* mark_bits,
+                                      JFRBitSet* mark_bits,
                                       const Edge* start_edge) {
   assert(edge_store != NULL, "invariant");
   assert(mark_bits != NULL," invariant");
@@ -77,7 +77,7 @@ void DFSClosure::find_leaks_from_edge(EdgeStore* edge_store,
 }
 
 void DFSClosure::find_leaks_from_root_set(EdgeStore* edge_store,
-                                          BitSet* mark_bits) {
+                                          JFRBitSet* mark_bits) {
   assert(edge_store != NULL, "invariant");
   assert(mark_bits != NULL, "invariant");
 

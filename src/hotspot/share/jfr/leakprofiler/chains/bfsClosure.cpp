@@ -22,7 +22,6 @@
  *
  */
 #include "precompiled.hpp"
-#include "jfr/leakprofiler/chains/bitset.hpp"
 #include "jfr/leakprofiler/chains/bfsClosure.hpp"
 #include "jfr/leakprofiler/chains/dfsClosure.hpp"
 #include "jfr/leakprofiler/chains/edge.hpp"
@@ -37,7 +36,7 @@
 #include "oops/oop.inline.hpp"
 #include "utilities/align.hpp"
 
-BFSClosure::BFSClosure(EdgeQueue* edge_queue, EdgeStore* edge_store, BitSet* mark_bits) :
+BFSClosure::BFSClosure(EdgeQueue* edge_queue, EdgeStore* edge_store, JFRBitSet* mark_bits) :
   _edge_queue(edge_queue),
   _edge_store(edge_store),
   _mark_bits(mark_bits),
