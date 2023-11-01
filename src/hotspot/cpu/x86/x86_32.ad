@@ -11733,10 +11733,8 @@ instruct MoveL2D_reg_reg_sse(regD dst, eRegL src, regD tmp) %{
 
 // =======================================================================
 // fast clearing of an array
-// Small ClearArray non-AVX512.
 instruct rep_stos(eCXRegI cnt, eDIRegP base, regD tmp, eAXRegI zero, Universe dummy, eFlagsReg cr) %{
-  predicate(!((ClearArrayNode*)n)->is_large() &&
-              (UseAVX <= 2 || !VM_Version::supports_avx512vlbw()));
+  predicate(!((ClearArrayNode*)n)->is_large());
   match(Set dummy (ClearArray cnt base));
   effect(USE_KILL cnt, USE_KILL base, TEMP tmp, KILL zero, KILL cr);
 
@@ -11789,76 +11787,13 @@ instruct rep_stos(eCXRegI cnt, eDIRegP base, regD tmp, eAXRegI zero, Universe du
   %}
   ins_encode %{
     __ clear_mem($base$$Register, $cnt$$Register, $zero$$Register,
-                 $tmp$$XMMRegister, false, knoreg);
+                 $tmp$$XMMRegister, false);
   %}
   ins_pipe( pipe_slow );
 %}
 
-// Small ClearArray AVX512 non-constant length.
-instruct rep_stos_evex(eCXRegI cnt, eDIRegP base, regD tmp, kReg ktmp, eAXRegI zero, Universe dummy, eFlagsReg cr) %{
-  predicate(!((ClearArrayNode*)n)->is_large() &&
-               UseAVX > 2 && VM_Version::supports_avx512vlbw() &&
-               !n->in(2)->bottom_type()->is_int()->is_con());
-  match(Set dummy (ClearArray cnt base));
-  effect(USE_KILL cnt, USE_KILL base, TEMP tmp, TEMP ktmp, KILL zero, KILL cr);
-
-  format %{ $$template
-    $$emit$$"XOR    EAX,EAX\t# ClearArray:\n\t"
-    $$emit$$"CMP    InitArrayShortSize,rcx\n\t"
-    $$emit$$"JG     LARGE\n\t"
-    $$emit$$"SHL    ECX, 1\n\t"
-    $$emit$$"DEC    ECX\n\t"
-    $$emit$$"JS     DONE\t# Zero length\n\t"
-    $$emit$$"MOV    EAX,(EDI,ECX,4)\t# LOOP\n\t"
-    $$emit$$"DEC    ECX\n\t"
-    $$emit$$"JGE    LOOP\n\t"
-    $$emit$$"JMP    DONE\n\t"
-    $$emit$$"# LARGE:\n\t"
-    if (UseFastStosb) {
-       $$emit$$"SHL    ECX,3\t# Convert doublewords to bytes\n\t"
-       $$emit$$"REP STOSB\t# store EAX into [EDI++] while ECX--\n\t"
-    } else if (UseXMMForObjInit) {
-       $$emit$$"MOV     RDI,RAX\n\t"
-       $$emit$$"VPXOR    YMM0,YMM0,YMM0\n\t"
-       $$emit$$"JMPQ    L_zero_64_bytes\n\t"
-       $$emit$$"# L_loop:\t# 64-byte LOOP\n\t"
-       $$emit$$"VMOVDQU YMM0,(RAX)\n\t"
-       $$emit$$"VMOVDQU YMM0,0x20(RAX)\n\t"
-       $$emit$$"ADD     0x40,RAX\n\t"
-       $$emit$$"# L_zero_64_bytes:\n\t"
-       $$emit$$"SUB     0x8,RCX\n\t"
-       $$emit$$"JGE     L_loop\n\t"
-       $$emit$$"ADD     0x4,RCX\n\t"
-       $$emit$$"JL      L_tail\n\t"
-       $$emit$$"VMOVDQU YMM0,(RAX)\n\t"
-       $$emit$$"ADD     0x20,RAX\n\t"
-       $$emit$$"SUB     0x4,RCX\n\t"
-       $$emit$$"# L_tail:\t# Clearing tail bytes\n\t"
-       $$emit$$"ADD     0x4,RCX\n\t"
-       $$emit$$"JLE     L_end\n\t"
-       $$emit$$"DEC     RCX\n\t"
-       $$emit$$"# L_sloop:\t# 8-byte short loop\n\t"
-       $$emit$$"VMOVQ   XMM0,(RAX)\n\t"
-       $$emit$$"ADD     0x8,RAX\n\t"
-       $$emit$$"DEC     RCX\n\t"
-       $$emit$$"JGE     L_sloop\n\t"
-       $$emit$$"# L_end:\n\t"
-    } else {
-       $$emit$$"SHL    ECX,1\t# Convert doublewords to words\n\t"
-       $$emit$$"REP STOS\t# store EAX into [EDI++] while ECX--\n\t"
-    }
-    $$emit$$"# DONE"
-  %}
-  ins_encode %{
-    __ clear_mem($base$$Register, $cnt$$Register, $zero$$Register,
-                 $tmp$$XMMRegister, false, $ktmp$$KRegister);
-  %}
-  ins_pipe( pipe_slow );
-%}
-
-// Large ClearArray non-AVX512.
 instruct rep_stos_large(eCXRegI cnt, eDIRegP base, regD tmp, eAXRegI zero, Universe dummy, eFlagsReg cr) %{
-  predicate(UseAVX <= 2 && ((ClearArrayNode*)n)->is_large());
+  predicate(((ClearArrayNode*)n)->is_large());
   match(Set dummy (ClearArray cnt base));
   effect(USE_KILL cnt, USE_KILL base, TEMP tmp, KILL zero, KILL cr);
   format %{ $$template
@@ -11901,74 +11836,9 @@ instruct rep_stos_large(eCXRegI cnt, eDIRegP base, regD tmp, eAXRegI zero, Unive
   %}
   ins_encode %{
     __ clear_mem($base$$Register, $cnt$$Register, $zero$$Register,
-                 $tmp$$XMMRegister, true, knoreg);
+                 $tmp$$XMMRegister, true);
   %}
   ins_pipe( pipe_slow );
-%}
-
-// Large ClearArray AVX512.
-instruct rep_stos_large_evex(eCXRegI cnt, eDIRegP base, regD tmp, kReg ktmp, eAXRegI zero, Universe dummy, eFlagsReg cr) %{
-  predicate(UseAVX > 2 && ((ClearArrayNode*)n)->is_large());
-  match(Set dummy (ClearArray cnt base));
-  effect(USE_KILL cnt, USE_KILL base, TEMP tmp, TEMP ktmp, KILL zero, KILL cr);
-  format %{ $$template
-    if (UseFastStosb) {
-       $$emit$$"XOR    EAX,EAX\t# ClearArray:\n\t"
-       $$emit$$"SHL    ECX,3\t# Convert doublewords to bytes\n\t"
-       $$emit$$"REP STOSB\t# store EAX into [EDI++] while ECX--\n\t"
-    } else if (UseXMMForObjInit) {
-       $$emit$$"MOV     RDI,RAX\t# ClearArray:\n\t"
-       $$emit$$"VPXOR   YMM0,YMM0,YMM0\n\t"
-       $$emit$$"JMPQ    L_zero_64_bytes\n\t"
-       $$emit$$"# L_loop:\t# 64-byte LOOP\n\t"
-       $$emit$$"VMOVDQU YMM0,(RAX)\n\t"
-       $$emit$$"VMOVDQU YMM0,0x20(RAX)\n\t"
-       $$emit$$"ADD     0x40,RAX\n\t"
-       $$emit$$"# L_zero_64_bytes:\n\t"
-       $$emit$$"SUB     0x8,RCX\n\t"
-       $$emit$$"JGE     L_loop\n\t"
-       $$emit$$"ADD     0x4,RCX\n\t"
-       $$emit$$"JL      L_tail\n\t"
-       $$emit$$"VMOVDQU YMM0,(RAX)\n\t"
-       $$emit$$"ADD     0x20,RAX\n\t"
-       $$emit$$"SUB     0x4,RCX\n\t"
-       $$emit$$"# L_tail:\t# Clearing tail bytes\n\t"
-       $$emit$$"ADD     0x4,RCX\n\t"
-       $$emit$$"JLE     L_end\n\t"
-       $$emit$$"DEC     RCX\n\t"
-       $$emit$$"# L_sloop:\t# 8-byte short loop\n\t"
-       $$emit$$"VMOVQ   XMM0,(RAX)\n\t"
-       $$emit$$"ADD     0x8,RAX\n\t"
-       $$emit$$"DEC     RCX\n\t"
-       $$emit$$"JGE     L_sloop\n\t"
-       $$emit$$"# L_end:\n\t"
-    } else {
-       $$emit$$"XOR    EAX,EAX\t# ClearArray:\n\t"
-       $$emit$$"SHL    ECX,1\t# Convert doublewords to words\n\t"
-       $$emit$$"REP STOS\t# store EAX into [EDI++] while ECX--\n\t"
-    }
-    $$emit$$"# DONE"
-  %}
-  ins_encode %{
-    __ clear_mem($base$$Register, $cnt$$Register, $zero$$Register,
-                 $tmp$$XMMRegister, true, $ktmp$$KRegister);
-  %}
-  ins_pipe( pipe_slow );
-%}
-
-// Small ClearArray AVX512 constant length.
-instruct rep_stos_im(immI cnt, kReg ktmp, eRegP base, regD tmp, rRegI zero, Universe dummy, eFlagsReg cr)
-%{
-  predicate(!((ClearArrayNode*)n)->is_large() &&
-               (UseAVX > 2 && VM_Version::supports_avx512vlbw() &&
-                 n->in(2)->bottom_type()->is_int()->is_con()));
-  match(Set dummy (ClearArray cnt base));
-  effect(TEMP tmp, TEMP zero, TEMP ktmp, KILL cr);
-  format %{ "clear_mem_imm $base , $cnt  \n\t" %}
-  ins_encode %{
-   __ clear_mem($base$$Register, $cnt$$constant, $zero$$Register, $tmp$$XMMRegister, $ktmp$$KRegister);
-  %}
-  ins_pipe(pipe_slow);
 %}
 
 instruct string_compareL(eDIRegP str1, eCXRegI cnt1, eSIRegP str2, eDXRegI cnt2,

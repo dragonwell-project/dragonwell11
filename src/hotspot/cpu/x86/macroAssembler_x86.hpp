@@ -1750,10 +1750,7 @@ public:
 
   // clear memory of size 'cnt' qwords, starting at 'base';
   // if 'is_large' is set, do not try to produce short loop
-  void clear_mem(Register base, Register cnt, Register rtmp, XMMRegister xtmp, bool is_large, KRegister mask=knoreg);
-
-  // clear memory initialization sequence for constant size;
-  void clear_mem(Register base, int cnt, Register rtmp, XMMRegister xtmp, KRegister mask=knoreg);
+  void clear_mem(Register base, Register cnt, Register rtmp, XMMRegister xtmp, bool is_large);
 
   // clear memory of size 'cnt' qwords, starting at 'base' using XMM/YMM registers
   void xmm_clear_mem(Register base, Register cnt, XMMRegister xtmp);
@@ -1920,18 +1917,6 @@ public:
   // Inflate byte[] array to char[].
   void byte_array_inflate(Register src, Register dst, Register len,
                           XMMRegister tmp1, Register tmp2, KRegister mask = knoreg);
-
-  void fill64_masked_avx(uint shift, Register dst, int disp,
-                         XMMRegister xmm, KRegister mask, Register length,
-                         Register temp, bool use64byteVector = false);
-
-  void fill32_masked_avx(uint shift, Register dst, int disp,
-                         XMMRegister xmm, KRegister mask, Register length,
-                         Register temp);
-
-  void fill32_avx(Register dst, int disp, XMMRegister xmm);
-
-  void fill64_avx(Register dst, int dis, XMMRegister xmm, bool use64byteVector = false);
 
   void vallones(XMMRegister dst, int vector_len);
 };
