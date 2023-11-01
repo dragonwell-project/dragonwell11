@@ -26,7 +26,6 @@
 #include "gc/shared/collectedHeap.hpp"
 #include "jfr/leakprofiler/leakProfiler.hpp"
 #include "jfr/leakprofiler/chains/bfsClosure.hpp"
-#include "jfr/leakprofiler/chains/bitset.hpp"
 #include "jfr/leakprofiler/chains/dfsClosure.hpp"
 #include "jfr/leakprofiler/chains/edge.hpp"
 #include "jfr/leakprofiler/chains/edgeQueue.hpp"
@@ -84,7 +83,7 @@ void PathToGcRootsOperation::doit() {
 
   // The bitset used for marking is dimensioned as a function of the heap size
   const MemRegion heap_region = Universe::heap()->reserved_region();
-  BitSet mark_bits(heap_region);
+  JFRBitSet mark_bits;
 
   // The edge queue is dimensioned as a fraction of the heap size
   const size_t edge_queue_reservation_size = edge_queue_memory_reservation(heap_region);
@@ -93,7 +92,7 @@ void PathToGcRootsOperation::doit() {
   // The initialize() routines will attempt to reserve and allocate backing storage memory.
   // Failure to accommodate will render root chain processing impossible.
   // As a fallback on failure, just write out the existing samples, flat, without chains.
-  if (!(mark_bits.initialize() && edge_queue.initialize())) {
+  if (!edge_queue.initialize()) {
     log_warning(jfr)("Unable to allocate memory for root chain processing");
     return;
   }
