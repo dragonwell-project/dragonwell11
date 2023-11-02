@@ -695,7 +695,8 @@ alloc_class chunk2(K7, K7_H,
                    K2, K2_H,
                    K1, K1_H);
 
-reg_class  vectmask_reg(K2, K2_H,
+reg_class  vectmask_reg(K1, K1_H,
+                        K2, K2_H,
                         K3, K3_H,
                         K4, K4_H,
                         K5, K5_H,

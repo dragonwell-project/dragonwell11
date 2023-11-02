@@ -40,6 +40,7 @@ class MacroAssembler: public Assembler {
 
  public:
 
+  // special instructions for EVEX
   void setvectmask(Register dst, Register src, KRegister mask);
   void restorevectmask(KRegister mask);
 
@@ -159,12 +160,6 @@ class MacroAssembler: public Assembler {
 
   void incrementq(Register reg, int value = 1);
   void incrementq(Address dst, int value = 1);
-
-#ifdef COMPILER2
-  // special instructions for EVEX
-  void setvectmask(Register dst, Register src);
-  void restorevectmask();
-#endif
 
   // Support optimal SSE move instructions.
   void movflt(XMMRegister dst, XMMRegister src) {
