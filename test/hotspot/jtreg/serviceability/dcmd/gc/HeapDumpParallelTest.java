@@ -27,6 +27,8 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import jdk.test.lib.Asserts;
 import jdk.test.lib.JDKToolLauncher;
@@ -40,13 +42,15 @@ import jdk.test.lib.hprof.HprofParser;
 
 /**
  * @test
- * @bug 8306441
+ * @bug 8306441 8319053
  * @summary Verify the integrity of generated heap dump and capability of parallel dump
  * @library /test/lib
  * @run main HeapDumpParallelTest
  */
 
 public class HeapDumpParallelTest {
+
+    private static final String heapDumpFileName = "parallelHeapDump.bin";
 
     private static void checkAndVerify(OutputAnalyzer dcmdOut, LingeredApp app, File heapDumpFile, boolean expectSerial) throws IOException {
         dcmdOut.shouldHaveExitValue(0);
@@ -66,6 +70,16 @@ public class HeapDumpParallelTest {
             appOut.shouldNotContain("Merge heap files complete");
         }
         verifyHeapDump(heapDumpFile);
+
+        List<String> files
+            = Stream.of(heapDumpFile.getAbsoluteFile().getParentFile().listFiles())
+                .filter(file -> !file.isDirectory())
+                .map(File::getName)
+                .filter(name -> name.startsWith(heapDumpFileName) && !name.equals(heapDumpFileName))
+                .collect(Collectors.toList());
+        if (!files.isEmpty()) {
+            throw new RuntimeException("Unexpected files left: " + files);
+        }
         if (heapDumpFile.exists()) {
             heapDumpFile.delete();
         }
@@ -83,8 +97,6 @@ public class HeapDumpParallelTest {
     }
 
     public static void main(String[] args) throws Exception {
-        String heapDumpFileName = "parallelHeapDump.bin";
-
         File heapDumpFile = new File(heapDumpFileName);
         if (heapDumpFile.exists()) {
             heapDumpFile.delete();

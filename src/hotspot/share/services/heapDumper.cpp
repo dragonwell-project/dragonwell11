@@ -382,7 +382,7 @@ enum {
 
 // Supports I/O operations for a dump
 
-class DumpWriter : public ResourceObj {
+class DumpWriter : public CHeapObj<mtInternal> {
  private:
   enum {
     io_buffer_max_size = 1*M,
@@ -1734,7 +1734,9 @@ void DumpMerger::do_merge() {
 #endif
     }
     // Delete selected segmented heap file nevertheless
-    remove(path);
+    if (remove(path) != 0) {
+      log_info(heapdump)("Removal of segment file (%d) failed (%d)", i, errno);
+    }
   }
 
   // restore compressor for further use
@@ -2264,6 +2266,7 @@ void VM_HeapDumper::work(uint worker_id) {
     } else {
       // propagate local error to global if any
       _dumper_controller->dumper_complete(local_writer, writer());
+      delete local_writer;
       return;
     }
   }
