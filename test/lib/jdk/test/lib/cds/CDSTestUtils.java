@@ -264,7 +264,7 @@ public class CDSTestUtils {
         for (String s : opts.suffix) cmd.add(s);
 
         String[] cmdLine = cmd.toArray(new String[cmd.size()]);
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true, cmdLine);
+        ProcessBuilder pb = ProcessTools.createTestJvm(cmdLine);
         return executeAndLog(pb, "dump");
     }
 
@@ -412,7 +412,7 @@ public class CDSTestUtils {
         for (String s : opts.suffix) cmd.add(s);
 
         String[] cmdLine = cmd.toArray(new String[cmd.size()]);
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true, cmdLine);
+        ProcessBuilder pb = ProcessTools.createTestJvm(cmdLine);
         return executeAndLog(pb, "exec");
     }
 
@@ -561,8 +561,12 @@ public class CDSTestUtils {
 
     // ============================= Logging
     public static OutputAnalyzer executeAndLog(ProcessBuilder pb, String logName) throws Exception {
+        return executeAndLog(pb.start(), logName);
+    }
+
+    public static OutputAnalyzer executeAndLog(Process process, String logName) throws Exception {
         long started = System.currentTimeMillis();
-        OutputAnalyzer output = new OutputAnalyzer(pb.start());
+        OutputAnalyzer output = new OutputAnalyzer(process);
 
         writeFile(getOutputFile(logName + ".stdout"), output.getStdout());
         writeFile(getOutputFile(logName + ".stderr"), output.getStderr());

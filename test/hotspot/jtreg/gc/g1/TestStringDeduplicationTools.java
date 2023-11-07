@@ -27,9 +27,7 @@ package gc.g1;
  * Common code for string deduplication tests
  */
 
-import java.lang.management.*;
 import java.lang.reflect.*;
-import java.security.*;
 import java.util.*;
 import jdk.test.lib.process.ProcessTools;
 import jdk.test.lib.process.OutputAnalyzer;
@@ -379,6 +377,23 @@ class TestStringDeduplicationTools {
         output.shouldContain("Concurrent String Deduplication");
         output.shouldContain("Deduplicated:");
         output.shouldNotContain("Rehash Count: 0");
+        output.shouldNotContain("Hash Seed: 0x0");
+        output.shouldHaveExitValue(0);
+    }
+
+    public static void testTableRehashFullGC() throws Exception {
+        // Test with StringDeduplicationRehashALot using full GCs
+        // Table resizing prevents table rehashing from happening, thus we use
+        // SmallNumberOfStrings to limit the number of table resizes.
+        OutputAnalyzer output = DeduplicationTest.run(SmallNumberOfStrings,
+                                                      DefaultAgeThreshold,
+                                                      FullGC,
+                                                      "-Xlog:gc,gc+stringdedup=trace",
+                                                      "-XX:+StringDeduplicationRehashALot");
+        output.shouldContain("Concurrent String Deduplication");
+        output.shouldContain("Deduplicated:");
+        output.shouldContain("Full GC");
+        output.shouldMatch("Rehash Count: [1-9]");
         output.shouldNotContain("Hash Seed: 0x0");
         output.shouldHaveExitValue(0);
     }

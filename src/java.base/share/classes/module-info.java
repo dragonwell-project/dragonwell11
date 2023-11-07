@@ -249,8 +249,9 @@ module java.base {
         jdk.naming.dns;
     exports sun.net.util to
         java.desktop,
+        java.net.http,
         jdk.jconsole,
-        java.net.http;
+        jdk.sctp;
     exports sun.net.www to
         java.desktop,
         java.net.http,
