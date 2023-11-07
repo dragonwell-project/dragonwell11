@@ -610,6 +610,14 @@ final class FloatMaxVector extends FloatVector {
             return this.defaultMaskCast(species);
         }
 
+        @Override
+        @ForceInline
+        public FloatMaxMask eq(VectorMask<Float> mask) {
+            Objects.requireNonNull(mask);
+            FloatMaxMask m = (FloatMaxMask)mask;
+            return xor(m.not());
+        }
+
         // Unary operations
 
         @Override

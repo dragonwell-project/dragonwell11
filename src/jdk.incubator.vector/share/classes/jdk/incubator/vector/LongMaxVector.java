@@ -605,6 +605,14 @@ final class LongMaxVector extends LongVector {
             return this.defaultMaskCast(species);
         }
 
+        @Override
+        @ForceInline
+        public LongMaxMask eq(VectorMask<Long> mask) {
+            Objects.requireNonNull(mask);
+            LongMaxMask m = (LongMaxMask)mask;
+            return xor(m.not());
+        }
+
         // Unary operations
 
         @Override
