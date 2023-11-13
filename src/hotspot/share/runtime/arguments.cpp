@@ -2094,33 +2094,6 @@ bool Arguments::check_vm_args_consistency() {
     }
   }
 
-  if (UseCompactObjectHeaders) {
-#if !defined(_LP64) || !(defined(X86) || defined(AARCH64))
-    jio_fprintf(defaultStream::error_stream(), "Platform do not support UseCompactObjectHeaders.\n");
-    status = false;
-#else
-    if (FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
-      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-    }
-    if (UseSerialGC || UseConcMarkSweepGC || UseEpsilonGC || UseZGC) {
-      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-    }
-#if INCLUDE_SHENANDOAHGC
-    if (UseShenandoahGC) {
-      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-    }
-#endif
-    if (EnableJVMCI || UseAOT) {
-      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
-    }
-
-    if (UseCompactObjectHeaders) {
-      FLAG_SET_DEFAULT(UseAltFastLocking, true);
-      FLAG_SET_DEFAULT(UseAltGCForwarding, true);
-    }
-#endif
-  }
-
   if (UseAltFastLocking) {
 #if !defined(_LP64) || !(defined(X86) || defined(AARCH64))
     jio_fprintf(defaultStream::error_stream(), "Platform do not support UseAltFastLocking.\n");
@@ -4214,6 +4187,40 @@ jint Arguments::apply_ergo() {
       FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
     }
   }
+
+  if (UseCompactObjectHeaders) {
+#if !defined(_LP64) || !(defined(X86) || defined(AARCH64))
+    warning("UseCompactObjectHeaders is not supported with current platform"
+            "; ignoring UseCompactObjectHeaders flag.");
+    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+#else
+    if (FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
+      warning("UseCompactObjectHeaders is not supported with -XX:-UseCompressedClassPointers"
+              "; ignoring UseCompactObjectHeaders flag.");
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+    if (!(UseG1GC || (UseParallelGC && UseParallelOldGC))) {
+      warning("UseCompactObjectHeaders is not supported with current GC setting"
+              "; ignoring UseCompactObjectHeaders flag.");
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+    if (EnableJVMCI || UseAOT) {
+      warning("UseCompactObjectHeaders is not supported with EnableJVMCI or UseAOT"
+              "; ignoring UseCompactObjectHeaders flag.");
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+
+    if (UseCompactObjectHeaders) {
+      FLAG_SET_DEFAULT(UseAltFastLocking, true);
+      FLAG_SET_DEFAULT(UseAltGCForwarding, true);
+
+      if (UseBiasedLocking) {
+        FLAG_SET_DEFAULT(UseBiasedLocking, false);
+      }
+    }
+#endif
+  }
+
 
 #ifdef CC_INTERP
   // Clear flags not supported on zero.
