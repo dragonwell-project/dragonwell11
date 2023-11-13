@@ -1124,8 +1124,8 @@ ObjectSynchronizer::LockOwnership ObjectSynchronizer::query_lock_ownership
     if (UseWispMonitor) {
       self = WispThread::current(self);
     }
-    return (owner == self ||
-            self->is_lock_owned((address)owner)) ? owner_self : owner_other;
+    bool lock_owned = UseAltFastLocking ? is_lock_owned(self, obj) : self->is_lock_owned((address)owner);
+    return (owner == self || lock_owned) ? owner_self : owner_other;
   }
 
   // CASE: neutral
