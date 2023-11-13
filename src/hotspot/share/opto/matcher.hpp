@@ -315,6 +315,7 @@ public:
   static const bool match_rule_supported_vector(int opcode, int vlen, BasicType bt);
 
   // Some microarchitectures have mask registers used on vectors
+  static const bool supports_vector_comparison_unsigned(int vlen, BasicType bt);
   static const bool has_predicated_vectors(void);
   static const RegMask* predicate_reg_mask(void);
   static const TypeVect* predicate_reg_type(const Type* elemTy, int length);

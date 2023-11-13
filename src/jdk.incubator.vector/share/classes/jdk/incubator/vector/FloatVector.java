@@ -380,20 +380,6 @@ public abstract class FloatVector extends AbstractVector<Float> {
     }
 
     /*package-private*/
-    @ForceInline
-    static boolean doBinTest(int cond, float a, float b) {
-        switch (cond) {
-        case BT_eq:  return a == b;
-        case BT_ne:  return a != b;
-        case BT_lt:  return a < b;
-        case BT_le:  return a <= b;
-        case BT_gt:  return a > b;
-        case BT_ge:  return a >= b;
-        }
-        throw new AssertionError(Integer.toHexString(cond));
-    }
-
-    /*package-private*/
     @Override
     abstract FloatSpecies vspecies();
 
@@ -2748,6 +2734,8 @@ public abstract class FloatVector extends AbstractVector<Float> {
         }
     }
 
+
+
     /**
      * Loads a vector from a {@linkplain ByteBuffer byte buffer}
      * starting at an offset into the byte buffer.
@@ -2880,7 +2868,7 @@ public abstract class FloatVector extends AbstractVector<Float> {
     }
 
     /**
-     * Stores this vector into an array of {@code float}
+     * Stores this vector into an array of type {@code float[]}
      * starting at offset and using a mask.
      * <p>
      * For each vector lane, where {@code N} is the vector lane index,
@@ -3018,6 +3006,8 @@ public abstract class FloatVector extends AbstractVector<Float> {
         }
     }
 
+
+
     /**
      * {@inheritDoc} <!--workaround-->
      */
@@ -3123,6 +3113,8 @@ public abstract class FloatVector extends AbstractVector<Float> {
             (arr, off, s) -> s.ldOp(arr, off,
                                     (arr_, off_, i) -> arr_[off_ + i]));
     }
+
+
 
     @Override
     abstract
@@ -3258,6 +3250,8 @@ public abstract class FloatVector extends AbstractVector<Float> {
     static long arrayAddress(float[] a, int index) {
         return ARRAY_BASE + (((long)index) << ARRAY_SHIFT);
     }
+
+
 
     @ForceInline
     static long byteArrayAddress(byte[] a, int index) {
