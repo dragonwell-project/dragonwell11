@@ -45,7 +45,7 @@
 //  --------
 //  unused:25 hash:31 -->| unused:1   age:4    biased_lock:1 lock:2 (normal object)
 //  Compact headers:
-//  nklass:32 hash:25 -->|  age:4  biased_lock/self-fwded:1  lock:2 (normal object)
+//  nklass:32 hash:25 -->|            age:4    self-fwded:1  lock:2 (normal object)
 //
 //  JavaThread*:54 epoch:2 unused:1   age:4    biased_lock:1 lock:2 (biased object)
 //  PromotedObject*:61 --------------------->| promo_bits:3 ----->| (CMS promoted object)

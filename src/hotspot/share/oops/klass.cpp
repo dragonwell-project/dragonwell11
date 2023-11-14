@@ -696,6 +696,11 @@ void Klass::oop_print_on(oop obj, outputStream* st) {
   if (WizardMode) {
      // print header
      obj->mark()->print_on(st);
+     if (UseCompactObjectHeaders) {
+       st->cr();
+       st->print(" - prototype_header: " INTPTR_FORMAT, _prototype_header->value());
+       st->cr();
+     }
   }
 
   // print class

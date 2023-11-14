@@ -3907,6 +3907,7 @@ void MacroAssembler::load_prototype_header(Register dst, Register src) {
 void MacroAssembler::store_klass(Register dst, Register src) {
   // FIXME: Should this be a store release?  concurrent gcs assumes
   // klass length is valid if klass field is not null.
+  assert(!UseCompactObjectHeaders, "not with compact headers");
   if (UseCompressedClassPointers) {
     encode_klass_not_null(src);
     strw(src, Address(dst, oopDesc::klass_offset_in_bytes()));
@@ -3916,6 +3917,7 @@ void MacroAssembler::store_klass(Register dst, Register src) {
 }
 
 void MacroAssembler::store_klass_gap(Register dst, Register src) {
+  assert(!UseCompactObjectHeaders, "not with compact headers");
   if (UseCompressedClassPointers) {
     // Store to klass gap in destination
     strw(src, Address(dst, oopDesc::klass_gap_offset_in_bytes()));

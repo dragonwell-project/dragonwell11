@@ -2693,9 +2693,8 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   diagnostic(bool, UseAltFastLocking, false,                                \
           "Alternative lightweight locking")                                \
                                                                             \
-  lp64_product(bool, UseCompactObjectHeaders, true,                         \
-          "Use 64-bit object headers instead of 96-bit headers. "           \
-          "lp64_product means flag is always constant in 32 bit VM")        \
+  experimental(bool, UseCompactObjectHeaders, true,                         \
+          "Use compact 64-bit object headers in 64-bit VM.")                \
 
 #define VM_FLAGS(develop,                                                   \
                  develop_pd,                                                \

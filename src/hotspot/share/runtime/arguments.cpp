@@ -4184,7 +4184,6 @@ jint Arguments::apply_ergo() {
       warning("UseAltGCForwarding is not supported with current GC setting"
               "; ignoring UseAltGCForwarding flag.");
       FLAG_SET_DEFAULT(UseAltGCForwarding, false);
-      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
     }
   }
 
