@@ -70,7 +70,11 @@ class ObjectSampleMarker : public StackObj {
     // now we will set the mark word to "marked" in order to quickly
     // identify sample objects during the reachability search from gc roots.
     assert(!obj->mark()->is_marked(), "should only mark an object once");
-    obj->set_mark(markOopDesc::prototype()->set_marked());
+    if (UseCompactObjectHeaders) {
+      obj->set_mark(obj->prototype_mark()->set_marked());
+    } else {
+      obj->set_mark(markOopDesc::prototype()->set_marked());
+    }
     assert(obj->mark()->is_marked(), "invariant");
   }
 };
