@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2023, Alibaba Group Holding Limited. All rights reserved.
  * Copyright (c) 2017, 2021, Azul Systems, Inc. All rights reserved.
  * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -51,5 +52,17 @@ JNIEXPORT void JNICALL Java_jdk_internal_crac_Core_registerPersistent0
         return;
     }
 
-    JVM_RegisterPersistent(fd, st.st_dev, st.st_ino);
+    JVM_RegisterPersistent(env, fd, st.st_dev, st.st_ino);
+}
+
+JNIEXPORT void JNICALL Java_jdk_internal_crac_Core_registerPseudoPersistent0
+        (JNIEnv *env, jclass ignore, jclass absolutFilePath, jint mode)
+{
+  JVM_RegisterPseudoPersistent(env, absolutFilePath, mode);
+}
+
+JNIEXPORT void JNICALL Java_jdk_internal_crac_Core_unregisterPseudoPersistent0
+        (JNIEnv *env, jclass ignore, jclass absolutFilePath)
+{
+  JVM_UnregisterPseudoPersistent(env, absolutFilePath);
 }

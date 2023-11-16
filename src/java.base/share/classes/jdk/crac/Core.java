@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2023, Alibaba Group Holding Limited. All rights reserved.
  * Copyright (c) 2017, 2021, Azul Systems, Inc. All rights reserved.
  * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -32,6 +33,8 @@ import jdk.crac.impl.CheckpointOpenSocketException;
 import jdk.crac.impl.OrderedContext;
 import java.io.StringWriter;
 import java.io.PrintWriter;
+
+import jdk.internal.misc.SharedSecrets;
 import sun.security.action.GetBooleanAction;
 
 import java.lang.reflect.InvocationTargetException;
@@ -60,10 +63,13 @@ public class Core {
     private static native Object[] checkpointRestore0(boolean dryRun, long jcmdStream);
     private static final Object checkpointRestoreLock = new Object();
     private static boolean checkpointInProgress = false;
+    private static volatile boolean restoreInProgress = false;
 
     private static class FlagsHolder {
         public static final boolean TRACE_STARTUP_TIME =
             GetBooleanAction.privilegedGetProperty("jdk.crac.trace-startup-time");
+        public static final boolean HOLD_ON_CR_ERROR =
+                GetBooleanAction.privilegedGetProperty("jdk.crac.hold-on-cr-error");
     }
 
     private static final Context<Resource> globalContext = new OrderedContext();
@@ -154,6 +160,19 @@ public class Core {
             }
         }
 
+        if (retCode == JVM_CHECKPOINT_ERROR && FlagsHolder.HOLD_ON_CR_ERROR) {
+            try {
+                if (checkpointException != null && checkpointException.getSuppressed() != null) {
+                    for (Throwable t : checkpointException.getSuppressed()) {
+                        t.printStackTrace();
+                    }
+                }
+                Thread.sleep(Long.MAX_VALUE);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         if (newProperties != null && newProperties.length > 0) {
             Arrays.stream(newProperties).map(propStr -> propStr.split("=", 2)).forEach(pair -> {
                 AccessController.doPrivileged(
@@ -164,6 +183,7 @@ public class Core {
 
         RestoreException restoreException = null;
         try {
+            restoreInProgress = true;
             globalContext.afterRestore(null);
         } catch (RestoreException re) {
             if (checkpointException == null) {
@@ -173,6 +193,8 @@ public class Core {
                     checkpointException.addSuppressed(t);
                 }
             }
+        } finally {
+            restoreInProgress = false;
         }
 
         /**
@@ -273,5 +295,24 @@ public class Core {
             return null;
         }
         return null;
+    }
+
+    public static void registerPseudoPersistent(String absoluteFilePath, int mode) {
+        jdk.internal.crac.Core.registerPseudoPersistent(absoluteFilePath, mode);
+    }
+
+    public static void unregisterPseudoPersistent(String absoluteFilePath) {
+        jdk.internal.crac.Core.unregisterPseudoPersistent(absoluteFilePath);
+    }
+    /**
+     * append path to app clasloader's classpath.
+     * @param path
+     * @throws jdk.crac.CheckpointException
+     */
+    public static void appendToAppClassLoaderClassPath(String path) throws CheckpointException {
+        if (!restoreInProgress) {
+            throw new CheckpointException("Allow call appendToAppClassLoaderClassPath only when restore in progress");
+        }
+        SharedSecrets.getJavaAppClassLoaderAccess().appendToClassPath(path);
     }
 }

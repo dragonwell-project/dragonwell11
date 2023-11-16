@@ -48,7 +48,12 @@ class ResourceWrapper extends WeakReference<Resource> implements jdk.crac.Resour
 
     @Override
     public String toString() {
-        return "ResourceWrapper[" + get().toString() + "]";
+        Resource r = get();
+        if (r != null) {
+            return "ResourceWrapper[" + r + "]";
+        } else {
+            return "ResourceWrapper[null]";
+        }
     }
 
     @Override
