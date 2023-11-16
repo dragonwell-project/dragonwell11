@@ -98,6 +98,9 @@
                                                                             \
   product(bool, CRaCValidateBeforeRestore, true,                            \
           "Validate OS,JVM,CPU before restore")                             \
+                                                                            \
+  product(bool, CRaCUnprivileged, false,                                    \
+          "Run criuengine as unprivileged")                                 \
   //add new AJDK specific flags here
 
 

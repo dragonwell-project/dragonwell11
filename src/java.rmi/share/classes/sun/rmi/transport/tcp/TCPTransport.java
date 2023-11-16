@@ -65,12 +65,8 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import jdk.crac.Context;
-import jdk.crac.Resource;
-import jdk.internal.crac.JDKResource;
 import sun.rmi.runtime.Log;
 import sun.rmi.runtime.NewThreadAction;
-import sun.rmi.transport.Channel;
 import sun.rmi.transport.Connection;
 import sun.rmi.transport.DGCAckHandler;
 import sun.rmi.transport.Endpoint;
@@ -87,7 +83,7 @@ import sun.rmi.transport.TransportConstants;
  * @author Peter Jones
  */
 @SuppressWarnings("deprecation")
-public class TCPTransport extends Transport implements JDKResource {
+public class TCPTransport extends Transport {
 
     /* tcp package log */
     static final Log tcpLog = Log.getLog("sun.rmi.transport.tcp", "tcp",
@@ -104,11 +100,6 @@ public class TCPTransport extends Transport implements JDKResource {
     private static final long threadKeepAliveTime =     // default 1 minute
         AccessController.doPrivileged((PrivilegedAction<Long>) () ->
             Long.getLong("sun.rmi.transport.tcp.threadKeepAliveTime", 60000));
-
-    /** wait for socket close when do checkpoint */
-    private static final long cracSocketCloseWaitTime =
-            AccessController.doPrivileged((PrivilegedAction<Long>) () ->
-                    Long.getLong("sun.rmi.transport.tcp.cracSocketCloseWaitTime", 3000));
 
     /** thread pool for connection handlers */
     private static final ExecutorService connectionThreadPool =
@@ -169,9 +160,6 @@ public class TCPTransport extends Transport implements JDKResource {
         if (tcpLog.isLoggable(Log.BRIEF)) {
             tcpLog.log(Log.BRIEF, "Version = " +
                 TransportConstants.Version + ", ep = " + getEndpoint());
-        }
-        if (jdk.crac.Configuration.checkpointEnabled()) {
-            jdk.internal.crac.Core.getJDKContext().register(this);
         }
     }
 
@@ -355,41 +343,6 @@ public class TCPTransport extends Transport implements JDKResource {
                 sm.checkListen(port);
             }
         }
-    }
-
-    @Override
-    public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
-        //close all connections for server side.
-        shedConnectionCaches();
-        //close server socket.
-        if (server != null) {
-            ServerSocket ss = server;
-            server = null;
-            try {
-                if (tcpLog.isLoggable(Log.BRIEF)) {
-                    tcpLog.log(Log.BRIEF, "server socket close: " + ss);
-                }
-                ss.close();
-            } catch (IOException e) {
-                if (tcpLog.isLoggable(Log.BRIEF)) {
-                    tcpLog.log(Log.BRIEF,
-                            "server socket close throws: " + e);
-                }
-            }
-        }
-        //after close server side channels,the sockets is not close immediately.
-        //to make sure all sockets closed,wait for a few seconds.
-        Thread.sleep(cracSocketCloseWaitTime);
-    }
-
-    @Override
-    public void afterRestore(Context<? extends Resource> context) throws Exception {
-        listen();
-    }
-
-    @Override
-    public Priority getPriority() {
-        return Priority.NORMAL;
     }
 
     /**

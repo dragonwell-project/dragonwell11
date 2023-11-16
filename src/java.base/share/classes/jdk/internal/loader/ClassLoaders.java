@@ -33,6 +33,7 @@ import java.security.CodeSource;
 import java.security.PermissionCollection;
 import java.util.jar.Manifest;
 
+import jdk.internal.misc.JavaAppClassLoaderAccess;
 import jdk.internal.misc.JavaLangAccess;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.VM;
@@ -159,6 +160,12 @@ public class ClassLoaders {
         AppClassLoader(PlatformClassLoader parent, URLClassPath ucp) {
             super("app", parent, ucp);
             this.ucp = ucp;
+            SharedSecrets.setJavaAppClassLoaderAccess(new JavaAppClassLoaderAccess() {
+                @Override
+                public void appendToClassPath(String path) {
+                    ucp.addFile(path);
+                }
+            });
         }
 
         @Override

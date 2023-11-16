@@ -52,6 +52,8 @@ int main(int argc, char *argv[]) {
     } else if (!strcmp(action, "restore")) {
         char *strid = getenv("CRAC_NEW_ARGS_ID");
         printf("SIM_CRAC_NEW_ARGS_ID=%s\n", strid ? strid : "0");
+    } else if (!strcmp(action, "restorevalidate")) {
+        return 0;
     } else {
         fprintf(stderr, "unknown action: %s\n", action);
         return 1;

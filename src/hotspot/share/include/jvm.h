@@ -1363,10 +1363,16 @@ JNIEXPORT jobjectArray JNICALL
 JVM_Checkpoint(JNIEnv *env, jboolean dry_run, jlong jcmd_stream);
 
 JNIEXPORT void JNICALL
-JVM_RegisterPersistent(int fd, int st_dev, int st_ino);
+JVM_RegisterPersistent(JNIEnv *env, int fd, int st_dev, int st_ino);
 
 JNIEXPORT void JNICALL
-JVM_DeregisterPersistent(int fd, int st_dev, int st_ino);
+JVM_DeregisterPersistent(JNIEnv *env, int fd, int st_dev, int st_ino);
+
+JNIEXPORT void JNICALL
+JVM_RegisterPseudoPersistent(JNIEnv *env, jstring absolute_file_path, int mode);
+
+JNIEXPORT void JNICALL
+JVM_UnregisterPseudoPersistent(JNIEnv *env, jstring absolute_file_path);
 
 JNIEXPORT jint JNICALL
 JVM_GetProxyUnpark(JNIEnv* env, jclass clz, jintArray res);

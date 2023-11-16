@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2023, Alibaba Group Holding Limited. All rights reserved.
  * Copyright (c) 2017, 2021, Azul Systems, Inc. All rights reserved.
  * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -43,16 +44,48 @@
 
 #define PERFDATA_NAME "perfdata"
 #define METADATA "metadata"
+#define PSEUDO_FILE_SUFFIX ".dat"
+#define PSEUDO_FILE_PREFIX "pp"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
+typedef int (*pseudo_file_func)(const char *, int, int, const char *);
+
+enum PseudoPersistentMode {
+    SAVE_RESTORE = 0x01,
+    SAVE_ONLY = 0x02,
+    OVERRIDE_WHEN_RESTORE = 0x04,
+    COPY_WHEN_RESTORE = 0x08,
+    SYMLINK_WHEN_RESTORE = 0x10,
+};
+
 static int create_cppath(const char *imagedir);
 
-static int restore_validate(char *criu, char *image_dir, char *jvm_version);
+static int restore_validate(char *criu, char *image_dir, char *jvm_version, const char* unprivileged);
 static int check_metadata(char *image_dir, char *jvm_version);
 static int check_os(char *checkpoint_os);
 static int create_metadata(const char *image_dir, const char *jvm_version);
+static int read_pseudo_file(const char *imagedir, pseudo_file_func func, const char* desc);
+static int restore_pseudo_persistent_file(const char *imagedir, int id, int mode, const char *src);
 static int exec_criu_command(const char *criu, const char *args[]);
+static int add_unprivileged_opt(const char *unprivileged, const char **opts,
+                         int size) {
+  if (!strcmp("true", unprivileged)) {
+    for (int pos = 0 ; pos < size; pos++) {
+      if (opts[pos] == NULL) {
+        if (pos == size - 1) {
+          fprintf(stderr, "criu option array is not enough to add the --unprivileged option.");
+          return 1;
+        } else {
+          opts[pos] = "--unprivileged";
+          opts[pos + 1] = NULL;
+          return 0;
+        }
+      }
+    }
+  }
+  return 0;
+}
 
 static int g_pid;
 
@@ -68,7 +101,8 @@ static int kickjvm(pid_t jvm, int code) {
 static int checkpoint(pid_t jvm, const char *basedir, const char *self,
                       const char *criu, const char *imagedir,
                       const char *validate_before_restore,
-                      const char *jvm_version) {
+                      const char *jvm_version,
+                      const char *unprivileged) {
   const char *dump_cpuinfo[32] = {criu, "cpuinfo", "dump",
                                   "-D", imagedir,  NULL};
   pid_t pid = fork();
@@ -114,6 +148,9 @@ static int checkpoint(pid_t jvm, const char *basedir, const char *self,
     if (create_metadata(imagedir, jvm_version)) {
       return 1;
     }
+    if (add_unprivileged_opt(unprivileged, dump_cpuinfo, ARRAY_SIZE(dump_cpuinfo))) {
+      return 1;
+    }
     if (exec_criu_command(criu, dump_cpuinfo)) {
       return 1;
     }
@@ -131,13 +168,16 @@ static int checkpoint(pid_t jvm, const char *basedir, const char *self,
   } else if (!child) {
     const char *args[32] = {
         criu,          "dump", "-t", jvmpidchar,  "-D", imagedir,
-        "--shell-job", "-v4",  "-o", "dump4.log", // -D without -W makes criu cd
-                                                  // to image dir for logs
+        "--shell-job", "-v4",  "-o", "dump4.log", // -D without -W makes criu cd to image dir for logs
+        "--action-script", self
     };
-    const char **arg = args + 10;
+    const char **arg = args + 12;
 
     if (leave_running) {
       *arg++ = "-R";
+    }
+    if (!strcmp("true", unprivileged)) {
+      *arg++ = "--unprivileged";
     }
 
     char *criuopts = getenv("CRAC_CRIU_OPTS");
@@ -176,7 +216,8 @@ static int checkpoint(pid_t jvm, const char *basedir, const char *self,
 static int restore(const char *basedir,
         const char *self,
         const char *criu,
-        const char *imagedir) {
+        const char *imagedir,
+        const char *unprivileged) {
     char *cppathpath;
     if (-1 == asprintf(&cppathpath, "%s/cppath", imagedir)) {
         return 1;
@@ -204,6 +245,11 @@ static int restore(const char *basedir,
     cppath[cppathlen] = '\0';
 
     close(fd);
+
+    if (read_pseudo_file(imagedir, restore_pseudo_persistent_file,
+                        "restore pseudo persistent file ")) {
+      return 1;
+    }
 
     char *inherit_perfdata = NULL;
     char *perfdatapath;
@@ -233,6 +279,10 @@ static int restore(const char *basedir,
         *arg++ = "--inherit-fd";
         *arg++ = inherit_perfdata;
     }
+    if (!strcmp("true", unprivileged)) {
+      *arg++ = "--unprivileged";
+    }
+
     const char* tail[] = {
         "--exec-cmd", "--", self, "restorewait",
         NULL
@@ -268,6 +318,193 @@ static int post_resume(void) {
 
     char *strid = getenv("CRAC_NEW_ARGS_ID");
     return kickjvm(pid, strid ? atoi(strid) : 0);
+}
+
+static int copy_file(const char *to, const char *from) {
+  int fd_to, fd_from;
+  char buf[4096];
+  ssize_t nread;
+  int saved_errno;
+
+  fd_from = open(from, O_RDONLY);
+  if (fd_from < 0)
+    return -1;
+
+  fd_to = open(to, O_WRONLY | O_CREAT | O_EXCL, 0666);
+  if (fd_to < 0)
+    goto out_error;
+
+  while ((nread = read(fd_from, buf, sizeof buf)) > 0) {
+    char *out_ptr = buf;
+    ssize_t nwritten;
+
+    do {
+      nwritten = write(fd_to, out_ptr, nread);
+
+      if (nwritten >= 0) {
+        nread -= nwritten;
+        out_ptr += nwritten;
+      } else if (errno != EINTR) {
+        goto out_error;
+      }
+    } while (nread > 0);
+  }
+
+  if (nread == 0) {
+    if (close(fd_to) < 0) {
+      fd_to = -1;
+      goto out_error;
+    }
+    close(fd_from);
+
+    /* Success! */
+    return 0;
+  }
+
+  out_error:
+  saved_errno = errno;
+
+  close(fd_from);
+  if (fd_to >= 0)
+    close(fd_to);
+
+  errno = saved_errno;
+  return -1;
+}
+
+static int checkpoint_pseudo_persistent_file(const char *imagedir, int id, int mode, const char *src) {
+  if ((mode & SAVE_ONLY) || (mode & SAVE_RESTORE)) {
+    char dest[PATH_MAX];
+    snprintf(dest, PATH_MAX, "%s/%s%d%s", imagedir, PSEUDO_FILE_PREFIX, id, PSEUDO_FILE_SUFFIX);
+    return copy_file(dest, src);
+  } else {
+    return 0;
+  }
+}
+
+static int do_mkdir(const char *path, mode_t mode) {
+  struct stat st;
+  int status = 0;
+
+  if (stat(path, &st) != 0) {
+    /* Directory does not exist. EEXIST for race condition */
+    if (mkdir(path, mode) != 0 && errno != EEXIST)
+      status = -1;
+  } else if (!S_ISDIR(st.st_mode)) {
+    errno = ENOTDIR;
+    status = -1;
+  }
+  return status;
+}
+
+int mkpath(const char *path, mode_t mode) {
+  char *pp;
+  char *sp;
+  int status;
+  char *copypath = strdup(path);
+
+  status = 0;
+  pp = copypath;
+  while (status == 0 && (sp = strchr(pp, '/')) != 0) {
+    if (sp != pp) {
+      /* Neither root nor double slash in path */
+      *sp = '\0';
+      status = do_mkdir(copypath, mode);
+      *sp = '/';
+    }
+    pp = sp + 1;
+  }
+  free(copypath);
+  return status;
+}
+
+static int restore_pseudo_persistent_file(const char *imagedir, int id, int mode, const char *dest) {
+  if (!(mode & SAVE_RESTORE)) {
+    return 0;
+  }
+  struct stat st;
+  if (stat(dest, &st) == 0) {
+    //default action is skip if dest file exist.
+    if (!(mode & OVERRIDE_WHEN_RESTORE)) {
+      return 0;
+    }
+  }
+
+  char src[PATH_MAX];
+  snprintf(src, PATH_MAX, "%s/%s%d%s", imagedir, PSEUDO_FILE_PREFIX, id, PSEUDO_FILE_SUFFIX);
+  if (mode & COPY_WHEN_RESTORE) {
+    if (mkpath(dest, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) {
+      perror(dest);
+      return 1;
+    }
+    return copy_file(dest, src);
+  } else if (mode & SYMLINK_WHEN_RESTORE) {
+    if (mkpath(dest, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) {
+      perror(dest);
+      return 1;
+    }
+    if (symlink(src, dest)) {
+      fprintf(stderr, "symlink %s to %s failed ,error: %s \n",
+              dest, src, strerror(errno));
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int read_pseudo_file(const char *imagedir, pseudo_file_func func, const char* desc) {
+  char filepath[PATH_MAX];
+  snprintf(filepath, PATH_MAX, "%s/pseudopersistent", imagedir);
+
+  //this file is not mandatory, return success if not exist.
+  struct stat st;
+  if (stat(filepath, &st) != 0) {
+    return 0;
+  }
+
+  FILE *f = fopen(filepath, "r");
+  if (f == NULL) {
+    fprintf(stderr, "open file: %s for read failed, error: %s \n",
+            filepath, strerror(errno));
+    return 1;
+  }
+
+  int ret = 0;
+  int id = 0;
+  //an integer,file path
+  char buff[PATH_MAX + 32];
+  while (fgets(buff, sizeof(buff), f) != NULL) {
+    char *p = strchr(buff, '\n');
+    if (p) {
+      *p = 0;
+    }
+    p = strchr(buff, ',');
+    if (!p) {
+      fprintf(stderr, "invalid %s file, miss comma\n", filepath);
+      ret = 1;
+      break;
+    }
+    *p = 0;
+    int mode = atoi(buff);
+
+    if (func(imagedir, id, mode, p + 1)) {
+      fprintf(stderr, "%s with file %s failed \n", desc, p + 1);
+      ret = 1;
+      break;
+    }
+    id++;
+  }
+  fclose(f);
+  return ret;
+}
+
+static int post_dump(void) {
+  char *imagedir = getenv("CRTOOLS_IMAGE_DIR");
+  if (!imagedir) {
+    fprintf(stderr, MSGPREFIX "cannot find CRTOOLS_IMAGE_DIR env\n");
+    return 1;
+  }
+  return read_pseudo_file(imagedir, checkpoint_pseudo_persistent_file, "checkpoint pseudo persistent file ");
 }
 
 static int create_cppath(const char *imagedir) {
@@ -386,21 +623,23 @@ int main(int argc, char *argv[]) {
         if (!strcmp(action, "checkpoint")) {
           pid_t jvm = getppid();
           return checkpoint(jvm, basedir, argv[0], criu, imagedir, argv[3],
-                            argv[4]);
+                            argv[4], argv[5]);
         } else if (!strcmp(action, "restore")) {
-          return restore(basedir, argv[0], criu, imagedir);
+          return restore(basedir, argv[0], criu, imagedir, argv[3]);
         } else if (!strcmp(action,
                            "restorewait")) { // called by CRIU --exec-cmd
           return restorewait();
         } else if (!strcmp(action, "restorevalidate")) {
-          return restore_validate(criu, imagedir, argv[3]);
+          return restore_validate(criu, imagedir, argv[3], argv[4]);
         } else {
           fprintf(stderr, "unknown command-line action: %s\n", action);
           return 1;
         }
     } else if ((action = getenv("CRTOOLS_SCRIPT_ACTION"))) { // called by CRIU --action-script
         if (!strcmp(action, "post-resume")) {
-            return post_resume();
+          return post_resume();
+        } else if (!strcmp(action, "post-dump")) {
+          return post_dump();
         } else {
             // ignore other notifications
             return 0;
@@ -412,9 +651,12 @@ int main(int argc, char *argv[]) {
     return 1;
 }
 
-static int restore_validate(char *criu, char *image_dir, char *jvm_version) {
+static int restore_validate(char *criu, char *image_dir, char *jvm_version, const char* unprivileged) {
   const char *args[32] = {criu, "cpuinfo", "check", "--cpu-cap=jvm",
                           "-D", image_dir, NULL};
+  if (add_unprivileged_opt(unprivileged, args, ARRAY_SIZE(args))) {
+    return -1;
+  }
   if (!check_metadata(image_dir, jvm_version)) {
     return exec_criu_command(criu, args);
   }
