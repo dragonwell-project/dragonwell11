@@ -270,6 +270,81 @@ struct PersistentResourceDesc {
   {}
 };
 
+struct PseudoPersistentFileDesc {
+    int _mode;
+    bool _mark;
+    const char* _path;
+    PseudoPersistentFileDesc(int mode, const char *path) :
+    _mode(mode),
+    _path(path),
+    _mark(false)
+    {}
+
+    PseudoPersistentFileDesc():
+    _mode(0),
+    _path(NULL),
+    _mark(false)
+    {}
+};
+
+class PseudoPersistent {
+private:
+    GrowableArray<PseudoPersistentFileDesc>* _ppfd;
+public:
+    PseudoPersistent(GrowableArray<PseudoPersistentFileDesc>* ppfd):
+    _ppfd(ppfd)
+    {}
+
+    bool test_and_mark(const char *path) {
+      if (!_ppfd) {
+        return false;
+      }
+      int j = 0;
+      while (j < _ppfd->length()) {
+        PseudoPersistentFileDesc *ppfd = _ppfd->adr_at(j);
+        int r = strcmp(ppfd->_path, path);
+        if (r == 0) {
+          ppfd->_mark = true;
+          return true;
+          break;
+        } else if (r > 0) {
+          return false;
+          break;
+        }
+        ++j;
+      }
+      return false;
+    }
+
+    bool write_marked(const char *image_dir) {
+      if (!_ppfd) {
+        return true;
+      }
+      char *path;
+      if (-1 == asprintf(&path, "%s/pseudopersistent", image_dir)) {
+        return false;
+      }
+      FILE *f = fopen(path, "w");
+      if (f == NULL) {
+        fprintf(stderr, "open file: %s for write failed, error: %s\n",
+                path, strerror(errno));
+        free(path);
+        return false;
+      }
+      int j = 0;
+      while (j < _ppfd->length()) {
+        PseudoPersistentFileDesc *ppfd = _ppfd->adr_at(j);
+        if (ppfd->_mark) {
+          fprintf(f, "%d,%s\n", ppfd->_mode, ppfd->_path);
+        }
+        ++j;
+      }
+      fclose(f);
+      free(path);
+      return true;
+    }
+};
+
 struct CracFailDep {
   int _type;
   char* _msg;
@@ -454,6 +529,7 @@ static jlong _restore_start_time;
 static jlong _restore_start_counter;
 static FdsInfo _vm_inited_fds(false);
 static GrowableArray<PersistentResourceDesc>* _persistent_resources = NULL;
+static GrowableArray<PseudoPersistentFileDesc>* _pseudo_persistent = NULL;
 
 // If the VM might have been created on the primordial thread, we need to resolve the
 // primordial thread stack bounds and check if the current thread might be the
@@ -7209,7 +7285,8 @@ static int call_crengine() {
   if (pid == 0) {
     execl(_crengine, _crengine, "checkpoint", CRaCCheckpointTo,
           CRaCValidateBeforeRestore ? "true" : "false",
-          VM_Version::internal_vm_info_string(), NULL);
+          VM_Version::internal_vm_info_string(),
+          CRaCUnprivileged ? "true" : "false", NULL);
     perror("execl");
     exit(1);
   }
@@ -7250,7 +7327,6 @@ public:
 };
 
 static int checkpoint_restore(int *shmid) {
-
   int cres = call_crengine();
   if (cres < 0) {
     return JVM_CHECKPOINT_ERROR;
@@ -7425,6 +7501,9 @@ void VM_Crac::doit() {
   do_classpaths(mark_all_in, &fds, Arguments::get_ext_dirs());
   mark_persistent(&fds);
 
+  PseudoPersistent pp(_pseudo_persistent);
+  int markcnt = 0;
+
   // dry-run fails checkpoint
   bool ok = !_dry_run;
 
@@ -7438,6 +7517,12 @@ void VM_Crac::doit() {
     const char* details = 0 < linkret ? detailsbuf : "";
     print_resources("JVM: FD fd=%d type=%s: details1=\"%s\" ",
         i, stat2strtype(fds.get_stat(i)->st_mode), details);
+
+    if (pp.test_and_mark(detailsbuf)) {
+      markcnt++;
+      print_resources("OK: user registered pseudo persistent file \n");
+      continue;
+    }
 
     if (_vm_inited_fds.get_state(i, FdsInfo::CLOSED) != FdsInfo::CLOSED) {
       print_resources("OK: inherited from process env\n");
@@ -7479,6 +7564,21 @@ void VM_Crac::doit() {
     char* msg = NEW_C_HEAP_ARRAY(char, strlen(details) + 1, mtInternal);
     strcpy(msg, details);
     _failures->append(CracFailDep(stat2stfail(st->st_mode & S_IFMT), msg));
+  }
+
+  if (ok && markcnt) {
+    ok = pp.write_marked(CRaCCheckpointTo);
+  }
+
+  // _pseudo_persistent initialize and free in each checkpoint operation.
+  if (_pseudo_persistent) {
+    int j = 0;
+    while (j < _pseudo_persistent->length()) {
+      FREE_C_HEAP_ARRAY(char, _pseudo_persistent->adr_at(j)->_path);
+      ++j;
+    }
+    delete _pseudo_persistent;
+    _pseudo_persistent = NULL;
   }
 
   if (!ok && CRHeapDumpOnCheckpointException) {
@@ -7565,6 +7665,52 @@ void os::Linux::deregister_persistent_fd(int fd, int st_dev, int st_ino) {
     _persistent_resources->remove_at(i);
   }
 }
+
+void os::Linux::register_pseudo_persistent(const char* absolute_file_path, int mode) {
+  if (!CRaCCheckpointTo) {
+    return;
+  }
+  if (!_pseudo_persistent) {
+    _pseudo_persistent = new (ResourceObj::C_HEAP, mtInternal)
+            GrowableArray<PseudoPersistentFileDesc>(0, true/*C_heap*/);
+  }
+  int i = 0 ;
+  while (i < _pseudo_persistent->length()) {
+    int r = strcmp(_pseudo_persistent->adr_at(i)->_path, absolute_file_path);
+    if (r == 0 ) {
+      return;
+    } else if (r > 0) {
+      break;
+    }
+    ++i;
+  }
+  char* path = NEW_C_HEAP_ARRAY(char, strlen(absolute_file_path) + 1, mtInternal);
+  strcpy(path, absolute_file_path);
+  _pseudo_persistent->insert_before(i, PseudoPersistentFileDesc(mode, path));
+}
+
+void os::Linux::unregister_pseudo_persistent(const char *absolute_file_path) {
+  if (!CRaCCheckpointTo) {
+    return;
+  }
+  if (!_pseudo_persistent) {
+    return;
+  }
+  int i = 0;
+  while (i < _pseudo_persistent->length()) {
+    int r = strcmp(_pseudo_persistent->adr_at(i)->_path, absolute_file_path);
+    if (r == 0 ) {
+      break;
+    } else if (r > 0) {
+      return;
+    }
+    ++i;
+  }
+  if (i < _pseudo_persistent->length()) {
+    _pseudo_persistent->remove_at(i);
+  }
+}
+
 
 bool os::Linux::prepare_checkpoint() {
   struct stat st;
@@ -7675,7 +7821,8 @@ void os::Linux::restore() {
     }
     if (pid == 0) {
       execl(_crengine, _crengine, "restorevalidate", CRaCRestoreFrom,
-            VM_Version::internal_vm_info_string(), NULL);
+            VM_Version::internal_vm_info_string(),
+            CRaCUnprivileged ? "true" : "false", NULL);
       perror("execl");
       exit(1);
     }
@@ -7713,7 +7860,7 @@ void os::Linux::restore() {
 
 
   if (_crengine) {
-    execl(_crengine, _crengine, "restore", CRaCRestoreFrom, NULL);
+    execl(_crengine, _crengine, "restore", CRaCRestoreFrom, CRaCUnprivileged ? "true" : "false", NULL);
     warning("cannot execute \"%s restore ...\" (%s)", _crengine, strerror(errno));
   }
 }

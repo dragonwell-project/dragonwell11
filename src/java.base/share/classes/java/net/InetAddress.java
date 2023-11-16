@@ -359,6 +359,7 @@ class InetAddress implements java.io.Serializable {
                 public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
                     cache.clear();
                     expirySet.clear();
+                    cachedLocalHost = null;
                 }
 
                 @Override

@@ -255,6 +255,8 @@ class Linux {
   static void close_extra_descriptors();
   static void register_persistent_fd(int fd, int st_dev, int st_ino);
   static void deregister_persistent_fd(int fd, int st_dev, int st_ino);
+  static void register_pseudo_persistent(const char *absolute_file_path, int mode);
+  static void unregister_pseudo_persistent(const char *absolute_file_path);
 
   static jlong restore_start_time();
   static jlong uptime_since_restore();

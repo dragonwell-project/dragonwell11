@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2023, Alibaba Group Holding Limited. All rights reserved.
  * Copyright (c) 2019, 2021, Azul Systems, Inc. All rights reserved.
  * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -33,6 +34,10 @@ public class Core {
 
     private static native void registerPersistent0(FileDescriptor fd);
 
+    private static native void registerPseudoPersistent0(String absoluteFilePath, int mode);
+
+    private static native void unregisterPseudoPersistent0(String absoluteFilePath);
+
     static {
         JDKContext = new JDKContext();
         jdk.crac.Core.getGlobalContext().register(JDKContext);
@@ -44,5 +49,13 @@ public class Core {
 
     public static void registerPersistent(FileDescriptor fd) {
         registerPersistent0(fd);
+    }
+
+    public static void registerPseudoPersistent(String absoluteFilePath, int mode) {
+        registerPseudoPersistent0(absoluteFilePath, mode);
+    }
+
+    public static void unregisterPseudoPersistent(String absoluteFilePath) {
+        unregisterPseudoPersistent0(absoluteFilePath);
     }
 }

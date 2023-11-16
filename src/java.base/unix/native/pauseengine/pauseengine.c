@@ -83,6 +83,8 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
+    } else if (!strcmp(action, "restorevalidate")) {
+      return 0;
     } else {
         fprintf(stderr, "unknown action: %s\n", action);
         return 1;
