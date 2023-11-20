@@ -2106,7 +2106,12 @@ bool Arguments::check_vm_args_consistency() {
 #endif
 
 #if INCLUDE_JVMCI
-    if (EnableJVMCI || UseAOT) {
+    if (EnableJVMCI) {
+      FLAG_SET_DEFAULT(UseAltFastLocking, false);
+    }
+#endif
+#if INCLUDE_AOT
+    if (UseAOT) {
       FLAG_SET_DEFAULT(UseAltFastLocking, false);
     }
 #endif
@@ -4185,6 +4190,49 @@ jint Arguments::apply_ergo() {
               "; ignoring UseAltGCForwarding flag.");
       FLAG_SET_DEFAULT(UseAltGCForwarding, false);
     }
+  }
+
+  if (UseCompactObjectHeaders) {
+#if !defined(_LP64) || !(defined(X86) || defined(AARCH64))
+    warning("UseCompactObjectHeaders is not supported with current platform"
+            "; ignoring UseCompactObjectHeaders flag.");
+    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+#else
+    if (FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
+      warning("UseCompactObjectHeaders is not supported with -XX:-UseCompressedClassPointers"
+              "; ignoring UseCompactObjectHeaders flag.");
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+    if (!(UseG1GC || (UseParallelGC && UseParallelOldGC))) {
+      warning("UseCompactObjectHeaders is not supported with current GC setting"
+              "; ignoring UseCompactObjectHeaders flag.");
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+
+#if INCLUDE_JVMCI
+    if (EnableJVMCI) {
+      warning("UseCompactObjectHeaders is not supported with EnableJVMCI"
+              "; ignoring UseCompactObjectHeaders flag.");
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+#endif
+#if INCLUDE_AOT
+    if (UseAOT) {
+      warning("UseCompactObjectHeaders is not supported with UseAOT"
+              "; ignoring UseCompactObjectHeaders flag.");
+      FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+    }
+#endif
+
+    if (UseCompactObjectHeaders) {
+      FLAG_SET_DEFAULT(UseAltFastLocking, true);
+      FLAG_SET_DEFAULT(UseAltGCForwarding, true);
+
+      if (UseBiasedLocking) {
+        FLAG_SET_DEFAULT(UseBiasedLocking, false);
+      }
+    }
+#endif
   }
 
 #ifdef CC_INTERP

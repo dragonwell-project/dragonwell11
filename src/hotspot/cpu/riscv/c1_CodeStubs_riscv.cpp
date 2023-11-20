@@ -242,6 +242,11 @@ void MonitorExitStub::emit_code(LIR_Assembler* ce)
   __ far_jump(RuntimeAddress(Runtime1::entry_for(exit_id)));
 }
 
+void LoadKlassStub::emit_code(LIR_Assembler* ce) {
+  // Currently not needed.
+  Unimplemented();
+}
+
 int PatchingStub::_patch_info_offset = -NativeGeneralJump::instruction_size;
 
 void PatchingStub::align_patch_site(MacroAssembler* masm) {}

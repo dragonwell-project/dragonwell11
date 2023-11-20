@@ -188,6 +188,16 @@ void* Klass::operator new(size_t size, ClassLoaderData* loader_data, size_t word
   return Metaspace::allocate(loader_data, word_size, MetaspaceObj::ClassType, THREAD);
 }
 
+static markOop make_prototype(Klass* kls) {
+  markOop prototype = markOopDesc::prototype();
+#ifdef _LP64
+  if (UseCompactObjectHeaders) {
+    prototype = prototype->set_klass(kls);
+  }
+#endif
+  return prototype;
+}
+
 // "Normal" instantiation is preceeded by a MetaspaceObj allocation
 // which zeros out memory - calloc equivalent.
 // The constructor is also used from CppVtableCloner,
@@ -195,7 +205,7 @@ void* Klass::operator new(size_t size, ClassLoaderData* loader_data, size_t word
 // Need to set the _java_mirror field explicitly to not hit an assert that the field
 // should be NULL before setting it.
 Klass::Klass(KlassID id) : _id(id),
-                           _prototype_header(markOopDesc::prototype()),
+                           _prototype_header(make_prototype(this)),
                            _shared_class_path_index(-1),
 #if INCLUDE_JVMTI
                            _shared_unregistered_class_path_index(-1),
@@ -686,6 +696,11 @@ void Klass::oop_print_on(oop obj, outputStream* st) {
   if (WizardMode) {
      // print header
      obj->mark()->print_on(st);
+     if (UseCompactObjectHeaders) {
+       st->cr();
+       st->print(" - prototype_header: " INTPTR_FORMAT, _prototype_header->value());
+       st->cr();
+     }
   }
 
   // print class

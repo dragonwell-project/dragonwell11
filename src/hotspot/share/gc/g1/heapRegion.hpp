@@ -131,6 +131,9 @@ class G1ContiguousSpace: public CompactibleSpace {
   // This version synchronizes with other calls to par_allocate_impl().
   inline HeapWord* par_allocate_impl(size_t min_word_size, size_t desired_word_size, size_t* actual_word_size);
 
+  template<bool RESOLVE>
+  void object_iterate_impl(ObjectClosure* blk);
+
  public:
   void reset_after_compaction() { set_top(compaction_top()); }
 
@@ -186,6 +189,8 @@ class G1ContiguousSpace: public CompactibleSpace {
   void print_bot_on(outputStream* out) {
     _bot_part.print_on(out);
   }
+
+  virtual size_t block_size_resolve(const HeapWord* p) const { ShouldNotReachHere(); return 0; }
 };
 
 class HeapRegion: public G1ContiguousSpace {
@@ -348,6 +353,7 @@ class HeapRegion: public G1ContiguousSpace {
   // Returns the object size for all valid block starts
   // and the amount of unallocated words if called on top()
   size_t block_size(const HeapWord* p) const;
+  size_t block_size_resolve(const HeapWord* p) const;
 
   // Scans through the region using the bitmap to determine what
   // objects to call size_t ApplyToMarkedClosure::apply(oop) for.

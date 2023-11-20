@@ -99,6 +99,7 @@ struct FileMapHeader : public CDSFileMapHeaderBase {
   address _narrow_oop_base;         // compressed oop encoding base
   int    _narrow_oop_shift;         // compressed oop encoding shift
   bool    _compact_strings;         // value of CompactStrings
+  bool   _compact_headers;          // value of UseCompactObjectHeaders
   uintx  _max_heap_size;            // java max heap size during dumping
   Universe::NARROW_OOP_MODE _narrow_oop_mode; // compressed oop encoding mode
   int     _narrow_klass_shift;      // save narrow klass base and shift
@@ -162,6 +163,7 @@ struct FileMapHeader : public CDSFileMapHeaderBase {
 
   bool compressed_oops()           const { return _compressed_oops; }
   bool compressed_class_pointers() const { return _compressed_class_ptrs; }
+  bool compact_headers()           const { return _compact_headers; }
 
   bool validate();
   void populate(FileMapInfo* info, size_t alignment);
@@ -228,6 +230,7 @@ public:
   Universe::NARROW_OOP_MODE narrow_oop_mode() { return _header->_narrow_oop_mode; }
   address narrow_oop_base()    const  { return _header->_narrow_oop_base; }
   int     narrow_oop_shift()   const  { return _header->_narrow_oop_shift; }
+  bool    compact_headers()    const  { return _header->_compact_headers; }
   uintx   max_heap_size()      const  { return _header->_max_heap_size; }
   address narrow_klass_base()  const  { return _header->_narrow_klass_base; }
   int     narrow_klass_shift() const  { return _header->_narrow_klass_shift; }

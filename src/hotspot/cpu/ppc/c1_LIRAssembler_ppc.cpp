@@ -2756,6 +2756,10 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   __ bind(*op->stub()->continuation());
 }
 
+void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
+  // Currently not needed.
+  Unimplemented();
+}
 
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
   ciMethod* method = op->profiled_method();

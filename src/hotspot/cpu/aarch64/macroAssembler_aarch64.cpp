@@ -3785,12 +3785,61 @@ void MacroAssembler::cmpoop(Register obj1, Register obj2) {
 }
 
 void MacroAssembler::load_klass(Register dst, Register src) {
-  if (UseCompressedClassPointers) {
+  if (UseCompactObjectHeaders) {
+    load_nklass_compact(dst, src);
+    decode_klass_not_null(dst);
+  } else if (UseCompressedClassPointers) {
     ldrw(dst, Address(src, oopDesc::klass_offset_in_bytes()));
     decode_klass_not_null(dst);
   } else {
     ldr(dst, Address(src, oopDesc::klass_offset_in_bytes()));
   }
+}
+
+// Loads the obj's Klass* into dst.
+// Preserves all registers (incl src, rscratch1 and rscratch2)
+void MacroAssembler::load_nklass_compact(Register dst, Register src) {
+  assert(UseCompactObjectHeaders, "expects UseCompactObjectHeaders");
+
+  Label fast;
+
+  // Check if we can take the (common) fast path, if obj is unlocked.
+  ldr(dst, Address(src, oopDesc::mark_offset_in_bytes()));
+  tbz(dst, exact_log2(markOopDesc::monitor_value), fast);
+
+  // Fetch displaced header
+  ldr(dst, Address(dst, OM_OFFSET_NO_MONITOR_VALUE_TAG(header)));
+
+  // Fast-path: shift and decode Klass*.
+  bind(fast);
+  lsr(dst, dst, markOopDesc::klass_shift);
+}
+
+void MacroAssembler::load_nklass_compact_c2(Register dst, Register obj, Register index, int scale, int disp) {
+  C2LoadNKlassStub* stub = new (Compile::current()->comp_arena()) C2LoadNKlassStub(dst);
+  Compile::current()->add_stub(stub);
+
+  // Note: Don't clobber obj anywhere in that method!
+
+  // The incoming address is pointing into obj-start + klass_offset_in_bytes. We need to extract
+  // obj-start, so that we can load from the object's mark-word instead. Usually the address
+  // comes as obj-start in obj and klass_offset_in_bytes in disp. However, sometimes C2
+  // emits code that pre-computes obj-start + klass_offset_in_bytes into a register, and
+  // then passes that register as obj and 0 in disp. The following code extracts the base
+  // and offset to load the mark-word.
+  int offset = oopDesc::mark_offset_in_bytes() + disp - oopDesc::klass_offset_in_bytes();
+  if (index == noreg) {
+    ldr(dst, Address(obj, offset));
+  } else {
+    lea(dst, Address(obj, index, Address::lsl(scale)));
+    ldr(dst, Address(dst, offset));
+  }
+  // NOTE: We can't use tbnz here, because the target is sometimes too far away
+  // and cannot be encoded.
+  tst(dst, markOopDesc::monitor_value);
+  br(Assembler::NE, stub->entry());
+  bind(stub->continuation());
+  lsr(dst, dst, markOopDesc::klass_shift);
 }
 
 // ((OopHandle)result).resolve();
@@ -3809,8 +3858,15 @@ void MacroAssembler::load_mirror(Register dst, Register method, Register tmp) {
 }
 
 void MacroAssembler::cmp_klass(Register oop, Register trial_klass, Register tmp) {
+  if (UseCompactObjectHeaders) {
+    assert_different_registers(oop, trial_klass, tmp);
+  }
   if (UseCompressedClassPointers) {
-    ldrw(tmp, Address(oop, oopDesc::klass_offset_in_bytes()));
+    if (UseCompactObjectHeaders) {
+      load_nklass_compact(tmp, oop);
+    } else {
+      ldrw(tmp, Address(oop, oopDesc::klass_offset_in_bytes()));
+    }
     if (Universe::narrow_klass_base() == NULL) {
       cmp(trial_klass, tmp, LSL, Universe::narrow_klass_shift());
       return;
@@ -3827,6 +3883,22 @@ void MacroAssembler::cmp_klass(Register oop, Register trial_klass, Register tmp)
   cmp(trial_klass, tmp);
 }
 
+void MacroAssembler::cmp_klass(Register src, Register dst, Register tmp1, Register tmp2) {
+  if (UseCompactObjectHeaders) {
+    load_nklass_compact(tmp1, src);
+    load_nklass_compact(tmp2, dst);
+    cmpw(tmp1, tmp2);
+  } else if (UseCompressedClassPointers) {
+    ldrw(tmp1, Address(src, oopDesc::klass_offset_in_bytes()));
+    ldrw(tmp2, Address(dst, oopDesc::klass_offset_in_bytes()));
+    cmpw(tmp1, tmp2);
+  } else {
+    ldr(tmp1, Address(src, oopDesc::klass_offset_in_bytes()));
+    ldr(tmp2, Address(dst, oopDesc::klass_offset_in_bytes()));
+    cmp(tmp1, tmp2);
+  }
+}
+
 void MacroAssembler::load_prototype_header(Register dst, Register src) {
   load_klass(dst, src);
   ldr(dst, Address(dst, Klass::prototype_header_offset()));
@@ -3835,6 +3907,7 @@ void MacroAssembler::load_prototype_header(Register dst, Register src) {
 void MacroAssembler::store_klass(Register dst, Register src) {
   // FIXME: Should this be a store release?  concurrent gcs assumes
   // klass length is valid if klass field is not null.
+  assert(!UseCompactObjectHeaders, "not with compact headers");
   if (UseCompressedClassPointers) {
     encode_klass_not_null(src);
     strw(src, Address(dst, oopDesc::klass_offset_in_bytes()));
@@ -3844,6 +3917,7 @@ void MacroAssembler::store_klass(Register dst, Register src) {
 }
 
 void MacroAssembler::store_klass_gap(Register dst, Register src) {
+  assert(!UseCompactObjectHeaders, "not with compact headers");
   if (UseCompressedClassPointers) {
     // Store to klass gap in destination
     strw(src, Address(dst, oopDesc::klass_gap_offset_in_bytes()));

@@ -195,6 +195,7 @@ void FileMapHeader::populate(FileMapInfo* mapinfo, size_t alignment) {
   _alignment = alignment;
   _obj_alignment = ObjectAlignmentInBytes;
   _compact_strings = CompactStrings;
+  _compact_headers = UseCompactObjectHeaders;
   _narrow_oop_mode = Universe::narrow_oop_mode();
   _narrow_oop_base = Universe::narrow_oop_base();
   _narrow_oop_shift = Universe::narrow_oop_shift();
@@ -1404,6 +1405,14 @@ bool FileMapHeader::validate() {
   if (compressed_oops() != UseCompressedOops || compressed_class_pointers() != UseCompressedClassPointers) {
     FileMapInfo::fail_continue("Unable to use shared archive.\nThe saved state of UseCompressedOops and UseCompressedClassPointers is "
                                "different from runtime, CDS will be disabled.");
+    return false;
+  }
+
+  if (compact_headers() != UseCompactObjectHeaders) {
+    FileMapInfo::fail_continue("The shared archive file's UseCompactObjectHeaders setting (%s)"
+                  " does not equal the current UseCompactObjectHeaders setting (%s).",
+                  _compact_headers          ? "enabled" : "disabled",
+                  UseCompactObjectHeaders   ? "enabled" : "disabled");
     return false;
   }
 

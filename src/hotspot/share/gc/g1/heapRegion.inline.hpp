@@ -182,6 +182,27 @@ inline size_t HeapRegion::block_size(const HeapWord *addr) const {
   return block_size_using_bitmap(addr, G1CollectedHeap::heap()->concurrent_mark()->prev_mark_bitmap());
 }
 
+inline size_t HeapRegion::block_size_resolve(const HeapWord *addr) const {
+  if (addr == top()) {
+    return pointer_delta(end(), addr);
+  }
+
+  if (block_is_obj(addr)) {
+    oop obj = oop(addr);
+#ifdef _LP64
+#ifdef ASSERT
+    assert(UseCompactObjectHeaders && !G1CollectedHeap::heap()->collector_state()->in_full_gc(), "Illegal/excessive resolve during full-GC");
+#endif
+    if (obj->is_forwarded()) {
+      obj = obj->forwardee();
+    }
+#endif
+    return obj->size();
+  }
+
+  return block_size_using_bitmap(addr, G1CollectedHeap::heap()->concurrent_mark()->prev_mark_bitmap());
+}
+
 inline void HeapRegion::complete_compaction() {
   // Reset space and bot after compaction is complete if needed.
   reset_after_compaction();

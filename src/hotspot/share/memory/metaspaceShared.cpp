@@ -1115,6 +1115,15 @@ public:
     memcpy(p, obj, bytes);
     assert(_new_loc_table->lookup(obj) == NULL, "each object can be relocated at most once");
     _new_loc_table->add(obj, (address)p);
+    if (UseCompactObjectHeaders && ref->msotype() == MetaspaceObj::ClassType) {
+      Klass* orig_klass = (Klass*)obj;
+      Klass* relocated_klass = (Klass*)p;
+      // Set the relocated klass to the prototype header of original klass to make sure the
+      // correctness of klass address in padding objects dumping
+      orig_klass->set_prototype_header(markOopDesc::prototype()->set_narrow_klass(Klass::encode_klass_not_null(relocated_klass)));
+      // The relocated klasses need prototype header
+      relocated_klass->set_prototype_header(markOopDesc::prototype()->set_narrow_klass(Klass::encode_klass_not_null(relocated_klass)));
+    }
     log_trace(cds)("Copy: " PTR_FORMAT " ==> " PTR_FORMAT " %d", p2i(obj), p2i(p), bytes);
     if (_new_loc_table->maybe_grow(MAX_TABLE_SIZE)) {
       log_info(cds, hashtables)("Expanded _new_loc_table to %d", _new_loc_table->table_size());
@@ -1597,7 +1606,11 @@ void VM_PopulateDumpSharedSpace::print_heap_region_stats(GrowableArray<MemRegion
 void MetaspaceShared::relocate_klass_ptr(oop o) {
   assert(DumpSharedSpaces, "sanity");
   Klass* k = ArchiveCompactor::get_relocated_klass(o->klass());
-  o->set_klass(k);
+  if (UseCompactObjectHeaders) {
+    o->set_mark(o->mark()->set_narrow_klass(Klass::encode_klass_not_null(k)));
+  } else {
+    o->set_klass(k);
+  }
 }
 
 Klass* MetaspaceShared::get_relocated_klass(Klass *k) {

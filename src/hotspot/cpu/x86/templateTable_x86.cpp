@@ -3732,7 +3732,11 @@ void TemplateTable::invokevirtual_helper(Register index,
   __ bind(notFinal);
 
   // get receiver klass
-  __ null_check(recv, oopDesc::klass_offset_in_bytes());
+  if (UseCompactObjectHeaders) {
+    __ null_check(recv, oopDesc::mark_offset_in_bytes());
+  } else {
+    __ null_check(recv, oopDesc::klass_offset_in_bytes());
+  }
   Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
   __ load_klass(rax, recv, tmp_load_klass);
 
@@ -3826,7 +3830,11 @@ void TemplateTable::invokeinterface(int byte_no) {
   __ jcc(Assembler::zero, notVFinal);
 
   // Get receiver klass into rlocals - also a null check
-  __ null_check(rcx, oopDesc::klass_offset_in_bytes());
+  if (UseCompactObjectHeaders) {
+    __ null_check(rcx, oopDesc::mark_offset_in_bytes());
+  } else {
+    __ null_check(rcx, oopDesc::klass_offset_in_bytes());
+  }
   Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
   __ load_klass(rlocals, rcx, tmp_load_klass);
 
@@ -3850,7 +3858,11 @@ void TemplateTable::invokeinterface(int byte_no) {
 
   // Get receiver klass into rdx - also a null check
   __ restore_locals();  // restore r14
-  __ null_check(rcx, oopDesc::klass_offset_in_bytes());
+  if (UseCompactObjectHeaders) {
+    __ null_check(rcx, oopDesc::mark_offset_in_bytes());
+  } else {
+    __ null_check(rcx, oopDesc::klass_offset_in_bytes());
+  }
   __ load_klass(rdx, rcx, tmp_load_klass);
 
   Label no_such_method;
@@ -4072,7 +4084,12 @@ void TemplateTable::_new() {
     // The object is initialized before the header.  If the object size is
     // zero, go directly to the header initialization.
     __ bind(initialize_object);
-    __ decrement(rdx, sizeof(oopDesc));
+    if (UseCompactObjectHeaders) {
+      assert(is_aligned(oopDesc::base_offset_in_bytes(), BytesPerLong), "oop base offset must be 8-byte-aligned");
+      __ decrement(rdx, oopDesc::base_offset_in_bytes());
+    } else {
+      __ decrement(rdx, sizeof(oopDesc));
+    }
     __ jcc(Assembler::zero, initialize_header);
 
     // Initialize topmost object field, divide rdx by 8, check if odd and
@@ -4094,15 +4111,22 @@ void TemplateTable::_new() {
     // initialize remaining object fields: rdx was a multiple of 8
     { Label loop;
     __ bind(loop);
-    __ movptr(Address(rax, rdx, Address::times_8, sizeof(oopDesc) - 1*oopSize), rcx);
-    NOT_LP64(__ movptr(Address(rax, rdx, Address::times_8, sizeof(oopDesc) - 2*oopSize), rcx));
+    if (UseCompactObjectHeaders) {
+      assert(is_aligned(oopDesc::base_offset_in_bytes(), BytesPerLong), "oop base offset must be 8-byte-aligned");
+      int header_size = oopDesc::base_offset_in_bytes();
+      __ movptr(Address(rax, rdx, Address::times_8, header_size - 1*oopSize), rcx);
+      NOT_LP64(__ movptr(Address(rax, rdx, Address::times_8, header_size - 2*oopSize), rcx));
+    } else {
+      __ movptr(Address(rax, rdx, Address::times_8, sizeof(oopDesc) - 1*oopSize), rcx);
+      NOT_LP64(__ movptr(Address(rax, rdx, Address::times_8, sizeof(oopDesc) - 2*oopSize), rcx));
+    }
     __ decrement(rdx);
     __ jcc(Assembler::notZero, loop);
     }
 
     // initialize object header only.
     __ bind(initialize_header);
-    if (UseBiasedLocking) {
+    if (UseBiasedLocking || UseCompactObjectHeaders) {
       __ pop(rcx);   // get saved klass back in the register.
       __ movptr(rbx, Address(rcx, Klass::prototype_header_offset()));
       __ movptr(Address(rax, oopDesc::mark_offset_in_bytes ()), rbx);
@@ -4111,12 +4135,14 @@ void TemplateTable::_new() {
                 (intptr_t)markOopDesc::prototype()); // header
       __ pop(rcx);   // get saved klass back in the register.
     }
+    if (!UseCompactObjectHeaders) {
 #ifdef _LP64
-    __ xorl(rsi, rsi); // use zero reg to clear memory (shorter code)
-    __ store_klass_gap(rax, rsi);  // zero klass gap for compressed oops
+      __ xorl(rsi, rsi); // use zero reg to clear memory (shorter code)
+      __ store_klass_gap(rax, rsi);  // zero klass gap for compressed oops
 #endif
-    Register tmp_store_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
-    __ store_klass(rax, rcx, tmp_store_klass);  // klass
+      Register tmp_store_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
+      __ store_klass(rax, rcx, tmp_store_klass);  // klass
+    }
 
     {
       SkipIfEqual skip_if(_masm, &DTraceAllocProbes, 0);

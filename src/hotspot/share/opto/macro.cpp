@@ -1865,14 +1865,17 @@ PhaseMacroExpand::initialize_object(AllocateNode* alloc,
   // Store the klass & mark bits
   Node* mark_node = NULL;
   // For now only enable fast locking for non-array types
-  if (UseBiasedLocking && (length == NULL)) {
+  if ((UseBiasedLocking && (length == NULL)) || UseCompactObjectHeaders) {
     mark_node = make_load(control, rawmem, klass_node, in_bytes(Klass::prototype_header_offset()), TypeRawPtr::BOTTOM, T_ADDRESS);
   } else {
     mark_node = makecon(TypeRawPtr::make((address)markOopDesc::prototype()));
   }
   rawmem = make_store(control, rawmem, object, oopDesc::mark_offset_in_bytes(), mark_node, T_ADDRESS);
 
-  rawmem = make_store(control, rawmem, object, oopDesc::klass_offset_in_bytes(), klass_node, T_METADATA);
+  if (!UseCompactObjectHeaders) {
+    rawmem = make_store(control, rawmem, object, oopDesc::klass_offset_in_bytes(), klass_node, T_METADATA);
+  }
+
   int header_size = alloc->minimum_header_size();  // conservatively small
 
   // Array length

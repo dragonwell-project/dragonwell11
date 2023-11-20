@@ -809,8 +809,11 @@ public:
 
   // oop manipulations
   void load_klass(Register dst, Register src);
+  void load_nklass_compact(Register dst, Register src);
+  void load_nklass_compact_c2(Register dst, Register obj, Register index, int scale, int disp);
   void store_klass(Register dst, Register src);
   void cmp_klass(Register oop, Register trial_klass, Register tmp);
+  void cmp_klass(Register src, Register dst, Register tmp1, Register tmp2);
 
   void resolve_oop_handle(Register result, Register tmp = r5);
   void load_mirror(Register dst, Register method, Register tmp = r5);
