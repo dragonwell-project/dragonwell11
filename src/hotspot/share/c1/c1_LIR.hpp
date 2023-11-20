@@ -876,6 +876,7 @@ class    LIR_OpUpdateCRC32;
 class    LIR_OpLock;
 class    LIR_OpTypeCheck;
 class    LIR_OpCompareAndSwap;
+class    LIR_OpLoadKlass;
 class    LIR_OpProfileCall;
 class    LIR_OpProfileType;
 #ifdef ASSERT
@@ -926,6 +927,7 @@ enum LIR_Code {
       , lir_pack64
       , lir_unpack64
       , lir_unwind
+      , lir_load_klass
   , end_op1
   , begin_op2
       , lir_branch
@@ -1147,6 +1149,7 @@ class LIR_Op: public CompilationResourceObj {
   virtual LIR_OpUpdateCRC32* as_OpUpdateCRC32() { return NULL; }
   virtual LIR_OpTypeCheck* as_OpTypeCheck() { return NULL; }
   virtual LIR_OpCompareAndSwap* as_OpCompareAndSwap() { return NULL; }
+  virtual LIR_OpLoadKlass* as_OpLoadKlass() { return NULL; }
   virtual LIR_OpProfileCall* as_OpProfileCall() { return NULL; }
   virtual LIR_OpProfileType* as_OpProfileType() { return NULL; }
 #ifdef ASSERT
@@ -1878,6 +1881,25 @@ class LIR_OpLock: public LIR_Op {
   void print_instr(outputStream* out) const PRODUCT_RETURN;
 };
 
+class LIR_OpLoadKlass: public LIR_Op {
+  friend class LIR_OpVisitState;
+
+ private:
+  LIR_Opr _obj;
+  CodeStub* _stub;
+ public:
+  LIR_OpLoadKlass(LIR_Opr obj, LIR_Opr result, CodeEmitInfo* info, CodeStub* stub)
+    : LIR_Op(lir_load_klass, result, info)
+    , _obj(obj)
+    , _stub(stub) {}
+
+  LIR_Opr obj()    const { return _obj;  }
+  CodeStub* stub() const { return _stub; }
+
+  virtual LIR_OpLoadKlass* as_OpLoadKlass() { return this; }
+  virtual void emit_code(LIR_Assembler* masm);
+  void print_instr(outputStream* out) const PRODUCT_RETURN;
+};
 
 class LIR_OpDelay: public LIR_Op {
  friend class LIR_OpVisitState;
@@ -2356,6 +2378,9 @@ class LIR_List: public CompilationResourceObj {
 
   void xadd(LIR_Opr src, LIR_Opr add, LIR_Opr res, LIR_Opr tmp) { append(new LIR_Op2(lir_xadd, src, add, res, tmp)); }
   void xchg(LIR_Opr src, LIR_Opr set, LIR_Opr res, LIR_Opr tmp) { append(new LIR_Op2(lir_xchg, src, set, res, tmp)); }
+
+  void load_klass(LIR_Opr obj, LIR_Opr result, CodeEmitInfo* info, CodeStub* stub) { append(new LIR_OpLoadKlass(obj, result, info, stub)); }
+
 #ifdef ASSERT
   void lir_assert(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2, const char* msg, bool halt) { append(new LIR_OpAssert(condition, opr1, opr2, msg, halt)); }
 #endif

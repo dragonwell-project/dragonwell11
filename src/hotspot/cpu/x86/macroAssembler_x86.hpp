@@ -320,7 +320,19 @@ class MacroAssembler: public Assembler {
 
   // oop manipulations
   void load_klass(Register dst, Register src, Register tmp);
+#ifdef _LP64
+  void load_nklass_compact(Register dst, Register src);
+  void load_nklass_compact_c2(Register dst, Register obj, Register index, Address::ScaleFactor scale, int disp);
+#endif
   void store_klass(Register dst, Register src, Register tmp);
+
+  // Compares the Klass pointer of an object to a given Klass (which might be narrow,
+  // depending on UseCompressedClassPointers).
+  void cmp_klass(Register klass, Register dst, Register tmp);
+
+  // Compares the Klass pointer of two objects o1 and o2. Result is in the condition flags.
+  // Uses t1 and t2 as temporary registers.
+  void cmp_klass(Register src, Register dst, Register tmp1, Register tmp2);
 
   void access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                       Register tmp1, Register thread_tmp);

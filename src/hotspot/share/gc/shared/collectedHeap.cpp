@@ -190,7 +190,7 @@ bool CollectedHeap::is_oop(oop object) const {
     return false;
   }
 
-  if (is_in_reserved(object->klass_or_null())) {
+  if (!UseCompactObjectHeaders && is_in_reserved(object->klass_or_null())) {
     return false;
   }
 

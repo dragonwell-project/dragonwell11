@@ -862,12 +862,25 @@ void G1ContiguousSpace::safe_object_iterate(ObjectClosure* blk) {
 }
 
 void G1ContiguousSpace::object_iterate(ObjectClosure* blk) {
+  if (!UseCompactObjectHeaders || G1CollectedHeap::heap()->collector_state()->in_full_gc()) {
+    object_iterate_impl<false>(blk);
+  } else {
+    object_iterate_impl<true>(blk);
+  }
+}
+
+template<bool RESOLVE>
+void G1ContiguousSpace::object_iterate_impl(ObjectClosure* blk) {
   HeapWord* p = bottom();
   while (p < top()) {
     if (block_is_obj(p)) {
       blk->do_object(oop(p));
     }
-    p += block_size(p);
+    if (RESOLVE) {
+      p += block_size_resolve(p);
+    } else {
+      p += block_size(p);
+    }
   }
 }
 

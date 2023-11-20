@@ -47,7 +47,11 @@ inline void PreservedMarks::push_if_necessary(oop obj, markOop m) {
 }
 
 inline void PreservedMarks::init_forwarded_mark(oop obj) {
-  obj->init_mark_raw();
+  if (UseCompactObjectHeaders) {
+    obj->forward_safe_init_mark();
+  } else {
+    obj->init_mark_raw();
+  }
 }
 
 inline void PreservedMarksSet::restore(RestorePreservedMarksTaskExecutor* executor) {

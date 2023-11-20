@@ -1300,6 +1300,11 @@ void LIRGenerator::do_isInstance(Intrinsic* x) {
   __ move(call_result, result);
 }
 
+void LIRGenerator::load_klass(LIR_Opr obj, LIR_Opr klass, CodeEmitInfo* null_check_info) {
+  CodeStub* slow_path = UseCompactObjectHeaders ? new LoadKlassStub(klass) : NULL;
+  __ load_klass(obj, klass, null_check_info, slow_path);
+}
+
 // Example: object.getClass ()
 void LIRGenerator::do_getClass(Intrinsic* x) {
   assert(x->number_of_arguments() == 1, "wrong type");
@@ -1315,10 +1320,16 @@ void LIRGenerator::do_getClass(Intrinsic* x) {
     info = state_for(x);
   }
 
-  // FIXME T_ADDRESS should actually be T_METADATA but it can't because the
-  // meaning of these two is mixed up (see JDK-8026837).
-  __ move(new LIR_Address(rcvr.result(), oopDesc::klass_offset_in_bytes(), T_ADDRESS), temp, info);
-  __ move_wide(new LIR_Address(temp, in_bytes(Klass::java_mirror_offset()), T_ADDRESS), temp);
+  if (UseCompactObjectHeaders) {
+    LIR_Opr klass = new_register(T_METADATA);
+    load_klass(rcvr.result(), klass, info);
+    __ move_wide(new LIR_Address(klass, in_bytes(Klass::java_mirror_offset()), T_ADDRESS), temp);
+  } else {
+    // FIXME T_ADDRESS should actually be T_METADATA but it can't because the
+    // meaning of these two is mixed up (see JDK-8026837).
+    __ move(new LIR_Address(rcvr.result(), oopDesc::klass_offset_in_bytes(), T_ADDRESS), temp, info);
+    __ move_wide(new LIR_Address(temp, in_bytes(Klass::java_mirror_offset()), T_ADDRESS), temp);
+  }
   // mirror = ((OopHandle)mirror)->resolve();
   access_load(IN_NATIVE, T_OBJECT,
               LIR_OprFact::address(new LIR_Address(temp, T_OBJECT)), result);
@@ -3677,7 +3688,11 @@ LIR_Opr LIRGenerator::mask_boolean(LIR_Opr array, LIR_Opr value, CodeEmitInfo*& 
     __ logical_and(value, LIR_OprFact::intConst(1), value_fixed);
   }
   LIR_Opr klass = new_register(T_METADATA);
-  __ move(new LIR_Address(array, oopDesc::klass_offset_in_bytes(), T_ADDRESS), klass, null_check_info);
+  if (UseCompactObjectHeaders) {
+    load_klass(array, klass, null_check_info);
+  } else {
+    __ move(new LIR_Address(array, oopDesc::klass_offset_in_bytes(), T_ADDRESS), klass, null_check_info);
+  }
   null_check_info = NULL;
   LIR_Opr layout = new_register(T_INT);
   __ move(new LIR_Address(klass, in_bytes(Klass::layout_helper_offset()), T_INT), layout);

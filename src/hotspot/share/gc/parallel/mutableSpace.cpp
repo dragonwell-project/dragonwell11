@@ -233,11 +233,28 @@ void MutableSpace::oop_iterate(OopIterateClosure* cl) {
   }
 }
 
-void MutableSpace::object_iterate(ObjectClosure* cl) {
+template<bool COMPACT_HEADERS>
+void MutableSpace::object_iterate_impl(ObjectClosure* cl) {
   HeapWord* p = bottom();
   while (p < top()) {
+    oop obj = cast_to_oop(p);
     cl->do_object(oop(p));
-    p += oop(p)->size();
+    if (COMPACT_HEADERS && obj->is_forwarded()) {
+      // It is safe to use the forwardee here. Parallel GC only uses
+      // header-based forwarding during promotion. Full GC doesn't
+      // use the object header for forwarding at all.
+      p += obj->forwardee()->size();
+    } else {
+      p += oop(p)->size();
+    }
+  }
+}
+
+void MutableSpace::object_iterate(ObjectClosure* cl) {
+  if (UseCompactObjectHeaders) {
+    object_iterate_impl<true>(cl);
+  } else {
+    object_iterate_impl<false>(cl);
   }
 }
 
