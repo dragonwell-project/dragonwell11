@@ -51,8 +51,10 @@ class arrayOopDesc : public oopDesc {
   // Returns the aligned header_size_in_bytes.  This is not equivalent to
   // sizeof(arrayOopDesc) which should not appear in the code.
   static int header_size_in_bytes() {
-    size_t hs = align_up(length_offset_in_bytes() + sizeof(int),
-                              HeapWordSize);
+    size_t hs = UseCompactObjectHeaders?
+                length_offset_in_bytes() + sizeof(int) :
+                align_up(length_offset_in_bytes() + sizeof(int),
+                         HeapWordSize);
 #ifdef ASSERT
     // make sure it isn't called before UseCompressedOops is initialized.
     static size_t arrayoopdesc_hs = 0;
@@ -66,6 +68,13 @@ class arrayOopDesc : public oopDesc {
   // aligned 0 mod 8.  The typeArrayOop itself must be aligned at least this
   // strongly.
   static bool element_type_should_be_aligned(BasicType type) {
+#ifdef _LP64
+    if (UseCompactObjectHeaders) {
+      if (type == T_OBJECT || type == T_ARRAY) {
+        return !UseCompressedOops;
+      }
+    }
+#endif
     return type == T_DOUBLE || type == T_LONG;
   }
 
@@ -81,7 +90,12 @@ class arrayOopDesc : public oopDesc {
 
   // Returns the offset of the first element.
   static int base_offset_in_bytes(BasicType type) {
-    return header_size(type) * HeapWordSize;
+    if (UseCompactObjectHeaders) {
+      size_t hs = header_size_in_bytes();
+      return (int)(element_type_should_be_aligned(type) ? align_up(hs, BytesPerLong) : hs);
+    } else {
+      return header_size(type) * HeapWordSize;
+    }
   }
 
   // Returns the address of the first element. The elements in the array will not
@@ -121,10 +135,17 @@ class arrayOopDesc : public oopDesc {
   // Returns the header size in words aligned to the requirements of the
   // array object type.
   static int header_size(BasicType type) {
+    assert(!UseCompactObjectHeaders, "not used with UseCompactObjectHeaders");
     size_t typesize_in_bytes = header_size_in_bytes();
     return (int)(element_type_should_be_aligned(type)
       ? align_object_offset(typesize_in_bytes/HeapWordSize)
       : typesize_in_bytes/HeapWordSize);
+  }
+
+  // Used for heap filling with UseCompactObjectHeaders
+  static int int_array_header_size() {
+    assert(UseCompactObjectHeaders, "used with UseCompactObjectHeaders");
+    return align_up(header_size_in_bytes(), HeapWordSize) / HeapWordSize;
   }
 
   // Return the maximum length of an array of BasicType.  The length can passed
@@ -135,8 +156,9 @@ class arrayOopDesc : public oopDesc {
     assert(type >= 0 && type < T_CONFLICT, "wrong type");
     assert(type2aelembytes(type) != 0, "wrong type");
 
+    int hdr_size_in_words = UseCompactObjectHeaders ? (align_up(base_offset_in_bytes(type), HeapWordSize) / HeapWordSize) : header_size(type);
     const size_t max_element_words_per_size_t =
-      align_down((SIZE_MAX/HeapWordSize - header_size(type)), MinObjAlignment);
+      align_down((SIZE_MAX/HeapWordSize - hdr_size_in_words), MinObjAlignment);
     const size_t max_elements_per_size_t =
       HeapWordSize * max_element_words_per_size_t / type2aelembytes(type);
     if ((size_t)max_jint < max_elements_per_size_t) {
@@ -144,7 +166,7 @@ class arrayOopDesc : public oopDesc {
       // (CollectedHeap, Klass::oop_oop_iterate(), and more) uses an int for
       // passing around the size (in words) of an object. So, we need to avoid
       // overflowing an int when we add the header. See CRs 4718400 and 7110613.
-      return align_down(max_jint - header_size(type), MinObjAlignment);
+      return align_down(max_jint - hdr_size_in_words, MinObjAlignment);
     }
     return (int32_t)max_elements_per_size_t;
   }
