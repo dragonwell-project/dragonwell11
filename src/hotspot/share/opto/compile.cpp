@@ -3260,6 +3260,7 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
     frc.inc_java_call_count(); // Count java call site;
   case Op_CallRuntime:
   case Op_CallLeaf:
+  case Op_CallLeafVector:
   case Op_CallLeafNoFP: {
     assert (n->is_Call(), "");
     CallNode *call = n->as_Call();

@@ -1434,6 +1434,16 @@ uint MachUEPNode::size(PhaseRegAlloc *ra_) const {
 
 //=============================================================================
 
+// Vector calling convention not supported.
+const bool Matcher::supports_vector_calling_convention() {
+  return false;
+}
+
+OptoRegPair Matcher::vector_return_value(uint ideal_reg) {
+  Unimplemented();
+  return OptoRegPair(0, 0);
+}
+
 int Matcher::regnum_to_fpu_offset(int regnum) {
   return regnum - 32; // The FP registers are in the second chunk
 }

@@ -443,6 +443,10 @@ public:
   OptoReg::Name  c_frame_pointer() const;
   static RegMask c_frame_ptr_mask;
 
+  // Java-Native vector calling convention
+  static const bool supports_vector_calling_convention();
+  static OptoRegPair vector_return_value(uint ideal_reg);
+
   // !!!!! Special stuff for building ScopeDescs
   virtual int      regnum_to_fpu_offset(int regnum);
 

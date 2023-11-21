@@ -742,6 +742,9 @@
   experimental(bool, EnableVectorAggressiveReboxing, false,                 \
           "Enables aggressive reboxing of vectors")                         \
                                                                             \
+  experimental(bool, UseVectorStubs, false,                                 \
+          "Use stubs for vector transcendental operations")                 \
+                                                                            \
   product(bool, UseTypeSpeculation, true,                                   \
           "Speculatively propagate types from profiles")                    \
                                                                             \
