@@ -29,6 +29,7 @@
 #include "opto/optoreg.hpp"
 #include "opto/output.hpp"
 #include "opto/runtime.hpp"
+#include "runtime/stubRoutines.hpp"
 #include "utilities/macros.hpp"
 
 

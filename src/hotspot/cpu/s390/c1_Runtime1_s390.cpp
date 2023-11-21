@@ -39,6 +39,7 @@
 #include "register_s390.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/signature.hpp"
+#include "runtime/stubRoutines.hpp"
 #include "runtime/vframeArray.hpp"
 #include "utilities/macros.hpp"
 #include "vmreg_s390.inline.hpp"

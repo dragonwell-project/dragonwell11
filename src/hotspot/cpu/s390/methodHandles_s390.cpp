@@ -32,6 +32,7 @@
 #include "memory/resourceArea.hpp"
 #include "prims/methodHandles.hpp"
 #include "runtime/frame.inline.hpp"
+#include "runtime/stubRoutines.hpp"
 #include "utilities/preserveException.hpp"
 
 #ifdef PRODUCT

@@ -40,6 +40,7 @@
 #include "runtime/frame.inline.hpp"
 #include "runtime/safepointMechanism.inline.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "runtime/stubRoutines.hpp"
 #include "vmreg_s390.inline.hpp"
 
 #define __ _masm->

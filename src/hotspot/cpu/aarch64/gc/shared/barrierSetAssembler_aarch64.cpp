@@ -26,6 +26,7 @@
 #include "gc/shared/barrierSetAssembler.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "runtime/jniHandles.hpp"
+#include "runtime/stubRoutines.hpp"
 #include "runtime/thread.hpp"
 
 #define __ masm->

@@ -24,6 +24,7 @@
  */
 
 #include "precompiled.hpp"
+#include "runtime/thread.inline.hpp"
 #include "jvm.h"
 #include "classfile/classLoader.hpp"
 #include "classfile/javaClasses.hpp"

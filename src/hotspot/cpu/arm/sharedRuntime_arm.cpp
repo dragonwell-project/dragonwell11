@@ -33,6 +33,7 @@
 #include "memory/resourceArea.hpp"
 #include "oops/compiledICHolder.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "runtime/stubRoutines.hpp"
 #include "runtime/vframeArray.hpp"
 #include "utilities/align.hpp"
 #include "vmreg_arm.inline.hpp"
