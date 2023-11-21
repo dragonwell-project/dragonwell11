@@ -433,7 +433,9 @@ MemRegion ObjArrayAllocator::obj_memory_range(oop obj) const {
     return MemAllocator::obj_memory_range(obj);
   }
   ArrayKlass* array_klass = ArrayKlass::cast(_klass);
-  const size_t hs = arrayOopDesc::header_size(array_klass->element_type());
+  const size_t hs = UseCompactObjectHeaders ?
+      align_up(arrayOopDesc::base_offset_in_bytes(array_klass->element_type()), HeapWordSize) / HeapWordSize :
+      arrayOopDesc::header_size(array_klass->element_type());
   return MemRegion(((HeapWord*)obj) + hs, _word_size - hs);
 }
 

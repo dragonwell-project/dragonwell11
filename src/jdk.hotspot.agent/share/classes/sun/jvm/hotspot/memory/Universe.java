@@ -207,6 +207,11 @@ public class Universe {
   // aligned 0 mod 8.  The typeArrayOop itself must be aligned at least this
   // strongly.
   public static boolean elementTypeShouldBeAligned(BasicType type) {
+    if (VM.getVM().isLP64() && VM.getVM().isCompactObjectHeadersEnabled()) {
+      if (type == BasicType.T_OBJECT || type == BasicType.T_ARRAY) {
+        return !VM.getVM().isCompressedOopsEnabled();
+      }
+    }
     return type == BasicType.T_DOUBLE || type == BasicType.T_LONG;
   }
 
