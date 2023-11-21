@@ -29,6 +29,7 @@
 #include "classfile/vmSymbols.hpp"
 #include "runtime/frame.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/stubCodeGenerator.hpp"
 #include "utilities/macros.hpp"
 
 #ifdef ZERO
@@ -38,6 +39,7 @@
 
 
 class MacroAssembler;
+class MethodHandlesAdapterBlob;
 class Label;
 
 class MethodHandles: AllStatic {

@@ -38,6 +38,7 @@
 #include "oops/objArrayKlass.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "runtime/stubRoutines.hpp"
 #include "vmreg_arm.inline.hpp"
 
 #define __ _masm->

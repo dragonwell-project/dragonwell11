@@ -42,6 +42,7 @@
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/thread.hpp"
 #include "runtime/vm_version.hpp"
+#include "runtime/stubRoutines.hpp"
 #if INCLUDE_G1GC
 #include "gc/g1/g1BarrierSet.hpp"
 #include "gc/g1/g1CardTable.hpp"

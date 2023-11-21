@@ -42,7 +42,6 @@
 #include "runtime/osThread.hpp"
 #include "runtime/park.hpp"
 #include "runtime/safepoint.hpp"
-#include "runtime/stubRoutines.hpp"
 #include "runtime/threadHeapSampler.hpp"
 #include "runtime/threadLocalStorage.hpp"
 #include "runtime/threadStatisticalInfo.hpp"
@@ -71,6 +70,7 @@ class ConcurrentLocksDump;
 class ParkEvent;
 class Parker;
 
+class BufferBlob;
 class ciEnv;
 class CompileThread;
 class CompileLog;
