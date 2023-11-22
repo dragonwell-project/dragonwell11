@@ -28,6 +28,7 @@
 #include "prims/jniFastGetField.hpp"
 #include "prims/jvm_misc.hpp"
 #include "runtime/safepoint.hpp"
+#include "runtime/stubRoutines.hpp"
 
 #define __ masm->
 
