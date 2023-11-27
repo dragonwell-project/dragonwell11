@@ -8,6 +8,8 @@
 #   JWarmUp   JWarmUp related
 #   Misc      Miscellaneous changes, such as Makefile, scripts
 #
+# If this is a backport patch, the title should be in form of
+# [Backport] IssueID: <One-line description of the ORIGINAL patch>
 
 Summary: <detailed description of the change>
 #
@@ -16,14 +18,14 @@ Summary: <detailed description of the change>
 #   New features added by this change
 #
 
-Test Plan: <how this patch has been tested>
+Testing: <how this patch has been tested>
 #
 # Please explain
 #   - Approaches used
 #   - Testsuites selected.
 #
 
-Reviewed-by: <Github IDs of reviewers>
+Reviewers: <Github IDs of reviewers>
 #
 # For code changes, at least two reviewers required
 #
