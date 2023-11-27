@@ -3566,6 +3566,7 @@ JVM_ENTRY_NO_ENV(void*, JVM_LoadLibrary(const char* name, jboolean throwExceptio
 
       THROW_HANDLE_0(h_exception);
     } else {
+      log_info(library)("Failed to load library %s", name);
       return load_result;
     }
   }
