@@ -442,6 +442,18 @@ AC_DEFUN_ONCE([HOTSPOT_SETUP_JVM_FEATURES],
 
   AC_SUBST(INCLUDE_JVMCI)
 
+  AC_MSG_CHECKING([if compiler2 should be enabled])
+  # Check if compiler2 is diabled
+  if HOTSPOT_IS_JVM_FEATURE_DISABLED(compiler2); then
+    AC_MSG_RESULT([no, forced])
+    INCLUDE_COMPILER2="false"
+  else
+    AC_MSG_RESULT([yes])
+    INCLUDE_COMPILER2="true"
+  fi
+
+  AC_SUBST(INCLUDE_COMPILER2)
+
   AC_MSG_CHECKING([if graal module jdk.internal.vm.compiler should be built])
   # Check if graal is diabled
   if HOTSPOT_IS_JVM_FEATURE_DISABLED(graal); then
