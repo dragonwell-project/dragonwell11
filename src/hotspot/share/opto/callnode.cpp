@@ -1094,11 +1094,6 @@ void CallRuntimeNode::dump_spec(outputStream *st) const {
   CallNode::dump_spec(st);
 }
 #endif
-uint CallLeafVectorNode::size_of() const { return sizeof(*this); }
-uint CallLeafVectorNode::cmp( const Node &n ) const {
-  CallLeafVectorNode &call = (CallLeafVectorNode&)n;
-  return CallLeafNode::cmp(call) && _num_bits == call._num_bits;
-}
 
 //------------------------------calling_convention-----------------------------
 void CallRuntimeNode::calling_convention( BasicType* sig_bt, VMRegPair *parm_regs, uint argcnt ) const {
@@ -1132,6 +1127,11 @@ void CallLeafNode::dump_spec(outputStream *st) const {
   CallNode::dump_spec(st);
 }
 #endif
+uint CallLeafVectorNode::size_of() const { return sizeof(*this); }
+uint CallLeafVectorNode::cmp( const Node &n ) const {
+  CallLeafVectorNode &call = (CallLeafVectorNode&)n;
+  return CallLeafNode::cmp(call) && _num_bits == call._num_bits;
+}
 
 //=============================================================================
 
