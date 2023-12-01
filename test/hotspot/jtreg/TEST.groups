@@ -77,7 +77,6 @@ hotspot_compiler_arraycopy = \
 hotspot_vector_1 = \
   compiler/c2/cr6340864 \
   compiler/codegen \
-  compiler/loopopts/superword \
   compiler/vectorapi \
   compiler/vectorization \
   -compiler/codegen/aes \
@@ -85,7 +84,6 @@ hotspot_vector_1 = \
   -compiler/codegen/Test6935535.java \
   -compiler/codegen/TestGCMStorePlacement.java \
   -compiler/codegen/TestTrichotomyExpressions.java \
-  -compiler/loopopts/superword/Vec_MulAddS2I.java \
   -compiler/vectorapi/VectorRebracket128Test.java
 
 hotspot_vector_2 = \
@@ -93,7 +91,6 @@ hotspot_vector_2 = \
   compiler/codegen/aes \
   compiler/codegen/Test6875866.java \
   compiler/codegen/Test6935535.java \
-  compiler/loopopts/superword/Vec_MulAddS2I.java \
   compiler/vectorapi/VectorRebracket128Test.java \
   -compiler/intrinsics/string/TestStringLatin1IndexOfChar.java
 
