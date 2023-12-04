@@ -743,6 +743,11 @@ void VM_Version::get_processor_features() {
   if( is_intel() ) { // Intel cpus specific settings
     if (is_knights_family()) {
       _features &= ~CPU_VZEROUPPER;
+      _features &= ~CPU_AVX512DQ;
+      _features &= ~CPU_AVX512_VPOPCNTDQ;
+      _features &= ~CPU_AVX512_VPCLMULQDQ;
+      _features &= ~CPU_AVX512_VBMI;
+      _features &= ~CPU_AVX512_VBMI2;
     }
   }
 
