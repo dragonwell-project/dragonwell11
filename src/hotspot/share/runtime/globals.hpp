@@ -2693,7 +2693,7 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   diagnostic(bool, UseAltFastLocking, false,                                \
           "Alternative lightweight locking")                                \
                                                                             \
-  product(bool, UseCompactObjectHeaders, false,                             \
+  product(bool, UseCompactObjectHeaders, true,                             \
           "Use compact 64-bit object headers in 64-bit VM.")                \
 
 #define VM_FLAGS(develop,                                                   \
