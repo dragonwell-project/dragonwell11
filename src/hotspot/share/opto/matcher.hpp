@@ -341,6 +341,14 @@ public:
   // Vector ideal reg
   static const uint vector_ideal_reg(int len);
 
+  // Vector length
+  static uint vector_length(const Node* n);
+  static uint vector_length(const MachNode* use, const MachOper* opnd);
+
+  // Vector length in bytes
+  static uint vector_length_in_bytes(const Node* n);
+  static uint vector_length_in_bytes(const MachNode* use, const MachOper* opnd);
+
   // Vector element basic type
   static BasicType vector_element_basic_type(const Node* n);
   static BasicType vector_element_basic_type(const MachNode* use, const MachOper* opnd);
