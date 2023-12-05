@@ -1020,17 +1020,6 @@ static void match_alias_type(Compile* C, Node* n, Node* m) {
 }
 #endif
 
-BasicType Matcher::vector_element_basic_type(const Node* n) {
-  const TypeVect* vt = n->bottom_type()->is_vect();
-  return vt->element_basic_type();
-}
-
-BasicType Matcher::vector_element_basic_type(const MachNode* use, const MachOper* opnd) {
-  int def_idx = use->operand_index(opnd);
-  Node* def = use->in(def_idx);
-  return def->bottom_type()->is_vect()->element_basic_type();
-}
-
 //------------------------------xform------------------------------------------
 // Given a Node in old-space, Match him (Label/Reduce) to produce a machine
 // Node in new-space.  Given a new-space Node, recursively walk his children.
@@ -2731,6 +2720,39 @@ void Matcher::specialize_generic_vector_operands() {
       }
     }
   }
+}
+
+uint Matcher::vector_length(const Node* n) {
+  const TypeVect* vt = n->bottom_type()->is_vect();
+  return vt->length();
+}
+
+uint Matcher::vector_length(const MachNode* use, const MachOper* opnd) {
+  int def_idx = use->operand_index(opnd);
+  Node* def = use->in(def_idx);
+  return def->bottom_type()->is_vect()->length();
+}
+
+uint Matcher::vector_length_in_bytes(const Node* n) {
+  const TypeVect* vt = n->bottom_type()->is_vect();
+  return vt->length_in_bytes();
+}
+
+uint Matcher::vector_length_in_bytes(const MachNode* use, const MachOper* opnd) {
+  uint def_idx = use->operand_index(opnd);
+  Node* def = use->in(def_idx);
+  return def->bottom_type()->is_vect()->length_in_bytes();
+}
+
+BasicType Matcher::vector_element_basic_type(const Node* n) {
+  const TypeVect* vt = n->bottom_type()->is_vect();
+  return vt->element_basic_type();
+}
+
+BasicType Matcher::vector_element_basic_type(const MachNode* use, const MachOper* opnd) {
+  int def_idx = use->operand_index(opnd);
+  Node* def = use->in(def_idx);
+  return def->bottom_type()->is_vect()->element_basic_type();
 }
 
 #ifdef ASSERT
