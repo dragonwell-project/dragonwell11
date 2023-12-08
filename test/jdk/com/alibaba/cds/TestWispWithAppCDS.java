@@ -85,7 +85,7 @@ public class TestWispWithAppCDS {
     }
 
     static void dumpLoadedClasses(String[] expectedClasses) throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-Dtest.classes=" + TEST_CLASS,
             "-XX:DumpLoadedClassList=" + CLASSLIST_FILE,
             // trigger JVMCI runtime init so that JVMCI classes will be
@@ -110,7 +110,7 @@ public class TestWispWithAppCDS {
 
     }
     static void dumpArchive() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-cp",
             TESTJAR,
             "-XX:SharedClassListFile=" + CLASSLIST_FILE_2,
@@ -136,7 +136,7 @@ public class TestWispWithAppCDS {
     }
 
     static void startWithJsa() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-Dtest.classes=" + TEST_CLASS,
             "-Xshare:on",
             "-XX:+UnlockExperimentalVMOptions",

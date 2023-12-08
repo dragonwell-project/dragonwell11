@@ -71,7 +71,7 @@ public class TestDumpAndLoadClassWithDifferentCP {
     }
 
     static void dumpLoadedClasses() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-XX:DumpLoadedClassList=" + CLASSLIST_FILE,
             // trigger JVMCI runtime init so that JVMCI classes will be
             // included in the classlist
@@ -86,7 +86,7 @@ public class TestDumpAndLoadClassWithDifferentCP {
     }
 
     static void dumpArchive() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-cp",
             TESTJAR,
             "-XX:SharedClassListFile=" + CLASSLIST_FILE,
@@ -121,7 +121,7 @@ public class TestDumpAndLoadClassWithDifferentCP {
 
     static void startWithJsa() throws Exception {
         String classPath = "newpath/testSimple.jar:./test.jar";
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-Xshare:on",
             "-XX:SharedArchiveFile=" + ARCHIVE_FILE,
             "-XX:+AppCDSClassFingerprintCheck",

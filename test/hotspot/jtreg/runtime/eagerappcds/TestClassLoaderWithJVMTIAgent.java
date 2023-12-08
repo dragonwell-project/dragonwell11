@@ -108,7 +108,7 @@ public class TestClassLoaderWithJVMTIAgent {
     }
 
     static void traceClasses() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-Dtest.classes=" + TEST_CLASS,
             "-Xlog:class+eagerappcds=trace",
             "-XX:DumpLoadedClassList=" + CLASSLIST_FILE,
@@ -149,7 +149,7 @@ public class TestClassLoaderWithJVMTIAgent {
     }
 
     static void convertClassList() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
                 "--add-exports",
                 "java.base/jdk.internal.misc=ALL-UNNAMED",
                 "-cp",
@@ -163,7 +163,7 @@ public class TestClassLoaderWithJVMTIAgent {
 
     }
     static void dumpArchive() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
                 "-cp",
                 TESTJAR,
                 "-XX:+UnlockExperimentalVMOptions",
@@ -188,7 +188,7 @@ public class TestClassLoaderWithJVMTIAgent {
     }
 
     static void startWithJsa() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
                 "-Dtest.classes=" + TEST_CLASS,
                 "-XX:+UnlockExperimentalVMOptions",
                 "-XX:+EagerAppCDS",
