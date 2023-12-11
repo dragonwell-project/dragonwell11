@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,13 +25,7 @@
 
 package sun.security.x509;
 
-import java.io.BufferedReader;
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.spec.AlgorithmParameterSpec;
@@ -42,6 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.security.auth.x500.X500Principal;
 
+import sun.security.jca.JCAUtil;
 import sun.security.util.*;
 import sun.security.provider.X509Factory;
 
@@ -129,14 +124,6 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
     protected X509CertInfo      info = null;
     protected AlgorithmId       algId = null;
     protected byte[]            signature = null;
-
-    // recognized extension OIDS
-    private static final String KEY_USAGE_OID = "2.5.29.15";
-    private static final String EXTENDED_KEY_USAGE_OID = "2.5.29.37";
-    private static final String BASIC_CONSTRAINT_OID = "2.5.29.19";
-    private static final String SUBJECT_ALT_NAME_OID = "2.5.29.17";
-    private static final String ISSUER_ALT_NAME_OID = "2.5.29.18";
-    private static final String AUTH_INFO_ACCESS_OID = "1.3.6.1.5.5.7.1.1";
 
     // number of standard key usage bits.
     private static final int NUM_STANDARD_KEY_USAGE = 9;
@@ -310,6 +297,13 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
             signedCert = null;
             throw new CertificateException("Unable to initialize, " + e, e);
         }
+    }
+
+    // helper method to record certificate, if necessary, after construction
+    public static X509CertImpl newX509CertImpl(byte[] certData) throws CertificateException {
+        var cert = new X509CertImpl(certData);
+        JCAUtil.tryCommitCertEvent(cert);
+        return cert;
     }
 
     /**
@@ -677,7 +671,7 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
 
     /**
      * Return the requested attribute from the certificate.
-     *
+     * <p>
      * Note that the X509CertInfo is not cloned for performance reasons.
      * Callers must ensure that they do not modify it. All other
      * attributes are cloned.
@@ -1425,7 +1419,7 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
      */
     public byte[] getExtensionValue(String oid) {
         try {
-            ObjectIdentifier findOID = new ObjectIdentifier(oid);
+            ObjectIdentifier findOID = ObjectIdentifier.of(oid);
             String extAlias = OIDMap.getName(findOID);
             Extension certExt = null;
             CertificateExtensions exts = (CertificateExtensions)info.get(
@@ -1528,7 +1522,8 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
     public static List<String> getExtendedKeyUsage(X509Certificate cert)
         throws CertificateParsingException {
         try {
-            byte[] ext = cert.getExtensionValue(EXTENDED_KEY_USAGE_OID);
+            byte[] ext = cert.getExtensionValue
+                    (KnownOIDs.extendedKeyUsage.value());
             if (ext == null)
                 return null;
             DerValue val = new DerValue(ext);
@@ -1585,7 +1580,7 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
         for (GeneralName gname : names.names()) {
             GeneralNameInterface name = gname.getName();
             List<Object> nameEntry = new ArrayList<>(2);
-            nameEntry.add(Integer.valueOf(name.getType()));
+            nameEntry.add(name.getType());
             switch (name.getType()) {
             case GeneralNameInterface.NAME_RFC822:
                 nameEntry.add(((RFC822Name) name).getName());
@@ -1698,7 +1693,8 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
     public static Collection<List<?>> getSubjectAlternativeNames(X509Certificate cert)
         throws CertificateParsingException {
         try {
-            byte[] ext = cert.getExtensionValue(SUBJECT_ALT_NAME_OID);
+            byte[] ext = cert.getExtensionValue
+                    (KnownOIDs.SubjectAlternativeName.value());
             if (ext == null) {
                 return null;
             }
@@ -1761,7 +1757,8 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
     public static Collection<List<?>> getIssuerAlternativeNames(X509Certificate cert)
         throws CertificateParsingException {
         try {
-            byte[] ext = cert.getExtensionValue(ISSUER_ALT_NAME_OID);
+            byte[] ext = cert.getExtensionValue
+                    (KnownOIDs.IssuerAlternativeName.value());
             if (ext == null) {
                 return null;
             }
@@ -2004,5 +2001,20 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
         int low = (b & 0x0f);
         buf.append(hexChars[high])
             .append(hexChars[low]);
+    }
+
+    /**
+     * Restores the state of this object from the stream.
+     * <p>
+     * Deserialization of this object is not supported.
+     *
+     * @param  stream the {@code ObjectInputStream} from which data is read
+     * @throws IOException if an I/O error occurs
+     * @throws ClassNotFoundException if a serialized class cannot be loaded
+     */
+    private void readObject(ObjectInputStream stream)
+            throws IOException, ClassNotFoundException {
+        throw new InvalidObjectException(
+                "X509CertImpls are not directly deserializable");
     }
 }
