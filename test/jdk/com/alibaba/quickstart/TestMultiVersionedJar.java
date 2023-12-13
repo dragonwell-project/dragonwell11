@@ -43,7 +43,7 @@ public class TestMultiVersionedJar {
     }
 
     static void trace(String parentDir) throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-Xquickstart:path=" + parentDir + "/quickstartcache",
             "-Xquickstart:verbose",
             "-Xlog:cds+jvmti=debug",
@@ -59,7 +59,7 @@ public class TestMultiVersionedJar {
     }
 
     static void replay(String parentDir) throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-Xquickstart:path=" + parentDir + "/quickstartcache",
             "-Xquickstart:verbose",
             "-Xlog:class+eagerappcds=trace",

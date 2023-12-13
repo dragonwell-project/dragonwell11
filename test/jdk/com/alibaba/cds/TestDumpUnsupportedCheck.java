@@ -53,7 +53,7 @@ public class TestDumpUnsupportedCheck {
     }
 
     static void dumpArchive() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true,
+        ProcessBuilder pb = ProcessTools.createTestJvm(
             "-XX:+UnlockExperimentalVMOptions",
             "-XX:+EagerAppCDS",
             "-XX:SharedClassListFile=" + System.getProperty("test.src", ".") + File.separator + CLASSLIST_FILE,
