@@ -34,7 +34,7 @@ public class Classes4CDS {
     public static final String CLASSES4CDS = "com.alibaba.jvm.cds.Classes4CDS";
 
     public static ProcessBuilder invokeClasses4CDS(String cds_original_list, String cds_final_list) {
-        return ProcessTools.createJavaProcessBuilder(true,
+        return ProcessTools.createTestJvm(
                 "--add-exports",
                 "java.base/jdk.internal.misc=ALL-UNNAMED",
                 "-cp",
