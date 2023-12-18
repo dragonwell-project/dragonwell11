@@ -82,7 +82,11 @@
           "be dumped into the corefile.")                               \
                                                                         \
   diagnostic(bool, UseCpuAllocPath, false,                              \
-             "Use CPU_ALLOC code path in os::active_processor_count ")
+             "Use CPU_ALLOC code path in os::active_processor_count ")  \
+                                                                        \
+  diagnostic(bool, DumpPerfMapAtExit, false,                            \
+             "Write map file for Linux perf tool at exit")
+
 
 //
 // Defines Linux-specific default values. The flags are available on all
