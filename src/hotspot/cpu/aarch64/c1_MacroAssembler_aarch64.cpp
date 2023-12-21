@@ -263,7 +263,10 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
      } else if (con_size_in_bytes <= threshold) {
        // use explicit null stores
        int i = hdr_size_in_bytes;
-       if (i < con_size_in_bytes && (con_size_in_bytes % (2 * BytesPerWord))) {
+       // Here assumes hdr_size_in_bytes is 2 words aligned but it's not with compact object header
+       // We have to check the rest of object space is 2 words aligned or not
+       // It's benign with UseTLAB but will corrupt next object with inline_contig_alloc with PSGC
+       if (i < con_size_in_bytes && ((con_size_in_bytes - (UseCompactObjectHeaders ? hdr_size_in_bytes : 0)) % (2 * BytesPerWord))) {
          str(zr, Address(obj, i));
          i += BytesPerWord;
        }
