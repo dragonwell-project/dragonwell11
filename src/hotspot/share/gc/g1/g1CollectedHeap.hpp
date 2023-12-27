@@ -1403,6 +1403,8 @@ public:
   G1HeapSummary create_g1_heap_summary();
   G1EvacSummary create_g1_evac_summary(G1EvacStats* stats);
 
+  inline bool root_region_scanning();
+
   // Printing
 private:
   void print_heap_regions() const;

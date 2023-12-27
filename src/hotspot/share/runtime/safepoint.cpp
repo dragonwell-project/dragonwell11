@@ -69,6 +69,9 @@
 #ifdef COMPILER1
 #include "c1/c1_globals.hpp"
 #endif
+#if INCLUDE_G1GC
+#include "gc/g1/g1CollectedHeap.inline.hpp"
+#endif // INCLUDE_G1GC
 
 template <typename E>
 static void set_current_safepoint_id(E* event, int adjustment = 0) {
@@ -731,6 +734,13 @@ public:
 void SafepointSynchronize::do_cleanup_tasks() {
 
   TraceTime timer("safepoint cleanup tasks", TRACETIME_LOG(Info, safepoint, cleanup));
+
+#if INCLUDE_G1GC
+  if (UseCompactObjectHeaders && UseG1GC && G1CollectedHeap::heap()->root_region_scanning()) {
+    log_info(safepoint)("Safepoint cancels cleanup due to G1 root region scanning.");
+    return;
+  }
+#endif // INCLUDE_G1GC
 
   // Prepare for monitor deflation.
   DeflateMonitorCounters deflate_counters;
