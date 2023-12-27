@@ -324,8 +324,8 @@ int oopDesc::size_given_klass(Klass* klass)  {
       // technique, we will need to suitably modify the assertion.
       assert((s == klass->oop_size(this)) ||
              (Universe::heap()->is_gc_active() &&
-              (((UseCompactObjectHeaders || is_typeArray()) && UseConcMarkSweepGC) ||
-               ((UseCompactObjectHeaders || is_objArray()) && is_forwarded() && (UseConcMarkSweepGC || UseParallelGC || UseG1GC)))),
+              ((is_typeArray() && UseConcMarkSweepGC) ||
+               (is_objArray()  && is_forwarded() && (UseConcMarkSweepGC || UseParallelGC || UseG1GC)))),
              "wrong array object size");
     } else {
       // Must be zero, so bite the bullet and take the virtual call.

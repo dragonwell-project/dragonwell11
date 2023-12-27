@@ -309,12 +309,9 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
   cmpptr(len, (int32_t)max_array_allocation_length);
   jcc(Assembler::above, slow_case);
 
-  // header_size is already base offset with UseCompactObjectHeaders
-  int base_offset = UseCompactObjectHeaders ? header_size : (header_size * BytesPerWord);
-
   const Register arr_size = t2; // okay to be the same
   // align object end
-  movptr(arr_size, (int32_t)base_offset + MinObjAlignmentInBytesMask);
+  movptr(arr_size, (int32_t)header_size * BytesPerWord + MinObjAlignmentInBytesMask);
   lea(arr_size, Address(arr_size, len, f));
   andptr(arr_size, ~MinObjAlignmentInBytesMask);
 
@@ -322,20 +319,12 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   initialize_header(obj, klass, len, t1, t2);
 
-  assert(is_aligned(base_offset, BytesPerWord) || UseCompactObjectHeaders, "must be aligned or with UseCompactObjectHeaders");
-  if (UseCompactObjectHeaders && !is_aligned(base_offset, BytesPerWord)) {
-    // Clear leading 4 bytes, if necessary.
-    // TODO: This could perhaps go into initialize_body() and also clear the leading 4 bytes
-    // for non-array objects, thereby replacing the klass-gap clearing code in initialize_header().
-    assert(is_aligned(base_offset, BytesPerInt), "must be 4-byte aligned");
-    movl(Address(obj, base_offset), 0);
-    base_offset += BytesPerInt;
-  }
-  assert(is_aligned(base_offset, BytesPerWord), "must be word aligned");
-
   // clear rest of allocated space
   const Register len_zero = len;
-  initialize_body(obj, arr_size, base_offset, len_zero);
+  if (UseCompactObjectHeaders) {
+    assert(header_size == 2, "check array header size");
+  }
+  initialize_body(obj, arr_size, header_size * BytesPerWord, len_zero);
 
   if (CURRENT_ENV->dtrace_alloc_probes()) {
     assert(obj == rax, "must be");
