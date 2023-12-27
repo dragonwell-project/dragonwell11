@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,8 @@
 package sun.security.rsa;
 
 import java.io.IOException;
+import java.io.InvalidObjectException;
+import java.io.ObjectInputStream;
 import java.math.BigInteger;
 
 import java.security.*;
@@ -33,15 +35,17 @@ import java.security.spec.AlgorithmParameterSpec;
 import java.security.interfaces.*;
 
 import sun.security.util.*;
-import sun.security.x509.AlgorithmId;
 import sun.security.pkcs.PKCS8Key;
+
+import sun.security.rsa.RSAUtil.KeyType;
 
 /**
  * RSA private key implementation for "RSA", "RSASSA-PSS" algorithms in non-CRT
- * form (modulus, private exponent only). For CRT private keys, see
- * RSAPrivateCrtKeyImpl. We need separate classes to ensure correct behavior
- * in instanceof checks, etc.
- *
+ * form (modulus, private exponent only).
+ * <p>
+ * For CRT private keys, see RSAPrivateCrtKeyImpl. We need separate classes
+ * to ensure correct behavior in instanceof checks, etc.
+ * <p>
  * Note: RSA keys must be at least 512 bits long
  *
  * @see RSAPrivateCrtKeyImpl
@@ -57,26 +61,37 @@ public final class RSAPrivateKeyImpl extends PKCS8Key implements RSAPrivateKey {
     private final BigInteger n;         // modulus
     private final BigInteger d;         // private exponent
 
+    private transient final KeyType type;
+
     // optional parameters associated with this RSA key
     // specified in the encoding of its AlgorithmId.
     // must be null for "RSA" keys.
-    private final AlgorithmParameterSpec keyParams;
+    private transient final AlgorithmParameterSpec keyParams;
 
     /**
      * Construct a key from its components. Used by the
      * RSAKeyFactory and the RSAKeyPairGenerator.
      */
-    RSAPrivateKeyImpl(AlgorithmId rsaId, BigInteger n, BigInteger d)
-            throws InvalidKeyException {
+    RSAPrivateKeyImpl(KeyType type, AlgorithmParameterSpec keyParams,
+            BigInteger n, BigInteger d) throws InvalidKeyException {
+
         RSAKeyFactory.checkRSAProviderKeyLengths(n.bitLength(), null);
 
         this.n = n;
         this.d = d;
-        this.keyParams = RSAUtil.getParamSpec(rsaId);
 
-        // generate the encoding
-        algid = rsaId;
         try {
+            // validate and generate the algid encoding
+            algid = RSAUtil.createAlgorithmId(type, keyParams);
+        } catch (ProviderException pe) {
+            throw new InvalidKeyException(pe);
+        }
+
+        this.type = type;
+        this.keyParams = keyParams;
+
+        try {
+            // generate the key encoding
             DerOutputStream out = new DerOutputStream();
             out.putInteger(0); // version must be 0
             out.putInteger(n);
@@ -99,7 +114,7 @@ public final class RSAPrivateKeyImpl extends PKCS8Key implements RSAPrivateKey {
     // see JCA doc
     @Override
     public String getAlgorithm() {
-        return algid.getName();
+        return type.keyAlgo;
     }
 
     // see JCA doc
@@ -123,8 +138,23 @@ public final class RSAPrivateKeyImpl extends PKCS8Key implements RSAPrivateKey {
     // return a string representation of this key for debugging
     @Override
     public String toString() {
-        return "Sun " + getAlgorithm() + " private key, " + n.bitLength()
+        return "Sun " + type.keyAlgo + " private key, " + n.bitLength()
                + " bits" + "\n  params: " + keyParams + "\n  modulus: " + n
                + "\n  private exponent: " + d;
+    }
+
+    /**
+     * Restores the state of this object from the stream.
+     * <p>
+     * Deserialization of this object is not supported.
+     *
+     * @param  stream the {@code ObjectInputStream} from which data is read
+     * @throws IOException if an I/O error occurs
+     * @throws ClassNotFoundException if a serialized class cannot be loaded
+     */
+    private void readObject(ObjectInputStream stream)
+            throws IOException, ClassNotFoundException {
+        throw new InvalidObjectException(
+                "RSAPrivateKeyImpl keys are not directly deserializable");
     }
 }
