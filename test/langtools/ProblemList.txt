@@ -78,3 +78,6 @@ tools/sjavac/ClasspathDependencies.java						8158002	   generic-all	  Requires i
 #
 # jdeps 
 
+# hotspot riscv
+jdk/jshell/JdiHangingLaunchExecutionControlTest.java https://github.com/dragonwell-project/dragonwell11/issues/770 linux-riscv64
+tools/javac/failover/CheckAttributedTree.java https://github.com/dragonwell-project/dragonwell11/issues/770 linux-riscv64
