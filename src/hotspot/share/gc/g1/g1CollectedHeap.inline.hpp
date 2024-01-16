@@ -289,4 +289,8 @@ inline void G1CollectedHeap::set_humongous_is_live(oop obj) {
   }
 }
 
+inline bool G1CollectedHeap::root_region_scanning() {
+  return _cm->root_regions()->scan_in_progress();
+}
+
 #endif // SHARE_VM_GC_G1_G1COLLECTEDHEAP_INLINE_HPP

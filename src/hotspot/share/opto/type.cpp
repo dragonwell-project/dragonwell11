@@ -4542,9 +4542,7 @@ void TypeAryPtr::dump2( Dict &d, uint depth, outputStream *st ) const {
   }
 
   if( _offset != 0 ) {
-    int header_size = UseCompactObjectHeaders ?
-                        arrayOopDesc::base_offset_in_bytes(elem()->basic_type()) :
-                        objArrayOopDesc::header_size() * wordSize;
+    int header_size = objArrayOopDesc::header_size() * wordSize;
     if( _offset == OffsetTop )       st->print("+undefined");
     else if( _offset == OffsetBot )  st->print("+any");
     else if( _offset < header_size ) st->print("+%d", _offset);

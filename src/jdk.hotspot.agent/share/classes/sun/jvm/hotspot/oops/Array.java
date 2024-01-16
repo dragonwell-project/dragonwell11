@@ -59,9 +59,7 @@ public class Array extends Oop {
     if (headerSize != 0) {
       return headerSize;
     }
-    if (VM.getVM().isCompactObjectHeadersEnabled()) {
-      headerSize = lengthOffsetInBytes() + VM.getVM().getIntSize();
-    } else if (VM.getVM().isCompressedKlassPointersEnabled()) {
+    if (VM.getVM().isCompressedKlassPointersEnabled()) {
       headerSize = typeSize;
     } else {
       headerSize = VM.getVM().alignUp(typeSize + VM.getVM().getIntSize(),
@@ -78,7 +76,7 @@ public class Array extends Oop {
     }
   }
 
-  private static long lengthOffsetInBytes() {
+  private long lengthOffsetInBytes() {
     if (lengthOffsetInBytes != 0) {
       return lengthOffsetInBytes;
     }
@@ -110,16 +108,7 @@ public class Array extends Oop {
   }
 
   public static long baseOffsetInBytes(BasicType type) {
-    if (VM.getVM().isCompactObjectHeadersEnabled()) {
-      long typeSizeInBytes = headerSizeInBytes();
-      if (Universe.elementTypeShouldBeAligned(type)) {
-        return VM.getVM().alignUp(typeSizeInBytes, VM.getVM().getHeapWordSize());
-      } else {
-        return typeSizeInBytes;
-      }
-    } else {
-      return headerSize(type) * VM.getVM().getHeapWordSize();
-    }
+    return headerSize(type) * VM.getVM().getHeapWordSize();
   }
 
   public boolean isArray()             { return true; }

@@ -355,14 +355,14 @@ size_t CollectedHeap::max_tlab_size() const {
   // We actually lose a little by dividing first,
   // but that just makes the TLAB  somewhat smaller than the biggest array,
   // which is fine, since we'll be able to fill that.
-  size_t max_int_size = (UseCompactObjectHeaders ? arrayOopDesc::int_array_header_size() : typeArrayOopDesc::header_size(T_INT)) +
+  size_t max_int_size = typeArrayOopDesc::header_size(T_INT) +
               sizeof(jint) *
               ((juint) max_jint / (size_t) HeapWordSize);
   return align_down(max_int_size, MinObjAlignment);
 }
 
 size_t CollectedHeap::filler_array_hdr_size() {
-  return align_object_offset(UseCompactObjectHeaders ? arrayOopDesc::int_array_header_size() : arrayOopDesc::header_size(T_INT)); // align to Long
+  return align_object_offset(arrayOopDesc::header_size(T_INT)); // align to Long
 }
 
 size_t CollectedHeap::filler_array_min_size() {

@@ -263,7 +263,10 @@ void C1_MacroAssembler::initialize_object(Register obj, Register klass, Register
      } else if (con_size_in_bytes <= threshold) {
        // use explicit null stores
        int i = hdr_size_in_bytes;
-       if (i < con_size_in_bytes && (con_size_in_bytes % (2 * BytesPerWord))) {
+       // Here assumes hdr_size_in_bytes is 2 words aligned but it's not with compact object header
+       // We have to check the rest of object space is 2 words aligned or not
+       // It's benign with UseTLAB but will corrupt next object with inline_contig_alloc with PSGC
+       if (i < con_size_in_bytes && ((con_size_in_bytes - (UseCompactObjectHeaders ? hdr_size_in_bytes : 0)) % (2 * BytesPerWord))) {
          str(zr, Address(obj, i));
          i += BytesPerWord;
        }
@@ -318,12 +321,9 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
   cmp(len, rscratch1);
   br(Assembler::HS, slow_case);
 
-  // header_size is already base offset with UseCompactObjectHeaders
-  int base_offset = UseCompactObjectHeaders ? header_size : (header_size * BytesPerWord);
-
   const Register arr_size = t2; // okay to be the same
   // align object end
-  mov(arr_size, (int32_t)base_offset + MinObjAlignmentInBytesMask);
+  mov(arr_size, (int32_t)header_size * BytesPerWord + MinObjAlignmentInBytesMask);
   add(arr_size, arr_size, len, ext::uxtw, f);
   andr(arr_size, arr_size, ~MinObjAlignmentInBytesMask);
 
@@ -331,19 +331,9 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register t1, 
 
   initialize_header(obj, klass, len, t1, t2);
 
-  assert(is_aligned(base_offset, BytesPerWord) || UseCompactObjectHeaders, "must be aligned or with UseCompactObjectHeaders");
-  if (UseCompactObjectHeaders && !is_aligned(base_offset, BytesPerWord)) {
-    // Clear leading 4 bytes, if necessary.
-    // TODO: This could perhaps go into initialize_body() and also clear the leading 4 bytes
-    // for non-array objects, thereby replacing the klass-gap clearing code in initialize_header().
-    assert(is_aligned(base_offset, BytesPerInt), "must be 4-byte aligned");
-    strw(zr, Address(obj, base_offset));
-    base_offset += BytesPerInt;
-  }
-
   // clear rest of allocated space
   const Register len_zero = len;
-  initialize_body(obj, arr_size, base_offset, len_zero);
+  initialize_body(obj, arr_size, header_size * BytesPerWord, len_zero);
 
   membar(StoreStore);
 
