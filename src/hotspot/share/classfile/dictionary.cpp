@@ -207,6 +207,7 @@ void DictionaryEntry::add_protection_domain(Dictionary* dict, Handle protection_
   if (lt.is_enabled()) {
     LogStream ls(lt);
     print_count(&ls);
+    ls.cr();
   }
 }
 

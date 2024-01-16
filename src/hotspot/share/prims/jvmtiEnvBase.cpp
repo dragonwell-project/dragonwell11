@@ -1023,9 +1023,17 @@ JvmtiEnvBase::get_object_monitor_usage(JavaThread* calling_thread, jobject objec
     }
     // implied else: entry_count == 0
   } else {
-    ThreadsListHandle tlh;
+    ThreadsListHandle tlh(current_thread);
     owning_thread = ObjectSynchronizer::get_lock_owner(tlh.list(), hobj);
     if (owning_thread != NULL) {  // monitor is owned
+      if (!at_safepoint && !owning_thread->is_thread_fully_suspended(true, &debug_bits)) {
+        // Don't worry! This return of JVMTI_ERROR_THREAD_NOT_SUSPENDED
+        // will not make it back to the JVM/TI agent. The error code will
+        // get intercepted in JvmtiEnv::GetObjectMonitorUsage() which
+        // will retry the call via a VM_GetObjectMonitorUsage VM op.
+        return JVMTI_ERROR_THREAD_NOT_SUSPENDED;
+      }
+
       Handle th(current_thread, owning_thread->threadObj());
       ret.owner = (jthread)jni_reference(calling_thread, th);
       ret.entry_count = count_locked_objects(owning_thread, hobj);

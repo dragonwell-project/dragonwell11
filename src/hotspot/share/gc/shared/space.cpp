@@ -645,7 +645,7 @@ void ContiguousSpace::allocate_temporary_filler(int factor) {
   }
   size = align_object_size(size);
 
-  const size_t array_header_size = UseCompactObjectHeaders ? arrayOopDesc::int_array_header_size() : typeArrayOopDesc::header_size(T_INT);
+  const size_t array_header_size = typeArrayOopDesc::header_size(T_INT);
   if (size >= align_object_size(array_header_size)) {
     size_t length = (size - array_header_size) * (HeapWordSize / sizeof(jint));
     // allocate uninitialized int array
