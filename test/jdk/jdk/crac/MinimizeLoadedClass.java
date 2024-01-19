@@ -57,7 +57,7 @@ public class MinimizeLoadedClass {
     }
 
     private static void runTest(String[] cmds, String[][] includes, String[][] excludes) throws IOException {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(true, cmds);
+        ProcessBuilder pb = ProcessTools.createTestJvm(cmds);
         OutputAnalyzer output = new OutputAnalyzer(pb.start());
         for (String[] include : includes) {
             for (String str : include) {
