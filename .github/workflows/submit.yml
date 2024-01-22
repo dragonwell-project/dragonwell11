@@ -8,6 +8,8 @@ on:
     branches-ignore:
       - master
       - pr/*
+      - dragonwell_extended-*
+      - dragonwell_standard-*
   workflow_dispatch:
     inputs:
       platforms:
@@ -95,7 +97,7 @@ jobs:
         if: steps.check_submit.outputs.should_run != 'false'
 
       - name: Determine the jtreg ref to checkout
-        run: "echo JTREG_REF=jtreg-${{ fromJson(steps.check_deps.outputs.dependencies).JTREG_VERSION }}+${{ fromJson(steps.check_deps.outputs.dependencies).JTREG_BUILD }} >> $GITHUB_ENV"
+        run: "echo JTREG_REF=jtreg-${{ fromJson(steps.check_deps.outputs.dependencies).JTREG_VERSION }} >> $GITHUB_ENV"
         if: steps.check_submit.outputs.should_run != 'false'
 
       - name: Determine the jtreg version to build
