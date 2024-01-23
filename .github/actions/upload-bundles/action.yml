@@ -62,9 +62,9 @@ runs:
         fi
 
         if [[ "$jdk_bundle_zip$jdk_bundle_tar_gz$symbols_bundle$tests_bundle" != "" ]]; then
-          echo 'bundles-found=true' >> $GITHUB_OUTPUT
+          echo 'bundles-found=true' >> "$GITHUB_OUTPUT"
         else
-          echo 'bundles-found=false' >> $GITHUB_OUTPUT
+          echo 'bundles-found=false' >> "$GITHUB_OUTPUT"
         fi
       shell: bash
 
