@@ -95,10 +95,10 @@ jobs:
           '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/vc/auxiliary/build/vcvars64.bat' -vcvars_ver=${{ inputs.msvc-toolset-version }}
           if [ $? -eq 0 ]; then
             echo "Toolchain is already installed"
-            echo "toolchain-installed=true" >> $GITHUB_OUTPUT
+            echo "toolchain-installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "Toolchain is not yet installed"
-            echo "toolchain-installed=false" >> $GITHUB_OUTPUT
+            echo "toolchain-installed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: 'Install toolchain and dependencies'

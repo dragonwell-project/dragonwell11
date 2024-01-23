@@ -68,5 +68,5 @@ runs:
       id: path-name
       run: |
         # Export the path
-        echo 'path=jtreg/installed' >> $GITHUB_OUTPUT
+        echo 'path=jtreg/installed' >> "$GITHUB_OUTPUT"
       shell: bash

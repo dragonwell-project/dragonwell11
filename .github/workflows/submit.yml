@@ -41,21 +41,21 @@ jobs:
     steps:
       - name: Check if submit tests should actually run depending on secrets and manual triggering
         id: check_submit
-        run: echo "should_run=${{ github.event.inputs.platforms != '' || (!secrets.JDK_SUBMIT_FILTER || startsWith(github.ref, 'refs/heads/submit/')) }}" >> $GITHUB_OUTPUT
+        run: echo "should_run=${{ github.event.inputs.platforms != '' || (!secrets.JDK_SUBMIT_FILTER || startsWith(github.ref, 'refs/heads/submit/')) }}" >> "$GITHUB_OUTPUT"
 
       - name: Check which platforms should be included
         id: check_platforms
         run: |
-          echo "platform_linux_x64=${{ contains(github.event.inputs.platforms, 'linux x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'linux x64'))) }}" >> $GITHUB_OUTPUT
-          echo "platform_linux_aarch64=${{ contains(github.event.inputs.platforms, 'linux aarch64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'linux aarch64'))) }}" >> $GITHUB_OUTPUT
-          echo "platform_windows_x64=${{ contains(github.event.inputs.platforms, 'windows x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'windows x64'))) }}" >> $GITHUB_OUTPUT
-          echo "platform_macos_x64=${{ contains(github.event.inputs.platforms, 'macos x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'macos x64'))) }}" >> $GITHUB_OUTPUT
-          echo "platform_macos_aarch64=${{ contains(github.event.inputs.platforms, 'macos aarch64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'macos aarch64'))) }}" >> $GITHUB_OUTPUT
+          echo "platform_linux_x64=${{ contains(github.event.inputs.platforms, 'linux x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'linux x64'))) }}" >> "$GITHUB_OUTPUT"
+          echo "platform_linux_aarch64=${{ contains(github.event.inputs.platforms, 'linux aarch64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'linux aarch64'))) }}" >> "$GITHUB_OUTPUT"
+          echo "platform_windows_x64=${{ contains(github.event.inputs.platforms, 'windows x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'windows x64'))) }}" >> "$GITHUB_OUTPUT"
+          echo "platform_macos_x64=${{ contains(github.event.inputs.platforms, 'macos x64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'macos x64'))) }}" >> "$GITHUB_OUTPUT"
+          echo "platform_macos_aarch64=${{ contains(github.event.inputs.platforms, 'macos aarch64') || (github.event.inputs.platforms == '' && (secrets.JDK_SUBMIT_PLATFORMS == '' || contains(secrets.JDK_SUBMIT_PLATFORMS, 'macos aarch64'))) }}" >> "$GITHUB_OUTPUT"
         if: steps.check_submit.outputs.should_run != 'false'
 
       - name: Determine unique bundle identifier
         id: check_bundle_id
-        run: echo "bundle_id=${GITHUB_ACTOR}_${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
+        run: echo "bundle_id=${GITHUB_ACTOR}_${GITHUB_SHA:0:8}" >> "$GITHUB_OUTPUT"
         if: steps.check_submit.outputs.should_run != 'false'
 
       - name: Checkout the source
@@ -91,7 +91,7 @@ jobs:
           else
              V=${FEATURE}
           fi
-          echo "jdk_version=${V}" >> $GITHUB_OUTPUT
+          echo "jdk_version=${V}" >> "$GITHUB_OUTPUT"
         if: steps.check_submit.outputs.should_run != 'false'
 
       - name: Determine the jtreg ref to checkout
