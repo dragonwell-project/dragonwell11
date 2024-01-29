@@ -28,12 +28,13 @@ public class TestOptionsWithLocale {
         }
     }
 
-    public static void main(String... args) throws Exception {
-        OutputAnalyzer output = ProcessTools.executeTestJvm(
+    public static void main(String... args) throws IOException {
+        ProcessBuilder pb = ProcessTools.createTestJvm(
                 "-Duser.country=DE",
                 "-Duser.language=de",
                 "-XX:FlightRecorderOptions:stackdepth=128",
                 PrintDate.class.getName());
+        OutputAnalyzer output = new OutputAnalyzer(pb.start());
         output.shouldContain("01.01.2020, 00:00:00");
     }
 }

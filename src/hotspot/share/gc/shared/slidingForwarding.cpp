@@ -44,6 +44,7 @@ HeapWord** SlidingForwarding::_biased_bases[SlidingForwarding::NUM_TARGET_REGION
 HeapWord** SlidingForwarding::_bases_table = NULL;
 SlidingForwarding::FallbackTable* SlidingForwarding::_fallback_table = NULL;
 
+#ifdef _LP64
 static size_t round_up_power_of_2(size_t value) {
   assert(value != 0, "Invalid value");
 
@@ -53,6 +54,7 @@ static size_t round_up_power_of_2(size_t value) {
 
   return (size_t)1 << (log2_intptr(value) + 1);
 }
+#endif
 
 static int log2i_exact(size_t value) {
   assert(is_power_of_2(value),
