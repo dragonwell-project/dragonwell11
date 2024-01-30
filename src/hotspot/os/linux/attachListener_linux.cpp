@@ -362,7 +362,7 @@ void LinuxAttachOperation::effectively_complete_raw(jint result, bufferedStream*
   Thread* thread = Thread::current();
   if (thread->is_Java_thread()) {
     JavaThread* jt = (JavaThread* )thread;
-    ThreadBlockInVM((JavaThread*) thread);
+    ThreadBlockInVM tbivm(jt);
     jt->set_suspend_equivalent();
     // cleared by handle_special_suspend_equivalent_condition() or
     // java_suspend_self() via check_and_wait_while_suspended()
