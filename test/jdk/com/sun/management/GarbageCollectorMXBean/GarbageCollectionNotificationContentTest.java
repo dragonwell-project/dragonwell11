@@ -154,7 +154,11 @@ public class GarbageCollectionNotificationContentTest {
             System.out.println("   Before GC: " + busage);
             System.out.println("   After GC: " + ausage);
 
-            checkMemoryUsage(poolname, busage, ausage);
+            String checkedPoolName = "Eden Space";
+            if ("G1 Concurrent GC".equals(notif.getGcName())) {
+                checkedPoolName = "G1 Old Gen";
+            }
+            checkMemoryUsage(poolname, checkedPoolName, busage, ausage);
         }
 
         // check if memory usage for all memory pools are returned
@@ -167,11 +171,12 @@ public class GarbageCollectionNotificationContentTest {
         }
     }
 
-    private static void checkMemoryUsage(String poolname, MemoryUsage busage, MemoryUsage ausage) throws Exception {
-        if (poolname.contains("Eden Space") && busage.getUsed() > 0) {
-            // Used size at Eden Space should be decreased or
+    private static void checkMemoryUsage(String poolname, String checkedPoolName,
+                                         MemoryUsage busage, MemoryUsage ausage) throws Exception {
+        if (poolname.contains(checkedPoolName) && busage.getUsed() > 0) {
+            // Used size at the checked pool should be decreased or
             if (busage.getUsed() <= ausage.getUsed()) {
-                throw new RuntimeException("Used size at Eden Space should be decreased.");
+                throw new RuntimeException("Used size at " + checkedPoolName + " should be decreased.");
             }
         }
     }
