@@ -36,6 +36,7 @@ import sun.jvm.hotspot.debugger.MachineDescription;
 import sun.jvm.hotspot.debugger.MachineDescriptionAMD64;
 import sun.jvm.hotspot.debugger.MachineDescriptionPPC64;
 import sun.jvm.hotspot.debugger.MachineDescriptionAArch64;
+import sun.jvm.hotspot.debugger.MachineDescriptionRISCV64;
 import sun.jvm.hotspot.debugger.MachineDescriptionIntelX86;
 import sun.jvm.hotspot.debugger.MachineDescriptionSPARC32Bit;
 import sun.jvm.hotspot.debugger.MachineDescriptionSPARC64Bit;
@@ -598,6 +599,8 @@ public class HotSpotAgent {
             } else {
                     machDesc = new MachineDescriptionSPARC32Bit();
             }
+        } else if (cpu.equals("riscv64")) {
+            machDesc = new MachineDescriptionRISCV64();
         } else {
           try {
             machDesc = (MachineDescription)

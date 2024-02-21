@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,6 +42,7 @@ package compiler.intrinsics.sha.cli;
 import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForOtherCPU;
 import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForUnsupportedAArch64CPU;
 import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForUnsupportedSparcCPU;
+import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForUnsupportedRISCV64CPU;
 import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForUnsupportedX86CPU;
 import compiler.intrinsics.sha.cli.testcases.UseSHAIntrinsicsSpecificTestCaseForUnsupportedCPU;
 
@@ -53,6 +54,8 @@ public class TestUseSHA1IntrinsicsOptionOnUnsupportedCPU {
                 new GenericTestCaseForUnsupportedX86CPU(
                         SHAOptionsBase.USE_SHA1_INTRINSICS_OPTION),
                 new GenericTestCaseForUnsupportedAArch64CPU(
+                        SHAOptionsBase.USE_SHA1_INTRINSICS_OPTION),
+                new GenericTestCaseForUnsupportedRISCV64CPU(
                         SHAOptionsBase.USE_SHA1_INTRINSICS_OPTION),
                 new UseSHAIntrinsicsSpecificTestCaseForUnsupportedCPU(
                         SHAOptionsBase.USE_SHA1_INTRINSICS_OPTION),
