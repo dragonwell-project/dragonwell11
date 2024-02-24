@@ -759,7 +759,8 @@ public:
     Flag_is_scheduled                = Flag_is_reduction << 1,
     Flag_has_vector_mask_set         = Flag_is_scheduled << 1,
     Flag_is_expensive                = Flag_has_vector_mask_set << 1,
-    _max_flags = (Flag_is_expensive << 1) - 1 // allow flags combination
+    Flag_intel_jcc_erratum           = Flag_is_expensive << 1,
+    _max_flags = (Flag_intel_jcc_erratum << 1) - 1 // allow flags combination
   };
 
 private:
@@ -771,11 +772,11 @@ protected:
   void init_class_id(juint c) {
     _class_id = c; // cast out const
   }
-  void init_flags(jushort fl) {
+  void init_flags(uint fl) {
     assert(fl <= _max_flags, "invalid node flag");
     _flags |= fl;
   }
-  void clear_flag(jushort fl) {
+  void clear_flag(uint fl) {
     assert(fl <= _max_flags, "invalid node flag");
     _flags &= ~fl;
   }
