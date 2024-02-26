@@ -94,7 +94,7 @@ private:
 
 public:
   LIR_OpZLoadBarrierTest(LIR_Opr opr) :
-      LIR_Op(lir_zloadbarrier_test, LIR_OprFact::illegalOpr, NULL),
+      LIR_Op(),
       _opr(opr) {}
 
   virtual void visit(LIR_OpVisitState* state) {

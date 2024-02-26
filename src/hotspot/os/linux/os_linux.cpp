@@ -2042,8 +2042,6 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen) {
   static  Elf32_Half running_arch_code=EM_PPC64;
 #elif  (defined __powerpc__)
   static  Elf32_Half running_arch_code=EM_PPC;
-#elif  (defined riscv)
-  static  Elf32_Half running_arch_code=EM_RISCV;
 #elif  (defined AARCH64)
   static  Elf32_Half running_arch_code=EM_AARCH64;
 #elif  (defined ARM)
@@ -2858,8 +2856,6 @@ void os::get_summary_cpu_info(char* cpuinfo, size_t length) {
   strncpy(cpuinfo, "IA64", length);
 #elif defined(PPC)
   strncpy(cpuinfo, "PPC64", length);
-#elif defined(RISCV)
-  strncpy(cpuinfo, "RISCV64", length);
 #elif defined(S390)
   strncpy(cpuinfo, "S390", length);
 #elif defined(SPARC)
@@ -4091,8 +4087,7 @@ size_t os::Linux::find_large_page_size() {
     IA64_ONLY(256 * M)
     PPC_ONLY(4 * M)
     S390_ONLY(1 * M)
-    SPARC_ONLY(4 * M)
-    RISCV64_ONLY(2 * M);
+    SPARC_ONLY(4 * M);
 #endif // ZERO
 
   FILE *fp = fopen("/proc/meminfo", "r");

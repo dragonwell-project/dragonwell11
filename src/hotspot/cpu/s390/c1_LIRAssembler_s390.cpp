@@ -1447,10 +1447,7 @@ void LIR_Assembler::comp_fl2i(LIR_Code code, LIR_Opr left, LIR_Opr right, LIR_Op
 }
 
 // result = condition ? opr1 : opr2
-void LIR_Assembler::cmove(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2, LIR_Opr result, BasicType type,
-                          LIR_Opr cmp_opr1, LIR_Opr cmp_opr2) {
-  assert(cmp_opr1 == LIR_OprFact::illegalOpr && cmp_opr2 == LIR_OprFact::illegalOpr, "unnecessary cmp oprs on s390");
-
+void LIR_Assembler::cmove(LIR_Condition condition, LIR_Opr opr1, LIR_Opr opr2, LIR_Opr result, BasicType type) {
   Assembler::branch_condition acond = Assembler::bcondEqual, ncond = Assembler::bcondNotEqual;
   switch (condition) {
     case lir_cond_equal:        acond = Assembler::bcondEqual;    ncond = Assembler::bcondNotEqual; break;

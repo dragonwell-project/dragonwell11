@@ -41,7 +41,6 @@ package compiler.intrinsics.sha.cli;
 
 import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForOtherCPU;
 import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForUnsupportedAArch64CPU;
-import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForUnsupportedRiscv64CPU;
 import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForUnsupportedSparcCPU;
 import compiler.intrinsics.sha.cli.testcases.GenericTestCaseForUnsupportedX86CPU;
 import compiler.intrinsics.sha.cli.testcases.UseSHAIntrinsicsSpecificTestCaseForUnsupportedCPU;
@@ -54,8 +53,6 @@ public class TestUseSHA512IntrinsicsOptionOnUnsupportedCPU {
                 new GenericTestCaseForUnsupportedX86CPU(
                         SHAOptionsBase.USE_SHA512_INTRINSICS_OPTION),
                 new GenericTestCaseForUnsupportedAArch64CPU(
-                        SHAOptionsBase.USE_SHA512_INTRINSICS_OPTION),
-                new GenericTestCaseForUnsupportedRiscv64CPU(
                         SHAOptionsBase.USE_SHA512_INTRINSICS_OPTION),
                 new UseSHAIntrinsicsSpecificTestCaseForUnsupportedCPU(
                         SHAOptionsBase.USE_SHA512_INTRINSICS_OPTION),
