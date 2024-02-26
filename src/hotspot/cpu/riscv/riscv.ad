@@ -960,16 +960,13 @@ int MachCallRuntimeNode::ret_addr_offset() {
   //   la(t0, RuntimeAddress(addr))   ->  lui + addi + slli + addi + slli + addi
   //   addi(sp, sp, -2 * wordSize)    ->  addi
   //   sd(zr, Address(sp))            ->  sd
-  //   sd(t1, Address(sp, wordSize))  ->  sd   -> sdd in CSky
+  //   sd(t1, Address(sp, wordSize))  ->  sd
   //   jalr(t0)                       ->  jalr
   CodeBlob *cb = CodeCache::find_blob(_entry_point);
   if (cb != NULL) {
     return 1 * NativeInstruction::instruction_size;
   } else {
-    if (UseCSky)
-      return 11 * NativeInstruction::instruction_size;
-    else
-      return 12 * NativeInstruction::instruction_size;
+    return 12 * NativeInstruction::instruction_size;
   }
 }
 
