@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,6 @@ inline int LinearScan::num_physical_regs(BasicType type) {
   return 1;
 }
 
-
 inline bool LinearScan::requires_adjacent_regs(BasicType type) {
   return false;
 }
@@ -58,8 +57,8 @@ inline bool LinearScan::is_caller_save(int assigned_reg) {
   return false;
 }
 
-
 inline void LinearScan::pd_add_temps(LIR_Op* op) {
+  // No special case behaviours yet
 }
 
 
@@ -80,6 +79,5 @@ inline bool LinearScanWalker::pd_init_regs_for_alloc(Interval* cur)
   }
   return false;
 }
-
 
 #endif // CPU_RISCV_C1_LINEARSCAN_RISCV_HPP

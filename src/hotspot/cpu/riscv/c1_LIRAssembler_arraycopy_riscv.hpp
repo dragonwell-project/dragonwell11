@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
  * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -26,6 +25,7 @@
 
 #ifndef CPU_RISCV_C1_LIRASSEMBLER_ARRAYCOPY_RISCV_HPP
 #define CPU_RISCV_C1_LIRASSEMBLER_ARRAYCOPY_RISCV_HPP
+
   // arraycopy sub functions
   void generic_arraycopy(Register src, Register src_pos, Register length,
                          Register dst, Register dst_pos, CodeStub *stub);
@@ -48,4 +48,5 @@
                             Register dst, Register dst_pos);
   void arraycopy_load_args(Register src, Register src_pos, Register length,
                            Register dst, Register dst_pos);
+
 #endif // CPU_RISCV_C1_LIRASSEMBLER_ARRAYCOPY_RISCV_HPP

@@ -30,13 +30,16 @@
 
 // Implementation of class atomic
 
+// Note that memory_order_conservative requires a full barrier after atomic stores.
+// See https://patchwork.kernel.org/patch/3575821/
+
 #define FULL_MEM_BARRIER  __sync_synchronize()
 #define READ_MEM_BARRIER  __atomic_thread_fence(__ATOMIC_ACQUIRE);
 #define WRITE_MEM_BARRIER __atomic_thread_fence(__ATOMIC_RELEASE);
 
 template<size_t byte_size>
 struct Atomic::PlatformAdd
-  : public Atomic::AddAndFetch<Atomic::PlatformAdd<byte_size> >
+  : Atomic::FetchAndAdd<Atomic::PlatformAdd<byte_size> >
 {
   template<typename I, typename D>
   D add_and_fetch(I add_value, D volatile* dest, atomic_memory_order order) const {

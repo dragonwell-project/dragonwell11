@@ -2042,8 +2042,6 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen) {
   static  Elf32_Half running_arch_code=EM_PPC64;
 #elif  (defined __powerpc__)
   static  Elf32_Half running_arch_code=EM_PPC;
-#elif  (defined riscv)
-  static  Elf32_Half running_arch_code=EM_RISCV;
 #elif  (defined AARCH64)
   static  Elf32_Half running_arch_code=EM_AARCH64;
 #elif  (defined ARM)

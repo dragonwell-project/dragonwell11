@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,8 +29,7 @@
 #include "runtime/sharedRuntime.hpp"
 #include "vmreg_riscv.inline.hpp"
 
-LIR_Opr FrameMap::map_to_opr(BasicType type, VMRegPair* reg, bool)
-{
+LIR_Opr FrameMap::map_to_opr(BasicType type, VMRegPair* reg, bool) {
   LIR_Opr opr = LIR_OprFact::illegalOpr;
   VMReg r_1 = reg->first();
   VMReg r_2 = reg->second();
@@ -231,7 +229,7 @@ void FrameMap::initialize() {
 
   // special register
   map_register(i, x0);  zr_opr  = LIR_OprFact::single_cpu(i); i++;  // zr
-  map_register(i, x1);  r1_opr  = LIR_OprFact::single_cpu(i); i++;  // lr
+  map_register(i, x1);  r1_opr  = LIR_OprFact::single_cpu(i); i++;  // ra
   map_register(i, x2);  r2_opr  = LIR_OprFact::single_cpu(i); i++;  // sp
   map_register(i, x3);  r3_opr  = LIR_OprFact::single_cpu(i); i++;  // gp
   map_register(i, x4);  r4_opr  = LIR_OprFact::single_cpu(i); i++;  // thread
@@ -331,7 +329,7 @@ Address FrameMap::make_new_address(ByteSize sp_offset) const {
 
 
 // ----------------mapping-----------------------
-// all mapping is based on rfp addressing, except for simple leaf methods where we access
+// all mapping is based on fp addressing, except for simple leaf methods where we access
 // the locals sp based (and no frame is built)
 
 
@@ -352,7 +350,7 @@ Address FrameMap::make_new_address(ByteSize sp_offset) const {
 //   +----------+
 //   | ret addr |
 //   +----------+
-//   |  args    |  <- RFP
+//   |  args    |  <- FP
 //   | .........|
 
 
@@ -376,14 +374,13 @@ VMReg FrameMap::fpu_regname (int n) {
   return as_FloatRegister(n)->as_VMReg();
 }
 
-LIR_Opr FrameMap::stack_pointer()
-{
+LIR_Opr FrameMap::stack_pointer() {
   return FrameMap::sp_opr;
 }
 
 // JSR 292
 LIR_Opr FrameMap::method_handle_invoke_SP_save_opr() {
-  return LIR_OprFact::illegalOpr;  // Not needed on riscv64
+  return LIR_OprFact::illegalOpr;  // Not needed on riscv
 }
 
 bool FrameMap::validate_frame() {

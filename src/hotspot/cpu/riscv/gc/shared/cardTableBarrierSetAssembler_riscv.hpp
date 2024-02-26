@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_RISCV64_GC_SHARED_CARDTABLEBARRIERSETASSEMBLER_RISCV_HPP
-#define CPU_RISCV64_GC_SHARED_CARDTABLEBARRIERSETASSEMBLER_RISCV_HPP
+#ifndef CPU_RISCV_GC_SHARED_CARDTABLEBARRIERSETASSEMBLER_RISCV_HPP
+#define CPU_RISCV_GC_SHARED_CARDTABLEBARRIERSETASSEMBLER_RISCV_HPP
 
 #include "asm/macroAssembler.hpp"
 #include "gc/shared/modRefBarrierSetAssembler.hpp"
@@ -37,7 +37,6 @@ protected:
                                                 Register start, Register count, Register tmp, RegSet saved_regs);
   virtual void oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                             Address dst, Register val, Register tmp1, Register tmp2);
-
 };
 
-#endif // #ifndef CPU_RISCV64_GC_SHARED_CARDTABLEBARRIERSETASSEMBLER_RISCV_HPP
+#endif // #ifndef CPU_RISCV_GC_SHARED_CARDTABLEBARRIERSETASSEMBLER_RISCV_HPP

@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,10 +55,10 @@
 //    [last esp              ]                   = last_sp()            last_sp_offset
 //    [old stack pointer     ]                     (sender_sp)          sender_sp_offset
 
-//    [old frame pointer     ]   <- fp           = link()
+//    [old frame pointer     ]
 //    [return pc             ]
 
-//    [last sp               ]
+//    [last sp               ]   <- fp           = link()
 //    [oop temp              ]                     (only for native calls)
 
 //    [padding               ]                     (to preserve machine SP alignment)
@@ -107,18 +106,14 @@
  public:
   enum {
     pc_return_offset                                 =  0,
-    // C frames
-    c_frame_link_offset                              = -2,
-    c_frame_return_addr_offset                       = -1,
-    c_frame_sender_sp_offset                         =  0,
-    // Java frames
-    link_offset                                      =  0,
-    return_addr_offset                               =  1,
-    sender_sp_offset                                 =  2,
+    // All frames
+    link_offset                                      = -2,
+    return_addr_offset                               = -1,
+    sender_sp_offset                                 =  0,
     // Interpreter frames
-    interpreter_frame_oop_temp_offset                =  3, // for native calls only
+    interpreter_frame_oop_temp_offset                =  1, // for native calls only
 
-    interpreter_frame_sender_sp_offset               = -1,
+    interpreter_frame_sender_sp_offset               = -3,
     // outgoing sp before a call to an invoked method
     interpreter_frame_last_sp_offset                 = interpreter_frame_sender_sp_offset - 1,
     interpreter_frame_method_offset                  = interpreter_frame_last_sp_offset - 1,
@@ -136,8 +131,8 @@
     // Entry frames
     // n.b. these values are determined by the layout defined in
     // stubGenerator for the Java call stub
-    entry_frame_after_call_words                     =  32,
-    entry_frame_call_wrapper_offset                  = -8,
+    entry_frame_after_call_words                     =  34,
+    entry_frame_call_wrapper_offset                  = -10,
 
     // we don't need a save area
     arg_reg_save_area_bytes                          =  0
@@ -190,12 +185,6 @@
 
   inline address* sender_pc_addr() const;
 
-  // C frame methods
-  inline intptr_t* c_frame_link() const;
-  inline address*  c_frame_sender_pc_addr() const;
-  inline address   c_frame_sender_pc() const;
-  inline intptr_t* c_frame_sender_sp() const;
-
   // expression stack tos if we are nested in a java call
   intptr_t* interpreter_frame_last_sp() const;
 
@@ -206,8 +195,5 @@
   void interpreter_frame_set_last_sp(intptr_t* last_sp);
 
   static jint interpreter_frame_expression_stack_direction() { return -1; }
-
-  // returns the sending frame, without applying any barriers
-  frame sender_raw(RegisterMap* map) const;
 
 #endif // CPU_RISCV_FRAME_RISCV_HPP

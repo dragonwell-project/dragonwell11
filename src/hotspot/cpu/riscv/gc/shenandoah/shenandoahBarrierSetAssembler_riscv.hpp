@@ -28,6 +28,7 @@
 
 #include "asm/macroAssembler.hpp"
 #include "gc/shared/barrierSetAssembler.hpp"
+#include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #ifdef COMPILER1
 class LIR_Assembler;
 class ShenandoahPreBarrierStub;
@@ -37,31 +38,6 @@ class StubAssembler;
 class StubCodeGenerator;
 
 class ShenandoahBarrierSetAssembler: public BarrierSetAssembler {
-public:
-  static address shenandoah_lrb();
-
-  void iu_barrier(MacroAssembler *masm, Register dst, Register tmp);
-
-#ifdef COMPILER1
-  void gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahPreBarrierStub* stub);
-  void gen_load_reference_barrier_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub);
-  void generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm);
-  void generate_c1_load_reference_barrier_runtime_stub(StubAssembler* sasm);
-#endif
-
-  virtual void arraycopy_prologue(MacroAssembler* masm, DecoratorSet decorators, bool is_oop,
-                                  Register src, Register dst, Register count, RegSet saved_regs);
-  virtual void load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
-                       Register dst, Address src, Register tmp1, Register tmp_thread);
-  virtual void store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
-                        Address dst, Register val, Register tmp1, Register tmp2);
-  virtual void try_resolve_jobject_in_native(MacroAssembler* masm, Register jni_env,
-                                             Register obj, Register tmp, Label& slowpath);
-  virtual void cmpxchg_oop(MacroAssembler* masm, Register addr, Register expected, Register new_val,
-                           Assembler::Aqrl acquire, Assembler::Aqrl release, bool is_cae, Register result);
-
-  virtual void barrier_stubs_init();
-
 private:
 
   static address _shenandoah_lrb;
@@ -87,6 +63,35 @@ private:
   void load_reference_barrier_not_null(MacroAssembler* masm, Register dst, Address load_addr);
 
   address generate_shenandoah_lrb(StubCodeGenerator* cgen);
+
+public:
+
+  static address shenandoah_lrb();
+
+  void iu_barrier(MacroAssembler* masm, Register dst, Register tmp);
+
+#ifdef COMPILER1
+  void gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahPreBarrierStub* stub);
+  void gen_load_reference_barrier_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub);
+  void generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm);
+  void generate_c1_load_reference_barrier_runtime_stub(StubAssembler* sasm);
+#endif
+
+  virtual void arraycopy_prologue(MacroAssembler* masm, DecoratorSet decorators, bool is_oop,
+                                  Register src, Register dst, Register count, RegSet saved_regs);
+
+  virtual void load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
+                       Register dst, Address src, Register tmp1, Register tmp_thread);
+  virtual void store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
+                        Address dst, Register val, Register tmp1, Register tmp2);
+
+  virtual void try_resolve_jobject_in_native(MacroAssembler* masm, Register jni_env,
+                                             Register obj, Register tmp, Label& slowpath);
+
+  virtual void cmpxchg_oop(MacroAssembler* masm, Register addr, Register expected, Register new_val,
+                   Assembler::Aqrl acquire, Assembler::Aqrl release, bool is_cae, Register result);
+
+  virtual void barrier_stubs_init();
 };
 
 #endif // CPU_RISCV_GC_SHENANDOAH_SHENANDOAHBARRIERSETASSEMBLER_RISCV_HPP

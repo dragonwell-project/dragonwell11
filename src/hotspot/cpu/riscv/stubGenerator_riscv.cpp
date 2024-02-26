@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,6 +47,9 @@
 #include "utilities/align.hpp"
 #ifdef COMPILER2
 #include "opto/runtime.hpp"
+#endif
+#if INCLUDE_ZGC
+#include "gc/z/zThreadLocalData.hpp"
 #endif
 
 // Declaration and definition of StubGenerator (no .hpp file).
@@ -98,7 +101,7 @@ class StubGenerator: public StubCodeGenerator {
   // There is no return from the stub itself as any Java result
   // is written to result
   //
-  // we save x1 (lr) as the return PC at the base of the frame and
+  // we save x1 (ra) as the return PC at the base of the frame and
   // link x8 (fp) below it as the frame pointer installing sp (x2)
   // into fp.
   //
@@ -123,80 +126,81 @@ class StubGenerator: public StubCodeGenerator {
   //     [ return_from_Java     ] <--- sp
   //     [ argument word n      ]
   //      ...
-  // -32 [ argument word 1      ]
-  // -31 [ saved f27            ] <--- sp_after_call
-  // -30 [ saved f26            ]
-  // -29 [ saved f25            ]
-  // -28 [ saved f24            ]
-  // -27 [ saved f23            ]
-  // -26 [ saved f22            ]
-  // -25 [ saved f21            ]
-  // -24 [ saved f20            ]
-  // -23 [ saved f19            ]
-  // -22 [ saved f18            ]
-  // -21 [ saved f9             ]
-  // -20 [ saved f8             ]
-  // -19 [ saved x27            ]
-  // -18 [ saved x26            ]
-  // -17 [ saved x25            ]
-  // -16 [ saved x24            ]
-  // -15 [ saved x23            ]
-  // -14 [ saved x22            ]
-  // -13 [ saved x21            ]
-  // -12 [ saved x20            ]
-  // -11 [ saved x19            ]
-  // -10 [ saved x18            ]
-  //  -9 [ saved x9             ]
-  //  -8 [ call wrapper   (x10) ]
-  //  -7 [ result         (x11) ]
-  //  -6 [ result type    (x12) ]
-  //  -5 [ method         (x13) ]
-  //  -4 [ entry point    (x14) ]
-  //  -3 [ parameters     (x15) ]
-  //  -2 [ parameter size (x16) ]
-  //  -1 [ thread         (x17) ]
-  //   0 [ saved fp       (x8)  ] <--- fp == saved sp (x2)
-  //   1 [ saved lr       (x1)  ]
+  // -34 [ argument word 1      ]
+  // -33 [ saved f27            ] <--- sp_after_call
+  // -32 [ saved f26            ]
+  // -31 [ saved f25            ]
+  // -30 [ saved f24            ]
+  // -29 [ saved f23            ]
+  // -28 [ saved f22            ]
+  // -27 [ saved f21            ]
+  // -26 [ saved f20            ]
+  // -25 [ saved f19            ]
+  // -24 [ saved f18            ]
+  // -23 [ saved f9             ]
+  // -22 [ saved f8             ]
+  // -21 [ saved x27            ]
+  // -20 [ saved x26            ]
+  // -19 [ saved x25            ]
+  // -18 [ saved x24            ]
+  // -17 [ saved x23            ]
+  // -16 [ saved x22            ]
+  // -15 [ saved x21            ]
+  // -14 [ saved x20            ]
+  // -13 [ saved x19            ]
+  // -12 [ saved x18            ]
+  // -11 [ saved x9             ]
+  // -10 [ call wrapper   (x10) ]
+  //  -9 [ result         (x11) ]
+  //  -8 [ result type    (x12) ]
+  //  -7 [ method         (x13) ]
+  //  -6 [ entry point    (x14) ]
+  //  -5 [ parameters     (x15) ]
+  //  -4 [ parameter size (x16) ]
+  //  -3 [ thread         (x17) ]
+  //  -2 [ saved fp       (x8)  ]
+  //  -1 [ saved ra       (x1)  ]
+  //   0 [                      ] <--- fp == saved sp (x2)
 
   // Call stub stack layout word offsets from fp
   enum call_stub_layout {
-    sp_after_call_off  = -31,
+    sp_after_call_off  = -33,
 
-    f27_off            = -31,
-    f26_off            = -30,
-    f25_off            = -29,
-    f24_off            = -28,
-    f23_off            = -27,
-    f22_off            = -26,
-    f21_off            = -25,
-    f20_off            = -24,
-    f19_off            = -23,
-    f18_off            = -22,
-    f9_off             = -21,
-    f8_off             = -20,
+    f27_off            = -33,
+    f26_off            = -32,
+    f25_off            = -31,
+    f24_off            = -30,
+    f23_off            = -29,
+    f22_off            = -28,
+    f21_off            = -27,
+    f20_off            = -26,
+    f19_off            = -25,
+    f18_off            = -24,
+    f9_off             = -23,
+    f8_off             = -22,
 
-    x27_off            = -19,
-    x26_off            = -18,
-    x25_off            = -17,
-    x24_off            = -16,
-    x23_off            = -15,
-    x22_off            = -14,
-    x21_off            = -13,
-    x20_off            = -12,
-    x19_off            = -11,
-    x18_off            = -10,
-    x9_off             =  -9,
+    x27_off            = -21,
+    x26_off            = -20,
+    x25_off            = -19,
+    x24_off            = -18,
+    x23_off            = -17,
+    x22_off            = -16,
+    x21_off            = -15,
+    x20_off            = -14,
+    x19_off            = -13,
+    x18_off            = -12,
+    x9_off             = -11,
 
-    call_wrapper_off   =  -8,
-    result_off         =  -7,
-    result_type_off    =  -6,
-    method_off         =  -5,
-    entry_point_off    =  -4,
-    parameters_off     =  -3,
-    parameter_size_off =  -2,
-    thread_off         =  -1,
-    fp_f               =   0,
-    retaddr_off        =   1,
+    call_wrapper_off   = -10,
+    result_off         = -9,
+    result_type_off    = -8,
+    method_off         = -7,
+    entry_point_off    = -6,
+    parameters_off     = -5,
+    parameter_size_off = -4,
+    thread_off         = -3,
+    fp_f               = -2,
+    retaddr_off        = -1,
   };
 
   address generate_call_stub(address& return_address) {
@@ -247,7 +251,7 @@ class StubGenerator: public StubCodeGenerator {
 
     // stub code
 
-    address riscv64_entry = __ pc();
+    address riscv_entry = __ pc();
 
     // set up frame and move sp to end of save area
     __ enter();
@@ -446,7 +450,7 @@ class StubGenerator: public StubCodeGenerator {
   // Note: Usually the parameters are removed by the callee. In case
   // of an exception crossing an activation frame boundary, that is
   // not the case if the callee is compiled code => need to setup the
-  // rsp.
+  // sp.
   //
   // x10: exception oop
 
@@ -497,7 +501,7 @@ class StubGenerator: public StubCodeGenerator {
   // x10: exception
   // x13: throwing pc
   //
-  // NOTE: At entry of this stub, exception-pc must be in LR !!
+  // NOTE: At entry of this stub, exception-pc must be in RA !!
 
   // NOTE: this is always used as a jump target within generated code
   // so it just needs to be generated code with no x86 prolog
@@ -506,7 +510,7 @@ class StubGenerator: public StubCodeGenerator {
     StubCodeMark mark(this, "StubRoutines", "forward exception");
     address start = __ pc();
 
-    // Upon entry, LR points to the return address returning into
+    // Upon entry, RA points to the return address returning into
     // Java (interpreted or compiled) code; i.e., the return address
     // becomes the throwing pc.
     //
@@ -530,24 +534,24 @@ class StubGenerator: public StubCodeGenerator {
 
     // call the VM to find the handler address associated with the
     // caller address. pass thread in x10 and caller pc (ret address)
-    // in x11. n.b. the caller pc is in lr, unlike x86 where it is on
+    // in x11. n.b. the caller pc is in ra, unlike x86 where it is on
     // the stack.
-    __ mv(c_rarg1, lr);
-    // lr will be trashed by the VM call so we move it to x9
+    __ mv(c_rarg1, ra);
+    // ra will be trashed by the VM call so we move it to x9
     // (callee-saved) because we also need to pass it to the handler
     // returned by this call.
-    __ mv(x9, lr);
+    __ mv(x9, ra);
     BLOCK_COMMENT("call exception_handler_for_return_address");
     __ call_VM_leaf(CAST_FROM_FN_PTR(address,
                          SharedRuntime::exception_handler_for_return_address),
                     xthread, c_rarg1);
-    // we should not really care that lr is no longer the callee
+    // we should not really care that ra is no longer the callee
     // address. we saved the value the handler needs in x9 so we can
     // just copy it to x13. however, the C2 handler will push its own
     // frame and then calls into the VM and the VM code asserts that
     // the PC for the frame above the handler belongs to a compiled
-    // Java method. So, we restore lr here to satisfy that assert.
-    __ mv(lr, x9);
+    // Java method. So, we restore ra here to satisfy that assert.
+    __ mv(ra, x9);
     // setup x10 & x13 & clear pending exception
     __ mv(x13, x9);
     __ mv(x9, x10);
@@ -583,7 +587,7 @@ class StubGenerator: public StubCodeGenerator {
   // Stack after saving c_rarg3:
   //    [tos + 0]: saved c_rarg3
   //    [tos + 1]: saved c_rarg2
-  //    [tos + 2]: saved lr
+  //    [tos + 2]: saved ra
   //    [tos + 3]: saved t1
   //    [tos + 4]: saved x10
   //    [tos + 5]: saved t0
@@ -630,7 +634,7 @@ class StubGenerator: public StubCodeGenerator {
     __ pusha();
     // debug(char* msg, int64_t pc, int64_t regs[])
     __ mv(c_rarg0, t0);             // pass address of error message
-    __ mv(c_rarg1, lr);             // pass return address
+    __ mv(c_rarg1, ra);             // pass return address
     __ mv(c_rarg2, sp);             // pass address of regs on stack
 #ifndef PRODUCT
     assert(frame::arg_reg_save_area_bytes == 0, "not expecting frame reg save area");
@@ -888,7 +892,7 @@ class StubGenerator: public StubCodeGenerator {
 
     const Register src = x30, dst = x31, vl = x14, cnt = x15, tmp1 = x16, tmp2 = x17;
     assert_different_registers(s, d, cnt, vl, tmp, tmp1, tmp2);
-    Assembler::SEW sew = Assembler::elemBytes_to_sew(granularity);
+    Assembler::SEW sew = Assembler::elembytes_to_sew(granularity);
     Label loop_forward, loop_backward, done;
 
     __ mv(dst, d);
@@ -928,7 +932,6 @@ class StubGenerator: public StubCodeGenerator {
 
   void copy_memory(bool is_aligned, Register s, Register d,
                    Register count, Register tmp, int step) {
-
     if (UseRVV) {
       return copy_memory_v(s, d, count, tmp, step);
     }
@@ -1039,7 +1042,7 @@ class StubGenerator: public StubCodeGenerator {
 
   // Scan over array at a for count oops, verifying each one.
   // Preserves a and count, clobbers t0 and t1.
-  void verify_oop_array (size_t size, Register a, Register count, Register temp) {
+  void verify_oop_array(size_t size, Register a, Register count, Register temp) {
     Label loop, end;
     __ mv(t1, zr);
     __ slli(t0, count, exact_log2(size));
@@ -1598,8 +1601,8 @@ class StubGenerator: public StubCodeGenerator {
     __ bgtu(temp, t0, L_failed);
 
     // Have to clean up high 32 bits of 'src_pos' and 'dst_pos'.
-    __ clear_upper_bits(src_pos, 32);
-    __ clear_upper_bits(dst_pos, 32);
+    __ zero_extend(src_pos, src_pos, 32);
+    __ zero_extend(dst_pos, dst_pos, 32);
 
     BLOCK_COMMENT("arraycopy_range_checks done");
   }
@@ -1813,8 +1816,8 @@ class StubGenerator: public StubCodeGenerator {
     // Get array_header_in_bytes()
     int lh_header_size_width = exact_log2(Klass::_lh_header_size_mask + 1);
     int lh_header_size_msb = Klass::_lh_header_size_shift + lh_header_size_width;
-    __ slli(t0_offset, lh, registerSize - lh_header_size_msb);          // left shift to remove 24 ~ 32;
-    __ srli(t0_offset, t0_offset, registerSize - lh_header_size_width); // array_offset
+    __ slli(t0_offset, lh, XLEN - lh_header_size_msb);          // left shift to remove 24 ~ 32;
+    __ srli(t0_offset, t0_offset, XLEN - lh_header_size_width); // array_offset
 
     __ add(src, src, t0_offset);           // src array offset
     __ add(dst, dst, t0_offset);           // dst array offset
@@ -1843,20 +1846,16 @@ class StubGenerator: public StubCodeGenerator {
     __ j(RuntimeAddress(byte_copy_entry));
 
   __ BIND(L_copy_shorts);
-    __ slli(t0, src_pos, 1);
-    __ add(from, src, t0); // src_addr
-    __ slli(t0, dst_pos, 1);
-    __ add(to, dst, t0); // dst_addr
+    __ shadd(from, src_pos, src, t0, 1); // src_addr
+    __ shadd(to, dst_pos, dst, t0, 1); // dst_addr
     __ addw(count, scratch_length, zr); // length
     __ j(RuntimeAddress(short_copy_entry));
 
   __ BIND(L_copy_ints);
     __ andi(t0, x22_elsize, 1);
     __ bnez(t0, L_copy_longs);
-    __ slli(t0, src_pos, 2);
-    __ add(from, src, t0); // src_addr
-    __ slli(t0, dst_pos, 2);
-    __ add(to, dst, t0); // dst_addr
+    __ shadd(from, src_pos, src, t0, 2); // src_addr
+    __ shadd(to, dst_pos, dst, t0, 2); // dst_addr
     __ addw(count, scratch_length, zr); // length
     __ j(RuntimeAddress(int_copy_entry));
 
@@ -1874,10 +1873,8 @@ class StubGenerator: public StubCodeGenerator {
       BLOCK_COMMENT("} assert long copy done");
     }
 #endif
-    __ slli(t0, src_pos, 3);
-    __ add(from, src, t0); // src_addr
-    __ slli(t0, dst_pos, 3);
-    __ add(to, dst, t0); // dst_addr
+    __ shadd(from, src_pos, src, t0, 3); // src_addr
+    __ shadd(to, dst_pos, dst, t0, 3); // dst_addr
     __ addw(count, scratch_length, zr); // length
     __ j(RuntimeAddress(long_copy_entry));
 
@@ -1894,11 +1891,9 @@ class StubGenerator: public StubCodeGenerator {
     arraycopy_range_checks(src, src_pos, dst, dst_pos, scratch_length,
                            t1, L_failed);
 
-    __ slli(t0, src_pos, LogBytesPerHeapOop);
-    __ add(from, t0, src);
+    __ shadd(from, src_pos, src, t0, LogBytesPerHeapOop);
     __ add(from, from, arrayOopDesc::base_offset_in_bytes(T_OBJECT));
-    __ slli(t0, dst_pos, LogBytesPerHeapOop);
-    __ add(to, t0, dst);
+    __ shadd(to, dst_pos, dst, t0, LogBytesPerHeapOop);
     __ add(to, to, arrayOopDesc::base_offset_in_bytes(T_OBJECT));
     __ addw(count, scratch_length, zr); // length
   __ BIND(L_plain_copy);
@@ -1919,11 +1914,9 @@ class StubGenerator: public StubCodeGenerator {
       __ load_klass(dst_klass, dst); // reload
 
       // Marshal the base address arguments now, freeing registers.
-      __ slli(t0, src_pos, LogBytesPerHeapOop);
-      __ add(from, t0, src);
+      __ shadd(from, src_pos, src, t0, LogBytesPerHeapOop);
       __ add(from, from, arrayOopDesc::base_offset_in_bytes(T_OBJECT));
-      __ slli(t0, dst_pos, LogBytesPerHeapOop);
-      __ add(to, t0, dst);
+      __ shadd(to, dst_pos, dst, t0, LogBytesPerHeapOop);
       __ add(to, to, arrayOopDesc::base_offset_in_bytes(T_OBJECT));
       __ addw(count, length, zr);           // length (reloaded)
       const Register sco_temp = c_rarg3;      // this register is free now
@@ -2084,8 +2077,7 @@ class StubGenerator: public StubCodeGenerator {
     // Note that the total length is no less than 8 bytes.
     if (t == T_BYTE || t == T_SHORT) {
       __ beqz(count, L_exit1);
-      __ slli(tmp_reg, count, shift);
-      __ add(to, to, tmp_reg); // points to the end
+      __ shadd(to, count, to, tmp_reg, shift); // points to the end
       __ sd(value, Address(to, -8)); // overwrite some elements
       __ bind(L_exit1);
       __ leave();
@@ -2145,7 +2137,7 @@ class StubGenerator: public StubCodeGenerator {
     generate_copy_longs(copy_f, c_rarg0, c_rarg1, t1, copy_forwards);
     generate_copy_longs(copy_b, c_rarg0, c_rarg1, t1, copy_backwards);
 
-    StubRoutines::riscv64::_zero_blocks = generate_zero_blocks();
+    StubRoutines::riscv::_zero_blocks = generate_zero_blocks();
 
     //*** jbyte
     // Always need aligned and unaligned versions
@@ -2354,11 +2346,9 @@ class StubGenerator: public StubCodeGenerator {
 
     if (isLU) {
       __ add(str1, str1, cnt2);
-      __ slli(t0, cnt2, 1);
-      __ add(str2, str2, t0);
+      __ shadd(str2, cnt2, str2, t0, 1);
     } else {
-      __ slli(t0, cnt2, 1);
-      __ add(str1, str1, t0);
+      __ shadd(str1, cnt2, str1, t0, 1);
       __ add(str2, str2, cnt2);
     }
     __ xorr(tmp3, tmp1, tmp2);
@@ -2387,9 +2377,10 @@ class StubGenerator: public StubCodeGenerator {
       __ addi(t0, cnt2, 16);
       __ beqz(t0, LOAD_LAST);
     __ bind(TAIL); // 1..15 characters left until last load (last 4 characters)
-      __ slli(t0, cnt2, 1);
-      __ add(cnt1, cnt1, t0); // Address of 8 bytes before last 4 characters in UTF-16 string
-      __ add(tmp2, tmp2, cnt2); // Address of 16 bytes before last 4 characters in Latin1 string
+      // Address of 8 bytes before last 4 characters in UTF-16 string
+      __ shadd(cnt1, cnt2, cnt1, t0, 1);
+      // Address of 16 bytes before last 4 characters in Latin1 string
+      __ add(tmp2, tmp2, cnt2);
       __ ld(tmp4, Address(cnt1, -8));
       // last 16 characters before last load
       compare_string_8_x_LU(tmpL, tmpU, DIFF1, DIFF2);
@@ -2521,10 +2512,10 @@ class StubGenerator: public StubCodeGenerator {
   }
 
   void generate_compare_long_strings() {
-    StubRoutines::riscv64::_compare_long_string_LL = generate_compare_long_string_same_encoding(true);
-    StubRoutines::riscv64::_compare_long_string_UU = generate_compare_long_string_same_encoding(false);
-    StubRoutines::riscv64::_compare_long_string_LU = generate_compare_long_string_different_encoding(true);
-    StubRoutines::riscv64::_compare_long_string_UL = generate_compare_long_string_different_encoding(false);
+    StubRoutines::riscv::_compare_long_string_LL = generate_compare_long_string_same_encoding(true);
+    StubRoutines::riscv::_compare_long_string_UU = generate_compare_long_string_same_encoding(false);
+    StubRoutines::riscv::_compare_long_string_LU = generate_compare_long_string_different_encoding(true);
+    StubRoutines::riscv::_compare_long_string_UL = generate_compare_long_string_different_encoding(false);
   }
 
   // x10 result
@@ -2549,7 +2540,7 @@ class StubGenerator: public StubCodeGenerator {
     // parameters
     Register result = x10, haystack = x11, haystack_len = x12, needle = x13, needle_len = x14;
     // temporary registers
-    Register mask1 = x20, match_mask = x21, first = x22, trailing_zero = x23, mask2 = x24, tmp = x25;
+    Register mask1 = x20, match_mask = x21, first = x22, trailing_zeros = x23, mask2 = x24, tmp = x25;
     // redefinitions
     Register ch1 = x28, ch2 = x29;
     RegSet spilled_regs = RegSet::range(x20, x25) + RegSet::range(x28, x29);
@@ -2570,9 +2561,13 @@ class StubGenerator: public StubCodeGenerator {
 
     // first is needle[0]
     __ andi(first, ch1, needle_isL ? 0xFF : 0xFFFF, first);
-    __ mv(mask1, haystack_isL ? 0x0101010101010101 : 0x0001000100010001);
+    uint64_t mask0101 = UCONST64(0x0101010101010101);
+    uint64_t mask0001 = UCONST64(0x0001000100010001);
+    __ mv(mask1, haystack_isL ? mask0101 : mask0001);
     __ mul(first, first, mask1);
-    __ mv(mask2, haystack_isL ? 0x7f7f7f7f7f7f7f7f : 0x7fff7fff7fff7fff);
+    uint64_t mask7f7f = UCONST64(0x7f7f7f7f7f7f7f7f);
+    uint64_t mask7fff = UCONST64(0x7fff7fff7fff7fff);
+    __ mv(mask2, haystack_isL ? mask7f7f : mask7fff);
     if (needle_isL != haystack_isL) {
       __ mv(tmp, ch1);
     }
@@ -2580,7 +2575,7 @@ class StubGenerator: public StubCodeGenerator {
     __ blez(haystack_len, L_SMALL);
 
     if (needle_isL != haystack_isL) {
-      __ inflate_lo32(ch1, tmp, match_mask, trailing_zero);
+      __ inflate_lo32(ch1, tmp, match_mask, trailing_zeros);
     }
     // xorr, sub, orr, notr, andr
     // compare and set match_mask[i] with 0x80/0x8000 (Latin1/UTF16) if ch2[i] == first[i]
@@ -2617,7 +2612,7 @@ class StubGenerator: public StubCodeGenerator {
     __ xorr(ch2, first, ch2);
     __ sub(match_mask, ch2, mask1);
     __ orr(ch2, ch2, mask2);
-    __ mv(trailing_zero, -1); // all bits set
+    __ mv(trailing_zeros, -1); // all bits set
     __ j(L_SMALL_PROCEED);
 
     __ align(OptoLoopAlignment);
@@ -2625,44 +2620,42 @@ class StubGenerator: public StubCodeGenerator {
     __ slli(haystack_len, haystack_len, LogBitsPerByte + haystack_chr_shift);
     __ neg(haystack_len, haystack_len);
     if (needle_isL != haystack_isL) {
-      __ inflate_lo32(ch1, tmp, match_mask, trailing_zero);
+      __ inflate_lo32(ch1, tmp, match_mask, trailing_zeros);
     }
     __ xorr(ch2, first, ch2);
     __ sub(match_mask, ch2, mask1);
     __ orr(ch2, ch2, mask2);
-    __ mv(trailing_zero, -1); // all bits set
+    __ mv(trailing_zeros, -1); // all bits set
 
     __ bind(L_SMALL_PROCEED);
-    __ srl(trailing_zero, trailing_zero, haystack_len); // mask. zeroes on useless bits.
+    __ srl(trailing_zeros, trailing_zeros, haystack_len); // mask. zeroes on useless bits.
     __ notr(ch2, ch2);
     __ andr(match_mask, match_mask, ch2);
-    __ andr(match_mask, match_mask, trailing_zero); // clear useless bits and check
+    __ andr(match_mask, match_mask, trailing_zeros); // clear useless bits and check
     __ beqz(match_mask, NOMATCH);
 
     __ bind(L_SMALL_HAS_ZERO_LOOP);
-    __ ctzc_bit(trailing_zero, match_mask, haystack_isL, ch2, tmp); // count trailing zeros
-    __ addi(trailing_zero, trailing_zero, haystack_isL ? 7 : 15);
+    __ ctzc_bit(trailing_zeros, match_mask, haystack_isL, ch2, tmp); // count trailing zeros
+    __ addi(trailing_zeros, trailing_zeros, haystack_isL ? 7 : 15);
     __ mv(ch2, wordSize / haystack_chr_size);
     __ ble(needle_len, ch2, L_SMALL_CMP_LOOP_LAST_CMP2);
-    __ compute_index(haystack, trailing_zero, match_mask, result, ch2, tmp, haystack_isL);
-    __ mv(trailing_zero, wordSize / haystack_chr_size);
+    __ compute_index(haystack, trailing_zeros, match_mask, result, ch2, tmp, haystack_isL);
+    __ mv(trailing_zeros, wordSize / haystack_chr_size);
     __ bne(ch1, ch2, L_SMALL_CMP_LOOP_NOMATCH);
 
     __ bind(L_SMALL_CMP_LOOP);
-    __ slli(first, trailing_zero, needle_chr_shift);
-    __ add(first, needle, first);
-    __ slli(ch2, trailing_zero, haystack_chr_shift);
-    __ add(ch2, haystack, ch2);
+    __ shadd(first, trailing_zeros, needle, first, needle_chr_shift);
+    __ shadd(ch2, trailing_zeros, haystack, ch2, haystack_chr_shift);
     needle_isL ? __ lbu(first, Address(first)) : __ lhu(first, Address(first));
     haystack_isL ? __ lbu(ch2, Address(ch2)) : __ lhu(ch2, Address(ch2));
-    __ add(trailing_zero, trailing_zero, 1);
-    __ bge(trailing_zero, needle_len, L_SMALL_CMP_LOOP_LAST_CMP);
+    __ add(trailing_zeros, trailing_zeros, 1);
+    __ bge(trailing_zeros, needle_len, L_SMALL_CMP_LOOP_LAST_CMP);
     __ beq(first, ch2, L_SMALL_CMP_LOOP);
 
     __ bind(L_SMALL_CMP_LOOP_NOMATCH);
     __ beqz(match_mask, NOMATCH);
-    __ ctzc_bit(trailing_zero, match_mask, haystack_isL, tmp, ch2);
-    __ addi(trailing_zero, trailing_zero, haystack_isL ? 7 : 15);
+    __ ctzc_bit(trailing_zeros, match_mask, haystack_isL, tmp, ch2);
+    __ addi(trailing_zeros, trailing_zeros, haystack_isL ? 7 : 15);
     __ add(result, result, 1);
     __ add(haystack, haystack, haystack_chr_size);
     __ j(L_SMALL_HAS_ZERO_LOOP);
@@ -2674,14 +2667,14 @@ class StubGenerator: public StubCodeGenerator {
 
     __ align(OptoLoopAlignment);
     __ bind(L_SMALL_CMP_LOOP_LAST_CMP2);
-    __ compute_index(haystack, trailing_zero, match_mask, result, ch2, tmp, haystack_isL);
+    __ compute_index(haystack, trailing_zeros, match_mask, result, ch2, tmp, haystack_isL);
     __ bne(ch1, ch2, L_SMALL_CMP_LOOP_NOMATCH);
     __ j(DONE);
 
     __ align(OptoLoopAlignment);
     __ bind(L_HAS_ZERO);
-    __ ctzc_bit(trailing_zero, match_mask, haystack_isL, tmp, ch2);
-    __ addi(trailing_zero, trailing_zero, haystack_isL ? 7 : 15);
+    __ ctzc_bit(trailing_zeros, match_mask, haystack_isL, tmp, ch2);
+    __ addi(trailing_zeros, trailing_zeros, haystack_isL ? 7 : 15);
     __ slli(needle_len, needle_len, BitsPerByte * wordSize / 2);
     __ orr(haystack_len, haystack_len, needle_len); // restore needle_len(32bits)
     __ sub(result, result, 1); // array index from 0, so result -= 1
@@ -2691,28 +2684,26 @@ class StubGenerator: public StubCodeGenerator {
     __ srli(ch2, haystack_len, BitsPerByte * wordSize / 2);
     __ bge(needle_len, ch2, L_CMP_LOOP_LAST_CMP2);
     // load next 8 bytes from haystack, and increase result index
-    __ compute_index(haystack, trailing_zero, match_mask, result, ch2, tmp, haystack_isL);
+    __ compute_index(haystack, trailing_zeros, match_mask, result, ch2, tmp, haystack_isL);
     __ add(result, result, 1);
-    __ mv(trailing_zero, wordSize / haystack_chr_size);
+    __ mv(trailing_zeros, wordSize / haystack_chr_size);
     __ bne(ch1, ch2, L_CMP_LOOP_NOMATCH);
 
     // compare one char
     __ bind(L_CMP_LOOP);
-    __ slli(needle_len, trailing_zero, needle_chr_shift);
-    __ add(needle_len, needle, needle_len);
+    __ shadd(needle_len, trailing_zeros, needle, needle_len, needle_chr_shift);
     needle_isL ? __ lbu(needle_len, Address(needle_len)) : __ lhu(needle_len, Address(needle_len));
-    __ slli(ch2, trailing_zero, haystack_chr_shift);
-    __ add(ch2, haystack, ch2);
+    __ shadd(ch2, trailing_zeros, haystack, ch2, haystack_chr_shift);
     haystack_isL ? __ lbu(ch2, Address(ch2)) : __ lhu(ch2, Address(ch2));
-    __ add(trailing_zero, trailing_zero, 1); // next char index
+    __ add(trailing_zeros, trailing_zeros, 1); // next char index
     __ srli(tmp, haystack_len, BitsPerByte * wordSize / 2);
-    __ bge(trailing_zero, tmp, L_CMP_LOOP_LAST_CMP);
+    __ bge(trailing_zeros, tmp, L_CMP_LOOP_LAST_CMP);
     __ beq(needle_len, ch2, L_CMP_LOOP);
 
     __ bind(L_CMP_LOOP_NOMATCH);
     __ beqz(match_mask, L_HAS_ZERO_LOOP_NOMATCH);
-    __ ctzc_bit(trailing_zero, match_mask, haystack_isL, needle_len, ch2); // find next "first" char index
-    __ addi(trailing_zero, trailing_zero, haystack_isL ? 7 : 15);
+    __ ctzc_bit(trailing_zeros, match_mask, haystack_isL, needle_len, ch2); // find next "first" char index
+    __ addi(trailing_zeros, trailing_zeros, haystack_isL ? 7 : 15);
     __ add(haystack, haystack, haystack_chr_size);
     __ j(L_HAS_ZERO_LOOP);
 
@@ -2723,7 +2714,7 @@ class StubGenerator: public StubCodeGenerator {
 
     __ align(OptoLoopAlignment);
     __ bind(L_CMP_LOOP_LAST_CMP2);
-    __ compute_index(haystack, trailing_zero, match_mask, result, ch2, tmp, haystack_isL);
+    __ compute_index(haystack, trailing_zeros, match_mask, result, ch2, tmp, haystack_isL);
     __ add(result, result, 1);
     __ bne(ch1, ch2, L_CMP_LOOP_NOMATCH);
     __ j(DONE);
@@ -2760,10 +2751,777 @@ class StubGenerator: public StubCodeGenerator {
 
   void generate_string_indexof_stubs()
   {
-    StubRoutines::riscv64::_string_indexof_linear_ll = generate_string_indexof_linear(true, true);
-    StubRoutines::riscv64::_string_indexof_linear_uu = generate_string_indexof_linear(false, false);
-    StubRoutines::riscv64::_string_indexof_linear_ul = generate_string_indexof_linear(true, false);
+    StubRoutines::riscv::_string_indexof_linear_ll = generate_string_indexof_linear(true, true);
+    StubRoutines::riscv::_string_indexof_linear_uu = generate_string_indexof_linear(false, false);
+    StubRoutines::riscv::_string_indexof_linear_ul = generate_string_indexof_linear(true, false);
   }
+
+#ifdef COMPILER2
+  address generate_mulAdd()
+  {
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", "mulAdd");
+
+    address entry = __ pc();
+
+    const Register out     = x10;
+    const Register in      = x11;
+    const Register offset  = x12;
+    const Register len     = x13;
+    const Register k       = x14;
+    const Register tmp     = x28;
+
+    BLOCK_COMMENT("Entry:");
+    __ enter();
+    __ mul_add(out, in, offset, len, k, tmp);
+    __ leave();
+    __ ret();
+
+    return entry;
+  }
+
+  /**
+   *  Arguments:
+   *
+   *  Input:
+   *    c_rarg0   - x address
+   *    c_rarg1   - x length
+   *    c_rarg2   - y address
+   *    c_rarg3   - y length
+   *    c_rarg4   - z address
+   *    c_rarg5   - z length
+   */
+  address generate_multiplyToLen()
+  {
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", "multiplyToLen");
+    address entry = __ pc();
+
+    const Register x     = x10;
+    const Register xlen  = x11;
+    const Register y     = x12;
+    const Register ylen  = x13;
+    const Register z     = x14;
+    const Register zlen  = x15;
+
+    const Register tmp1  = x16;
+    const Register tmp2  = x17;
+    const Register tmp3  = x7;
+    const Register tmp4  = x28;
+    const Register tmp5  = x29;
+    const Register tmp6  = x30;
+    const Register tmp7  = x31;
+
+    BLOCK_COMMENT("Entry:");
+    __ enter(); // required for proper stackwalking of RuntimeStub frame
+    __ multiply_to_len(x, xlen, y, ylen, z, zlen, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7);
+    __ leave(); // required for proper stackwalking of RuntimeStub frame
+    __ ret();
+
+    return entry;
+  }
+
+  address generate_squareToLen()
+  {
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", "squareToLen");
+    address entry = __ pc();
+
+    const Register x     = x10;
+    const Register xlen  = x11;
+    const Register z     = x12;
+    const Register zlen  = x13;
+    const Register y     = x14; // == x
+    const Register ylen  = x15; // == xlen
+
+    const Register tmp1  = x16;
+    const Register tmp2  = x17;
+    const Register tmp3  = x7;
+    const Register tmp4  = x28;
+    const Register tmp5  = x29;
+    const Register tmp6  = x30;
+    const Register tmp7  = x31;
+
+    BLOCK_COMMENT("Entry:");
+    __ enter();
+    __ mv(y, x);
+    __ mv(ylen, xlen);
+    __ multiply_to_len(x, xlen, y, ylen, z, zlen, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7);
+    __ leave();
+    __ ret();
+
+    return entry;
+  }
+#endif
+
+#ifdef COMPILER2
+  class MontgomeryMultiplyGenerator : public MacroAssembler {
+
+    Register Pa_base, Pb_base, Pn_base, Pm_base, inv, Rlen, Ra, Rb, Rm, Rn,
+      Pa, Pb, Pn, Pm, Rhi_ab, Rlo_ab, Rhi_mn, Rlo_mn, tmp0, tmp1, tmp2, Ri, Rj;
+
+    RegSet _toSave;
+    bool _squaring;
+
+  public:
+    MontgomeryMultiplyGenerator (Assembler *as, bool squaring)
+      : MacroAssembler(as->code()), _squaring(squaring) {
+
+      // Register allocation
+
+      Register reg = c_rarg0;
+      Pa_base = reg;       // Argument registers
+      if (squaring) {
+        Pb_base = Pa_base;
+      } else {
+        Pb_base = ++reg;
+      }
+      Pn_base = ++reg;
+      Rlen= ++reg;
+      inv = ++reg;
+      Pm_base = ++reg;
+
+                        // Working registers:
+      Ra =  ++reg;      // The current digit of a, b, n, and m.
+      Rb =  ++reg;
+      Rm =  ++reg;
+      Rn =  ++reg;
+
+      Pa =  ++reg;      // Pointers to the current/next digit of a, b, n, and m.
+      Pb =  ++reg;
+      Pm =  ++reg;
+      Pn =  ++reg;
+
+      tmp0 =  ++reg;    // Three registers which form a
+      tmp1 =  ++reg;    // triple-precision accumuator.
+      tmp2 =  ++reg;
+
+      Ri =  x6;         // Inner and outer loop indexes.
+      Rj =  x7;
+
+      Rhi_ab = x28;     // Product registers: low and high parts
+      Rlo_ab = x29;     // of a*b and m*n.
+      Rhi_mn = x30;
+      Rlo_mn = x31;
+
+      // x18 and up are callee-saved.
+      _toSave = RegSet::range(x18, reg) + Pm_base;
+    }
+
+  private:
+    void save_regs() {
+      push_reg(_toSave, sp);
+    }
+
+    void restore_regs() {
+      pop_reg(_toSave, sp);
+    }
+
+    template <typename T>
+    void unroll_2(Register count, T block) {
+      Label loop, end, odd;
+      beqz(count, end);
+      andi(t0, count, 0x1);
+      bnez(t0, odd);
+      align(16);
+      bind(loop);
+      (this->*block)();
+      bind(odd);
+      (this->*block)();
+      addi(count, count, -2);
+      bgtz(count, loop);
+      bind(end);
+    }
+
+    template <typename T>
+    void unroll_2(Register count, T block, Register d, Register s, Register tmp) {
+      Label loop, end, odd;
+      beqz(count, end);
+      andi(tmp, count, 0x1);
+      bnez(tmp, odd);
+      align(16);
+      bind(loop);
+      (this->*block)(d, s, tmp);
+      bind(odd);
+      (this->*block)(d, s, tmp);
+      addi(count, count, -2);
+      bgtz(count, loop);
+      bind(end);
+    }
+
+    void pre1(RegisterOrConstant i) {
+      block_comment("pre1");
+      // Pa = Pa_base;
+      // Pb = Pb_base + i;
+      // Pm = Pm_base;
+      // Pn = Pn_base + i;
+      // Ra = *Pa;
+      // Rb = *Pb;
+      // Rm = *Pm;
+      // Rn = *Pn;
+      if (i.is_register()) {
+        slli(t0, i.as_register(), LogBytesPerWord);
+      } else {
+        mv(t0, i.as_constant());
+        slli(t0, t0, LogBytesPerWord);
+      }
+
+      mv(Pa, Pa_base);
+      add(Pb, Pb_base, t0);
+      mv(Pm, Pm_base);
+      add(Pn, Pn_base, t0);
+
+      ld(Ra, Address(Pa));
+      ld(Rb, Address(Pb));
+      ld(Rm, Address(Pm));
+      ld(Rn, Address(Pn));
+
+      // Zero the m*n result.
+      mv(Rhi_mn, zr);
+      mv(Rlo_mn, zr);
+    }
+
+    // The core multiply-accumulate step of a Montgomery
+    // multiplication.  The idea is to schedule operations as a
+    // pipeline so that instructions with long latencies (loads and
+    // multiplies) have time to complete before their results are
+    // used.  This most benefits in-order implementations of the
+    // architecture but out-of-order ones also benefit.
+    void step() {
+      block_comment("step");
+      // MACC(Ra, Rb, tmp0, tmp1, tmp2);
+      // Ra = *++Pa;
+      // Rb = *--Pb;
+      mulhu(Rhi_ab, Ra, Rb);
+      mul(Rlo_ab, Ra, Rb);
+      addi(Pa, Pa, wordSize);
+      ld(Ra, Address(Pa));
+      addi(Pb, Pb, -wordSize);
+      ld(Rb, Address(Pb));
+      acc(Rhi_mn, Rlo_mn, tmp0, tmp1, tmp2); // The pending m*n from the
+                                            // previous iteration.
+      // MACC(Rm, Rn, tmp0, tmp1, tmp2);
+      // Rm = *++Pm;
+      // Rn = *--Pn;
+      mulhu(Rhi_mn, Rm, Rn);
+      mul(Rlo_mn, Rm, Rn);
+      addi(Pm, Pm, wordSize);
+      ld(Rm, Address(Pm));
+      addi(Pn, Pn, -wordSize);
+      ld(Rn, Address(Pn));
+      acc(Rhi_ab, Rlo_ab, tmp0, tmp1, tmp2);
+    }
+
+    void post1() {
+      block_comment("post1");
+
+      // MACC(Ra, Rb, tmp0, tmp1, tmp2);
+      // Ra = *++Pa;
+      // Rb = *--Pb;
+      mulhu(Rhi_ab, Ra, Rb);
+      mul(Rlo_ab, Ra, Rb);
+      acc(Rhi_mn, Rlo_mn, tmp0, tmp1, tmp2);  // The pending m*n
+      acc(Rhi_ab, Rlo_ab, tmp0, tmp1, tmp2);
+
+      // *Pm = Rm = tmp0 * inv;
+      mul(Rm, tmp0, inv);
+      sd(Rm, Address(Pm));
+
+      // MACC(Rm, Rn, tmp0, tmp1, tmp2);
+      // tmp0 = tmp1; tmp1 = tmp2; tmp2 = 0;
+      mulhu(Rhi_mn, Rm, Rn);
+
+#ifndef PRODUCT
+      // assert(m[i] * n[0] + tmp0 == 0, "broken Montgomery multiply");
+      {
+        mul(Rlo_mn, Rm, Rn);
+        add(Rlo_mn, tmp0, Rlo_mn);
+        Label ok;
+        beqz(Rlo_mn, ok);
+        stop("broken Montgomery multiply");
+        bind(ok);
+      }
+#endif
+      // We have very carefully set things up so that
+      // m[i]*n[0] + tmp0 == 0 (mod b), so we don't have to calculate
+      // the lower half of Rm * Rn because we know the result already:
+      // it must be -tmp0.  tmp0 + (-tmp0) must generate a carry iff
+      // tmp0 != 0.  So, rather than do a mul and an cad we just set
+      // the carry flag iff tmp0 is nonzero.
+      //
+      // mul(Rlo_mn, Rm, Rn);
+      // cad(zr, tmp0, Rlo_mn);
+      addi(t0, tmp0, -1);
+      sltu(t0, t0, tmp0); // Set carry iff tmp0 is nonzero
+      cadc(tmp0, tmp1, Rhi_mn, t0);
+      adc(tmp1, tmp2, zr, t0);
+      mv(tmp2, zr);
+    }
+
+    void pre2(Register i, Register len) {
+      block_comment("pre2");
+      // Pa = Pa_base + i-len;
+      // Pb = Pb_base + len;
+      // Pm = Pm_base + i-len;
+      // Pn = Pn_base + len;
+
+      sub(Rj, i, len);
+      // Rj == i-len
+
+      // Ra as temp register
+      slli(Ra, Rj, LogBytesPerWord);
+      add(Pa, Pa_base, Ra);
+      add(Pm, Pm_base, Ra);
+      slli(Ra, len, LogBytesPerWord);
+      add(Pb, Pb_base, Ra);
+      add(Pn, Pn_base, Ra);
+
+      // Ra = *++Pa;
+      // Rb = *--Pb;
+      // Rm = *++Pm;
+      // Rn = *--Pn;
+      add(Pa, Pa, wordSize);
+      ld(Ra, Address(Pa));
+      add(Pb, Pb, -wordSize);
+      ld(Rb, Address(Pb));
+      add(Pm, Pm, wordSize);
+      ld(Rm, Address(Pm));
+      add(Pn, Pn, -wordSize);
+      ld(Rn, Address(Pn));
+
+      mv(Rhi_mn, zr);
+      mv(Rlo_mn, zr);
+    }
+
+    void post2(Register i, Register len) {
+      block_comment("post2");
+      sub(Rj, i, len);
+
+      cad(tmp0, tmp0, Rlo_mn, t0); // The pending m*n, low part
+
+      // As soon as we know the least significant digit of our result,
+      // store it.
+      // Pm_base[i-len] = tmp0;
+      // Rj as temp register
+      slli(Rj, Rj, LogBytesPerWord);
+      add(Rj, Pm_base, Rj);
+      sd(tmp0, Address(Rj));
+
+      // tmp0 = tmp1; tmp1 = tmp2; tmp2 = 0;
+      cadc(tmp0, tmp1, Rhi_mn, t0); // The pending m*n, high part
+      adc(tmp1, tmp2, zr, t0);
+      mv(tmp2, zr);
+    }
+
+    // A carry in tmp0 after Montgomery multiplication means that we
+    // should subtract multiples of n from our result in m.  We'll
+    // keep doing that until there is no carry.
+    void normalize(Register len) {
+      block_comment("normalize");
+      // while (tmp0)
+      //   tmp0 = sub(Pm_base, Pn_base, tmp0, len);
+      Label loop, post, again;
+      Register cnt = tmp1, i = tmp2; // Re-use registers; we're done with them now
+      beqz(tmp0, post); {
+        bind(again); {
+          mv(i, zr);
+          mv(cnt, len);
+          slli(Rn, i, LogBytesPerWord);
+          add(Rm, Pm_base, Rn);
+          ld(Rm, Address(Rm));
+          add(Rn, Pn_base, Rn);
+          ld(Rn, Address(Rn));
+          li(t0, 1); // set carry flag, i.e. no borrow
+          align(16);
+          bind(loop); {
+            notr(Rn, Rn);
+            add(Rm, Rm, t0);
+            add(Rm, Rm, Rn);
+            sltu(t0, Rm, Rn);
+            slli(Rn, i, LogBytesPerWord); // Rn as temp register
+            add(Rn, Pm_base, Rn);
+            sd(Rm, Address(Rn));
+            add(i, i, 1);
+            slli(Rn, i, LogBytesPerWord);
+            add(Rm, Pm_base, Rn);
+            ld(Rm, Address(Rm));
+            add(Rn, Pn_base, Rn);
+            ld(Rn, Address(Rn));
+            sub(cnt, cnt, 1);
+          } bnez(cnt, loop);
+          addi(tmp0, tmp0, -1);
+          add(tmp0, tmp0, t0);
+        } bnez(tmp0, again);
+      } bind(post);
+    }
+
+    // Move memory at s to d, reversing words.
+    //    Increments d to end of copied memory
+    //    Destroys tmp1, tmp2
+    //    Preserves len
+    //    Leaves s pointing to the address which was in d at start
+    void reverse(Register d, Register s, Register len, Register tmp1, Register tmp2) {
+      assert(tmp1 < x28 && tmp2 < x28, "register corruption");
+
+      slli(tmp1, len, LogBytesPerWord);
+      add(s, s, tmp1);
+      mv(tmp1, len);
+      unroll_2(tmp1,  &MontgomeryMultiplyGenerator::reverse1, d, s, tmp2);
+      slli(tmp1, len, LogBytesPerWord);
+      sub(s, d, tmp1);
+    }
+    // [63...0] -> [31...0][63...32]
+    void reverse1(Register d, Register s, Register tmp) {
+      addi(s, s, -wordSize);
+      ld(tmp, Address(s));
+      ror_imm(tmp, tmp, 32, t0);
+      sd(tmp, Address(d));
+      addi(d, d, wordSize);
+    }
+
+    void step_squaring() {
+      // An extra ACC
+      step();
+      acc(Rhi_ab, Rlo_ab, tmp0, tmp1, tmp2);
+    }
+
+    void last_squaring(Register i) {
+      Label dont;
+      // if ((i & 1) == 0) {
+      andi(t0, i, 0x1);
+      bnez(t0, dont); {
+        // MACC(Ra, Rb, tmp0, tmp1, tmp2);
+        // Ra = *++Pa;
+        // Rb = *--Pb;
+        mulhu(Rhi_ab, Ra, Rb);
+        mul(Rlo_ab, Ra, Rb);
+        acc(Rhi_ab, Rlo_ab, tmp0, tmp1, tmp2);
+      } bind(dont);
+    }
+
+    void extra_step_squaring() {
+      acc(Rhi_mn, Rlo_mn, tmp0, tmp1, tmp2);  // The pending m*n
+
+      // MACC(Rm, Rn, tmp0, tmp1, tmp2);
+      // Rm = *++Pm;
+      // Rn = *--Pn;
+      mulhu(Rhi_mn, Rm, Rn);
+      mul(Rlo_mn, Rm, Rn);
+      addi(Pm, Pm, wordSize);
+      ld(Rm, Address(Pm));
+      addi(Pn, Pn, -wordSize);
+      ld(Rn, Address(Pn));
+    }
+
+    void post1_squaring() {
+      acc(Rhi_mn, Rlo_mn, tmp0, tmp1, tmp2);  // The pending m*n
+
+      // *Pm = Rm = tmp0 * inv;
+      mul(Rm, tmp0, inv);
+      sd(Rm, Address(Pm));
+
+      // MACC(Rm, Rn, tmp0, tmp1, tmp2);
+      // tmp0 = tmp1; tmp1 = tmp2; tmp2 = 0;
+      mulhu(Rhi_mn, Rm, Rn);
+
+#ifndef PRODUCT
+      // assert(m[i] * n[0] + tmp0 == 0, "broken Montgomery multiply");
+      {
+        mul(Rlo_mn, Rm, Rn);
+        add(Rlo_mn, tmp0, Rlo_mn);
+        Label ok;
+        beqz(Rlo_mn, ok); {
+          stop("broken Montgomery multiply");
+        } bind(ok);
+      }
+#endif
+      // We have very carefully set things up so that
+      // m[i]*n[0] + tmp0 == 0 (mod b), so we don't have to calculate
+      // the lower half of Rm * Rn because we know the result already:
+      // it must be -tmp0.  tmp0 + (-tmp0) must generate a carry iff
+      // tmp0 != 0.  So, rather than do a mul and a cad we just set
+      // the carry flag iff tmp0 is nonzero.
+      //
+      // mul(Rlo_mn, Rm, Rn);
+      // cad(zr, tmp, Rlo_mn);
+      addi(t0, tmp0, -1);
+      sltu(t0, t0, tmp0); // Set carry iff tmp0 is nonzero
+      cadc(tmp0, tmp1, Rhi_mn, t0);
+      adc(tmp1, tmp2, zr, t0);
+      mv(tmp2, zr);
+    }
+
+    // use t0 as carry
+    void acc(Register Rhi, Register Rlo,
+             Register tmp0, Register tmp1, Register tmp2) {
+      cad(tmp0, tmp0, Rlo, t0);
+      cadc(tmp1, tmp1, Rhi, t0);
+      adc(tmp2, tmp2, zr, t0);
+    }
+
+  public:
+    /**
+     * Fast Montgomery multiplication.  The derivation of the
+     * algorithm is in A Cryptographic Library for the Motorola
+     * DSP56000, Dusse and Kaliski, Proc. EUROCRYPT 90, pp. 230-237.
+     *
+     * Arguments:
+     *
+     * Inputs for multiplication:
+     *   c_rarg0   - int array elements a
+     *   c_rarg1   - int array elements b
+     *   c_rarg2   - int array elements n (the modulus)
+     *   c_rarg3   - int length
+     *   c_rarg4   - int inv
+     *   c_rarg5   - int array elements m (the result)
+     *
+     * Inputs for squaring:
+     *   c_rarg0   - int array elements a
+     *   c_rarg1   - int array elements n (the modulus)
+     *   c_rarg2   - int length
+     *   c_rarg3   - int inv
+     *   c_rarg4   - int array elements m (the result)
+     *
+     */
+    address generate_multiply() {
+      Label argh, nothing;
+      bind(argh);
+      stop("MontgomeryMultiply total_allocation must be <= 8192");
+
+      align(CodeEntryAlignment);
+      address entry = pc();
+
+      beqz(Rlen, nothing);
+
+      enter();
+
+      // Make room.
+      li(Ra, 512);
+      bgt(Rlen, Ra, argh);
+      slli(Ra, Rlen, exact_log2(4 * sizeof(jint)));
+      sub(Ra, sp, Ra);
+      andi(sp, Ra, -2 * wordSize);
+
+      srliw(Rlen, Rlen, 1);  // length in longwords = len/2
+
+      {
+        // Copy input args, reversing as we go.  We use Ra as a
+        // temporary variable.
+        reverse(Ra, Pa_base, Rlen, Ri, Rj);
+        if (!_squaring)
+          reverse(Ra, Pb_base, Rlen, Ri, Rj);
+        reverse(Ra, Pn_base, Rlen, Ri, Rj);
+      }
+
+      // Push all call-saved registers and also Pm_base which we'll need
+      // at the end.
+      save_regs();
+
+#ifndef PRODUCT
+      // assert(inv * n[0] == -1UL, "broken inverse in Montgomery multiply");
+      {
+        ld(Rn, Address(Pn_base));
+        mul(Rlo_mn, Rn, inv);
+        li(t0, -1);
+        Label ok;
+        beq(Rlo_mn, t0, ok);
+        stop("broken inverse in Montgomery multiply");
+        bind(ok);
+      }
+#endif
+
+      mv(Pm_base, Ra);
+
+      mv(tmp0, zr);
+      mv(tmp1, zr);
+      mv(tmp2, zr);
+
+      block_comment("for (int i = 0; i < len; i++) {");
+      mv(Ri, zr); {
+        Label loop, end;
+        bge(Ri, Rlen, end);
+
+        bind(loop);
+        pre1(Ri);
+
+        block_comment("  for (j = i; j; j--) {"); {
+          mv(Rj, Ri);
+          unroll_2(Rj, &MontgomeryMultiplyGenerator::step);
+        } block_comment("  } // j");
+
+        post1();
+        addw(Ri, Ri, 1);
+        blt(Ri, Rlen, loop);
+        bind(end);
+        block_comment("} // i");
+      }
+
+      block_comment("for (int i = len; i < 2*len; i++) {");
+      mv(Ri, Rlen); {
+        Label loop, end;
+        slli(t0, Rlen, 1);
+        bge(Ri, t0, end);
+
+        bind(loop);
+        pre2(Ri, Rlen);
+
+        block_comment("  for (j = len*2-i-1; j; j--) {"); {
+          slliw(Rj, Rlen, 1);
+          subw(Rj, Rj, Ri);
+          subw(Rj, Rj, 1);
+          unroll_2(Rj, &MontgomeryMultiplyGenerator::step);
+        } block_comment("  } // j");
+
+        post2(Ri, Rlen);
+        addw(Ri, Ri, 1);
+        slli(t0, Rlen, 1);
+        blt(Ri, t0, loop);
+        bind(end);
+      }
+      block_comment("} // i");
+
+      normalize(Rlen);
+
+      mv(Ra, Pm_base);  // Save Pm_base in Ra
+      restore_regs();  // Restore caller's Pm_base
+
+      // Copy our result into caller's Pm_base
+      reverse(Pm_base, Ra, Rlen, Ri, Rj);
+
+      leave();
+      bind(nothing);
+      ret();
+
+      return entry;
+    }
+
+    /**
+     *
+     * Arguments:
+     *
+     * Inputs:
+     *   c_rarg0   - int array elements a
+     *   c_rarg1   - int array elements n (the modulus)
+     *   c_rarg2   - int length
+     *   c_rarg3   - int inv
+     *   c_rarg4   - int array elements m (the result)
+     *
+     */
+    address generate_square() {
+      Label argh;
+      bind(argh);
+      stop("MontgomeryMultiply total_allocation must be <= 8192");
+
+      align(CodeEntryAlignment);
+      address entry = pc();
+
+      enter();
+
+      // Make room.
+      li(Ra, 512);
+      bgt(Rlen, Ra, argh);
+      slli(Ra, Rlen, exact_log2(4 * sizeof(jint)));
+      sub(Ra, sp, Ra);
+      andi(sp, Ra, -2 * wordSize);
+
+      srliw(Rlen, Rlen, 1);  // length in longwords = len/2
+
+      {
+        // Copy input args, reversing as we go.  We use Ra as a
+        // temporary variable.
+        reverse(Ra, Pa_base, Rlen, Ri, Rj);
+        reverse(Ra, Pn_base, Rlen, Ri, Rj);
+      }
+
+      // Push all call-saved registers and also Pm_base which we'll need
+      // at the end.
+      save_regs();
+
+      mv(Pm_base, Ra);
+
+      mv(tmp0, zr);
+      mv(tmp1, zr);
+      mv(tmp2, zr);
+
+      block_comment("for (int i = 0; i < len; i++) {");
+      mv(Ri, zr); {
+        Label loop, end;
+        bind(loop);
+        bge(Ri, Rlen, end);
+
+        pre1(Ri);
+
+        block_comment("for (j = (i+1)/2; j; j--) {"); {
+          addi(Rj, Ri, 1);
+          srliw(Rj, Rj, 1);
+          unroll_2(Rj, &MontgomeryMultiplyGenerator::step_squaring);
+        } block_comment("  } // j");
+
+        last_squaring(Ri);
+
+        block_comment("  for (j = i/2; j; j--) {"); {
+          srliw(Rj, Ri, 1);
+          unroll_2(Rj, &MontgomeryMultiplyGenerator::extra_step_squaring);
+        } block_comment("  } // j");
+
+        post1_squaring();
+        addi(Ri, Ri, 1);
+        blt(Ri, Rlen, loop);
+
+        bind(end);
+        block_comment("} // i");
+      }
+
+      block_comment("for (int i = len; i < 2*len; i++) {");
+      mv(Ri, Rlen); {
+        Label loop, end;
+        bind(loop);
+        slli(t0, Rlen, 1);
+        bge(Ri, t0, end);
+
+        pre2(Ri, Rlen);
+
+        block_comment("  for (j = (2*len-i-1)/2; j; j--) {"); {
+          slli(Rj, Rlen, 1);
+          sub(Rj, Rj, Ri);
+          sub(Rj, Rj, 1);
+          srliw(Rj, Rj, 1);
+          unroll_2(Rj, &MontgomeryMultiplyGenerator::step_squaring);
+        } block_comment("  } // j");
+
+        last_squaring(Ri);
+
+        block_comment("  for (j = (2*len-i)/2; j; j--) {"); {
+          slli(Rj, Rlen, 1);
+          sub(Rj, Rj, Ri);
+          srliw(Rj, Rj, 1);
+          unroll_2(Rj, &MontgomeryMultiplyGenerator::extra_step_squaring);
+        } block_comment("  } // j");
+
+        post2(Ri, Rlen);
+        addi(Ri, Ri, 1);
+        slli(t0, Rlen, 1);
+        blt(Ri, t0, loop);
+
+        bind(end);
+        block_comment("} // i");
+      }
+
+      normalize(Rlen);
+
+      mv(Ra, Pm_base);  // Save Pm_base in Ra
+      restore_regs();  // Restore caller's Pm_base
+
+      // Copy our result into caller's Pm_base
+      reverse(Pm_base, Ra, Rlen, Ri, Rj);
+
+      leave();
+      ret();
+
+      return entry;
+    }
+  };
+#endif // COMPILER2
 
   // Continuation point for throwing of implicit exceptions that are
   // not handled in the current activation. Fabricates an exception
@@ -2792,7 +3550,7 @@ class StubGenerator: public StubCodeGenerator {
     // Note that we only have to preserve callee-saved registers since
     // the compilers are responsible for supplying a continuation point
     // if they expect all registers to be preserved.
-    // n.b. riscv64 asserts that frame::arg_reg_save_area_bytes == 0
+    // n.b. riscv asserts that frame::arg_reg_save_area_bytes == 0
     assert_cond(runtime_entry != NULL);
     enum layout {
       fp_off = 0,
@@ -2817,12 +3575,12 @@ class StubGenerator: public StubCodeGenerator {
     // thread-local storage and also sets up last_Java_sp slightly
     // differently than the real call_VM
 
-    __ enter(); // Save FP and LR before call
+    __ enter(); // Save FP and RA before call
 
     assert(is_even(framesize / 2), "sp not 16-byte aligned");
 
-    // lr and fp are already in place
-    __ addi(sp, fp, 0 - (((unsigned)framesize - 4) << LogBytesPerInt)); // prolog
+    // ra and fp are already in place
+    __ addi(sp, fp, 0 - ((unsigned)framesize << LogBytesPerInt)); // prolog
 
     int frame_complete = __ pc() - start;
 
@@ -2851,7 +3609,6 @@ class StubGenerator: public StubCodeGenerator {
     oop_maps->add_gc_map(the_pc - start, map);
 
     __ reset_last_Java_frame(true);
-    __ ifence();
 
     __ leave();
 
@@ -2936,11 +3693,37 @@ class StubGenerator: public StubCodeGenerator {
     // arraycopy stubs used by compilers
     generate_arraycopy_stubs();
 
+#ifdef COMPILER2
+    if (UseMulAddIntrinsic) {
+      StubRoutines::_mulAdd = generate_mulAdd();
+    }
+
+    if (UseMultiplyToLenIntrinsic) {
+      StubRoutines::_multiplyToLen = generate_multiplyToLen();
+    }
+
+    if (UseSquareToLenIntrinsic) {
+      StubRoutines::_squareToLen = generate_squareToLen();
+    }
+
+    if (UseMontgomeryMultiplyIntrinsic) {
+      StubCodeMark mark(this, "StubRoutines", "montgomeryMultiply");
+      MontgomeryMultiplyGenerator g(_masm, /*squaring*/false);
+      StubRoutines::_montgomeryMultiply = g.generate_multiply();
+    }
+
+    if (UseMontgomerySquareIntrinsic) {
+      StubCodeMark mark(this, "StubRoutines", "montgomerySquare");
+      MontgomeryMultiplyGenerator g(_masm, /*squaring*/true);
+      StubRoutines::_montgomerySquare = g.generate_square();
+    }
+#endif
+
     generate_compare_long_strings();
 
     generate_string_indexof_stubs();
 
-    StubRoutines::riscv64::set_completed();
+    StubRoutines::riscv::set_completed();
   }
 
  public:

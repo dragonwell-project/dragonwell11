@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -58,31 +57,49 @@ class RegisterImpl: public AbstractRegisterImpl {
  public:
   enum {
     number_of_registers      = 32,
-    number_of_byte_registers = 32,
     max_slots_per_register   = 2,
+
+    // integer registers x8 - x15 and floating-point registers f8 - f15 are allocatable
+    // for compressed instructions. See Table 17.2 in spec.
+    compressed_register_base = 8,
+    compressed_register_top  = 15,
   };
 
   // derived registers, offsets, and addresses
-  Register successor() const                          { return as_Register(encoding() + 1); }
+  const Register successor() const { return as_Register(encoding() + 1); }
 
   // construction
   inline friend Register as_Register(int encoding);
 
-  VMReg as_VMReg();
+  VMReg as_VMReg() const;
 
   // accessors
-  int   encoding() const                         { assert(is_valid(), "invalid register"); return (intptr_t)this; }
-  bool  is_valid() const                         { return 0 <= (intptr_t)this && (intptr_t)this < number_of_registers; }
-  bool  has_byte_register() const                { return 0 <= (intptr_t)this && (intptr_t)this < number_of_byte_registers; }
+  int encoding() const            { assert(is_valid(), "invalid register"); return encoding_nocheck(); }
+  int encoding_nocheck() const    { return (intptr_t)this; }
+  bool is_valid() const           { return (unsigned)encoding_nocheck() < number_of_registers; }
   const char* name() const;
-  int   encoding_nocheck() const                 { return (intptr_t)this; }
+
+  // for rvc
+  int compressed_encoding() const {
+    assert(is_compressed_valid(), "invalid compressed register");
+    return encoding() - compressed_register_base;
+  }
+
+  int compressed_encoding_nocheck() const {
+    return encoding_nocheck() - compressed_register_base;
+  }
+
+  bool is_compressed_valid() const {
+    return encoding_nocheck() >= compressed_register_base &&
+           encoding_nocheck() <= compressed_register_top;
+  }
 
   // Return the bit which represents this register.  This is intended
   // to be ORed into a bitmask: for usage see class RegSet below.
-  unsigned long bit(bool should_set = true) const { return should_set ? 1 << encoding() : 0; }
+  uint64_t bit(bool should_set = true) const { return should_set ? 1 << encoding() : 0; }
 };
 
-// The integer registers of the riscv64 architecture
+// The integer registers of the RISCV architecture
 
 CONSTANT_REGISTER_DECLARATION(Register, noreg, (-1));
 
@@ -133,25 +150,43 @@ class FloatRegisterImpl: public AbstractRegisterImpl {
   enum {
     number_of_registers     = 32,
     max_slots_per_register  = 2,
+
+    // float registers in the range of [f8~f15] correspond to RVC. Please see Table 16.2 in spec.
+    compressed_register_base = 8,
+    compressed_register_top  = 15,
   };
 
   // construction
   inline friend FloatRegister as_FloatRegister(int encoding);
 
-  VMReg as_VMReg();
+  VMReg as_VMReg() const;
 
   // derived registers, offsets, and addresses
-  FloatRegister successor() const                          { return as_FloatRegister(encoding() + 1); }
+  FloatRegister successor() const { return as_FloatRegister(encoding() + 1); }
 
   // accessors
-  int   encoding() const                          { assert(is_valid(), "invalid register"); return (intptr_t)this; }
-  int   encoding_nocheck() const                         { return (intptr_t)this; }
-  bool  is_valid() const                          { return 0 <= (intptr_t)this && (intptr_t)this < number_of_registers; }
+  int encoding() const            { assert(is_valid(), "invalid register"); return encoding_nocheck(); }
+  int encoding_nocheck() const    { return (intptr_t)this; }
+  int is_valid() const            { return (unsigned)encoding_nocheck() < number_of_registers; }
   const char* name() const;
 
+  // for rvc
+  int compressed_encoding() const {
+    assert(is_compressed_valid(), "invalid compressed register");
+    return encoding() - compressed_register_base;
+  }
+
+  int compressed_encoding_nocheck() const {
+    return encoding_nocheck() - compressed_register_base;
+  }
+
+  bool is_compressed_valid() const {
+    return encoding_nocheck() >= compressed_register_base &&
+           encoding_nocheck() <= compressed_register_top;
+  }
 };
 
-// The float registers of the RISCV64 architecture
+// The float registers of the RISCV architecture
 
 CONSTANT_REGISTER_DECLARATION(FloatRegister, fnoreg , (-1));
 
@@ -196,7 +231,7 @@ inline VectorRegister as_VectorRegister(int encoding) {
   return (VectorRegister)(intptr_t) encoding;
 }
 
-// The implementation of vector registers for riscv-v
+// The implementation of vector registers for RVV
 class VectorRegisterImpl: public AbstractRegisterImpl {
  public:
   enum {
@@ -207,15 +242,15 @@ class VectorRegisterImpl: public AbstractRegisterImpl {
   // construction
   inline friend VectorRegister as_VectorRegister(int encoding);
 
-  VMReg as_VMReg();
+  VMReg as_VMReg() const;
 
   // derived registers, offsets, and addresses
   VectorRegister successor() const { return as_VectorRegister(encoding() + 1); }
 
   // accessors
-  int encoding() const             { assert(is_valid(), "invalid register"); return (intptr_t)this; }
-  int encoding_nocheck() const     { return (intptr_t)this; }
-  bool is_valid() const            { return 0 <= (intptr_t)this && (intptr_t)this < number_of_registers; }
+  int encoding() const            { assert(is_valid(), "invalid register"); return encoding_nocheck(); }
+  int encoding_nocheck() const    { return (intptr_t)this; }
+  bool is_valid() const           { return (unsigned)encoding_nocheck() < number_of_registers; }
   const char* name() const;
 
 };
@@ -275,21 +310,19 @@ class ConcreteRegisterImpl : public AbstractRegisterImpl {
   // added to make it compile
   static const int max_gpr;
   static const int max_fpr;
-  static const int max_vpr;
 };
 
 // A set of registers
 class RegSet {
   uint32_t _bitset;
 
-public:
   RegSet(uint32_t bitset) : _bitset(bitset) { }
+
+public:
 
   RegSet() : _bitset(0) { }
 
   RegSet(Register r1) : _bitset(r1->bit()) { }
-
-  ~RegSet() {}
 
   RegSet operator+(const RegSet aSet) const {
     RegSet result(_bitset | aSet._bitset);
@@ -330,13 +363,20 @@ public:
   static RegSet range(Register start, Register end) {
     uint32_t bits = ~0;
     bits <<= start->encoding();
-    bits <<= (31 - end->encoding());
-    bits >>= (31 - end->encoding());
+    bits <<= 31 - end->encoding();
+    bits >>= 31 - end->encoding();
 
     return RegSet(bits);
   }
 
   uint32_t bits() const { return _bitset; }
+
+private:
+
+  Register first() {
+    uint32_t first = _bitset & -_bitset;
+    return first ? as_Register(exact_log2(first)) : noreg;
+  }
 };
 
 #endif // CPU_RISCV_REGISTER_RISCV_HPP

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +23,7 @@
  *
  */
 
+#include "precompiled.hpp"
 #include "memory/allocation.hpp"
 #include "memory/allocation.inline.hpp"
 #include "runtime/os.inline.hpp"
@@ -42,16 +43,11 @@ void VM_Version_Ext::initialize_cpu_information(void) {
     return;
   }
 
-  int core_id = -1;
-  int chip_id = -1;
-  int len = 0;
-  char* src_string = NULL;
-
   _no_of_cores  = os::processor_count();
   _no_of_threads = _no_of_cores;
   _no_of_sockets = _no_of_cores;
-  snprintf(_cpu_name, CPU_TYPE_DESC_BUF_SIZE - 1, "Riscv64");
-  snprintf(_cpu_desc, CPU_DETAILED_DESC_BUF_SIZE, "Riscv64 %s", _features_string);
+  snprintf(_cpu_name, CPU_TYPE_DESC_BUF_SIZE - 1, "RISCV64");
+  snprintf(_cpu_desc, CPU_DETAILED_DESC_BUF_SIZE, "RISCV64 %s", _features_string);
   _initialized = true;
 }
 

@@ -1,5 +1,7 @@
 /*
- * Copyright (c) 2003, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Red Hat Inc.
+ * Copyright (c) 2021, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +24,23 @@
  *
  */
 
-package sun.jvm.hotspot.debugger;
+package sun.jvm.hotspot.debugger.proc.riscv64;
 
-public class MachineDescriptionRiscv64 extends MachineDescriptionTwosComplement implements MachineDescription {
-  public long getAddressSize() {
-    return 8;
-  }
+import sun.jvm.hotspot.debugger.*;
+import sun.jvm.hotspot.debugger.proc.*;
 
-  public boolean isLP64() {
-    return true;
-  }
+public class ProcRISCV64ThreadFactory implements ProcThreadFactory {
+    private ProcDebugger debugger;
 
-  public boolean isBigEndian() {
-    return false;
-  }
+    public ProcRISCV64ThreadFactory(ProcDebugger debugger) {
+        this.debugger = debugger;
+    }
+
+    public ThreadProxy createThreadWrapper(Address threadIdentifierAddr) {
+        return new ProcRISCV64Thread(debugger, threadIdentifierAddr);
+    }
+
+    public ThreadProxy createThreadWrapper(long id) {
+        return new ProcRISCV64Thread(debugger, id);
+    }
 }

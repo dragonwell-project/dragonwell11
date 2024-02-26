@@ -24,6 +24,7 @@
  */
 
 #include "precompiled.hpp"
+#include "memory/metaspaceShared.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/thread.inline.hpp"
 
@@ -62,9 +63,15 @@ bool JavaThread::pd_get_top_frame(frame* fr_addr, void* ucontext, bool isInJava)
     intptr_t* ret_fp = NULL;
     intptr_t* ret_sp = NULL;
     ExtendedPC addr = os::Linux::fetch_frame_from_ucontext(this, uc,
-                                                           &ret_sp, &ret_fp);
+      &ret_sp, &ret_fp);
     if (addr.pc() == NULL || ret_sp == NULL ) {
       // ucontext wasn't useful
+      return false;
+    }
+
+    if (MetaspaceShared::is_in_trampoline_frame(addr.pc())) {
+      // In the middle of a trampoline call. Bail out for safety.
+      // This happens rarely so shouldn't affect profiling.
       return false;
     }
 
@@ -91,4 +98,3 @@ bool JavaThread::pd_get_top_frame(frame* fr_addr, void* ucontext, bool isInJava)
 }
 
 void JavaThread::cache_global_variables() { }
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -142,7 +142,7 @@ inline void JavaThread::set_pending_async_exception(oop e) {
   set_has_async_exception();
 }
 
-#if defined(PPC64) || defined(AARCH64) || defined(RISCV64)
+#if defined(PPC64) || defined (AARCH64) || defined(RISCV64)
 inline JavaThreadState JavaThread::thread_state() const    {
   return (JavaThreadState) OrderAccess::load_acquire((volatile jint*)&_thread_state);
 }

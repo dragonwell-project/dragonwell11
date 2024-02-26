@@ -371,7 +371,7 @@ AC_DEFUN_ONCE([HOTSPOT_SETUP_JVM_FEATURES],
   if HOTSPOT_CHECK_JVM_FEATURE(shenandoahgc); then
     if test "x$OPENJDK_TARGET_CPU_ARCH" = "xx86" || \
        test "x$OPENJDK_TARGET_CPU" = "xaarch64" || \
-       test "x$OPENJDK_TARGET_CPU_ARCH" = "xriscv"; then
+       test "x$OPENJDK_TARGET_CPU" = "xriscv64"; then
       AC_MSG_RESULT([yes])
     else
       DISABLED_JVM_FEATURES="$DISABLED_JVM_FEATURES shenandoahgc"

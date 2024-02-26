@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 1998, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +27,6 @@
 #define CPU_RISCV_JNITYPES_RISCV_HPP
 
 #include "jni.h"
-#include "memory/allocation.hpp"
 #include "oops/oop.hpp"
 
 // This file holds platform-dependent routines used to write primitive jni
@@ -67,9 +65,9 @@ public:
   }
 
   // Oops are stored in native format in one JavaCallArgument slot at *to.
-  static inline void    put_obj(oop  from, intptr_t *to)           { *(oop *)(to +   0  ) =  from; }
-  static inline void    put_obj(oop  from, intptr_t *to, int& pos) { *(oop *)(to + pos++) =  from; }
-  static inline void    put_obj(oop *from, intptr_t *to, int& pos) { *(oop *)(to + pos++) = *from; }
+  static inline void    put_obj(oop  from, intptr_t *to)                { *(oop *)(to +   0  ) =  from; }
+  static inline void    put_obj(oop  from, intptr_t *to, int& pos)      { *(oop *)(to + pos++) =  from; }
+  static inline void    put_obj(oop *from, intptr_t *to, int& pos)      { *(oop *)(to + pos++) = *from; }
 
   // Floats are stored in native format in one JavaCallArgument slot at *to.
   static inline void    put_float(jfloat  from, intptr_t *to)           { *(jfloat *)(to +   0  ) =  from;  }

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@
 #include "interpreter/interpreterRuntime.hpp"
 #include "logging/log.hpp"
 #include "oops/arrayOop.hpp"
-#include "oops/markOop.hpp"
 #include "oops/method.hpp"
 #include "oops/methodData.hpp"
 #include "prims/jvmtiExport.hpp"
@@ -67,17 +66,17 @@ void InterpreterMacroAssembler::narrow(Register result) {
   bind(notBool);
   mv(t1, T_BYTE);
   bne(t0, t1, notByte);
-  sign_ext(result, result, registerSize - 8);
+  sign_extend(result, result, 8);
   j(done);
 
   bind(notByte);
   mv(t1, T_CHAR);
   bne(t0, t1, notChar);
-  zero_ext(result, result, registerSize - 16); // turncate upper 48 bits
+  zero_extend(result, result, 16);
   j(done);
 
   bind(notChar);
-  sign_ext(result, result, registerSize - 16); // sign-extend short
+  sign_extend(result, result, 16);
 
   // Nothing to do for T_INT
   bind(done);
@@ -178,7 +177,7 @@ void InterpreterMacroAssembler::check_and_handle_earlyret(Register java_thread) 
 void InterpreterMacroAssembler::get_unsigned_2_byte_index_at_bcp(Register reg, int bcp_offset) {
   assert(bcp_offset >= 0, "bcp is still pointing to start of bytecode");
   lhu(reg, Address(xbcp, bcp_offset));
-  grev16(reg, reg);
+  revb_h(reg, reg);
 }
 
 void InterpreterMacroAssembler::get_dispatch() {
@@ -223,13 +222,12 @@ void InterpreterMacroAssembler::get_cache_and_index_at_bcp(Register cache,
   assert_different_registers(cache, xcpool);
   get_cache_index_at_bcp(index, bcp_offset, index_size);
   assert(sizeof(ConstantPoolCacheEntry) == 4 * wordSize, "adjust code below");
-  // convert from field index to ConstantPoolCacheEntry
-  // riscv64 already has the cache in xcpool so there is no need to
-  // install it in cache. instead we pre-add the indexed offset to
+  // Convert from field index to ConstantPoolCacheEntry
+  // riscv already has the cache in xcpool so there is no need to
+  // install it in cache. Instead we pre-add the indexed offset to
   // xcpool and return it in cache. All clients of this method need to
   // be modified accordingly.
-  slli(cache, index, 5);
-  add(cache, xcpool, cache);
+  shadd(cache, index, xcpool, cache, 5);
 }
 
 
@@ -250,8 +248,8 @@ void InterpreterMacroAssembler::get_cache_and_index_and_bytecode_at_bcp(Register
   lwu(bytecode, bytecode);
   membar(MacroAssembler::LoadLoad | MacroAssembler::LoadStore);
   const int shift_count = (1 + byte_no) * BitsPerByte;
-  slli(bytecode, bytecode, registerSize - (shift_count + BitsPerByte));
-  srli(bytecode, bytecode, registerSize - BitsPerByte);
+  slli(bytecode, bytecode, XLEN - (shift_count + BitsPerByte));
+  srli(bytecode, bytecode, XLEN - BitsPerByte);
 }
 
 void InterpreterMacroAssembler::get_cache_entry_pointer_at_bcp(Register cache,
@@ -261,14 +259,15 @@ void InterpreterMacroAssembler::get_cache_entry_pointer_at_bcp(Register cache,
   assert(cache != tmp, "must use different register");
   get_cache_index_at_bcp(tmp, bcp_offset, index_size);
   assert(sizeof(ConstantPoolCacheEntry) == 4 * wordSize, "adjust code below");
-  // convert from field index to ConstantPoolCacheEntry index
+  // Convert from field index to ConstantPoolCacheEntry index
   // and from word offset to byte offset
-  assert(exact_log2(in_bytes(ConstantPoolCacheEntry::size_in_bytes())) == 2 + LogBytesPerWord, "else change next line");
+  assert(exact_log2(in_bytes(ConstantPoolCacheEntry::size_in_bytes())) == 2 + LogBytesPerWord,
+         "else change next line");
   ld(cache, Address(fp, frame::interpreter_frame_cache_offset * wordSize));
   // skip past the header
   add(cache, cache, in_bytes(ConstantPoolCache::base_offset()));
-  slli(tmp, tmp, 2 + LogBytesPerWord);
-  add(cache, cache, tmp);  // construct pointer to cache entry
+  // construct pointer to cache entry
+  shadd(cache, tmp, cache, tmp, 2 + LogBytesPerWord);
 }
 
 // Load object from cpool->resolved_references(index)
@@ -277,25 +276,22 @@ void InterpreterMacroAssembler::load_resolved_reference_at_index(
   assert_different_registers(result, index);
 
   get_constant_pool(result);
-  // load pointer for resolved_references[] objArray
+  // Load pointer for resolved_references[] objArray
   ld(result, Address(result, ConstantPool::cache_offset_in_bytes()));
   ld(result, Address(result, ConstantPoolCache::resolved_references_offset_in_bytes()));
   resolve_oop_handle(result, tmp);
   // Add in the index
   addi(index, index, arrayOopDesc::base_offset_in_bytes(T_OBJECT) >> LogBytesPerHeapOop);
-  slli(index, index, LogBytesPerHeapOop);
-  add(result, result, index);
+  shadd(result, index, result, index, LogBytesPerHeapOop);
   load_heap_oop(result, Address(result, 0));
 }
 
 void InterpreterMacroAssembler::load_resolved_klass_at_offset(
                                 Register cpool, Register index, Register klass, Register temp) {
-  slli(temp, index, LogBytesPerWord);
-  add(temp, temp, cpool);
+  shadd(temp, index, cpool, temp, LogBytesPerWord);
   lhu(temp, Address(temp, sizeof(ConstantPool))); // temp = resolved_klass_index
   ld(klass, Address(cpool, ConstantPool::resolved_klasses_offset_in_bytes())); // klass = cpool->_resolved_klasses
-  slli(temp, temp, LogBytesPerWord);
-  add(klass, klass, temp);
+  shadd(klass, temp, klass, temp, LogBytesPerWord);
   ld(klass, Address(klass, Array<Klass*>::base_offset_in_bytes()));
 }
 
@@ -507,23 +503,21 @@ void InterpreterMacroAssembler::dispatch_base(TosState state,
   Label safepoint;
   address* const safepoint_table = Interpreter::safept_table(state);
   bool needs_thread_local_poll = generate_poll &&
-                                 SafepointMechanism::uses_thread_local_poll() && table != safepoint_table;
+    SafepointMechanism::uses_thread_local_poll() && table != safepoint_table;
 
   if (needs_thread_local_poll) {
     NOT_PRODUCT(block_comment("Thread-local Safepoint poll"));
     ld(t1, Address(xthread, Thread::polling_page_offset()));
-    andi(t1, t1, 1 << exact_log2(SafepointMechanism::poll_bit()));
+    andi(t1, t1, SafepointMechanism::poll_bit());
     bnez(t1, safepoint);
   }
   if (table == Interpreter::dispatch_table(state)) {
     li(t1, Interpreter::distance_from_dispatch_table(state));
     add(t1, Rs, t1);
-    slli(t1, t1, 3);
-    add(t1, xdispatch, t1);
+    shadd(t1, t1, xdispatch, t1, 3);
   } else {
     mv(t1, (address)table);
-    slli(Rs, Rs, 3);
-    add(t1, t1, Rs);
+    shadd(t1, Rs, t1, Rs, 3);
   }
   ld(t1, Address(t1));
   jr(t1);
@@ -531,8 +525,7 @@ void InterpreterMacroAssembler::dispatch_base(TosState state,
   if (needs_thread_local_poll) {
     bind(safepoint);
     la(t1, ExternalAddress((address)safepoint_table));
-    slli(Rs, Rs, 3);
-    add(t1, t1, Rs);
+    shadd(t1, Rs, t1, Rs, 3);
     ld(t1, Address(t1));
     jr(t1);
   }
@@ -581,7 +574,7 @@ void InterpreterMacroAssembler::remove_activation(
                                 bool throw_monitor_exception,
                                 bool install_monitor_exception,
                                 bool notify_jvmdi) {
-  // Note: Registers x13 xmm0 may be in use for the
+  // Note: Registers x13 may be in use for the
   // result check if synchronized method
   Label unlocked, unlock, no_unlock;
 
@@ -773,7 +766,7 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
 
     Label slow_case;
 
-    // Load object pointer into obj_reg %c_rarg3
+    // Load object pointer into obj_reg c_rarg3
     ld(obj_reg, Address(lock_reg, obj_offset));
 
     if (UseBiasedLocking) {
@@ -791,7 +784,7 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
            "displached header must be first word in BasicObjectLock");
 
     if (PrintBiasedLockingStatistics) {
-      Label fast, fail;
+      Label fail, fast;
       cmpxchg_obj_header(swap_reg, lock_reg, obj_reg, t0, fast, &fail);
       bind(fast);
       atomic_incw(Address((address)BiasedLocking::fast_path_entry_count_addr()),
@@ -804,13 +797,13 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg)
 
     // Test if the oopMark is an obvious stack pointer, i.e.,
     //  1) (mark & 7) == 0, and
-    //  2) rsp <= mark < mark + os::pagesize()
+    //  2) sp <= mark < mark + os::pagesize()
     //
     // These 3 tests can be done by evaluating the following
-    // expression: ((mark - rsp) & (7 - os::vm_page_size())),
+    // expression: ((mark - sp) & (7 - os::vm_page_size())),
     // assuming both stack pointer and pagesize have their
     // least significant 3 bits clear.
-    // NOTE: the oopMark is in swap_reg %x10 as the result of cmpxchg
+    // NOTE: the oopMark is in swap_reg x10 as the result of cmpxchg
     sub(swap_reg, swap_reg, sp);
     li(t0, (int64_t)(7 - os::vm_page_size()));
     andr(swap_reg, swap_reg, t0);
@@ -853,7 +846,9 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
   assert(lock_reg == c_rarg1, "The argument is only for looks. It must be rarg1");
 
   if (UseHeavyMonitors) {
-    call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), lock_reg);
+    call_VM(noreg,
+            CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit),
+            lock_reg);
   } else {
     Label done;
 
@@ -864,10 +859,10 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
     save_bcp(); // Save in case of exception
 
     // Convert from BasicObjectLock structure to object and BasicLock
-    // structure Store the BasicLock address into %x10
+    // structure Store the BasicLock address into x10
     la(swap_reg, Address(lock_reg, BasicObjectLock::lock_offset_in_bytes()));
 
-    // Load oop into obj_reg(%c_rarg3)
+    // Load oop into obj_reg(c_rarg3)
     ld(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes()));
 
     // Free entry
@@ -889,7 +884,9 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg)
 
     // Call the runtime routine for slow case.
     sd(obj_reg, Address(lock_reg, BasicObjectLock::obj_offset_in_bytes())); // restore obj
-    call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit), lock_reg);
+    call_VM(noreg,
+            CAST_FROM_FN_PTR(address, InterpreterRuntime::monitorexit),
+            lock_reg);
 
     bind(done);
 
@@ -1473,7 +1470,7 @@ void InterpreterMacroAssembler::profile_switch_case(Register index,
   if (ProfileInterpreter) {
     Label profile_continue;
 
-    // if no method data exists, go to profile_continue.
+    // If no method data exists, go to profile_continue.
     test_method_data_pointer(mdp, profile_continue);
 
     // Build the base (index * per_case_size_in_bytes()) +
@@ -1651,8 +1648,8 @@ void InterpreterMacroAssembler::profile_obj_type(Register obj, const Address& md
   xorr(obj, obj, t0);
   andi(t0, obj, TypeEntries::type_klass_mask);
   beqz(t0, next); // klass seen before, nothing to
-                           // do. The unknown bit may have been
-                           // set already but no need to check.
+                  // do. The unknown bit may have been
+                  // set already but no need to check.
 
   andi(t0, obj, TypeEntries::type_unknown);
   bnez(t0, next);
@@ -1793,8 +1790,7 @@ void InterpreterMacroAssembler::profile_arguments_type(Register mdp, Register ca
         // CallTypeData/VirtualCallTypeData to reach its end. Non null
         // if there's a return to profile.
         assert(ReturnTypeEntry::static_cell_count() < TypeStackSlotEntries::per_arg_count(), "can't move past ret type");
-        slli(tmp, tmp, exact_log2(DataLayout::cell_size));
-        add(mdp, mdp, tmp);
+        shadd(mdp, tmp, mdp, tmp, exact_log2(DataLayout::cell_size));
       }
       sd(mdp, Address(fp, frame::interpreter_frame_mdp_offset * wordSize));
     } else {
@@ -1833,7 +1829,7 @@ void InterpreterMacroAssembler::profile_return_type(Register mdp, Register ret, 
       beq(t0, tmp, do_profile);
       get_method(tmp);
       lhu(t0, Address(tmp, Method::intrinsic_id_offset_in_bytes()));
-      li(t1, static_cast<int>(vmIntrinsics::_compiledLambdaForm));
+      li(t1, vmIntrinsics::_compiledLambdaForm);
       bne(t0, t1, profile_continue);
       bind(do_profile);
     }
@@ -1876,22 +1872,17 @@ void InterpreterMacroAssembler::profile_parameters_type(Register mdp, Register t
     add(t0, mdp, off_base);
     add(t1, mdp, type_base);
 
-
-    slli(tmp2, tmp1, per_arg_scale);
-    add(tmp2, tmp2, t0);
+    shadd(tmp2, tmp1, t0, tmp2, per_arg_scale);
     // load offset on the stack from the slot for this parameter
     ld(tmp2, Address(tmp2, 0));
     neg(tmp2, tmp2);
 
     // read the parameter from the local area
-
-    slli(tmp2, tmp2, Interpreter::logStackElementSize);
-    add(tmp2, tmp2, xlocals);
+    shadd(tmp2, tmp2, xlocals, tmp2, Interpreter::logStackElementSize);
     ld(tmp2, Address(tmp2, 0));
 
     // profile the parameter
-    slli(t0, tmp1, per_arg_scale);
-    add(t1, t0, t1);
+    shadd(t1, tmp1, t1, t0, per_arg_scale);
     Address arg_type(t1, 0);
     profile_obj_type(tmp2, arg_type, tmp3);
 

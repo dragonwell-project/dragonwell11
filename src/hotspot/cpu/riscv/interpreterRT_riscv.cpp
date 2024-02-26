@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,94 +45,99 @@ Register InterpreterRuntime::SignatureHandlerGenerator::from() { return xlocals;
 Register InterpreterRuntime::SignatureHandlerGenerator::to()   { return sp; }
 Register InterpreterRuntime::SignatureHandlerGenerator::temp() { return t0; }
 
+Register InterpreterRuntime::SignatureHandlerGenerator::next_gpr() {
+  if (_num_reg_int_args < Argument::n_int_register_parameters_c - 1) {
+    return g_INTArgReg[++_num_reg_int_args];
+  }
+  return noreg;
+}
+
+FloatRegister InterpreterRuntime::SignatureHandlerGenerator::next_fpr() {
+  if (_num_reg_fp_args < Argument::n_float_register_parameters_c) {
+    return g_FPArgReg[_num_reg_fp_args++];
+  } else {
+    return fnoreg;
+  }
+}
+
+int InterpreterRuntime::SignatureHandlerGenerator::next_stack_offset() {
+  int ret = _stack_offset;
+  _stack_offset += wordSize;
+  return ret;
+}
+
 InterpreterRuntime::SignatureHandlerGenerator::SignatureHandlerGenerator(
   const methodHandle& method, CodeBuffer* buffer) : NativeSignatureIterator(method) {
   _masm = new MacroAssembler(buffer); // allocate on resourse area by default
-  _num_int_args = (method->is_static() ? 1 : 0);
-  _num_fp_args = 0;
+  _num_reg_int_args = (method->is_static() ? 1 : 0);
+  _num_reg_fp_args = 0;
   _stack_offset = 0;
 }
 
 void InterpreterRuntime::SignatureHandlerGenerator::pass_int() {
   const Address src(from(), Interpreter::local_offset_in_bytes(offset()));
 
-  if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-    __ lw(g_INTArgReg[++_num_int_args], src);
+  Register reg = next_gpr();
+  if (reg != noreg) {
+    __ lw(reg, src);
   } else {
     __ lw(x10, src);
-    __ sw(x10, Address(to(), _stack_offset));
-    _stack_offset += wordSize;
-    _num_int_args++;
+    __ sw(x10, Address(to(), next_stack_offset()));
   }
 }
 
 void InterpreterRuntime::SignatureHandlerGenerator::pass_long() {
   const Address src(from(), Interpreter::local_offset_in_bytes(offset() + 1));
 
-  if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-    __ ld(g_INTArgReg[++_num_int_args], src);
-  } else {
+  Register reg = next_gpr();
+  if (reg != noreg) {
+    __ ld(reg, src);
+  } else  {
     __ ld(x10, src);
-    __ sd(x10, Address(to(), _stack_offset));
-    _stack_offset += wordSize;
-    _num_int_args++;
+    __ sd(x10, Address(to(), next_stack_offset()));
   }
 }
 
 void InterpreterRuntime::SignatureHandlerGenerator::pass_float() {
   const Address src(from(), Interpreter::local_offset_in_bytes(offset()));
 
-  if (_num_fp_args < Argument::n_float_register_parameters_c) {
-    // to c_farg
-    __ flw(g_FPArgReg[_num_fp_args++], src);
-  } else if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-    // to c_rarg
-    __ lwu(g_INTArgReg[++_num_int_args], src);
+  FloatRegister reg = next_fpr();
+  if (reg != fnoreg) {
+    __ flw(reg, src);
   } else {
-    // to stack
-    __ lwu(x10, src);
-    __ sw(x10, Address(to(), _stack_offset));
-    _stack_offset += wordSize;
-    _num_fp_args++;
+    // a floating-point argument is passed according to the integer calling
+    // convention if no floating-point argument register available
+    pass_int();
   }
 }
 
 void InterpreterRuntime::SignatureHandlerGenerator::pass_double() {
   const Address src(from(), Interpreter::local_offset_in_bytes(offset() + 1));
 
-  if (_num_fp_args < Argument::n_float_register_parameters_c) {
-    // to c_farg
-    __ fld(g_FPArgReg[_num_fp_args++], src);
-  } else if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-    // to c_rarg
-    __ ld(g_INTArgReg[++_num_int_args], src);
+  FloatRegister reg = next_fpr();
+  if (reg != fnoreg) {
+    __ fld(reg, src);
   } else {
-    // to stack
-    __ ld(x10, src);
-    __ sd(x10, Address(to(), _stack_offset));
-    _stack_offset += wordSize;
-    _num_fp_args++;
+    // a floating-point argument is passed according to the integer calling
+    // convention if no floating-point argument register available
+    pass_long();
   }
 }
 
 void InterpreterRuntime::SignatureHandlerGenerator::pass_object() {
-
-  if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-    // to reg
-    if (_num_int_args == 0) {
-      assert(offset() == 0, "argument register 1 can only be (non-null) receiver");
-      __ addi(c_rarg1, from(), Interpreter::local_offset_in_bytes(offset()));
-      _num_int_args++;
-    } else {
+  Register reg = next_gpr();
+  if (reg == c_rarg1) {
+    assert(offset() == 0, "argument register 1 can only be (non-null) receiver");
+    __ addi(c_rarg1, from(), Interpreter::local_offset_in_bytes(offset()));
+  } else if (reg != noreg) {
       // c_rarg2-c_rarg7
       __ addi(x10, from(), Interpreter::local_offset_in_bytes(offset()));
-      __ mv(g_INTArgReg[++_num_int_args], 0); //_num_int_args:c_rarg -> 1:c_rarg2,  2:c_rarg3...
+      __ mv(reg, zr); //_num_reg_int_args:c_rarg -> 1:c_rarg2,  2:c_rarg3...
       __ ld(temp(), x10);
       Label L;
       __ beqz(temp(), L);
-      __ mv(g_INTArgReg[_num_int_args], x10);
+      __ mv(reg, x10);
       __ bind(L);
-    }
   } else {
     //to stack
     __ addi(x10, from(), Interpreter::local_offset_in_bytes(offset()));
@@ -141,9 +146,8 @@ void InterpreterRuntime::SignatureHandlerGenerator::pass_object() {
     __ bnez(temp(), L);
     __ mv(x10, zr);
     __ bind(L);
-    __ sd(x10, Address(to(), _stack_offset));
-    _stack_offset += wordSize;
-    _num_int_args++;
+    assert(sizeof(jobject) == wordSize, "");
+    __ sd(x10, Address(to(), next_stack_offset()));
   }
 }
 
@@ -172,84 +176,79 @@ class SlowSignatureHandler
   intptr_t* _int_args;
   intptr_t* _fp_args;
   intptr_t* _fp_identifiers;
-  unsigned int _num_int_args;
-  unsigned int _num_fp_args;
+  unsigned int _num_reg_int_args;
+  unsigned int _num_reg_fp_args;
 
-  virtual void pass_int()
-  {
-    jint from_obj = *(jint *)(_from + Interpreter::local_offset_in_bytes(0));
+  intptr_t* single_slot_addr() {
+    intptr_t* from_addr = (intptr_t*)(_from + Interpreter::local_offset_in_bytes(0));
     _from -= Interpreter::stackElementSize;
+    return from_addr;
+  }
 
-    if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-      *_int_args++ = from_obj;
-      _num_int_args++;
-    } else {
-      *_to++ = from_obj;
-      _num_int_args++;
+  intptr_t* double_slot_addr() {
+    intptr_t* from_addr = (intptr_t*)(_from + Interpreter::local_offset_in_bytes(1));
+    _from -= 2 * Interpreter::stackElementSize;
+    return from_addr;
+  }
+
+  int pass_gpr(intptr_t value) {
+    if (_num_reg_int_args < Argument::n_int_register_parameters_c - 1) {
+      *_int_args++ = value;
+      return _num_reg_int_args++;
+    }
+    return -1;
+  }
+
+  int pass_fpr(intptr_t value) {
+    if (_num_reg_fp_args < Argument::n_float_register_parameters_c) {
+      *_fp_args++ = value;
+      return _num_reg_fp_args++;
+    }
+    return -1;
+  }
+
+  void pass_stack(intptr_t value) {
+    *_to++ = value;
+  }
+
+  virtual void pass_int() {
+    jint value = *(jint*)single_slot_addr();
+    if (pass_gpr(value) < 0) {
+      pass_stack(value);
     }
   }
 
-  virtual void pass_long()
-  {
-    intptr_t from_obj = *(intptr_t*)(_from + Interpreter::local_offset_in_bytes(1));
-    _from -= 2*Interpreter::stackElementSize;
-
-    if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-      *_int_args++ = from_obj;
-      _num_int_args++;
-    } else {
-      *_to++ = from_obj;
-      _num_int_args++;
+  virtual void pass_long() {
+    intptr_t value = *double_slot_addr();
+    if (pass_gpr(value) < 0) {
+      pass_stack(value);
     }
   }
 
-  virtual void pass_object()
-  {
-    intptr_t *from_addr = (intptr_t*)(_from + Interpreter::local_offset_in_bytes(0));
-    _from -= Interpreter::stackElementSize;
-
-    if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-      *_int_args++ = (*from_addr == 0) ? NULL : (intptr_t)from_addr;
-      _num_int_args++;
-    } else {
-      *_to++ = (*from_addr == 0) ? NULL : (intptr_t) from_addr;
-      _num_int_args++;
+  virtual void pass_object() {
+    intptr_t* addr = single_slot_addr();
+    intptr_t value = *addr == 0 ? NULL : (intptr_t)addr;
+    if (pass_gpr(value) < 0) {
+      pass_stack(value);
     }
   }
 
-  virtual void pass_float()
-  {
-    jint from_obj = *(jint*)(_from + Interpreter::local_offset_in_bytes(0));
-    _from -= Interpreter::stackElementSize;
-
-    if (_num_fp_args < Argument::n_float_register_parameters_c) {
-      *_fp_args++ = from_obj;
-      _num_fp_args++;
-    } else if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-      *_int_args++ = from_obj;
-      _num_int_args++;
-    } else {
-      *_to++ = from_obj;
-      _num_fp_args++;
+  virtual void pass_float() {
+    jint value = *(jint*) single_slot_addr();
+    // a floating-point argument is passed according to the integer calling
+    // convention if no floating-point argument register available
+    if (pass_fpr(value) < 0 && pass_gpr(value) < 0) {
+      pass_stack(value);
     }
   }
 
-  virtual void pass_double()
-  {
-    intptr_t from_obj = *(intptr_t*)(_from + Interpreter::local_offset_in_bytes(1));
-    _from -= 2*Interpreter::stackElementSize;
-
-    if (_num_fp_args < Argument::n_float_register_parameters_c) {
-      *_fp_args++ = from_obj;
-      *_fp_identifiers |= (1ull << _num_fp_args); // mark as double
-      _num_fp_args++;
-    } else if (_num_int_args < Argument::n_int_register_parameters_c - 1) {
-      // ld/st from_obj as integer, no need to mark _fp_identifiers
-      *_int_args++ = from_obj;
-      _num_int_args++;
-    } else {
-      *_to++ = from_obj;
-      _num_fp_args++;
+  virtual void pass_double() {
+    intptr_t value = *double_slot_addr();
+    int arg = pass_fpr(value);
+    if (0 <= arg) {
+      *_fp_identifiers |= (1ull << arg); // mark as double
+    } else if (pass_gpr(value) < 0) { // no need to mark if passing by integer registers or stack
+      pass_stack(value);
     }
   }
 
@@ -261,12 +260,13 @@ class SlowSignatureHandler
     _to   = to;
 
     _int_args = to - (method->is_static() ? 16 : 17);
-    _fp_args =  to - 8;
+    _fp_args  = to - 8;
     _fp_identifiers = to - 9;
     *(int*) _fp_identifiers = 0;
-    _num_int_args = (method->is_static() ? 1 : 0);
-    _num_fp_args = 0;
+    _num_reg_int_args = (method->is_static() ? 1 : 0);
+    _num_reg_fp_args = 0;
   }
+
   ~SlowSignatureHandler()
   {
     _from           = NULL;

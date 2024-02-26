@@ -83,28 +83,10 @@ address JNI_FastGetField::generate_fast_get_int_field0(BasicType type) {
   // An even value means there are no ongoing safepoint operations
   __ andi(t0, rcounter, 1);
   __ bnez(t0, slow);
-
-  if (JvmtiExport::can_post_field_access()) {
-    // Using barrier to order wrt. JVMTI check and load of result.
-    __ membar(MacroAssembler::LoadLoad);
-
-    // Check to see if a field access watch has been set before we
-    // take the fast path.
-    int32_t offset2;
-    __ la_patchable(result,
-                    ExternalAddress((address) JvmtiExport::get_field_access_count_addr()),
-                    offset2);
-    __ lwu(result, Address(result, offset2));
-    __ bnez(result, slow);
-
-    __ mv(robj, c_rarg1);
-  } else {
-    // Using address dependency to order wrt. load of result.
-    __ xorr(robj, c_rarg1, rcounter);
-    __ xorr(robj, robj, rcounter);               // obj, since
-                                                 // robj ^ rcounter ^ rcounter == robj
-                                                 // robj is address dependent on rcounter.
-  }
+  __ xorr(robj, c_rarg1, rcounter);
+  __ xorr(robj, robj, rcounter);               // obj, since
+                                               // robj ^ rcounter ^ rcounter == robj
+                                               // robj is address dependent on rcounter.
 
   // Both robj and t0 are clobbered by try_resolve_jobject_in_native.
   BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
@@ -137,10 +119,8 @@ address JNI_FastGetField::generate_fast_get_int_field0(BasicType type) {
     default:        ShouldNotReachHere();
   }
 
-  // Using acquire: Order JVMTI check and load of result wrt. succeeding check
-  // (LoadStore for volatile field).
-  __ membar(MacroAssembler::LoadLoad | MacroAssembler::LoadStore);
-
+  __ xorr(rcounter_addr, rcounter_addr, result);
+  __ xorr(rcounter_addr, rcounter_addr, result);
   __ lw(t0, safepoint_counter_addr);
   __ bne(rcounter, t0, slow);
 
@@ -172,7 +152,6 @@ address JNI_FastGetField::generate_fast_get_int_field0(BasicType type) {
     int32_t tmp_offset = 0;
     __ la_patchable(t0, ExternalAddress(slow_case_addr), tmp_offset);
     __ jalr(x1, t0, tmp_offset);
-    __ ifence();
     __ leave();
     __ ret();
   }

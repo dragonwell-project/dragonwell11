@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,6 +41,10 @@ void CardTableBarrierSetAssembler::store_check(MacroAssembler* masm, Register ob
   BarrierSet* bs = BarrierSet::barrier_set();
   assert(bs->kind() == BarrierSet::CardTableBarrierSet, "Wrong barrier set kind");
 
+  CardTableBarrierSet* ctbs = barrier_set_cast<CardTableBarrierSet>(bs);
+  CardTable* ct = ctbs->card_table();
+  assert(sizeof(*ct->byte_map_base()) == sizeof(jbyte), "adjust this code");
+
   __ srli(obj, obj, CardTable::card_shift);
 
   assert(CardTable::dirty_card_val() == 0, "must be");
@@ -56,6 +60,9 @@ void CardTableBarrierSetAssembler::store_check(MacroAssembler* masm, Register ob
     __ sb(zr, Address(tmp));
     __ bind(L_already_dirty);
   } else {
+    if (ct->scanned_concurrently()) {
+      __ membar(MacroAssembler::StoreStore);
+    }
     __ sb(zr, Address(tmp));
   }
 }
@@ -66,12 +73,16 @@ void CardTableBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembl
   assert_different_registers(start, tmp);
   assert_different_registers(count, tmp);
 
+  BarrierSet* bs = BarrierSet::barrier_set();
+  CardTableBarrierSet* ctbs = barrier_set_cast<CardTableBarrierSet>(bs);
+  CardTable* ct = ctbs->card_table();
+
   Label L_loop, L_done;
   const Register end = count;
 
   __ beqz(count, L_done); // zero count - nothing to do
-  __ slli(count, count, LogBytesPerHeapOop);
-  __ add(end, start, count); // end = start + count << LogBytesPerHeapOop
+  // end = start + count << LogBytesPerHeapOop
+  __ shadd(end, count, start, count, LogBytesPerHeapOop);
   __ sub(end, end, BytesPerHeapOop); // last element address to make inclusive
 
   __ srli(start, start, CardTable::card_shift);
@@ -80,6 +91,9 @@ void CardTableBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembl
 
   __ load_byte_map_base(tmp);
   __ add(start, start, tmp);
+  if (ct->scanned_concurrently()) {
+    __ membar(MacroAssembler::StoreStore);
+  }
 
   __ bind(L_loop);
   __ add(tmp, start, count);

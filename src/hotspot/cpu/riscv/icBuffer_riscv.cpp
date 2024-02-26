@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,7 @@
 
 int InlineCacheBuffer::ic_stub_code_size() {
   // 6: auipc + ld + auipc + jalr + address(2 * instruction_size)
-  // 5: auipc + ld + j + address(2 * instruction_size )
+  // 5: auipc + ld + j + address(2 * instruction_size)
   return (MacroAssembler::far_branches() ? 6 : 5) * NativeInstruction::instruction_size;
 }
 
@@ -47,7 +47,7 @@ void InlineCacheBuffer::assemble_ic_buffer_code(address code_begin, void* cached
   ResourceMark rm;
   CodeBuffer      code(code_begin, ic_stub_code_size());
   MacroAssembler* masm            = new MacroAssembler(&code);
-  // note: even though the code contains an embedded value, we do not need reloc info
+  // Note: even though the code contains an embedded value, we do not need reloc info
   // because
   // (1) the value is old (i.e., doesn't matter for scavenges)
   // (2) these ICStubs are removed *before* a GC happens, so the roots disappear

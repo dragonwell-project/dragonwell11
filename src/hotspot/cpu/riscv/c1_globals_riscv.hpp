@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -58,7 +57,7 @@ define_pd_global(uintx, CodeCacheMinBlockLength,     1);
 define_pd_global(uintx, CodeCacheMinimumUseSpace,    400*K);
 define_pd_global(uintx, MetaspaceSize,               12*M );
 define_pd_global(bool, NeverActAsServerClassMachine, true );
-define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
+define_pd_global(uint64_t, MaxRAM,                   1ULL*G);
 define_pd_global(bool, CICompileOSR,                 true );
 #endif // !TIERED
 define_pd_global(bool, UseTypeProfile,               false);
@@ -67,6 +66,6 @@ define_pd_global(bool, RoundFPResults,               true );
 define_pd_global(bool, LIRFillDelaySlots,            false);
 define_pd_global(bool, OptimizeSinglePrecision,      true );
 define_pd_global(bool, CSEArrayLength,               false);
-define_pd_global(bool, TwoOperandLIRForm,            false );
+define_pd_global(bool, TwoOperandLIRForm,            false);
 
 #endif // CPU_RISCV_C1_GLOBALS_RISCV_HPP

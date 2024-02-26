@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@
 #include "code/codeCache.hpp"
 #include "code/vmreg.inline.hpp"
 
-// Inline functions for RISCV64 frames:
+// Inline functions for RISCV frames:
 
 // Constructors:
 
@@ -143,18 +143,17 @@ inline bool frame::is_older(intptr_t* id) const   { assert(this->id() != NULL &&
 
 inline intptr_t* frame::link() const              { return (intptr_t*) *(intptr_t **)addr_at(link_offset); }
 
+inline intptr_t* frame::link_or_null() const {
+  intptr_t** ptr = (intptr_t **)addr_at(link_offset);
+  return os::is_readable_pointer(ptr) ? *ptr : NULL;
+}
+
 inline intptr_t* frame::unextended_sp() const     { return _unextended_sp; }
 
 // Return address
 inline address* frame::sender_pc_addr() const     { return (address*) addr_at(return_addr_offset); }
 inline address  frame::sender_pc() const          { return *sender_pc_addr(); }
 inline intptr_t* frame::sender_sp() const         { return addr_at(sender_sp_offset); }
-
-// C frame methods
-inline intptr_t* frame::c_frame_link() const      { return (intptr_t*) *(intptr_t **)addr_at(c_frame_link_offset); }
-inline address*  frame::c_frame_sender_pc_addr() const { return (address*) addr_at(c_frame_return_addr_offset); }
-inline address   frame::c_frame_sender_pc() const { return *c_frame_sender_pc_addr(); }
-inline intptr_t* frame::c_frame_sender_sp() const { return addr_at(c_frame_sender_sp_offset); }
 
 inline intptr_t** frame::interpreter_frame_locals_addr() const {
   return (intptr_t**)addr_at(interpreter_frame_locals_offset);
@@ -233,21 +232,14 @@ inline JavaCallWrapper** frame::entry_frame_call_wrapper_addr() const {
 // Compiled frames
 inline oop frame::saved_oop_result(RegisterMap* map) const {
   oop* result_adr = (oop *)map->location(x10->as_VMReg());
-  if(result_adr != NULL) {
-    return (*result_adr);
-  } else {
-    ShouldNotReachHere();
-    return NULL;
-  }
+  guarantee(result_adr != NULL, "bad register save location");
+  return (*result_adr);
 }
 
 inline void frame::set_saved_oop_result(RegisterMap* map, oop obj) {
   oop* result_adr = (oop *)map->location(x10->as_VMReg());
-  if(result_adr != NULL) {
-    *result_adr = obj;
-  } else {
-    ShouldNotReachHere();
-  }
+  guarantee(result_adr != NULL, "bad register save location");
+  *result_adr = obj;
 }
 
 #endif // CPU_RISCV_FRAME_RISCV_INLINE_HPP

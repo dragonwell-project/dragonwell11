@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,8 +30,7 @@
 // Inline functions for memory copy and fill.
 
 // Contains inline asm implementations
-#include OS_CPU_HEADER(copy)
-
+#include OS_CPU_HEADER_INLINE(copy)
 
 static void pd_fill_to_words(HeapWord* tohw, size_t count, juint value) {
   julong* to = (julong*) tohw;

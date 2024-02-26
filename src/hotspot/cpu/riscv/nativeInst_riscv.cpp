@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -235,24 +235,20 @@ void NativeMovConstReg::set_data(intptr_t x) {
   // Find and replace the oop/metadata corresponding to this
   // instruction in oops section.
   CodeBlob* cb = CodeCache::find_blob(instruction_address());
-  if(cb != NULL) {
-    nmethod* nm = cb->as_nmethod_or_null();
-    if (nm != NULL) {
-      RelocIterator iter(nm, instruction_address(), next_instruction_address());
-      while (iter.next()) {
-        if (iter.type() == relocInfo::oop_type) {
-          oop* oop_addr = iter.oop_reloc()->oop_addr();
-          *oop_addr = cast_to_oop(x);
-          break;
-        } else if (iter.type() == relocInfo::metadata_type) {
-          Metadata** metadata_addr = iter.metadata_reloc()->metadata_addr();
-          *metadata_addr = (Metadata*)x;
-          break;
-        }
+  nmethod* nm = cb->as_nmethod_or_null();
+  if (nm != NULL) {
+    RelocIterator iter(nm, instruction_address(), next_instruction_address());
+    while (iter.next()) {
+      if (iter.type() == relocInfo::oop_type) {
+        oop* oop_addr = iter.oop_reloc()->oop_addr();
+        *oop_addr = cast_to_oop(x);
+        break;
+      } else if (iter.type() == relocInfo::metadata_type) {
+        Metadata** metadata_addr = iter.metadata_reloc()->metadata_addr();
+        *metadata_addr = (Metadata*)x;
+        break;
       }
     }
-  } else {
-    ShouldNotReachHere();
   }
 }
 
@@ -326,10 +322,9 @@ bool NativeInstruction::is_safepoint_poll() {
 
 bool NativeInstruction::is_lwu_to_zr(address instr) {
   assert_cond(instr != NULL);
-  unsigned insn = *(unsigned*)instr;
-  return (Assembler::extract(insn, 6, 0) == 0b0000011 &&
-          Assembler::extract(insn, 14, 12) == 0b110 &&
-          Assembler::extract(insn, 11, 7) == 0b00000); // zr
+  return (extract_opcode(instr) == 0b0000011 &&
+          extract_funct3(instr) == 0b110 &&
+          extract_rd(instr) == zr);         // zr
 }
 
 // A 16-bit instruction with all bits ones is permanently reserved as an illegal instruction.
@@ -358,7 +353,7 @@ void NativeJump::patch_verified_entry(address entry, address verified_entry, add
 
   assert(nativeInstruction_at(verified_entry)->is_jump_or_nop() ||
          nativeInstruction_at(verified_entry)->is_sigill_zombie_not_entrant(),
-         "riscv64 cannot replace non-jump with jump");
+         "riscv cannot replace non-jump with jump");
 
   // Patch this nmethod atomically.
   if (Assembler::reachable_from_branch_at(verified_entry, dest)) {
@@ -384,8 +379,6 @@ void NativeJump::patch_verified_entry(address entry, address verified_entry, add
 }
 
 void NativeGeneralJump::insert_unconditional(address code_pos, address entry) {
-  NativeGeneralJump* n_jump = (NativeGeneralJump*)code_pos;
-
   CodeBuffer cb(code_pos, instruction_size);
   MacroAssembler a(&cb);
 
@@ -434,4 +427,3 @@ void NativeMembar::set_kind(uint32_t order_kind) {
   address membar = addr_at(0);
   *(unsigned int*) membar = insn;
 }
-

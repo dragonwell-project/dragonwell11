@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2017, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@
 #include "utilities/align.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/macros.hpp"
-
 
 int AbstractInterpreter::BasicType_as_index(BasicType type) {
   int i = 0;
@@ -102,7 +101,7 @@ int AbstractInterpreter::size_activation(int max_stack,
              // frame do we need to allow max_stack words.
              (is_top_frame ? max_stack : temps + extra_args);
 
-  // On riscv64 we always keep the stack pointer 16-aligned, so we
+  // On riscv we always keep the stack pointer 16-aligned, so we
   // must round up here.
   size = align_up(size, 2);
 
@@ -134,10 +133,9 @@ void AbstractInterpreter::layout_activation(Method* method,
 #endif
 
   interpreter_frame->interpreter_frame_set_method(method);
-  // NOTE the difference in using sender_sp and
-  // interpreter_frame_sender_sp interpreter_frame_sender_sp is
-  // the original sp of the caller (the unextended_sp) and
-  // sender_sp is fp+8/16 (32bit/64bit)
+  // NOTE the difference in using sender_sp and interpreter_frame_sender_sp
+  // interpreter_frame_sender_sp is the original sp of the caller (the unextended_sp)
+  // and sender_sp is fp
   intptr_t* locals = NULL;
   if (caller->is_interpreted_frame()) {
     locals = caller->interpreter_frame_last_sp() + caller_actual_parameters - 1;
@@ -171,6 +169,7 @@ void AbstractInterpreter::layout_activation(Method* method,
     interpreter_frame->set_interpreter_frame_sender_sp(caller->sp() +
                                                        extra_locals);
   }
+
   *interpreter_frame->interpreter_frame_cache_addr() =
     method->constants()->cache();
   *interpreter_frame->interpreter_frame_mirror_addr() =

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1999, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@
 #include "gc/shared/collectedHeap.hpp"
 #include "interpreter/interpreter.hpp"
 #include "oops/arrayOop.hpp"
-#include "oops/markOop.hpp"
 #include "runtime/basicLock.hpp"
 #include "runtime/biasedLocking.hpp"
 #include "runtime/os.hpp"
@@ -51,7 +50,7 @@ void C1_MacroAssembler::float_cmp(bool is_float, int unordered_result,
   }
 }
 
-int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr, Register tmp, Label& slow_case) {
+int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr, Register scratch, Label& slow_case) {
   const int aligned_mask = BytesPerWord - 1;
   const int hdr_offset = oopDesc::mark_offset_in_bytes();
   assert(hdr != obj && hdr != disp_hdr && obj != disp_hdr, "registers must be different");
@@ -64,8 +63,8 @@ int C1_MacroAssembler::lock_object(Register hdr, Register obj, Register disp_hdr
   sd(obj, Address(disp_hdr, BasicObjectLock::obj_offset_in_bytes()));
 
   if (UseBiasedLocking) {
-    assert(tmp != noreg, "should have tmp register at this point");
-    null_check_offset = biased_locking_enter(disp_hdr, obj, hdr, tmp, false, done, &slow_case);
+    assert(scratch != noreg, "should have scratch register at this point");
+    null_check_offset = biased_locking_enter(disp_hdr, obj, hdr, scratch, false, done, &slow_case);
   } else {
     null_check_offset = offset();
   }
@@ -182,7 +181,7 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
 }
 
 // preserves obj, destroys len_in_bytes
-void C1_MacroAssembler::initialize_body(Register obj, Register len_in_bytes, int hdr_size_in_bytes, Register tmp1) {
+void C1_MacroAssembler::initialize_body(Register obj, Register len_in_bytes, int hdr_size_in_bytes, Register tmp) {
   assert(hdr_size_in_bytes >= 0, "header size must be positive or 0");
   Label done;
 
@@ -194,7 +193,7 @@ void C1_MacroAssembler::initialize_body(Register obj, Register len_in_bytes, int
   if (hdr_size_in_bytes) {
     add(obj, obj, hdr_size_in_bytes);
   }
-  zero_memory(obj, len_in_bytes, tmp1);
+  zero_memory(obj, len_in_bytes, tmp);
   if (hdr_size_in_bytes) {
     sub(obj, obj, hdr_size_in_bytes);
   }
@@ -288,8 +287,7 @@ void C1_MacroAssembler::allocate_array(Register obj, Register len, Register tmp1
   const Register arr_size = tmp2; // okay to be the same
   // align object end
   mv(arr_size, (int32_t)header_size * BytesPerWord + MinObjAlignmentInBytesMask);
-  slli(t0, len, f);
-  add(arr_size, arr_size, t0);
+  shadd(arr_size, len, arr_size, t0, f);
   andi(arr_size, arr_size, ~(uint)MinObjAlignmentInBytesMask);
 
   try_allocate(obj, arr_size, 0, tmp1, tmp2, slow_case);
@@ -320,14 +318,14 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache, L
 
 void C1_MacroAssembler::build_frame(int framesize, int bang_size_in_bytes) {
   // If we have to make this method not-entrant we'll overwrite its
-  // first instruction with a jump.  For this action to be legal we
+  // first instruction with a jump. For this action to be legal we
   // must ensure that this first instruction is a J, JAL or NOP.
   // Make it a NOP.
   nop();
+
   assert(bang_size_in_bytes >= framesize, "stack bang size incorrect");
   // Make sure there is enough stack space for this method's activation.
-  // Note that we do this before doing an enter().
-
+  // Note that we do this before creating a frame.
   generate_stack_overflow_check(bang_size_in_bytes);
   MacroAssembler::build_frame(framesize);
 }
@@ -338,21 +336,15 @@ void C1_MacroAssembler::remove_frame(int framesize) {
 
 
 void C1_MacroAssembler::verified_entry() {
-  // If we have to make this method not-entrant we'll overwrite its
-  // first instruction with a jump. For this action to be legal we
-  // must ensure that this first instruction is a J, JAL or NOP.
-  // Make it a NOP.
-
-  nop();
 }
 
 void C1_MacroAssembler::load_parameter(int offset_in_words, Register reg) {
-  //  fp + 0: link
-  //     + 1: return address
-  //     + 2: argument with offset 0
-  //     + 3: argument with offset 1
-  //     + 4: ...
-  ld(reg, Address(fp, (offset_in_words + 2) * BytesPerWord));
+  //  fp + -2: link
+  //     + -1: return address
+  //     +  0: argument with offset 0
+  //     +  1: argument with offset 1
+  //     +  2: ...
+  ld(reg, Address(fp, offset_in_words * BytesPerWord));
 }
 
 #ifndef PRODUCT
@@ -431,9 +423,9 @@ void C1_MacroAssembler::c1_cmp_branch(int cmpFlag, Register op1, Register op2, L
   if (type == T_OBJECT || type == T_ARRAY) {
     assert(cmpFlag == lir_cond_equal || cmpFlag == lir_cond_notEqual, "Should be equal or notEqual");
     if (cmpFlag == lir_cond_equal) {
-      oop_beq(op1, op2, label, is_far);
+      beq(op1, op2, label, is_far);
     } else {
-      oop_bne(op1, op2, label, is_far);
+      bne(op1, op2, label, is_far);
     }
   } else {
     assert(cmpFlag >= 0 && cmpFlag < (int)(sizeof(c1_cond_branch) / sizeof(c1_cond_branch[0])),

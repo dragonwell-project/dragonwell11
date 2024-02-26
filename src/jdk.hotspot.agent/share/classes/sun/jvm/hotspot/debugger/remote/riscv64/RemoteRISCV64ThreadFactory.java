@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Red Hat Inc.
+ * Copyright (c) 2021, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,22 +21,26 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
+ *
  */
 
-#ifndef OS_CPU_LINUX_RISCV_GC_Z_ZSYSCALL_LINUX_RISCV_HPP
-#define OS_CPU_LINUX_RISCV_GC_Z_ZSYSCALL_LINUX_RISCV_HPP
+package sun.jvm.hotspot.debugger.remote.riscv64;
 
-#include <sys/syscall.h>
+import sun.jvm.hotspot.debugger.*;
+import sun.jvm.hotspot.debugger.remote.*;
 
-//
-// Support for building on older Linux systems
-//
+public class RemoteRISCV64ThreadFactory implements RemoteThreadFactory {
+  private RemoteDebuggerClient debugger;
 
-#ifndef SYS_memfd_create
-#define SYS_memfd_create     279
-#endif
-#ifndef SYS_fallocate
-#define SYS_fallocate        47
-#endif
+  public RemoteRISCV64ThreadFactory(RemoteDebuggerClient debugger) {
+    this.debugger = debugger;
+  }
 
-#endif // OS_CPU_LINUX_RISCV_GC_Z_ZSYSCALL_LINUX_RISCV_HPP
+  public ThreadProxy createThreadWrapper(Address threadIdentifierAddr) {
+    return new RemoteRISCV64Thread(debugger, threadIdentifierAddr);
+  }
+
+  public ThreadProxy createThreadWrapper(long id) {
+    return new RemoteRISCV64Thread(debugger, id);
+  }
+}

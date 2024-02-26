@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,6 +34,7 @@
 #include "prims/methodHandles.hpp"
 #include "runtime/flags/flagSetting.hpp"
 #include "runtime/frame.inline.hpp"
+#include "runtime/stubRoutines.hpp"
 
 #define __ _masm->
 
@@ -91,7 +92,7 @@ void MethodHandles::verify_klass(MacroAssembler* _masm,
   BLOCK_COMMENT("} verify_klass");
 }
 
-void MethodHandles::verify_ref_kind(MacroAssembler* _masm, int ref_kind, Register member_reg, Register temp) {  }
+void MethodHandles::verify_ref_kind(MacroAssembler* _masm, int ref_kind, Register member_reg, Register temp) {}
 
 #endif //ASSERT
 
@@ -154,7 +155,7 @@ void MethodHandles::jump_to_lambda_form(MacroAssembler* _masm,
                         sizeof(u2), /*is_signed*/ false);
     Label L;
     __ ld(t0, __ argument_address(temp2, -1));
-    __ oop_beq(recv, t0, L);
+    __ beq(recv, t0, L);
     __ ld(x10, __ argument_address(temp2, -1));
     __ ebreak();
     __ BIND(L);
@@ -181,8 +182,9 @@ address MethodHandles::generate_method_handle_interpreter_entry(MacroAssembler* 
 
   // x30: sender SP (must preserve; see prepare_to_jump_from_interpreted)
   // xmethod: Method*
-  // x13: argument locator (parameter slot count, added to rsp)
+  // x13: argument locator (parameter slot count, added to sp)
   // x11: used as temp to hold mh or receiver
+  // x10, x29: garbage temps, blown away
   Register argp   = x13;   // argument list ptr, live on error paths
   Register mh     = x11;   // MH receiver; dies quickly and is recycled
 
@@ -232,7 +234,6 @@ address MethodHandles::generate_method_handle_interpreter_entry(MacroAssembler* 
   trace_method_handle_interpreter_entry(_masm, iid);
   if (iid == vmIntrinsics::_invokeBasic) {
     generate_method_handle_dispatch(_masm, iid, mh, noreg, not_for_compiler_entry);
-
   } else {
     // Adjust argument list by popping the trailing MemberName argument.
     Register recv = noreg;
@@ -430,7 +431,7 @@ void MethodHandles::generate_method_handle_dispatch(MacroAssembler* _masm,
 
 #ifndef PRODUCT
 void trace_method_handle_stub(const char* adaptername,
-                              oop mh,
+                              oopDesc* mh,
                               intptr_t* saved_regs,
                               intptr_t* entry_sp) {  }
 

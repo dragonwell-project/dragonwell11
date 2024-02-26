@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,8 +28,8 @@
 #include "code/vmreg.hpp"
 
 void VMRegImpl::set_regName() {
-  Register reg = ::as_Register(0);
   int i = 0;
+  Register reg = ::as_Register(0);
   for ( ; i < ConcreteRegisterImpl::max_gpr ; ) {
     for (int j = 0 ; j < RegisterImpl::max_slots_per_register ; j++) {
       regName[i++] = reg->name();
@@ -46,7 +45,7 @@ void VMRegImpl::set_regName() {
     freg = freg->successor();
   }
 
-  for ( ; i < ConcreteRegisterImpl::number_of_registers ; i ++ ) {
+  for ( ; i < ConcreteRegisterImpl::number_of_registers ; i++) {
     regName[i] = "NON-GPR-FPR";
   }
 }

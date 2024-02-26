@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 1999, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -108,7 +108,7 @@ intptr_t* os::Linux::ucontext_get_fp(const ucontext_t * uc) {
 // frames. Currently we don't do that on Linux, so it's the same as
 // os::fetch_frame_from_context().
 ExtendedPC os::Linux::fetch_frame_from_ucontext(Thread* thread,
-                                                const ucontext_t* uc, intptr_t** ret_sp, intptr_t** ret_fp) {
+  const ucontext_t* uc, intptr_t** ret_sp, intptr_t** ret_fp) {
 
   assert(thread != NULL, "just checking");
   assert(ret_sp != NULL, "just checking");
@@ -118,9 +118,9 @@ ExtendedPC os::Linux::fetch_frame_from_ucontext(Thread* thread,
 }
 
 ExtendedPC os::fetch_frame_from_context(const void* ucVoid,
-                                        intptr_t** ret_sp, intptr_t** ret_fp) {
+                    intptr_t** ret_sp, intptr_t** ret_fp) {
 
-  ExtendedPC  epc;
+  ExtendedPC epc;
   const ucontext_t* uc = (const ucontext_t*)ucVoid;
 
   if (uc != NULL) {
@@ -173,14 +173,14 @@ bool os::Linux::get_frame_at_stack_banging_point(JavaThread* thread, ucontext_t*
       // stack overflow handling
       return false;
     } else {
-      // In compiled code, the stack banging is performed before LR
-      // has been saved in the frame.  LR is live, and SP and FP
+      // In compiled code, the stack banging is performed before RA
+      // has been saved in the frame.  RA is live, and SP and FP
       // belong to the caller.
-      intptr_t* frame_fp = os::Linux::ucontext_get_fp(uc);
-      intptr_t* frame_sp = os::Linux::ucontext_get_sp(uc);
-      address frame_pc = (address)(uintptr_t)(uc->uc_mcontext.__gregs[REG_LR] -
-                                              NativeInstruction::instruction_size);
-      *fr = frame(frame_sp, frame_fp, frame_pc);
+      intptr_t* fp = os::Linux::ucontext_get_fp(uc);
+      intptr_t* sp = os::Linux::ucontext_get_sp(uc);
+      address pc = (address)(uc->uc_mcontext.__gregs[REG_LR]
+                         - NativeInstruction::instruction_size);
+      *fr = frame(sp, fp, pc);
       if (!fr->is_java_frame()) {
         assert(fr->safe_for_sender(thread), "Safety check");
         assert(!fr->is_first_frame(), "Safety check");
@@ -195,14 +195,14 @@ bool os::Linux::get_frame_at_stack_banging_point(JavaThread* thread, ucontext_t*
 // By default, gcc always saves frame pointer rfp on this stack. This
 // may get turned off by -fomit-frame-pointer.
 frame os::get_sender_for_C_frame(frame* fr) {
-  return frame(fr->c_frame_sender_sp(), fr->c_frame_link(), fr->c_frame_sender_pc());
+  return frame(fr->sender_sp(), fr->link(), fr->sender_pc());
 }
 
 NOINLINE frame os::current_frame() {
   intptr_t **sender_sp = (intptr_t **)__builtin_frame_address(0);
-  if(sender_sp != NULL) {
+  if (sender_sp != NULL) {
     frame myframe((intptr_t*)os::current_stack_pointer(),
-                  sender_sp[frame::c_frame_link_offset],
+                  sender_sp[frame::link_offset],
                   CAST_FROM_FN_PTR(address, os::current_frame));
     if (os::is_first_C_frame(&myframe)) {
       // stack is not walkable
@@ -216,83 +216,7 @@ NOINLINE frame os::current_frame() {
   }
 }
 
-bool os::is_first_C_frame(frame* fr) {
-  // Load up sp, fp, sender sp and sender fp, check for reasonable values.
-  // Check usp first, because if that's bad the other accessors may fault
-  // on some architectures.  Ditto ufp second, etc.
-  uintptr_t fp_align_mask = (uintptr_t)(sizeof(address) - 1);
-  // sp on amd can be 32 bit aligned.
-  uintptr_t sp_align_mask = (uintptr_t)(sizeof(int) - 1);
-
-  uintptr_t usp    = (uintptr_t)fr->sp();
-  if ((usp & sp_align_mask) != 0) {
-    return true;
-  }
-
-  uintptr_t ufp    = (uintptr_t)fr->fp();
-  if ((ufp & fp_align_mask) != 0) {
-    return true;
-  }
-
-  uintptr_t old_sp = (uintptr_t)fr->c_frame_sender_sp();
-  if ((old_sp & sp_align_mask) != 0) {
-    return true;
-  }
-  if (old_sp == 0 || old_sp == (uintptr_t)-1) {
-    return true;
-  }
-
-  uintptr_t old_fp = (uintptr_t)fr->c_frame_link();
-  if ((old_fp & fp_align_mask) != 0) {
-    return true;
-  }
-  if (old_fp == 0 || old_fp == (uintptr_t)-1 || old_fp == ufp) {
-    return true;
-  }
-
-  // stack grows downwards; if old_fp is below current fp or if the stack
-  // frame is too large, either the stack is corrupted or fp is not saved
-  // on stack (i.e. on x86, ebp may be used as general register). The stack
-  // is not walkable beyond current frame.
-  if (old_fp < ufp) {
-    return true;
-  }
-  if (old_fp - ufp > 64 * K) {
-    return true;
-  }
-
-  return false;
-}
-
-int os::get_native_stack(address* stack, int frames, int toSkip) {
-  int frame_idx = 0;
-  int num_of_frames = 0;  // number of frames captured
-  frame fr = os::current_frame();
-  while (fr.pc() && frame_idx < frames) {
-    if (toSkip > 0) {
-      toSkip --;
-    } else {
-      stack[frame_idx ++] = fr.pc();
-    }
-    if (fr.fp() == NULL || fr.cb() != NULL ||
-        fr.c_frame_sender_pc() == NULL || os::is_first_C_frame(&fr)) {
-      break;
-    }
-
-    if (fr.c_frame_sender_pc() && !os::is_first_C_frame(&fr)) {
-      fr = os::get_sender_for_C_frame(&fr);
-    } else {
-      break;
-    }
-  }
-  num_of_frames = frame_idx;
-  for (; frame_idx < frames; frame_idx ++) {
-    stack[frame_idx] = NULL;
-  }
-
-  return num_of_frames;
-}
-
+// Utility functions
 extern "C" JNIEXPORT int
 JVM_handle_linux_signal(int sig,
                         siginfo_t* info,
@@ -327,36 +251,42 @@ JVM_handle_linux_signal(int sig,
 
 #ifdef CAN_SHOW_REGISTERS_ON_ASSERT
   if ((sig == SIGSEGV || sig == SIGBUS) && info != NULL && info->si_addr == g_assert_poison) {
-    handle_assert_poison_fault(ucVoid, info->si_addr);
-    return 1;
+    if (handle_assert_poison_fault(ucVoid, info->si_addr)) {
+      return 1;
+    }
   }
 #endif
 
   JavaThread* thread = NULL;
   VMThread* vmthread = NULL;
   if (os::Linux::signal_handlers_are_installed) {
-    if (t != NULL ) {
+    if (t != NULL ){
       if(t->is_Java_thread()) {
-        thread = (JavaThread*)t;
-      } else if(t->is_VM_thread()) {
+        thread = (JavaThread *) t;
+      }
+      else if(t->is_VM_thread()){
         vmthread = (VMThread *)t;
       }
+    }
+  }
+
+  // Handle SafeFetch faults
+  if ((sig == SIGSEGV || sig == SIGBUS) && uc != NULL) {
+    address const pc = (address) os::Linux::ucontext_get_pc(uc);
+    if (pc && StubRoutines::is_safefetch_fault(pc)) {
+      os::Linux::ucontext_set_pc(uc, StubRoutines::continuation_for_safefetch_fault(pc));
+      return 1;
     }
   }
 
   // decide if this trap can be handled by a stub
   address stub = NULL;
 
-  address pc = NULL;
+  address pc          = NULL;
 
   //%note os_trap_1
   if (info != NULL && uc != NULL && thread != NULL) {
     pc = (address) os::Linux::ucontext_get_pc(uc);
-
-    if (StubRoutines::is_safefetch_fault(pc)) {
-      os::Linux::ucontext_set_pc(uc, StubRoutines::continuation_for_safefetch_fault(pc));
-      return 1;
-    }
 
     // Handle ALL stack overflow variations here
     if (sig == SIGSEGV) {
@@ -372,12 +302,12 @@ JVM_handle_linux_signal(int sig,
               if (os::Linux::get_frame_at_stack_banging_point(thread, uc, &fr)) {
                 assert(fr.is_java_frame(), "Must be a Java frame");
                 frame activation =
-                        SharedRuntime::look_for_reserved_stack_annotated_method(thread, fr);
+                  SharedRuntime::look_for_reserved_stack_annotated_method(thread, fr);
                 if (activation.sp() != NULL) {
                   thread->disable_stack_reserved_zone();
                   if (activation.is_interpreted_frame()) {
                     thread->set_reserved_stack_activation((address)(
-                            activation.fp() + frame::interpreter_frame_initial_sp_offset));
+                      activation.fp() + frame::interpreter_frame_initial_sp_offset));
                   } else {
                     thread->set_reserved_stack_activation((address)activation.unextended_sp());
                   }
@@ -410,14 +340,14 @@ JVM_handle_linux_signal(int sig,
           // current thread was created by user code with MAP_GROWSDOWN flag
           // and then attached to VM. See notes in os_linux.cpp.
           if (thread->osthread()->expanding_stack() == 0) {
-            thread->osthread()->set_expanding_stack();
-            if (os::Linux::manually_expand_stack(thread, addr)) {
-              thread->osthread()->clear_expanding_stack();
-              return 1;
-            }
-            thread->osthread()->clear_expanding_stack();
+             thread->osthread()->set_expanding_stack();
+             if (os::Linux::manually_expand_stack(thread, addr)) {
+               thread->osthread()->clear_expanding_stack();
+               return 1;
+             }
+             thread->osthread()->clear_expanding_stack();
           } else {
-            fatal("recursive segv. expanding stack.");
+             fatal("recursive segv. expanding stack.");
           }
         }
       }
@@ -455,7 +385,7 @@ JVM_handle_linux_signal(int sig,
           stub = SharedRuntime::handle_unsafe_access(thread, next_pc);
         }
       } else if (sig == SIGFPE  &&
-          (info->si_code == FPE_INTDIV || info->si_code == FPE_FLTDIV)) {
+                 (info->si_code == FPE_INTDIV || info->si_code == FPE_FLTDIV)) {
         stub =
           SharedRuntime::
           continuation_for_implicit_exception(thread,
@@ -463,7 +393,7 @@ JVM_handle_linux_signal(int sig,
                                               SharedRuntime::
                                               IMPLICIT_DIVIDE_BY_ZERO);
       } else if (sig == SIGSEGV &&
-              !MacroAssembler::needs_explicit_null_check((intptr_t)info->si_addr)) {
+               !MacroAssembler::needs_explicit_null_check((intptr_t)info->si_addr)) {
           // Determination of interpreter/vtable stub/compiled code null exception
           stub = SharedRuntime::continuation_for_implicit_exception(thread, pc, SharedRuntime::IMPLICIT_NULL);
       }
@@ -477,9 +407,9 @@ JVM_handle_linux_signal(int sig,
     // jni_fast_Get<Primitive>Field can trap at certain pc's if a GC kicks in
     // and the heap gets shrunk before the field access.
     if ((sig == SIGSEGV) || (sig == SIGBUS)) {
-      address addr_slow = JNI_FastGetField::find_slowcase_pc(pc);
-      if (addr_slow != (address)-1) {
-        stub = addr_slow;
+      address addr = JNI_FastGetField::find_slowcase_pc(pc);
+      if (addr != (address)-1) {
+        stub = addr;
       }
     }
 
@@ -497,9 +427,7 @@ JVM_handle_linux_signal(int sig,
 
   if (stub != NULL) {
     // save all thread context in case we need to restore it
-    if (thread != NULL) {
-      thread->set_saved_exception_pc(pc);
-    }
+    if (thread != NULL) thread->set_saved_exception_pc(pc);
 
     os::Linux::ucontext_set_pc(uc, stub);
     return true;
@@ -507,7 +435,7 @@ JVM_handle_linux_signal(int sig,
 
   // signal-chaining
   if (os::Linux::chained_handler(sig, info, ucVoid)) {
-    return true;
+     return true;
   }
 
   if (!abort_if_unrecognized) {
@@ -540,7 +468,6 @@ int os::Linux::get_fpu_control_word(void) {
 
 void os::Linux::set_fpu_control_word(int fpu_control) {
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // thread stack
@@ -586,7 +513,7 @@ void os::print_context(outputStream *st, const void *context) {
 
   intptr_t *frame_sp = (intptr_t *)os::Linux::ucontext_get_sp(uc);
   st->print_cr("Top of Stack: (sp=" PTR_FORMAT ")", p2i(frame_sp));
-  print_hex_dump(st, (address)frame_sp, (address)(frame_sp + 8 * sizeof(intptr_t)), sizeof(intptr_t));
+  print_hex_dump(st, (address)frame_sp, (address)(frame_sp + 64), sizeof(intptr_t));
   st->cr();
 
   // Note: it may be unsafe to inspect memory near pc. For example, pc may

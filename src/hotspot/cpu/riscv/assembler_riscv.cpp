@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,7 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
+ *
  */
 
 #include <stdio.h>
@@ -34,7 +35,6 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/sharedRuntime.hpp"
-#include "nativeInst_riscv.hpp"
 
 int AbstractAssembler::code_fill_byte() {
   return 0;
@@ -80,11 +80,16 @@ void Assembler::subw(Register Rd, Register Rn, int64_t decrement, Register temp)
   }
 }
 
-void Assembler::li(Register Rd, int64_t imm) {
+void Assembler::zext_w(Register Rd, Register Rs) {
+  add_uw(Rd, Rs, zr);
+}
+
+void Assembler::_li(Register Rd, int64_t imm) {
   // int64_t is in range 0x8000 0000 0000 0000 ~ 0x7fff ffff ffff ffff
   int shift = 12;
   int64_t upper = imm, lower = imm;
-  // Split imm to a lower 12-bit sign-extended part and the remainder, because addi will sign-extend the lower imm.
+  // Split imm to a lower 12-bit sign-extended part and the remainder,
+  // because addi will sign-extend the lower imm.
   lower = ((int32_t)imm << 20) >> 20;
   upper -= lower;
 
@@ -98,8 +103,7 @@ void Assembler::li(Register Rd, int64_t imm) {
     if (lower != 0) {
       addi(Rd, Rd, lower);
     }
-  }
-  else {
+  } else {
     // 32-bit integer
     Register hi_Rd = zr;
     if (upper != 0) {
@@ -113,8 +117,8 @@ void Assembler::li(Register Rd, int64_t imm) {
 }
 
 void Assembler::li64(Register Rd, int64_t imm) {
-   // Load upper 32 bits. Upper = imm[63:32], but if imm[31] = 1 or (imm[31:28] == 0x7ff && imm[19] == 1),
-   // upper = imm[63:32] + 1.
+   // Load upper 32 bits. upper = imm[63:32], but if imm[31] == 1 or
+   // (imm[31:28] == 0x7ff && imm[19] == 1), upper = imm[63:32] + 1.
    int64_t lower = imm & 0xffffffff;
    lower -= ((lower << 44) >> 44);
    int64_t tmp_imm = ((uint64_t)(imm & 0xffffffff00000000)) + (uint64_t)lower;
@@ -209,13 +213,13 @@ void Assembler::ret() {
 
 #define INSN(NAME, REGISTER)                                   \
   void Assembler::NAME(const Address &adr, Register temp) {    \
-    switch(adr.getMode()) {                                    \
+    switch (adr.getMode()) {                                   \
       case Address::literal: {                                 \
         code_section()->relocate(pc(), adr.rspec());           \
         NAME(adr.target(), temp);                              \
         break;                                                 \
       }                                                        \
-      case Address::base_plus_offset:{                         \
+      case Address::base_plus_offset: {                        \
         int32_t offset = 0;                                    \
         baseOffset(temp, adr, offset);                         \
         jalr(REGISTER, temp, offset);                          \
@@ -366,4 +370,3 @@ Address::Address(address target, relocInfo::relocType rtype) : _base(noreg), _of
       ShouldNotReachHere();
   }
 }
-

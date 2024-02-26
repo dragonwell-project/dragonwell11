@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,9 +24,9 @@
  *
  */
 
-#ifndef CPU_RISCV64_VM_DEPCHECKER_RISCV64_HPP
-#define CPU_RISCV64_VM_DEPCHECKER_RISCV64_HPP
+#ifndef CPU_RISCV_VM_DEPCHECKER_RISCV_HPP
+#define CPU_RISCV_VM_DEPCHECKER_RISCV_HPP
 
-// Nothing to do on riscv64
+// Nothing to do on riscv
 
-#endif // CPU_RISCV64_VM_DEPCHECKER_RISCV64_HPP
+#endif // CPU_RISCV_VM_DEPCHECKER_RISCV_HPP

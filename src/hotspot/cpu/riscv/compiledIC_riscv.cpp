@@ -86,7 +86,7 @@ int CompiledStaticCall::reloc_to_interp_stub() {
 }
 
 void CompiledDirectStaticCall::set_to_interpreted(const methodHandle& callee, address entry) {
-  address stub = find_stub(false);
+  address stub = find_stub(false /* is_aot */);
   guarantee(stub != NULL, "stub not found");
 
   if (TraceICs) {
@@ -118,6 +118,7 @@ void CompiledDirectStaticCall::set_to_interpreted(const methodHandle& callee, ad
 }
 
 void CompiledDirectStaticCall::set_stub_to_clean(static_stub_Relocation* static_stub) {
+  assert (CompiledIC_lock->is_locked() || SafepointSynchronize::is_at_safepoint(), "mt unsafe call");
   // Reset stub.
   address stub = static_stub->addr();
   assert(stub != NULL, "stub not found");
@@ -134,12 +135,10 @@ void CompiledDirectStaticCall::set_stub_to_clean(static_stub_Relocation* static_
 void CompiledDirectStaticCall::verify() {
   // Verify call.
   _call->verify();
-  if (os::is_MP()) {
-    _call->verify_alignment();
-  }
+  _call->verify_alignment();
 
   // Verify stub.
-  address stub = find_stub(false);
+  address stub = find_stub(false /* is_aot */);
   assert(stub != NULL, "no stub found for static call");
   // Creation also verifies the object.
   NativeMovConstReg* method_holder

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,8 +36,6 @@
 #include "ci/ciArrayKlass.hpp"
 #include "ci/ciInstance.hpp"
 #include "code/compiledIC.hpp"
-#include "gc/shared/barrierSet.hpp"
-#include "gc/shared/cardTableBarrierSet.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "nativeInst_riscv.hpp"
 #include "oops/objArrayKlass.hpp"
@@ -100,25 +98,11 @@ LIR_Opr LIR_Assembler::osrBufferPointer() {
   return FrameMap::as_pointer_opr(receiverOpr()->as_register());
 }
 
-//--------------fpu register translations-----------------------
-void LIR_Assembler::set_24bit_FPU() { Unimplemented(); }
-
-void LIR_Assembler::reset_FPU() { Unimplemented(); }
-
-void LIR_Assembler::fpop() { Unimplemented(); }
-
-void LIR_Assembler::fxch(int i) { Unimplemented(); }
-
-void LIR_Assembler::fld(int i) { Unimplemented(); }
-
-void LIR_Assembler::ffree(int i) { Unimplemented(); }
-
 void LIR_Assembler::breakpoint() { Unimplemented(); }
 
 void LIR_Assembler::push(LIR_Opr opr) { Unimplemented(); }
 
 void LIR_Assembler::pop(LIR_Opr opr) { Unimplemented(); }
-//-------------------------------------------
 
 static jlong as_long(LIR_Opr data) {
   jlong result;
@@ -134,6 +118,43 @@ static jlong as_long(LIR_Opr data) {
       result = 0;  // unreachable
   }
   return result;
+}
+
+Address LIR_Assembler::as_Address(LIR_Address* addr, Register tmp) {
+  if (addr->base()->is_illegal()) {
+    assert(addr->index()->is_illegal(), "must be illegal too");
+    __ movptr(tmp, addr->disp());
+    return Address(tmp, 0);
+  }
+
+  Register base = addr->base()->as_pointer_register();
+  LIR_Opr index_opr = addr->index();
+
+  if (index_opr->is_illegal()) {
+    return Address(base, addr->disp());
+  }
+
+  int scale = addr->scale();
+  if (index_opr->is_cpu_register()) {
+    Register index;
+    if (index_opr->is_single_cpu()) {
+      index = index_opr->as_register();
+    } else {
+      index = index_opr->as_register_lo();
+    }
+    if (scale != 0) {
+      __ shadd(tmp, index, base, tmp, scale);
+    } else {
+      __ add(tmp, base, index);
+    }
+    return Address(tmp, addr->disp());
+  } else if (index_opr->is_constant()) {
+    intptr_t addr_offset = (((intptr_t)index_opr->as_constant_ptr()->as_jint()) << scale) + addr->disp();
+    return Address(base, addr_offset);
+  }
+
+  Unimplemented();
+  return Address();
 }
 
 Address LIR_Assembler::as_Address_hi(LIR_Address* addr) {
@@ -640,8 +661,7 @@ void LIR_Assembler::reg2stack(LIR_Opr src, LIR_Opr dest, BasicType type, bool po
   }
 }
 
-void LIR_Assembler::reg2mem(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_PatchCode patch_code, CodeEmitInfo* info,
-                            bool pop_fpu_stack, bool wide, bool /* unaligned */) {
+void LIR_Assembler::reg2mem(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_PatchCode patch_code, CodeEmitInfo* info, bool pop_fpu_stack, bool wide, bool /* unaligned */) {
   LIR_Address* to_addr = dest->as_address_ptr();
   // t0 was used as tmp reg in as_Address, so we use t1 as compressed_src
   Register compressed_src = t1;
@@ -763,8 +783,7 @@ void LIR_Assembler::stack2stack(LIR_Opr src, LIR_Opr dest, BasicType type) {
   reg2stack(temp, dest, dest->type(), false);
 }
 
-void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_PatchCode patch_code, CodeEmitInfo* info,
-                            bool wide, bool /* unaligned */) {
+void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_PatchCode patch_code, CodeEmitInfo* info, bool wide, bool /* unaligned */) {
   assert(src->is_address(), "should not call otherwise");
   assert(dest->is_register(), "should not call otherwise");
 
@@ -809,6 +828,9 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
       __ ld(dest->as_register(), as_Address(from_addr));
       break;
     case T_ADDRESS:
+      // FIXME: OMG this is a horrible kludge.  Any offset from an
+      // address that matches klass_offset_in_bytes() will be loaded
+      // as a word, not a long.
       if (UseCompressedClassPointers && addr->disp() == oopDesc::klass_offset_in_bytes()) {
         __ lwu(dest->as_register(), as_Address(from_addr));
       } else {
@@ -960,13 +982,13 @@ void LIR_Assembler::emit_opConvert(LIR_OpConvert* op) {
     case Bytecodes::_d2f:
       __ fcvt_s_d(dest->as_float_reg(), src->as_double_reg()); break;
     case Bytecodes::_i2c:
-      __ zero_ext(dest->as_register(), src->as_register(), registerSize - 16); break; // 16: char size
+      __ zero_extend(dest->as_register(), src->as_register(), 16); break;
     case Bytecodes::_i2l:
       __ addw(dest->as_register_lo(), src->as_register(), zr); break;
     case Bytecodes::_i2s:
-      __ sign_ext(dest->as_register(), src->as_register(), registerSize - 16); break; // 16: short size
+      __ sign_extend(dest->as_register(), src->as_register(), 16); break;
     case Bytecodes::_i2b:
-      __ sign_ext(dest->as_register(), src->as_register(), registerSize - 8); break;  // 8: byte size
+      __ sign_extend(dest->as_register(), src->as_register(), 8); break;
     case Bytecodes::_l2i:
       _masm->block_comment("FIXME: This coulde be no-op");
       __ addw(dest->as_register(), src->as_register_lo(), zr); break;
@@ -1331,7 +1353,12 @@ void LIR_Assembler::comp_fl2i(LIR_Code code, LIR_Opr left, LIR_Opr right, LIR_Op
   }
 }
 
-void LIR_Assembler::align_call(LIR_Code code) { }
+void LIR_Assembler::align_call(LIR_Code code) {
+  // With RVC a call instruction may get 2-byte aligned.
+  // The address of the call instruction needs to be 4-byte aligned to
+  // ensure that it does not span a cache line so that it can be patched.
+  __ align(4);
+}
 
 void LIR_Assembler::call(LIR_OpJavaCall* op, relocInfo::relocType rtype) {
   address call = __ trampoline_call(Address(op->addr(), rtype));
@@ -1351,10 +1378,14 @@ void LIR_Assembler::ic_call(LIR_OpJavaCall* op) {
   add_call_info(code_offset(), op->info());
 }
 
-void LIR_Assembler::vtable_call(LIR_OpJavaCall* op) { ShouldNotReachHere(); }
+/* Currently, vtable-dispatch is only enabled for sparc platforms */
+void LIR_Assembler::vtable_call(LIR_OpJavaCall* op) {
+  ShouldNotReachHere();
+}
 
 void LIR_Assembler::emit_static_call_stub() {
   address call_pc = __ pc();
+  assert((__ offset() % 4) == 0, "bad alignment");
   address stub = __ start_a_stub(call_stub_size());
   if (stub == NULL) {
     bailout("static call stub overflow");
@@ -1366,7 +1397,8 @@ void LIR_Assembler::emit_static_call_stub() {
   __ relocate(static_stub_Relocation::spec(call_pc));
   __ emit_static_call_stub();
 
-  assert(__ offset() - start + CompiledStaticCall::to_trampoline_stub_size() <= call_stub_size(), "stub too big");
+  assert(__ offset() - start + CompiledStaticCall::to_trampoline_stub_size()
+         <= call_stub_size(), "stub too big");
   __ end_a_stub();
 }
 
@@ -1668,8 +1700,7 @@ void LIR_Assembler::check_no_conflict(ciKlass* exact_klass, intptr_t current_kla
   }
 #endif
     // first time here. Set profile type.
-    // TODO: Fix this typo. See JDK-8267625.
-    __ ld(tmp, mdo_addr);
+    __ sd(tmp, mdo_addr);
   } else {
     assert(ciTypeEntries::valid_ciklass(current_klass) != NULL &&
            ciTypeEntries::valid_ciklass(current_klass) != exact_klass, "inconsistent");
@@ -1774,30 +1805,33 @@ void LIR_Assembler::negate(LIR_Opr left, LIR_Opr dest, LIR_Opr tmp) {
 
 
 void LIR_Assembler::leal(LIR_Opr addr, LIR_Opr dest, LIR_PatchCode patch_code, CodeEmitInfo* info) {
-  if (patch_code != lir_patch_none) {
+#if INCLUDE_SHENANDOAHGC
+  if (UseShenandoahGC && patch_code != lir_patch_none) {
     deoptimize_trap(info);
     return;
   }
+#endif
 
+  assert(patch_code == lir_patch_none, "Patch code not supported");
   LIR_Address* adr = addr->as_address_ptr();
   Register dst = dest->as_register_lo();
 
   assert_different_registers(dst, t0);
-  if(adr->base()->is_valid() && dst == adr->base()->as_pointer_register() && (!adr->index()->is_cpu_register())) {
-
+  if (adr->base()->is_valid() && dst == adr->base()->as_pointer_register() && (!adr->index()->is_cpu_register())) {
+    int scale = adr->scale();
     intptr_t offset = adr->disp();
     LIR_Opr index_op = adr->index();
-    int scale = adr->scale();
-    if(index_op->is_constant()) {
+    if (index_op->is_constant()) {
       offset += ((intptr_t)index_op->as_constant_ptr()->as_jint()) << scale;
     }
 
-    if(!is_imm_in_range(offset, 12, 0)) {
+    if (!is_imm_in_range(offset, 12, 0)) {
       __ la(t0, as_Address(adr));
       __ mv(dst, t0);
       return;
     }
   }
+
   __ la(dst, as_Address(adr));
 }
 
@@ -1817,13 +1851,11 @@ void LIR_Assembler::rt_call(LIR_Opr result, address dest, const LIR_OprList* arg
   if (info != NULL) {
     add_call_info_here(info);
   }
-  __ ifence();
 }
 
 void LIR_Assembler::volatile_move_op(LIR_Opr src, LIR_Opr dest, BasicType type, CodeEmitInfo* info) {
   if (dest->is_address() || src->is_address()) {
-    move_op(src, dest, type, lir_patch_none, info, /* pop_fpu_stack */ false,
-           /* unaligned */ false, /* wide */ false);
+    move_op(src, dest, type, lir_patch_none, info, /* pop_fpu_stack */ false, /*unaligned*/ false, /* wide */ false);
   } else {
     ShouldNotReachHere();
   }
@@ -1950,42 +1982,6 @@ int LIR_Assembler::array_element_size(BasicType type) const {
   return exact_log2(elem_size);
 }
 
-Address LIR_Assembler::as_Address(LIR_Address* addr, Register tmp) {
-  if (addr->base()->is_illegal()) {
-    assert(addr->index()->is_illegal(), "must be illegal too");
-    __ movptr(tmp, addr->disp());
-    return Address(tmp, 0);
-  }
-
-  Register base = addr->base()->as_pointer_register();
-  LIR_Opr index_op = addr->index();
-  int scale = addr->scale();
-
-  if (index_op->is_illegal()) {
-    return Address(base, addr->disp());
-  } else if (index_op->is_cpu_register()) {
-    Register index;
-    if (index_op->is_single_cpu()) {
-      index = index_op->as_register();
-    } else {
-      index = index_op->as_register_lo();
-    }
-    if (scale != 0) {
-      __ slli(tmp, index, scale);
-      __ add(tmp, base, tmp);
-    } else {
-      __ add(tmp, base, index);
-    }
-    return Address(tmp, addr->disp());
-  } else if (index_op->is_constant()) {
-    intptr_t addr_offset = (((intptr_t)index_op->as_constant_ptr()->as_jint()) << scale) + addr->disp();
-    return Address(base, addr_offset);
-  }
-
-  Unimplemented();
-  return Address();
-}
-
 // helper functions which checks for overflow and sets bailout if it
 // occurs.  Always returns a valid embeddable pointer but in the
 // bailout case the pointer won't be to unique storage.
@@ -2018,6 +2014,18 @@ address LIR_Assembler::int_constant(jlong n) {
     return const_addr;
   }
 }
+
+void LIR_Assembler::set_24bit_FPU() { Unimplemented(); }
+
+void LIR_Assembler::reset_FPU() { Unimplemented(); }
+
+void LIR_Assembler::fpop() { Unimplemented(); }
+
+void LIR_Assembler::fxch(int i) { Unimplemented(); }
+
+void LIR_Assembler::fld(int i) { Unimplemented(); }
+
+void LIR_Assembler::ffree(int i) { Unimplemented(); }
 
 void LIR_Assembler::casw(Register addr, Register newval, Register cmpval) {
   __ cmpxchg(addr, cmpval, newval, Assembler::int32, Assembler::aq /* acquire */,

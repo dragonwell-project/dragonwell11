@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +26,7 @@
 #ifndef CPU_RISCV_C1_FRAMEMAP_RISCV_HPP
 #define CPU_RISCV_C1_FRAMEMAP_RISCV_HPP
 
-//  On RISCV64 the frame looks as follows:
+//  On RISCV the frame looks as follows:
 //
 //  +-----------------------------+---------+----------------------------------------+----------------+-----------
 //  | size_arguments-nof_reg_args | 2 words | size_locals-size_arguments+numreg_args | _size_monitors | spilling .

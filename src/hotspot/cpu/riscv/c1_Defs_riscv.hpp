@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -77,7 +76,7 @@ enum {
 
 // Encoding of float value in debug info.  This is true on x86 where
 // floats are extended to doubles when stored in the stack, false for
-// RISCV64 where floats and doubles are stored in their native form.
+// RISCV where floats and doubles are stored in their native form.
 enum {
   pd_float_saved_as_double = false
 };

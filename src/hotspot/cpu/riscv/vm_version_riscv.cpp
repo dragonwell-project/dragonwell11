@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,58 +24,13 @@
  */
 
 #include "precompiled.hpp"
-#include "asm/macroAssembler.hpp"
-#include "asm/macroAssembler.inline.hpp"
-#include "memory/resourceArea.hpp"
 #include "runtime/java.hpp"
 #include "runtime/os.hpp"
-#include "runtime/stubCodeGenerator.hpp"
 #include "runtime/vm_version.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/macros.hpp"
 
 #include OS_HEADER_INLINE(os)
-
-#include <sys/auxv.h>
-#include <asm/hwcap.h>
-
-#ifndef HWCAP_ISA_I
-#define HWCAP_ISA_I  (1 << ('I' - 'A'))
-#endif
-
-#ifndef HWCAP_ISA_M
-#define HWCAP_ISA_M  (1 << ('M' - 'A'))
-#endif
-
-#ifndef HWCAP_ISA_A
-#define HWCAP_ISA_A  (1 << ('A' - 'A'))
-#endif
-
-#ifndef HWCAP_ISA_F
-#define HWCAP_ISA_F  (1 << ('F' - 'A'))
-#endif
-
-#ifndef HWCAP_ISA_D
-#define HWCAP_ISA_D  (1 << ('D' - 'A'))
-#endif
-
-#ifndef HWCAP_ISA_C
-#define HWCAP_ISA_C  (1 << ('C' - 'A'))
-#endif
-
-#ifndef HWCAP_ISA_V
-#define HWCAP_ISA_V  (1 << ('V' - 'A'))
-#endif
-
-#define read_csr(csr)                                           \
-({                                                              \
-        register unsigned long __v;                             \
-        __asm__ __volatile__ ("csrr %0, %1"                     \
-                              : "=r" (__v)                      \
-                              : "i" (csr)                       \
-                              : "memory");                      \
-        __v;                                                    \
-})
 
 address VM_Version::_checkvext_fault_pc = NULL;
 address VM_Version::_checkvext_continuation_pc = NULL;
@@ -120,55 +75,13 @@ public:
 const char* VM_Version::_uarch = "";
 uint32_t VM_Version::_initial_vector_length = 0;
 
-uint32_t VM_Version::get_current_vector_length() {
-  assert(_features & CPU_V, "should not call this");
-  return (uint32_t)read_csr(CSR_VLENB);
-}
+void VM_Version::initialize() {
+  get_os_cpu_info();
 
-void VM_Version::get_os_cpu_info() {
-
-  uint64_t auxv = getauxval(AT_HWCAP);
-
-  assert(CPU_I == HWCAP_ISA_I, "Flag CPU_I must follow Linux HWCAP");
-  assert(CPU_M == HWCAP_ISA_M, "Flag CPU_M must follow Linux HWCAP");
-  assert(CPU_A == HWCAP_ISA_A, "Flag CPU_A must follow Linux HWCAP");
-  assert(CPU_F == HWCAP_ISA_F, "Flag CPU_F must follow Linux HWCAP");
-  assert(CPU_D == HWCAP_ISA_D, "Flag CPU_D must follow Linux HWCAP");
-  assert(CPU_C == HWCAP_ISA_C, "Flag CPU_C must follow Linux HWCAP");
-  assert(CPU_V == HWCAP_ISA_V, "Flag CPU_V must follow Linux HWCAP");
-
-  // RISC-V has four bit-manipulation ISA-extensions: Zba/Zbb/Zbc/Zbs.
-  // Availability for those extensions could not be queried from HWCAP.
-  // TODO: Add proper detection for those extensions.
-  _features = auxv & (
-          HWCAP_ISA_I |
-          HWCAP_ISA_M |
-          HWCAP_ISA_A |
-          HWCAP_ISA_F |
-          HWCAP_ISA_D |
-          HWCAP_ISA_C |
-          HWCAP_ISA_V);
-
-  if (FILE *f = fopen("/proc/cpuinfo", "r")) {
-    char buf[512], *p;
-    while (fgets(buf, sizeof (buf), f) != NULL) {
-      if ((p = strchr(buf, ':')) != NULL) {
-        if (strncmp(buf, "uarch", sizeof "uarch" - 1) == 0) {
-          char* uarch = os::strdup(p + 2);
-          uarch[strcspn(uarch, "\n")] = '\0';
-          _uarch = uarch;
-          break;
-        }
-      }
-    }
-    fclose(f);
-  }
-}
-
-void VM_Version::get_processor_features() {
   if (FLAG_IS_DEFAULT(UseFMA)) {
     FLAG_SET_DEFAULT(UseFMA, true);
   }
+
   if (FLAG_IS_DEFAULT(AllocatePrefetchDistance)) {
     FLAG_SET_DEFAULT(AllocatePrefetchDistance, 0);
   }
@@ -209,11 +122,6 @@ void VM_Version::get_processor_features() {
     FLAG_SET_DEFAULT(UseSHA512Intrinsics, false);
   }
 
-  if (UsePopCountInstruction) {
-    warning("Pop count instructions are not available on this CPU.");
-    FLAG_SET_DEFAULT(UsePopCountInstruction, false);
-  }
-
   if (UseCRC32Intrinsics) {
     warning("CRC32 intrinsics are not available on this CPU.");
     FLAG_SET_DEFAULT(UseCRC32Intrinsics, false);
@@ -252,35 +160,80 @@ void VM_Version::get_processor_features() {
     }
   }
 
+  if (UseRVB && !(_features & CPU_B)) {
+    warning("RVB is not supported on this CPU");
+    FLAG_SET_DEFAULT(UseRVB, false);
+  }
+
+  if (UseRVC && !(_features & CPU_C)) {
+    warning("RVC is not supported on this CPU");
+    FLAG_SET_DEFAULT(UseRVC, false);
+  }
+
   if (FLAG_IS_DEFAULT(AvoidUnalignedAccesses)) {
     FLAG_SET_DEFAULT(AvoidUnalignedAccesses, true);
   }
 
+  if (UseRVB) {
+    if (FLAG_IS_DEFAULT(UsePopCountInstruction)) {
+      FLAG_SET_DEFAULT(UsePopCountInstruction, true);
+    }
+  } else {
+    FLAG_SET_DEFAULT(UsePopCountInstruction, false);
+  }
+
+  char buf[512];
+  buf[0] = '\0';
+  if (_uarch != NULL && strcmp(_uarch, "") != 0) snprintf(buf, sizeof(buf), "%s,", _uarch);
+  strcat(buf, "rv64");
+#define ADD_FEATURE_IF_SUPPORTED(id, name, bit) if (_features & CPU_##id) strcat(buf, name);
+  CPU_FEATURE_FLAGS(ADD_FEATURE_IF_SUPPORTED)
+#undef ADD_FEATURE_IF_SUPPORTED
+
+  _features_string = os::strdup(buf);
+
 #ifdef COMPILER2
-  get_c2_processor_features();
+  c2_initialize();
 #endif // COMPILER2
+
+  UNSUPPORTED_OPTION(CriticalJNINatives);
+
+  FLAG_SET_DEFAULT(UseMembar, true);
 }
 
 #ifdef COMPILER2
-void VM_Version::get_c2_processor_features() {
-  // lack of cmove in riscv64
+void VM_Version::c2_initialize() {
   if (UseCMoveUnconditionally) {
     FLAG_SET_DEFAULT(UseCMoveUnconditionally, false);
   }
+
   if (ConditionalMoveLimit > 0) {
     FLAG_SET_DEFAULT(ConditionalMoveLimit, 0);
   }
 
-  // disable vector
-  if (FLAG_IS_DEFAULT(UseSuperWord)) {
-    FLAG_SET_DEFAULT(UseSuperWord, false);
+  if (!UseRVV) {
+    FLAG_SET_DEFAULT(SpecialEncodeISOArray, false);
   }
-  if (FLAG_IS_DEFAULT(MaxVectorSize)) {
+
+  if (!UseRVV && MaxVectorSize) {
     FLAG_SET_DEFAULT(MaxVectorSize, 0);
   }
-  if (MaxVectorSize > 0) {
-    warning("Vector instructions are not available on this CPU");
-    FLAG_SET_DEFAULT(MaxVectorSize, 0);
+
+  if (UseRVV) {
+    if (FLAG_IS_DEFAULT(MaxVectorSize)) {
+      MaxVectorSize = _initial_vector_length;
+    } else if (MaxVectorSize < 16) {
+      warning("RVV does not support vector length less than 16 bytes. Disabling RVV.");
+      UseRVV = false;
+    } else if (is_power_of_2(MaxVectorSize)) {
+      if (MaxVectorSize > _initial_vector_length) {
+        warning("Current system only supports max RVV vector length %d. Set MaxVectorSize to %d",
+                _initial_vector_length, _initial_vector_length);
+      }
+      MaxVectorSize = _initial_vector_length;
+    } else {
+      vm_exit_during_initialization(err_msg("Unsupported MaxVectorSize: %d", (int)MaxVectorSize));
+    }
   }
 
   if (UseRVV) {
@@ -292,10 +245,25 @@ void VM_Version::get_c2_processor_features() {
   if (FLAG_IS_DEFAULT(AllocatePrefetchStyle)) {
     FLAG_SET_DEFAULT(AllocatePrefetchStyle, 0);
   }
+
+  if (FLAG_IS_DEFAULT(UseMulAddIntrinsic)) {
+    FLAG_SET_DEFAULT(UseMulAddIntrinsic, true);
+  }
+
+  if (FLAG_IS_DEFAULT(UseMultiplyToLenIntrinsic)) {
+    FLAG_SET_DEFAULT(UseMultiplyToLenIntrinsic, true);
+  }
+
+  if (FLAG_IS_DEFAULT(UseSquareToLenIntrinsic)) {
+    FLAG_SET_DEFAULT(UseSquareToLenIntrinsic, true);
+  }
+
+  if (FLAG_IS_DEFAULT(UseMontgomeryMultiplyIntrinsic)) {
+    FLAG_SET_DEFAULT(UseMontgomeryMultiplyIntrinsic, true);
+  }
+
+  if (FLAG_IS_DEFAULT(UseMontgomerySquareIntrinsic)) {
+    FLAG_SET_DEFAULT(UseMontgomerySquareIntrinsic, true);
+  }
 }
 #endif // COMPILER2
-
-void VM_Version::initialize() {
-  get_processor_features();
-  UNSUPPORTED_OPTION(CriticalJNINatives);
-}

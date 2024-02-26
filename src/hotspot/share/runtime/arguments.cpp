@@ -3852,7 +3852,7 @@ void Arguments::handle_extra_cms_flags(const char* msg) {
 void Arguments::check_arguments_for_riscv64() {
   UNSUPPORTED_RISCV64_OPTS(EnableCoroutine || UseWispMonitor);
 }
-#endif //
+#endif // RISCV64
 
 // Parse entry point called from JNI_CreateJavaVM
 

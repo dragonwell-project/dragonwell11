@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1585,8 +1585,8 @@ class LIR_Op2: public LIR_Op {
     : LIR_Op(code, LIR_OprFact::illegalOpr, info)
     , _opr1(opr1)
     , _opr2(opr2)
-    , _type(type)
     , _fpu_stack_size(0)
+    , _type(type)
     , _tmp1(LIR_OprFact::illegalOpr)
     , _tmp2(LIR_OprFact::illegalOpr)
     , _tmp3(LIR_OprFact::illegalOpr)
@@ -1601,13 +1601,13 @@ class LIR_Op2: public LIR_Op {
     , _opr1(opr1)
     , _opr2(opr2)
     , _type(type)
+    , _condition(condition)
     , _fpu_stack_size(0)
     , _tmp1(LIR_OprFact::illegalOpr)
     , _tmp2(LIR_OprFact::illegalOpr)
     , _tmp3(LIR_OprFact::illegalOpr)
     , _tmp4(LIR_OprFact::illegalOpr)
-    , _tmp5(LIR_OprFact::illegalOpr)
-    , _condition(condition) {
+    , _tmp5(LIR_OprFact::illegalOpr) {
     assert(code == lir_cmove, "code check");
     assert(type != T_ILLEGAL, "cmove should have type");
   }
@@ -1674,7 +1674,6 @@ class LIR_OpBranch: public LIR_Op2 {
  friend class LIR_OpVisitState;
 
  private:
-  BasicType     _type;
   Label*        _label;
   BlockBegin*   _block;  // if this is a branch to a block, this is the block
   BlockBegin*   _ublock; // if this is a float-branch, this is the unorderd block
@@ -1682,8 +1681,7 @@ class LIR_OpBranch: public LIR_Op2 {
 
  public:
   LIR_OpBranch(LIR_Condition cond, BasicType type, Label* lbl)
-    : LIR_Op2(lir_branch, cond, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, (CodeEmitInfo*) NULL)
-    , _type(type)
+    : LIR_Op2(lir_branch, cond, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, (CodeEmitInfo*) NULL, type)
     , _label(lbl)
     , _block(NULL)
     , _ublock(NULL)
@@ -1703,11 +1701,10 @@ class LIR_OpBranch: public LIR_Op2 {
     set_condition(cond);
   }
 
-  BasicType     type()        const              { return _type;        }
   Label*        label()       const              { return _label;       }
   BlockBegin*   block()       const              { return _block;       }
   BlockBegin*   ublock()      const              { return _ublock;      }
-  CodeStub*     stub()        const              { return _stub;       }
+  CodeStub*     stub()        const              { return _stub;        }
 
   void          change_block(BlockBegin* b);
   void          change_ublock(BlockBegin* b);
@@ -1805,12 +1802,12 @@ class LIR_Op4: public LIR_Op {
     , _opr3(opr3)
     , _opr4(opr4)
     , _type(type)
-    , _condition(condition)
     , _tmp1(LIR_OprFact::illegalOpr)
     , _tmp2(LIR_OprFact::illegalOpr)
     , _tmp3(LIR_OprFact::illegalOpr)
     , _tmp4(LIR_OprFact::illegalOpr)
-    , _tmp5(LIR_OprFact::illegalOpr) {
+    , _tmp5(LIR_OprFact::illegalOpr)
+    , _condition(condition) {
     assert(code == lir_cmove, "code check");
     assert(type != T_ILLEGAL, "cmove should have type");
   }
@@ -2311,19 +2308,17 @@ class LIR_List: public CompilationResourceObj {
   void jump(CodeStub* stub) {
     append(new LIR_OpBranch(lir_cond_always, T_ILLEGAL, stub));
   }
-  void branch(LIR_Condition cond, BasicType type, Label* lbl) {
-    append(new LIR_OpBranch(cond, type, lbl));
-  }
-  // Should not be used for fp comparisons
+  void branch(LIR_Condition cond, BasicType type, Label* lbl)        { append(new LIR_OpBranch(cond, type, lbl)); }
   void branch(LIR_Condition cond, BasicType type, BlockBegin* block) {
+    assert(type != T_FLOAT && type != T_DOUBLE, "no fp comparisons");
     append(new LIR_OpBranch(cond, type, block));
   }
-  // Should not be used for fp comparisons
-  void branch(LIR_Condition cond, BasicType type, CodeStub* stub) {
+  void branch(LIR_Condition cond, BasicType type, CodeStub* stub)    {
+    assert(type != T_FLOAT && type != T_DOUBLE, "no fp comparisons");
     append(new LIR_OpBranch(cond, type, stub));
   }
-  // Should only be used for fp comparisons
   void branch(LIR_Condition cond, BasicType type, BlockBegin* block, BlockBegin* unordered) {
+    assert(type == T_FLOAT || type == T_DOUBLE, "fp comparisons only");
     append(new LIR_OpBranch(cond, type, block, unordered));
   }
 

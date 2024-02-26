@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,9 +35,7 @@ static int icache_flush(address addr, int lines, int magic) {
 }
 
 void ICacheStubGenerator::generate_icache_flush(ICache::flush_icache_stub_t* flush_icache_stub) {
-
   address start = (address)icache_flush;
-
   *flush_icache_stub = (ICache::flush_icache_stub_t)start;
 
   // ICache::invalidate_range() contains explicit condition that the first

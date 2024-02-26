@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -58,9 +58,6 @@
 private:
   bool pd_get_top_frame(frame* fr_addr, void* ucontext, bool isInJava);
 public:
-
-  static Thread *riscv64_get_thread_helper();
-
   // These routines are only used on cpu architectures that
   // have separate register stacks (Itanium).
   static bool register_stack_overflow() { return false; }

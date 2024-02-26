@@ -23,12 +23,11 @@
  *
  */
 
-#ifndef CPU_RISCV64_GC_SHARED_BARRIERSETASSEMBLER_RISCV_HPP
-#define CPU_RISCV64_GC_SHARED_BARRIERSETASSEMBLER_RISCV_HPP
+#ifndef CPU_RISCV_GC_SHARED_BARRIERSETASSEMBLER_RISCV_HPP
+#define CPU_RISCV_GC_SHARED_BARRIERSETASSEMBLER_RISCV_HPP
 
 #include "asm/macroAssembler.hpp"
 #include "gc/shared/barrierSet.hpp"
-#include "gc/shared/barrierSetNMethod.hpp"
 #include "memory/allocation.hpp"
 #include "oops/access.hpp"
 
@@ -74,4 +73,4 @@ public:
   virtual ~BarrierSetAssembler() {}
 };
 
-#endif // CPU_RISCV64_GC_SHARED_BARRIERSETASSEMBLER_RISCV_HPP
+#endif // CPU_RISCV_GC_SHARED_BARRIERSETASSEMBLER_RISCV_HPP
