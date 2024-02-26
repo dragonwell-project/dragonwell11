@@ -1792,8 +1792,8 @@ const bool Matcher::match_rule_supported(int opcode) {
 
 // Identify extra cases that we might want to provide match rules for vector nodes and
 // other intrinsics guarded with vector length (vlen) and element type (bt).
-const bool Matcher::match_rule_supported_vector(int opcode, int vlen, BasicType bt) {
-  if (!match_rule_supported(opcode) || !vector_size_supported(bt, vlen)) {
+const bool Matcher::match_rule_supported_vector(int opcode, int vlen) {
+  if (!match_rule_supported(opcode)) {
     return false;
   }
 
@@ -1880,6 +1880,11 @@ const uint Matcher::vector_ideal_reg(int len) {
   return 0;
 }
 
+const uint Matcher::vector_shift_count_ideal_reg(int size) {
+  ShouldNotReachHere();  // Not supported
+  return 0;
+}
+
 // AES support not yet implemented
 const bool Matcher::pass_original_key_for_aes() {
   return false;
@@ -1910,24 +1915,6 @@ const bool Matcher::require_postalloc_expand = false;
 // Do we need to mask the count passed to shift instructions or does
 // the cpu only look at the lower 5/6 bits anyway?
 const bool Matcher::need_masked_shift_count = false;
-
-// No support for generic vector operands.
-const bool Matcher::supports_generic_vector_operands  = false;
-
-MachOper* Matcher::pd_specialize_generic_vector_operand(MachOper* original_opnd, uint ideal_reg, bool is_temp) {
-  ShouldNotReachHere(); // generic vector operands not supported
-  return NULL;
-}
-
-bool Matcher::is_generic_reg2reg_move(MachNode* m) {
-  ShouldNotReachHere();  // generic vector operands not supported
-  return false;
-}
-
-bool Matcher::is_generic_vector(MachOper* opnd)  {
-  ShouldNotReachHere();  // generic vector operands not supported
-  return false;
-}
 
 // This affects two different things:
 //  - how Decode nodes are matched
