@@ -766,9 +766,6 @@ class MacroAssembler: public Assembler {
   void fill_words(Register base, Register cnt, Register value);
   void zero_memory(Register addr, Register len, Register tmp1);
 
-  // shift left by shamt and add
-  void shadd(Register Rd, Register Rs1, Register Rs2, Register tmp, int shamt);
-
 #ifdef COMPILER2
   // refer to conditional_branches and float_conditional_branches
   static const int bool_test_bits = 3;
@@ -801,43 +798,6 @@ class MacroAssembler: public Assembler {
   void fcvt_l_s_safe(Register dst, FloatRegister src, Register temp = t0);
   void fcvt_w_d_safe(Register dst, FloatRegister src, Register temp = t0);
   void fcvt_l_d_safe(Register dst, FloatRegister src, Register temp = t0);
-
-  // vector load/store unit-stride instructions
-  void vlex_v(VectorRegister vd, Register base, Assembler::SEW sew, VectorMask vm = unmasked) {
-    switch (sew) {
-      case Assembler::e64:
-        vle64_v(vd, base, vm);
-        break;
-      case Assembler::e32:
-        vle32_v(vd, base, vm);
-        break;
-      case Assembler::e16:
-        vle16_v(vd, base, vm);
-        break;
-      case Assembler::e8: // fall through
-      default:
-        vle8_v(vd, base, vm);
-        break;
-    }
-  }
-
-  void vsex_v(VectorRegister store_data, Register base, Assembler::SEW sew, VectorMask vm = unmasked) {
-    switch (sew) {
-      case Assembler::e64:
-        vse64_v(store_data, base, vm);
-        break;
-      case Assembler::e32:
-        vse32_v(store_data, base, vm);
-        break;
-      case Assembler::e16:
-        vse16_v(store_data, base, vm);
-        break;
-      case Assembler::e8: // fall through
-      default:
-        vse8_v(store_data, base, vm);
-        break;
-    }
-  }
 
   static const int zero_words_block_size;
 
@@ -883,11 +843,6 @@ class MacroAssembler: public Assembler {
   int push_fp(unsigned int bitset, Register stack);
   int pop_fp(unsigned int bitset, Register stack);
 
-  // vext
-  void vmnot_m(VectorRegister vd, VectorRegister vs);
-  void vncvt_x_x_w(VectorRegister vd, VectorRegister vs, VectorMask vm = unmasked);
-  void vfneg_v(VectorRegister vd, VectorRegister vs);
-
 #ifdef COMPILER2
   void string_indexof(Register str1, Register str2,
                       Register cnt1, Register cnt2,
@@ -910,68 +865,6 @@ class MacroAssembler: public Assembler {
   void minmax_FD(FloatRegister dst,
                  FloatRegister src1, FloatRegister src2,
                  bool is_double, bool is_min);
-
-  void spill(VectorRegister v, int offset) {
-    add(t0, sp, offset);
-    vs1r_v(v, t0);
-  }
-
-  void unspill(VectorRegister v, int offset) {
-    add(t0, sp, offset);
-    vl1r_v(v, t0);
-  }
-
-  void spill_copy_vector_stack_to_stack(int src_offset, int dst_offset, int vec_reg_size_in_bytes) {
-    assert(vec_reg_size_in_bytes % 16 == 0, "unexpected vector reg size");
-    unspill(v0, src_offset);
-    spill(v0, dst_offset);
-  }
-
-private:
-  void element_compare(Register r1, Register r2,
-                       Register result, Register cnt,
-                       Register tmp1, Register tmp2,
-                       VectorRegister vr1, VectorRegister vr2,
-                       VectorRegister vrs,
-                       bool is_latin, Label& DONE);
-public:
-  // intrinsic methods implemented by rvv instructions
-  void string_equals_v(Register r1, Register r2,
-                       Register result, Register cnt1,
-                       int elem_size);
-
-  void arrays_equals_v(Register r1, Register r2,
-                       Register result, Register cnt1,
-                       int elem_size);
-
-  void string_compare_v(Register str1, Register str2,
-                        Register cnt1, Register cnt2,
-                        Register result,
-                        Register tmp1, Register tmp2,
-                        int encForm);
-
-  void clear_array_v(Register base, Register cnt);
-
-  void byte_array_inflate_v(Register src, Register dst,
-                            Register len, Register tmp);
-
-  void char_array_compress_v(Register src, Register dst,
-                             Register len, Register result,
-                             Register tmp);
-
-  void encode_iso_array_v(Register src, Register dst,
-                          Register len, Register result,
-                          Register tmp);
-
-  void minmax_FD_v(VectorRegister dst,
-                   VectorRegister src1, VectorRegister src2,
-                   bool is_double, bool is_min);
-
-  void reduce_minmax_FD_v(FloatRegister dst,
-                          FloatRegister src1, VectorRegister src2,
-                          VectorRegister tmp1, VectorRegister tmp2,
-                          bool is_double, bool is_min);
-
 #endif // COMPILER2
 
 private:

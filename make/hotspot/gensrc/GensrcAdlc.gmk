@@ -162,12 +162,6 @@ ifeq ($(call check-jvm-feature, compiler2), true)
       )))
   endif
 
-  ifeq ($(HOTSPOT_TARGET_CPU_ARCH), riscv)
-    AD_SRC_FILES += $(call uniq, $(wildcard $(foreach d, $(AD_SRC_ROOTS), \
-        $d/cpu/$(HOTSPOT_TARGET_CPU_ARCH)/$(HOTSPOT_TARGET_CPU_ARCH)_v.ad \
-    )))
-  endif
-
   SINGLE_AD_SRCFILE := $(ADLC_SUPPORT_DIR)/all-ad-src.ad
 
   INSERT_FILENAME_AWK_SCRIPT := \

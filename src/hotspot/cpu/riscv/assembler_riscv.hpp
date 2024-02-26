@@ -1254,15 +1254,6 @@ enum VTA {
   ta, // agnostic
 };
 
-static Assembler::SEW elembytes_to_sew(int ebytes) {
-  assert(ebytes > 0 && ebytes <= 8, "unsupported element size");
-  return (Assembler::SEW) exact_log2(ebytes);
-}
-
-static Assembler::SEW elemtype_to_sew(BasicType etype) {
-  return Assembler::elembytes_to_sew(type2aelembytes(etype));
-}
-
 #define patch_vtype(hsb, lsb, vlmul, vsew, vta, vma, vill)   \
     if (vill == 1) {                                         \
       guarantee((vlmul | vsew | vsew | vta | vma == 0),      \
@@ -1279,27 +1270,12 @@ static Assembler::SEW elemtype_to_sew(BasicType etype) {
   void NAME(Register Rd, Register Rs1, SEW sew, LMUL lmul = m1,           \
             VMA vma = mu, VTA vta = tu, bool vill = false) {              \
     unsigned insn = 0;                                                    \
-    if (UseRVV071) {                                                      \
-      patch((address)&insn, 6, 0, op);                                    \
-      patch_reg((address)&insn, 7, Rd);                                   \
-      patch((address)&insn, 14, 12, funct3);                              \
-      patch_reg((address)&insn, 15, Rs1);                                 \
-      assert_cond(sew >= e8 && sew <= e128);                              \
-      assert_cond(lmul >= m1 && lmul <= m8);                              \
-      assert_cond(vma == mu && vta == tu && vill == false);               \
-      int ediv = 0;  /* ignore ediv */                                    \
-      patch((address)&insn, 21, 20, lmul);                                \
-      patch((address)&insn, 24, 22, sew);                                 \
-      patch((address)&insn, 26, 25, ediv);                                \
-      patch((address)&insn, 31, 27, 0);                                   \
-    } else {                                                             \
-      patch((address)&insn, 6, 0, op);                                    \
-      patch((address)&insn, 14, 12, funct3);                              \
-      patch_vtype(30, 20, lmul, sew, vta, vma, vill);                     \
-      patch((address)&insn, 31, 0);                                       \
-      patch_reg((address)&insn, 7, Rd);                                   \
-      patch_reg((address)&insn, 15, Rs1);                                 \
-    }                                                                     \
+    patch((address)&insn, 6, 0, op);                                      \
+    patch((address)&insn, 14, 12, funct3);                                \
+    patch_vtype(30, 20, lmul, sew, vta, vma, vill);                       \
+    patch((address)&insn, 31, 0);                                         \
+    patch_reg((address)&insn, 7, Rd);                                     \
+    patch_reg((address)&insn, 15, Rs1);                                   \
     emit(insn);                                                           \
   }
 
@@ -1310,7 +1286,6 @@ static Assembler::SEW elemtype_to_sew(BasicType etype) {
 #define INSN(NAME, op, funct3)                                            \
   void NAME(Register Rd, uint32_t imm, SEW sew, LMUL lmul = m1,           \
             VMA vma = mu, VTA vta = tu, bool vill = false) {              \
-    assert_cond(!UseRVV071);                                              \
     unsigned insn = 0;                                                    \
     guarantee(is_unsigned_imm_in_range(imm, 5, 0), "imm is invalid");     \
     patch((address)&insn, 6, 0, op);                                      \
@@ -1337,7 +1312,6 @@ enum VectorMask {
 #define INSN(NAME, op, funct3, funct5)                                   \
   void NAME(VectorRegister vSrc, Register rBase, VectorRegister vOffset, \
             bool src_as_dst, VectorMask vm = unmasked) {                 \
-    assert_cond(!UseRVV071);                                             \
     unsigned insn = 0;                                                   \
     patch((address)&insn, 6, 0, op);                                     \
     patch((address)&insn, 14, 12, funct3);                               \
@@ -1399,19 +1373,8 @@ enum VectorMask {
 
   // Vector Mask
   INSN(vpopc_m,  0b1010111, 0b010, 0b10000, 0b010000);
-  INSN(_vfirst_m, 0b1010111, 0b010, 0b10001, 0b010000);
-
-  // vector 0.7.1
-  INSN(_vmfirst_m, 0b1010111, 0b010, 0b00000, 0b010101);
+  INSN(vfirst_m, 0b1010111, 0b010, 0b10001, 0b010000);
 #undef INSN
-
-  void vfirst_m(Register Rd, VectorRegister Vs2, VectorMask vm = unmasked) {
-    if (UseRVV071) {
-      _vmfirst_m(Rd, Vs2, vm);
-    } else {
-      _vfirst_m(Rd, Vs2, vm);
-    }
-  }
 
 #define INSN(NAME, op, funct3, Vs1, funct6)                                    \
   void NAME(VectorRegister Vd, VectorRegister Vs2, VectorMask vm = unmasked) { \
@@ -1427,13 +1390,10 @@ enum VectorMask {
   INSN(vsext_vf8, 0b1010111, 0b010, 0b00011, 0b010010);
 
   // Vector Mask
-  INSN(_vmsbf_m,   0b1010111, 0b010, 0b00001, 0b010100);
+  INSN(vmsbf_m,   0b1010111, 0b010, 0b00001, 0b010100);
   INSN(vmsif_m,   0b1010111, 0b010, 0b00011, 0b010100);
   INSN(vmsof_m,   0b1010111, 0b010, 0b00010, 0b010100);
   INSN(viota_m,   0b1010111, 0b010, 0b10000, 0b010100);
-
-  // Vector Mask for rvv0.7.1
-  INSN(_vmsbf_m_071,   0b1010111, 0b010, 0b00001, 0b010110);
 
   // Vector Single-Width Floating-Point/Integer Type-Convert Instructions
   INSN(vfcvt_xu_f_v, 0b1010111, 0b001, 0b00000, 0b010010);
@@ -1467,14 +1427,6 @@ enum VectorMask {
   INSN(vfclass_v, 0b1010111, 0b001, 0b10000, 0b010011);
 
 #undef INSN
-
-  void vmsbf_m(VectorRegister Vd, VectorRegister Vs2, VectorMask vm = unmasked) {
-    if (UseRVV071) {
-      _vmsbf_m_071(Vd, Vs2, vm);
-    } else {
-      _vmsbf_m(Vd, Vs2, vm);
-    }
-  }
 
 // r2rd
 #define INSN(NAME, op, funct3, simm5, vm, funct6)         \
@@ -2172,19 +2124,6 @@ enum Nf {
   INSN(vse16_v, 0b0100111, 0b101, 0b00000, 0b00, 0b0);
   INSN(vse32_v, 0b0100111, 0b110, 0b00000, 0b00, 0b0);
   INSN(vse64_v, 0b0100111, 0b111, 0b00000, 0b00, 0b0);
-
-#undef INSN
-
-#define INSN(NAME, op, width, umop, mop, mew)                                               \
-  void NAME(VectorRegister Vd_or_Vs3, Register Rs1, VectorMask vm = unmasked, Nf nf = g1) { \
-    patch_VLdSt(op, Vd_or_Vs3, width, Rs1, umop, vm, mop, mew, nf);                         \
-  }
-
-  // Vector Unit-Stride Instructions for RVV-0.7.1
-  // unsigned
-  INSN(vlbu_v,   0b0000111, 0b000, 0b00000, 0b00, 0b1);
-  INSN(vlhu_v,   0b0000111, 0b101, 0b00000, 0b00, 0b1);
-  INSN(vlwu_v,   0b0000111, 0b110, 0b00000, 0b00, 0b1);
 
 #undef INSN
 

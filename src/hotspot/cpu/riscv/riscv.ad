@@ -226,177 +226,6 @@ reg_def F30_H ( SOC, SOC, Op_RegF,  30, f30->as_VMReg()->next() );
 reg_def F31   ( SOC, SOC, Op_RegF,  31, f31->as_VMReg()         );
 reg_def F31_H ( SOC, SOC, Op_RegF,  31, f31->as_VMReg()->next() );
 
-// ----------------------------
-// Vector Registers
-// ----------------------------
-
-// For RVV vector registers, we simply extend vector register size to 4
-// 'logical' slots. This is nominally 128 bits but it actually covers
-// all possible 'physical' RVV vector register lengths from 128 ~ 1024
-// bits. The 'physical' RVV vector register length is detected during
-// startup, so the register allocator is able to identify the correct
-// number of bytes needed for an RVV spill/unspill.
-
-reg_def V0    ( SOC, SOC, Op_VecX, 0,  v0->as_VMReg()           );
-reg_def V0_H  ( SOC, SOC, Op_VecX, 0,  v0->as_VMReg()->next()   );
-reg_def V0_J  ( SOC, SOC, Op_VecX, 0,  v0->as_VMReg()->next(2)  );
-reg_def V0_K  ( SOC, SOC, Op_VecX, 0,  v0->as_VMReg()->next(3)  );
-
-reg_def V1    ( SOC, SOC, Op_VecX, 1,  v1->as_VMReg() 	        );
-reg_def V1_H  ( SOC, SOC, Op_VecX, 1,  v1->as_VMReg()->next()   );
-reg_def V1_J  ( SOC, SOC, Op_VecX, 1,  v1->as_VMReg()->next(2)  );
-reg_def V1_K  ( SOC, SOC, Op_VecX, 1,  v1->as_VMReg()->next(3)  );
-
-reg_def V2    ( SOC, SOC, Op_VecX, 2,  v2->as_VMReg()           );
-reg_def V2_H  ( SOC, SOC, Op_VecX, 2,  v2->as_VMReg()->next()   );
-reg_def V2_J  ( SOC, SOC, Op_VecX, 2,  v2->as_VMReg()->next(2)  );
-reg_def V2_K  ( SOC, SOC, Op_VecX, 2,  v2->as_VMReg()->next(3)  );
-
-reg_def V3    ( SOC, SOC, Op_VecX, 3,  v3->as_VMReg()           );
-reg_def V3_H  ( SOC, SOC, Op_VecX, 3,  v3->as_VMReg()->next()   );
-reg_def V3_J  ( SOC, SOC, Op_VecX, 3,  v3->as_VMReg()->next(2)  );
-reg_def V3_K  ( SOC, SOC, Op_VecX, 3,  v3->as_VMReg()->next(3)  );
-
-reg_def V4    ( SOC, SOC, Op_VecX, 4,  v4->as_VMReg()           );
-reg_def V4_H  ( SOC, SOC, Op_VecX, 4,  v4->as_VMReg()->next()   );
-reg_def V4_J  ( SOC, SOC, Op_VecX, 4,  v4->as_VMReg()->next(2)  );
-reg_def V4_K  ( SOC, SOC, Op_VecX, 4,  v4->as_VMReg()->next(3)  );
-
-reg_def V5    ( SOC, SOC, Op_VecX, 5,  v5->as_VMReg() 	        );
-reg_def V5_H  ( SOC, SOC, Op_VecX, 5,  v5->as_VMReg()->next()   );
-reg_def V5_J  ( SOC, SOC, Op_VecX, 5,  v5->as_VMReg()->next(2)  );
-reg_def V5_K  ( SOC, SOC, Op_VecX, 5,  v5->as_VMReg()->next(3)  );
-
-reg_def V6    ( SOC, SOC, Op_VecX, 6,  v6->as_VMReg()           );
-reg_def V6_H  ( SOC, SOC, Op_VecX, 6,  v6->as_VMReg()->next()   );
-reg_def V6_J  ( SOC, SOC, Op_VecX, 6,  v6->as_VMReg()->next(2)  );
-reg_def V6_K  ( SOC, SOC, Op_VecX, 6,  v6->as_VMReg()->next(3)  );
-
-reg_def V7    ( SOC, SOC, Op_VecX, 7,  v7->as_VMReg() 	        );
-reg_def V7_H  ( SOC, SOC, Op_VecX, 7,  v7->as_VMReg()->next()   );
-reg_def V7_J  ( SOC, SOC, Op_VecX, 7,  v7->as_VMReg()->next(2)  );
-reg_def V7_K  ( SOC, SOC, Op_VecX, 7,  v7->as_VMReg()->next(3)  );
-
-reg_def V8    ( SOC, SOC, Op_VecX, 8,  v8->as_VMReg()           );
-reg_def V8_H  ( SOC, SOC, Op_VecX, 8,  v8->as_VMReg()->next()   );
-reg_def V8_J  ( SOC, SOC, Op_VecX, 8,  v8->as_VMReg()->next(2)  );
-reg_def V8_K  ( SOC, SOC, Op_VecX, 8,  v8->as_VMReg()->next(3)  );
-
-reg_def V9    ( SOC, SOC, Op_VecX, 9,  v9->as_VMReg()           );
-reg_def V9_H  ( SOC, SOC, Op_VecX, 9,  v9->as_VMReg()->next()   );
-reg_def V9_J  ( SOC, SOC, Op_VecX, 9,  v9->as_VMReg()->next(2)  );
-reg_def V9_K  ( SOC, SOC, Op_VecX, 9,  v9->as_VMReg()->next(3)  );
-
-reg_def V10   ( SOC, SOC, Op_VecX, 10, v10->as_VMReg()          );
-reg_def V10_H ( SOC, SOC, Op_VecX, 10, v10->as_VMReg()->next()  );
-reg_def V10_J ( SOC, SOC, Op_VecX, 10, v10->as_VMReg()->next(2) );
-reg_def V10_K ( SOC, SOC, Op_VecX, 10, v10->as_VMReg()->next(3) );
-
-reg_def V11   ( SOC, SOC, Op_VecX, 11, v11->as_VMReg()          );
-reg_def V11_H ( SOC, SOC, Op_VecX, 11, v11->as_VMReg()->next()  );
-reg_def V11_J ( SOC, SOC, Op_VecX, 11, v11->as_VMReg()->next(2) );
-reg_def V11_K ( SOC, SOC, Op_VecX, 11, v11->as_VMReg()->next(3) );
-
-reg_def V12   ( SOC, SOC, Op_VecX, 12, v12->as_VMReg()          );
-reg_def V12_H ( SOC, SOC, Op_VecX, 12, v12->as_VMReg()->next()  );
-reg_def V12_J ( SOC, SOC, Op_VecX, 12, v12->as_VMReg()->next(2) );
-reg_def V12_K ( SOC, SOC, Op_VecX, 12, v12->as_VMReg()->next(3) );
-
-reg_def V13   ( SOC, SOC, Op_VecX, 13, v13->as_VMReg()          );
-reg_def V13_H ( SOC, SOC, Op_VecX, 13, v13->as_VMReg()->next()  );
-reg_def V13_J ( SOC, SOC, Op_VecX, 13, v13->as_VMReg()->next(2) );
-reg_def V13_K ( SOC, SOC, Op_VecX, 13, v13->as_VMReg()->next(3) );
-
-reg_def V14   ( SOC, SOC, Op_VecX, 14, v14->as_VMReg()          );
-reg_def V14_H ( SOC, SOC, Op_VecX, 14, v14->as_VMReg()->next()  );
-reg_def V14_J ( SOC, SOC, Op_VecX, 14, v14->as_VMReg()->next(2) );
-reg_def V14_K ( SOC, SOC, Op_VecX, 14, v14->as_VMReg()->next(3) );
-
-reg_def V15   ( SOC, SOC, Op_VecX, 15, v15->as_VMReg()          );
-reg_def V15_H ( SOC, SOC, Op_VecX, 15, v15->as_VMReg()->next()  );
-reg_def V15_J ( SOC, SOC, Op_VecX, 15, v15->as_VMReg()->next(2) );
-reg_def V15_K ( SOC, SOC, Op_VecX, 15, v15->as_VMReg()->next(3) );
-
-reg_def V16   ( SOC, SOC, Op_VecX, 16, v16->as_VMReg()          );
-reg_def V16_H ( SOC, SOC, Op_VecX, 16, v16->as_VMReg()->next()  );
-reg_def V16_J ( SOC, SOC, Op_VecX, 16, v16->as_VMReg()->next(2) );
-reg_def V16_K ( SOC, SOC, Op_VecX, 16, v16->as_VMReg()->next(3) );
-
-reg_def V17   ( SOC, SOC, Op_VecX, 17, v17->as_VMReg()          );
-reg_def V17_H ( SOC, SOC, Op_VecX, 17, v17->as_VMReg()->next()  );
-reg_def V17_J ( SOC, SOC, Op_VecX, 17, v17->as_VMReg()->next(2) );
-reg_def V17_K ( SOC, SOC, Op_VecX, 17, v17->as_VMReg()->next(3) );
-
-reg_def V18   ( SOC, SOC, Op_VecX, 18, v18->as_VMReg()          );
-reg_def V18_H ( SOC, SOC, Op_VecX, 18, v18->as_VMReg()->next()  );
-reg_def V18_J ( SOC, SOC, Op_VecX, 18, v18->as_VMReg()->next(2) );
-reg_def V18_K ( SOC, SOC, Op_VecX, 18, v18->as_VMReg()->next(3) );
-
-reg_def V19   ( SOC, SOC, Op_VecX, 19, v19->as_VMReg()          );
-reg_def V19_H ( SOC, SOC, Op_VecX, 19, v19->as_VMReg()->next()  );
-reg_def V19_J ( SOC, SOC, Op_VecX, 19, v19->as_VMReg()->next(2) );
-reg_def V19_K ( SOC, SOC, Op_VecX, 19, v19->as_VMReg()->next(3) );
-
-reg_def V20   ( SOC, SOC, Op_VecX, 20, v20->as_VMReg()          );
-reg_def V20_H ( SOC, SOC, Op_VecX, 20, v20->as_VMReg()->next()  );
-reg_def V20_J ( SOC, SOC, Op_VecX, 20, v20->as_VMReg()->next(2) );
-reg_def V20_K ( SOC, SOC, Op_VecX, 20, v20->as_VMReg()->next(3) );
-
-reg_def V21   ( SOC, SOC, Op_VecX, 21, v21->as_VMReg()          );
-reg_def V21_H ( SOC, SOC, Op_VecX, 21, v21->as_VMReg()->next()  );
-reg_def V21_J ( SOC, SOC, Op_VecX, 21, v21->as_VMReg()->next(2) );
-reg_def V21_K ( SOC, SOC, Op_VecX, 21, v21->as_VMReg()->next(3) );
-
-reg_def V22   ( SOC, SOC, Op_VecX, 22, v22->as_VMReg()          );
-reg_def V22_H ( SOC, SOC, Op_VecX, 22, v22->as_VMReg()->next()  );
-reg_def V22_J ( SOC, SOC, Op_VecX, 22, v22->as_VMReg()->next(2) );
-reg_def V22_K ( SOC, SOC, Op_VecX, 22, v22->as_VMReg()->next(3) );
-
-reg_def V23   ( SOC, SOC, Op_VecX, 23, v23->as_VMReg()          );
-reg_def V23_H ( SOC, SOC, Op_VecX, 23, v23->as_VMReg()->next()  );
-reg_def V23_J ( SOC, SOC, Op_VecX, 23, v23->as_VMReg()->next(2) );
-reg_def V23_K ( SOC, SOC, Op_VecX, 23, v23->as_VMReg()->next(3) );
-
-reg_def V24   ( SOC, SOC, Op_VecX, 24, v24->as_VMReg()          );
-reg_def V24_H ( SOC, SOC, Op_VecX, 24, v24->as_VMReg()->next()  );
-reg_def V24_J ( SOC, SOC, Op_VecX, 24, v24->as_VMReg()->next(2) );
-reg_def V24_K ( SOC, SOC, Op_VecX, 24, v24->as_VMReg()->next(3) );
-
-reg_def V25   ( SOC, SOC, Op_VecX, 25, v25->as_VMReg()          );
-reg_def V25_H ( SOC, SOC, Op_VecX, 25, v25->as_VMReg()->next()  );
-reg_def V25_J ( SOC, SOC, Op_VecX, 25, v25->as_VMReg()->next(2) );
-reg_def V25_K ( SOC, SOC, Op_VecX, 25, v25->as_VMReg()->next(3) );
-
-reg_def V26   ( SOC, SOC, Op_VecX, 26, v26->as_VMReg()          );
-reg_def V26_H ( SOC, SOC, Op_VecX, 26, v26->as_VMReg()->next()  );
-reg_def V26_J ( SOC, SOC, Op_VecX, 26, v26->as_VMReg()->next(2) );
-reg_def V26_K ( SOC, SOC, Op_VecX, 26, v26->as_VMReg()->next(3) );
-
-reg_def V27   ( SOC, SOC, Op_VecX, 27, v27->as_VMReg()          );
-reg_def V27_H ( SOC, SOC, Op_VecX, 27, v27->as_VMReg()->next()  );
-reg_def V27_J ( SOC, SOC, Op_VecX, 27, v27->as_VMReg()->next(2) );
-reg_def V27_K ( SOC, SOC, Op_VecX, 27, v27->as_VMReg()->next(3) );
-
-reg_def V28   ( SOC, SOC, Op_VecX, 28, v28->as_VMReg()          );
-reg_def V28_H ( SOC, SOC, Op_VecX, 28, v28->as_VMReg()->next()  );
-reg_def V28_J ( SOC, SOC, Op_VecX, 28, v28->as_VMReg()->next(2) );
-reg_def V28_K ( SOC, SOC, Op_VecX, 28, v28->as_VMReg()->next(3) );
-
-reg_def V29   ( SOC, SOC, Op_VecX, 29, v29->as_VMReg()          );
-reg_def V29_H ( SOC, SOC, Op_VecX, 29, v29->as_VMReg()->next()  );
-reg_def V29_J ( SOC, SOC, Op_VecX, 29, v29->as_VMReg()->next(2) );
-reg_def V29_K ( SOC, SOC, Op_VecX, 29, v29->as_VMReg()->next(3) );
-
-reg_def V30   ( SOC, SOC, Op_VecX, 30, v30->as_VMReg()          );
-reg_def V30_H ( SOC, SOC, Op_VecX, 30, v30->as_VMReg()->next()  );
-reg_def V30_J ( SOC, SOC, Op_VecX, 30, v30->as_VMReg()->next(2) );
-reg_def V30_K ( SOC, SOC, Op_VecX, 30, v30->as_VMReg()->next(3) );
-
-reg_def V31   ( SOC, SOC, Op_VecX, 31, v31->as_VMReg()          );
-reg_def V31_H ( SOC, SOC, Op_VecX, 31, v31->as_VMReg()->next()  );
-reg_def V31_J ( SOC, SOC, Op_VecX, 31, v31->as_VMReg()->next(2) );
-reg_def V31_K ( SOC, SOC, Op_VecX, 31, v31->as_VMReg()->next(3) );
-
 // Double Registers
 
 // The rules of ADL require that double registers be defined in pairs.
@@ -513,42 +342,7 @@ alloc_class chunk1(
     F27, F27_H,
 );
 
-alloc_class chunk2(
-    V0, V0_H, V0_J, V0_K,
-    V1, V1_H, V1_J, V1_K,
-    V2, V2_H, V2_J, V2_K,
-    V3, V3_H, V3_J, V3_K,
-    V4, V4_H, V4_J, V4_K,
-    V5, V5_H, V5_J, V5_K,
-    V6, V6_H, V6_J, V6_K,
-    V7, V7_H, V7_J, V7_K,
-    V8, V8_H, V8_J, V8_K,
-    V9, V9_H, V9_J, V9_K,
-    V10, V10_H, V10_J, V10_K,
-    V11, V11_H, V11_J, V11_K,
-    V12, V12_H, V12_J, V12_K,
-    V13, V13_H, V13_J, V13_K,
-    V14, V14_H, V14_J, V14_K,
-    V15, V15_H, V15_J, V15_K,
-    V16, V16_H, V16_J, V16_K,
-    V17, V17_H, V17_J, V17_K,
-    V18, V18_H, V18_J, V18_K,
-    V19, V19_H, V19_J, V19_K,
-    V20, V20_H, V20_J, V20_K,
-    V21, V21_H, V21_J, V21_K,
-    V22, V22_H, V22_J, V22_K,
-    V23, V23_H, V23_J, V23_K,
-    V24, V24_H, V24_J, V24_K,
-    V25, V25_H, V25_J, V25_K,
-    V26, V26_H, V26_J, V26_K,
-    V27, V27_H, V27_J, V27_K,
-    V28, V28_H, V28_J, V28_K,
-    V29, V29_H, V29_J, V29_K,
-    V30, V30_H, V30_J, V30_K,
-    V31, V31_H, V31_J, V31_K,
-);
-
-alloc_class chunk3(RFLAGS);
+alloc_class chunk2(RFLAGS);
 
 //----------Architecture Description Register Classes--------------------------
 // Several register classes are automatically defined based upon information in
@@ -852,37 +646,6 @@ reg_class vectord_reg(
 
 // Class for all 128bit vector registers
 reg_class vectorx_reg(
-    V1, V1_H, V1_J, V1_K,
-    V2, V2_H, V2_J, V2_K,
-    V3, V3_H, V3_J, V3_K,
-    V4, V4_H, V4_J, V4_K,
-    V5, V5_H, V5_J, V5_K,
-    V6, V6_H, V6_J, V6_K,
-    V7, V7_H, V7_J, V7_K,
-    V8, V8_H, V8_J, V8_K,
-    V9, V9_H, V9_J, V9_K,
-    V10, V10_H, V10_J, V10_K,
-    V11, V11_H, V11_J, V11_K,
-    V12, V12_H, V12_J, V12_K,
-    V13, V13_H, V13_J, V13_K,
-    V14, V14_H, V14_J, V14_K,
-    V15, V15_H, V15_J, V15_K,
-    V16, V16_H, V16_J, V16_K,
-    V17, V17_H, V17_J, V17_K,
-    V18, V18_H, V18_J, V18_K,
-    V19, V19_H, V19_J, V19_K,
-    V20, V20_H, V20_J, V20_K,
-    V21, V21_H, V21_J, V21_K,
-    V22, V22_H, V22_J, V22_K,
-    V23, V23_H, V23_J, V23_K,
-    V24, V24_H, V24_J, V24_K,
-    V25, V25_H, V25_J, V25_K,
-    V26, V26_H, V26_J, V26_K,
-    V27, V27_H, V27_J, V27_K,
-    V28, V28_H, V28_J, V28_K,
-    V29, V29_H, V29_J, V29_K,
-    V30, V30_H, V30_J, V30_K,
-    V31, V31_H, V31_J, V31_K
 );
 
 // Class for 64 bit register f0
@@ -903,31 +666,6 @@ reg_class f2_reg(
 // Class for 64 bit register f3
 reg_class f3_reg(
     F3, F3_H
-);
-
-// class for vector register v1
-reg_class v1_reg(
-    V1, V1_H, V1_J, V1_K
-);
-
-// class for vector register v2
-reg_class v2_reg(
-    V2, V2_H, V2_J, V2_K
-);
-
-// class for vector register v3
-reg_class v3_reg(
-    V3, V3_H, V3_J, V3_K
-);
-
-// class for vector register v4
-reg_class v4_reg(
-    V4, V4_H, V4_J, V4_K
-);
-
-// class for vector register v5
-reg_class v5_reg(
-    V5, V5_H, V5_J, V5_K
 );
 
 // class for condition codes
@@ -1449,7 +1187,7 @@ int MachEpilogNode::safepoint_offset() const {
 
 // Figure out which register class each belongs in: rc_int, rc_float or
 // rc_stack.
-enum RC { rc_bad, rc_int, rc_float, rc_vector, rc_stack };
+enum RC { rc_bad, rc_int, rc_float, rc_stack };
 
 static enum RC rc_class(OptoReg::Name reg) {
 
@@ -1508,30 +1246,8 @@ uint MachSpillCopyNode::implementation(CodeBuffer *cbuf, PhaseRegAlloc *ra_, boo
   int src_offset = ra_->reg2offset(src_lo);
   int dst_offset = ra_->reg2offset(dst_lo);
 
-  if (bottom_type()->isa_vect() != NULL) {
-    uint ireg = ideal_reg();
-    if (ireg == Op_VecX && cbuf) {
-      MacroAssembler _masm(cbuf);
-      const int vector_reg_size_in_bytes = 16;
-      if (src_lo_rc == rc_stack && dst_lo_rc == rc_stack) {
-        // stack to stack
-        __ spill_copy_vector_stack_to_stack(src_offset, dst_offset,
-                                            vector_reg_size_in_bytes);
-      } else if (src_lo_rc == rc_vector && dst_lo_rc == rc_stack) {
-        // vpr to stack
-        __ spill(as_VectorRegister(Matcher::_regEncode[src_lo]), ra_->reg2offset(dst_lo));
-      } else if (src_lo_rc == rc_stack && dst_lo_rc == rc_vector) {
-        // stack to vpr
-        __ unspill(as_VectorRegister(Matcher::_regEncode[dst_lo]), ra_->reg2offset(src_lo));
-      } else if (src_lo_rc == rc_vector && dst_lo_rc == rc_vector) {
-        // vpr to vpr
-        __ vmv1r_v(as_VectorRegister(Matcher::_regEncode[dst_lo]), as_VectorRegister(Matcher::_regEncode[src_lo]));
-      } else {
-        ShouldNotReachHere();
-      }
-    } else {
-      ShouldNotReachHere();
-    }
+  if (bottom_type() == NULL || bottom_type()->isa_vect() != NULL) {
+    ShouldNotReachHere();
   } else if (cbuf != NULL) {
     MacroAssembler _masm(cbuf);
     switch (src_lo_rc) {
@@ -1773,31 +1489,18 @@ const bool Matcher::match_rule_supported(int opcode) {
   if (!has_match_rule(opcode)) {
     return false;
   }
-
-  switch (opcode) {
-    case Op_StrCompressedCopy: // fall through
-    case Op_StrInflatedCopy:   // fall through
-      return UseRVV;
-
-    case Op_EncodeISOArray:
-      return UseRVV && SpecialEncodeISOArray;
-
-    case Op_PopCountI:
-    case Op_PopCountL:
-      return UsePopCountInstruction;
-  }
-
   return true; // Per default match rules are supported.
 }
 
-// Identify extra cases that we might want to provide match rules for vector nodes and
-// other intrinsics guarded with vector length (vlen) and element type (bt).
 const bool Matcher::match_rule_supported_vector(int opcode, int vlen) {
-  if (!match_rule_supported(opcode)) {
-    return false;
-  }
 
-  return op_vec_supported(opcode);
+  // TODO
+  // identify extra cases that we might want to provide match rules for
+  // e.g. Op_ vector nodes and other intrinsics while guarding with vlen
+  bool ret_value = match_rule_supported(opcode);
+  // Add rules here.
+
+  return ret_value;  // Per default match rules are supported.
 }
 
 const bool Matcher::has_predicated_vectors(void) {
@@ -1871,17 +1574,12 @@ const int Matcher::min_vector_size(const BasicType bt) {
 
 // Vector ideal reg.
 const uint Matcher::vector_ideal_reg(int len) {
-  assert(MaxVectorSize >= len, "");
-  if (UseRVV) {
-    return Op_VecX;
-  }
-
   ShouldNotReachHere();
   return 0;
 }
 
 const uint Matcher::vector_shift_count_ideal_reg(int size) {
-  ShouldNotReachHere();  // Not supported
+  ShouldNotReachHere();
   return 0;
 }
 
@@ -1897,6 +1595,8 @@ const bool Matcher::misaligned_vectors_ok() {
 
 // false => size gets scaled to BytesPerLong, ok.
 const bool Matcher::init_array_count_is_in_bytes = false;
+
+// TODO: wind: too much  ----------------
 
 // Use conditional move (CMOVL)
 const int Matcher::long_cmove_cost() {
@@ -1977,6 +1677,8 @@ bool Matcher::float_in_double() { return false; }
 // the whole long is written but de-opt'ing will have to extract
 // the relevant 32 bits.
 const bool Matcher::int_in_long = true;
+
+// TODO: wind: too much  ----------------
 
 // Return whether or not this register is ever used as an argument.
 // This function is used on startup to build the trampoline stubs in
@@ -3406,67 +3108,6 @@ operand fRegD()
   constraint(ALLOC_IN_RC(double_reg));
   match(RegD);
 
-  op_cost(0);
-  format %{ %}
-  interface(REG_INTER);
-%}
-
-// Generic vector class. This will be used for
-// all vector operands.
-operand vReg()
-%{
-  constraint(ALLOC_IN_RC(vectorx_reg));
-  match(VecX);
-  op_cost(0);
-  format %{ %}
-  interface(REG_INTER);
-%}
-
-operand vReg_V1()
-%{
-  constraint(ALLOC_IN_RC(v1_reg));
-  match(VecX);
-  match(vReg);
-  op_cost(0);
-  format %{ %}
-  interface(REG_INTER);
-%}
-
-operand vReg_V2()
-%{
-  constraint(ALLOC_IN_RC(v2_reg));
-  match(VecX);
-  match(vReg);
-  op_cost(0);
-  format %{ %}
-  interface(REG_INTER);
-%}
-
-operand vReg_V3()
-%{
-  constraint(ALLOC_IN_RC(v3_reg));
-  match(VecX);
-  match(vReg);
-  op_cost(0);
-  format %{ %}
-  interface(REG_INTER);
-%}
-
-operand vReg_V4()
-%{
-  constraint(ALLOC_IN_RC(v4_reg));
-  match(VecX);
-  match(vReg);
-  op_cost(0);
-  format %{ %}
-  interface(REG_INTER);
-%}
-
-operand vReg_V5()
-%{
-  constraint(ALLOC_IN_RC(v5_reg));
-  match(VecX);
-  match(vReg);
   op_cost(0);
   format %{ %}
   interface(REG_INTER);

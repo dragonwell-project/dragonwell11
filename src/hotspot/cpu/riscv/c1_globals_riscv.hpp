@@ -33,6 +33,8 @@
 // Sets the default values for platform dependent flags used by the client compiler.
 // (see c1_globals.hpp)
 
+// TODO: wind: will this configs affect performance?
+
 #ifndef TIERED
 define_pd_global(bool, BackgroundCompilation,        true );
 define_pd_global(bool, UseTLAB,                      true );

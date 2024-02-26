@@ -824,56 +824,8 @@ class StubGenerator: public StubCodeGenerator {
 
   typedef void (MacroAssembler::*copy_insn)(Register Rd, const Address &adr, Register temp);
 
-  void copy_memory_v(Register s, Register d, Register count, Register tmp, int step) {
-    bool is_backward = step < 0;
-    int granularity = uabs(step);
-
-    const Register src = x30, dst = x31, vl = x14, cnt = x15, tmp1 = x16, tmp2 = x17;
-    assert_different_registers(s, d, cnt, vl, tmp, tmp1, tmp2);
-    Assembler::SEW sew = Assembler::elemBytes_to_sew(granularity);
-    Label loop_forward, loop_backward, done;
-
-    __ mv(dst, d);
-    __ mv(src, s);
-    __ mv(cnt, count);
-
-    __ bind(loop_forward);
-    __ vsetvli(vl, cnt, sew, Assembler::m8);
-    if (is_backward) {
-      __ bne(vl, cnt, loop_backward);
-    }
-
-    __ vlex_v(v0, src, sew);
-    __ sub(cnt, cnt, vl);
-    __ slli(vl, vl, (int)sew);
-    __ add(src, src, vl);
-
-    __ vsex_v(v0, dst, sew);
-    __ add(dst, dst, vl);
-    __ bnez(cnt, loop_forward);
-
-    if (is_backward) {
-      __ j(done);
-
-      __ bind(loop_backward);
-      __ sub(tmp, cnt, vl);
-      __ slli(tmp, tmp, sew);
-      __ add(tmp1, s, tmp);
-      __ vlex_v(v0, tmp1, sew);
-      __ add(tmp2, d, tmp);
-      __ vsex_v(v0, tmp2, sew);
-      __ sub(cnt, cnt, vl);
-      __ bnez(cnt, loop_forward);
-      __ bind(done);
-    }
-  }
-
   void copy_memory(bool is_aligned, Register s, Register d,
                    Register count, Register tmp, int step) {
-
-    if (UseRVV) {
-      return copy_memory_v(s, d, count, tmp, step);
-    }
 
     bool is_backwards = step < 0;
     int granularity = uabs(step);
