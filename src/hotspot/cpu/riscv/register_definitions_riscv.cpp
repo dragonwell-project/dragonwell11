@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2002, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2018, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@
 
 #include "precompiled.hpp"
 #include "asm/assembler.hpp"
-#include "asm/macroAssembler.inline.hpp"
 #include "asm/register.hpp"
 #include "interp_masm_riscv.hpp"
 #include "register_riscv.hpp"
@@ -177,7 +176,6 @@ REGISTER_DEFINITION(Register, gp);
 REGISTER_DEFINITION(Register, tp);
 REGISTER_DEFINITION(Register, xmethod);
 REGISTER_DEFINITION(Register, ra);
-REGISTER_DEFINITION(Register, lr);
 REGISTER_DEFINITION(Register, sp);
 REGISTER_DEFINITION(Register, fp);
 REGISTER_DEFINITION(Register, xheapbase);

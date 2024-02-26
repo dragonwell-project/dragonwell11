@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -65,8 +64,7 @@ void LIR_Assembler::arithmetic_idiv(LIR_Code code, LIR_Opr left, LIR_Opr right, 
         if (is_imm_in_range(c - 1, 12, 0)) {
           __ andi(t1, t1, c - 1);
         } else {
-          __ slli(t1, t1, registerSize - shift);
-          __ srli(t1, t1, registerSize - shift);
+          __ zero_extend(t1, t1, shift);
         }
         __ subw(dreg, t1, t0);
       }
@@ -80,8 +78,7 @@ void LIR_Assembler::arithmetic_idiv(LIR_Code code, LIR_Opr left, LIR_Opr right, 
         if (is_imm_in_range(c - 1, 12, 0)) {
           __ andi(t0, t0, c - 1);
         } else {
-          __ slli(t0, t0, registerSize - shift);
-          __ srli(t0, t0, registerSize - shift);
+          __ zero_extend(t0, t0, shift);
         }
         __ addw(dreg, t0, lreg);
         __ sraiw(dreg, dreg, shift);
@@ -193,39 +190,37 @@ void LIR_Assembler::arith_op_double_cpu(LIR_Code code, LIR_Opr left, LIR_Opr rig
         code == lir_add ? __ add(dreg, lreg_lo, c) : __ sub(dreg, lreg_lo, c);
         break;
       case lir_div:
-        assert(c > 0 && is_power_of_2(c), "divisor must be power-of-2 constant");
+        assert(c > 0 && is_power_of_2_long(c), "divisor must be power-of-2 constant");
         if (c == 1) {
           // move lreg_lo to dreg if divisor is 1
           __ mv(dreg, lreg_lo);
         } else {
-          unsigned int shift = exact_log2(c);
+          unsigned int shift = exact_log2_long(c);
           // use t0 as intermediate result register
           __ srai(t0, lreg_lo, 0x3f);
           if (is_imm_in_range(c - 1, 12, 0)) {
             __ andi(t0, t0, c - 1);
           } else {
-            __ slli(t0, t0, registerSize - shift);
-            __ srli(t0, t0, registerSize - shift);
+            __ zero_extend(t0, t0, shift);
           }
           __ add(dreg, t0, lreg_lo);
           __ srai(dreg, dreg, shift);
         }
         break;
       case lir_rem:
-        assert(c > 0 && is_power_of_2(c), "divisor must be power-of-2 constant");
+        assert(c > 0 && is_power_of_2_long(c), "divisor must be power-of-2 constant");
         if (c == 1) {
           // move 0 to dreg if divisor is 1
           __ mv(dreg, zr);
         } else {
-          unsigned int shift = exact_log2(c);
+          unsigned int shift = exact_log2_long(c);
           __ srai(t0, lreg_lo, 0x3f);
           __ srli(t0, t0, BitsPerLong - shift);
           __ add(t1, lreg_lo, t0);
           if (is_imm_in_range(c - 1, 12, 0)) {
             __ andi(t1, t1, c - 1);
           } else {
-            __ slli(t1, t1, registerSize - shift);
-            __ srli(t1, t1, registerSize - shift);
+            __ zero_extend(t1, t1, shift);
           }
           __ sub(dreg, t1, t0);
         }
@@ -243,9 +238,9 @@ void LIR_Assembler::arith_op_single_fpu(LIR_Code code, LIR_Opr left, LIR_Opr rig
   switch (code) {
     case lir_add: __ fadd_s(dest->as_float_reg(), left->as_float_reg(), right->as_float_reg()); break;
     case lir_sub: __ fsub_s(dest->as_float_reg(), left->as_float_reg(), right->as_float_reg()); break;
-    case lir_mul_strictfp:  // fall through
+    case lir_mul_strictfp: // fall through
     case lir_mul: __ fmul_s(dest->as_float_reg(), left->as_float_reg(), right->as_float_reg()); break;
-    case lir_div_strictfp:  // fall through
+    case lir_div_strictfp: // fall through
     case lir_div: __ fdiv_s(dest->as_float_reg(), left->as_float_reg(), right->as_float_reg()); break;
     default:
       ShouldNotReachHere();
@@ -258,9 +253,9 @@ void LIR_Assembler::arith_op_double_fpu(LIR_Code code, LIR_Opr left, LIR_Opr rig
     switch (code) {
       case lir_add: __ fadd_d(dest->as_double_reg(), left->as_double_reg(), right->as_double_reg()); break;
       case lir_sub: __ fsub_d(dest->as_double_reg(), left->as_double_reg(), right->as_double_reg()); break;
-      case lir_mul_strictfp:  // fall through
+      case lir_mul_strictfp: // fall through
       case lir_mul: __ fmul_d(dest->as_double_reg(), left->as_double_reg(), right->as_double_reg()); break;
-      case lir_div_strictfp:  // fall through
+      case lir_div_strictfp: // fall through
       case lir_div: __ fdiv_d(dest->as_double_reg(), left->as_double_reg(), right->as_double_reg()); break;
       default:
         ShouldNotReachHere();

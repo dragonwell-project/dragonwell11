@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,26 +34,24 @@
 // Implementation of the platform-specific part of StubRoutines - for
 // a description of how to extend it, see the stubRoutines.hpp file.
 
-address StubRoutines::riscv64::_get_previous_sp_entry = NULL;
+address StubRoutines::riscv::_get_previous_sp_entry = NULL;
 
-address StubRoutines::riscv64::_f2i_fixup = NULL;
-address StubRoutines::riscv64::_f2l_fixup = NULL;
-address StubRoutines::riscv64::_d2i_fixup = NULL;
-address StubRoutines::riscv64::_d2l_fixup = NULL;
-address StubRoutines::riscv64::_float_sign_mask = NULL;
-address StubRoutines::riscv64::_float_sign_flip = NULL;
-address StubRoutines::riscv64::_double_sign_mask = NULL;
-address StubRoutines::riscv64::_double_sign_flip = NULL;
-address StubRoutines::riscv64::_zero_blocks = NULL;
-address StubRoutines::riscv64::_has_negatives = NULL;
-address StubRoutines::riscv64::_has_negatives_long = NULL;
-address StubRoutines::riscv64::_compare_long_string_LL = NULL;
-address StubRoutines::riscv64::_compare_long_string_UU = NULL;
-address StubRoutines::riscv64::_compare_long_string_LU = NULL;
-address StubRoutines::riscv64::_compare_long_string_UL = NULL;
-address StubRoutines::riscv64::_string_indexof_linear_ll = NULL;
-address StubRoutines::riscv64::_string_indexof_linear_uu = NULL;
-address StubRoutines::riscv64::_string_indexof_linear_ul = NULL;
-address StubRoutines::riscv64::_large_byte_array_inflate = NULL;
-address StubRoutines::riscv64::_method_entry_barrier = NULL;
-bool StubRoutines::riscv64::_completed = false;
+address StubRoutines::riscv::_f2i_fixup = NULL;
+address StubRoutines::riscv::_f2l_fixup = NULL;
+address StubRoutines::riscv::_d2i_fixup = NULL;
+address StubRoutines::riscv::_d2l_fixup = NULL;
+address StubRoutines::riscv::_float_sign_mask = NULL;
+address StubRoutines::riscv::_float_sign_flip = NULL;
+address StubRoutines::riscv::_double_sign_mask = NULL;
+address StubRoutines::riscv::_double_sign_flip = NULL;
+address StubRoutines::riscv::_zero_blocks = NULL;
+address StubRoutines::riscv::_compare_long_string_LL = NULL;
+address StubRoutines::riscv::_compare_long_string_UU = NULL;
+address StubRoutines::riscv::_compare_long_string_LU = NULL;
+address StubRoutines::riscv::_compare_long_string_UL = NULL;
+address StubRoutines::riscv::_string_indexof_linear_ll = NULL;
+address StubRoutines::riscv::_string_indexof_linear_uu = NULL;
+address StubRoutines::riscv::_string_indexof_linear_ul = NULL;
+address StubRoutines::riscv::_large_byte_array_inflate = NULL;
+
+bool StubRoutines::riscv::_completed = false;

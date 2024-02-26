@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2018, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -254,7 +254,7 @@ VtableStub* VtableStubs::create_itable_stub(int itable_index) {
 }
 
 int VtableStub::pd_code_alignment() {
-  // riscv64 cache line size is 64 bytes, but we want to limit alignment loss.
+  // RISCV cache line size is not an architected constant. We just align on word size.
   const unsigned int icache_line_size = wordSize;
   return icache_line_size;
 }

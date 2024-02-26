@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1999, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2015, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,12 +33,8 @@ const int StackAlignmentInBytes = 16;
 // 32-bit integer argument values are extended to 64 bits.
 const bool CCallingConventionRequiresIntsAsLongs = false;
 
-// RISC-V has adopted a multicopy atomic model closely following
-// that of ARMv8.
-#define CPU_MULTI_COPY_ATOMIC
-
-// We treat concurrent modification and execution of instructions
-// conservatively on RISC-V, just like it was done in aarch64 port.
+// To be safe, we deoptimize when we come across an access that needs
+// patching. This is similar to what is done on aarch64.
 #define DEOPTIMIZE_WHEN_PATCHING
 
 #define SUPPORTS_NATIVE_CX8
@@ -47,6 +43,10 @@ const bool CCallingConventionRequiresIntsAsLongs = false;
 
 #define THREAD_LOCAL_POLL
 
-#define COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS true
+#if INCLUDE_JVMCI
+#define COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS (EnableJVMCI || UseAOT)
+#else
+#define COMPRESSED_CLASS_POINTERS_DEPENDS_ON_COMPRESSED_OOPS false
+#endif
 
 #endif // CPU_RISCV_GLOBALDEFINITIONS_RISCV_HPP

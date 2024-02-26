@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2012, 2016 SAP SE. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,8 +26,6 @@
 
 #ifndef CPU_RISCV_BYTES_RISCV_HPP
 #define CPU_RISCV_BYTES_RISCV_HPP
-
-#include "memory/allocation.hpp"
 
 class Bytes: AllStatic {
  public:

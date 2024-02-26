@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2006, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,35 +34,20 @@ inline bool is_FloatRegister() {
   return value() >= ConcreteRegisterImpl::max_gpr && value() < ConcreteRegisterImpl::max_fpr;
 }
 
-inline bool is_VectorRegister() {
-  return value() >= ConcreteRegisterImpl::max_fpr && value() < ConcreteRegisterImpl::max_vpr;
-}
-
 inline Register as_Register() {
-  assert( is_Register(), "must be");
+  assert(is_Register(), "must be");
   return ::as_Register(value() / RegisterImpl::max_slots_per_register);
 }
 
 inline FloatRegister as_FloatRegister() {
-  assert( is_FloatRegister() && is_even(value()), "must be" );
+  assert(is_FloatRegister() && is_even(value()), "must be");
   return ::as_FloatRegister((value() - ConcreteRegisterImpl::max_gpr) /
                             FloatRegisterImpl::max_slots_per_register);
 }
 
-inline VectorRegister as_VectorRegister() {
-  assert( is_VectorRegister() && ((value() & (VectorRegisterImpl::max_slots_per_register - 1)) == 0), "must be" );
-  return ::as_VectorRegister((value() - ConcreteRegisterImpl::max_fpr) /
-                             VectorRegisterImpl::max_slots_per_register);
-}
-
 inline bool is_concrete() {
   assert(is_reg(), "must be");
-  if (is_VectorRegister()) {
-    int base = value() - ConcreteRegisterImpl::max_fpr;
-    return (base % VectorRegisterImpl::max_slots_per_register) == 0;
-  } else {
-    return is_even(value());
-  }
+  return is_even(value());
 }
 
 #endif // CPU_RISCV_VMREG_RISCV_HPP

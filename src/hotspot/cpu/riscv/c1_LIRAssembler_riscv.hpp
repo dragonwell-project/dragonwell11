@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -68,17 +68,16 @@ private:
 
   void deoptimize_trap(CodeEmitInfo *info);
 
-  enum
-  {
-    // see emit_static_call_stub for detail:
+  enum {
+    // See emit_static_call_stub for detail
     // CompiledStaticCall::to_interp_stub_size() (14) + CompiledStaticCall::to_trampoline_stub_size() (1 + 3 + address)
     _call_stub_size = 14 * NativeInstruction::instruction_size +
                       (NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size),
     _call_aot_stub_size = 0,
-    // see emit_exception_handler for detail:
+    // See emit_exception_handler for detail
     // verify_not_null_oop + far_call + should_not_reach_here + invalidate_registers(DEBUG_ONLY)
     _exception_handler_size = DEBUG_ONLY(584) NOT_DEBUG(548), // or smaller
-    // see emit_deopt_handler for detail
+    // See emit_deopt_handler for detail
     // auipc (1) + far_jump (6 or 2)
     _deopt_handler_size = 1 * NativeInstruction::instruction_size +
                           6 * NativeInstruction::instruction_size // or smaller

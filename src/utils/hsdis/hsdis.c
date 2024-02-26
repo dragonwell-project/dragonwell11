@@ -36,6 +36,7 @@
 #include <bfd.h>
 #include <bfdver.h>
 #include <dis-asm.h>
+
 #include "hsdis.h"
 
 #ifndef bool
@@ -478,9 +479,6 @@ static const char* native_arch_name() {
 #endif
 #ifdef LIBARCH_s390x
   res = "s390:64-bit";
-#endif
-#ifdef LIBARCH_riscv64
-  res = "riscv:rv64";
 #endif
   if (res == NULL)
     res = "architecture not set in Makefile!";

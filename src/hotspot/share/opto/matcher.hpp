@@ -338,12 +338,12 @@ public:
   // Vector ideal reg
   static const uint vector_ideal_reg(int len);
 
+  // Does the CPU supports vector variable shift instructions?
+  static bool supports_vector_variable_shifts(void);
+
   // Vector element basic type
   static BasicType vector_element_basic_type(const Node* n);
   static BasicType vector_element_basic_type(const MachNode* use, const MachOper* opnd);
-
-  // Does the CPU supports vector variable shift instructions?
-  static bool supports_vector_variable_shifts(void);
 
   // CPU supports misaligned vectors store/load.
   static const bool misaligned_vectors_ok();

@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2015, 2019, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,7 +39,7 @@ define_pd_global(bool, TrapBasedNullChecks,      false);
 define_pd_global(bool, UncommonNullCast,         true);  // Uncommon-trap NULLs past to check cast
 
 define_pd_global(uintx, CodeCacheSegmentSize,    64 TIERED_ONLY(+64)); // Tiered compilation has large code-entry alignment.
-define_pd_global(intx, CodeEntryAlignment,       16);
+define_pd_global(intx, CodeEntryAlignment,       64);
 define_pd_global(intx, OptoLoopAlignment,        16);
 define_pd_global(intx, InlineFrequencyCount,     100);
 
@@ -83,34 +82,31 @@ define_pd_global(bool, ThreadLocalHandshakes, true);
 
 define_pd_global(intx, InlineSmallCode,          1000);
 
-#define ARCH_FLAGS(develop,                                             \
-                   product,                                             \
-                   diagnostic,                                          \
-                   experimental,                                        \
-                   notproduct,                                          \
-                   range,                                               \
-                   constraint,                                          \
-                   writeable)                                           \
-                                                                        \
-  product(bool, NearCpool, true,                                        \
-          "constant pool is close to instructions")                     \
-  product(bool, UseBarriersForVolatile, false,                          \
-          "Use memory barriers to implement volatile accesses")         \
-  product(bool, UseCRC32, false,                                        \
-          "Use CRC32 instructions for CRC32 computation")               \
-  product(bool, UseBlockZeroing, true,                                  \
-          "Use DC ZVA for block zeroing")                               \
-  product(intx, BlockZeroingLowLimit, 256,                              \
-          "Minimum size in bytes when block zeroing will be used")      \
-          range(1, max_jint)                                            \
-  product(bool, TraceTraps, false, "Trace all traps the signal handler")\
-  product(bool, UseConservativeFence, true,                             \
-          "Extend i for r and o for w in the pred/succ flags of fence;" \
-          "Extend fence.i to fence.i + fence.")                         \
-  product(bool, AvoidUnalignedAccesses, true,                           \
-          "Avoid generating unaligned memory accesses")                 \
-  product(bool, UseRVV, false, "Use RVV instructions")                  \
-  product(bool, UseRVV071, false, "Use RVV 0.7.1 instructions")         \
-  product(bool, UseCSky, false, "Use CSky specific instructions")       \
+#define ARCH_FLAGS(develop,                                                      \
+                   product,                                                      \
+                   diagnostic,                                                   \
+                   experimental,                                                 \
+                   notproduct,                                                   \
+                   range,                                                        \
+                   constraint,                                                   \
+                   writeable)                                                    \
+                                                                                 \
+  product(bool, NearCpool, true,                                                 \
+         "constant pool is close to instructions")                               \
+  product(intx, BlockZeroingLowLimit, 256,                                       \
+          "Minimum size in bytes when block zeroing will be used")               \
+          range(1, max_jint)                                                     \
+  product(bool, TraceTraps, false, "Trace all traps the signal handler")         \
+  /* For now we're going to be safe and add the I/O bits to userspace fences. */ \
+  product(bool, UseConservativeFence, true,                                      \
+          "Extend i for r and o for w in the pred/succ flags of fence;"          \
+          "Extend fence.i to fence.i + fence.")                                  \
+  product(bool, AvoidUnalignedAccesses, true,                                    \
+          "Avoid generating unaligned memory accesses")                          \
+  experimental(bool, UseRVV, false, "Use RVV instructions")                      \
+  experimental(bool, UseRVV071, false, "Use RVV 0.7.1 instructions")             \
+  experimental(bool, UseRVB, false, "Use RVB instructions")                      \
+  experimental(bool, UseRVC, false, "Use RVC instructions")                      \
+  product(bool, UseCSky, false, "Use CSky specific instructions")                \
 
 #endif // CPU_RISCV_GLOBALS_RISCV_HPP

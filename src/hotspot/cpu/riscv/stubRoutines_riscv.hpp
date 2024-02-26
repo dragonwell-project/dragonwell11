@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,7 @@
 // definition. See stubRoutines.hpp for a description on how to
 // extend it.
 
-static bool    returns_to_call_stub(address return_pc)   {
+static bool returns_to_call_stub(address return_pc) {
   return return_pc == _call_stub_return_address;
 }
 
@@ -40,7 +40,7 @@ enum platform_dependent_constants {
   code_size2 = 28000           // simply increase if too small (assembler will crash if too small)
 };
 
-class riscv64 {
+class riscv {
  friend class StubGenerator;
 
  private:
@@ -58,8 +58,6 @@ class riscv64 {
 
   static address _zero_blocks;
 
-  static address _has_negatives;
-  static address _has_negatives_long;
   static address _compare_long_string_LL;
   static address _compare_long_string_LU;
   static address _compare_long_string_UL;
@@ -69,67 +67,48 @@ class riscv64 {
   static address _string_indexof_linear_ul;
   static address _large_byte_array_inflate;
 
-  static address _method_entry_barrier;
-
   static bool _completed;
 
  public:
 
-  static address get_previous_sp_entry()
-  {
+  static address get_previous_sp_entry() {
     return _get_previous_sp_entry;
   }
 
-  static address f2i_fixup()
-  {
+  static address f2i_fixup() {
     return _f2i_fixup;
   }
 
-  static address f2l_fixup()
-  {
+  static address f2l_fixup() {
     return _f2l_fixup;
   }
 
-  static address d2i_fixup()
-  {
+  static address d2i_fixup() {
     return _d2i_fixup;
   }
 
-  static address d2l_fixup()
-  {
+  static address d2l_fixup() {
     return _d2l_fixup;
   }
 
-  static address float_sign_mask()
-  {
+  static address float_sign_mask() {
     return _float_sign_mask;
   }
 
-  static address float_sign_flip()
-  {
+  static address float_sign_flip() {
     return _float_sign_flip;
   }
 
-  static address double_sign_mask()
-  {
+  static address double_sign_mask() {
     return _double_sign_mask;
   }
 
-  static address double_sign_flip()
-  {
+  static address double_sign_flip() {
     return _double_sign_flip;
   }
 
   static address zero_blocks() {
     return _zero_blocks;
-  }
-
-  static address has_negatives() {
-    return _has_negatives;
-  }
-
-  static address has_negatives_long() {
-    return _has_negatives_long;
   }
 
   static address compare_long_string_LL() {
@@ -162,10 +141,6 @@ class riscv64 {
 
   static address large_byte_array_inflate() {
     return _large_byte_array_inflate;
-  }
-
-  static address method_entry_barrier() {
-    return _method_entry_barrier;
   }
 
   static bool complete() {

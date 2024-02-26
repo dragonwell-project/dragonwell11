@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -251,8 +251,7 @@ void LIR_Op2::verify() const {
 
 
 LIR_OpBranch::LIR_OpBranch(LIR_Condition cond, BasicType type, BlockBegin* block)
-  : LIR_Op2(lir_branch, cond, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, (CodeEmitInfo*)NULL)
-  , _type(type)
+  : LIR_Op2(lir_branch, cond, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, (CodeEmitInfo*)NULL, type)
   , _label(block->label())
   , _block(block)
   , _ublock(NULL)
@@ -260,8 +259,7 @@ LIR_OpBranch::LIR_OpBranch(LIR_Condition cond, BasicType type, BlockBegin* block
 }
 
 LIR_OpBranch::LIR_OpBranch(LIR_Condition cond, BasicType type, CodeStub* stub) :
-  LIR_Op2(lir_branch, cond, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, (CodeEmitInfo*)NULL)
-  , _type(type)
+  LIR_Op2(lir_branch, cond, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, (CodeEmitInfo*)NULL, type)
   , _label(stub->entry())
   , _block(NULL)
   , _ublock(NULL)
@@ -269,8 +267,7 @@ LIR_OpBranch::LIR_OpBranch(LIR_Condition cond, BasicType type, CodeStub* stub) :
 }
 
 LIR_OpBranch::LIR_OpBranch(LIR_Condition cond, BasicType type, BlockBegin* block, BlockBegin* ublock)
-  : LIR_Op2(lir_cond_float_branch, cond, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, (CodeEmitInfo*)NULL)
-  , _type(type)
+  : LIR_Op2(lir_cond_float_branch, cond, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, (CodeEmitInfo*)NULL, type)
   , _label(block->label())
   , _block(block)
   , _ublock(ublock)

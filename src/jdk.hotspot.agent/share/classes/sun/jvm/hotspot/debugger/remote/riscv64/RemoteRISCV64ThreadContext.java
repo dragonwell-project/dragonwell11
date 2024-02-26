@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Red Hat Inc.
+ * Copyright (c) 2021, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,21 +24,25 @@
  *
  */
 
-#include "precompiled.hpp"
-#if INCLUDE_ZGC
-#include "gc/shared/barrierSetNMethod.hpp"
-#include "utilities/debug.hpp"
+package sun.jvm.hotspot.debugger.remote.riscv64;
 
-void BarrierSetNMethod::deoptimize(nmethod* nm, address* return_address_ptr) {
-  ShouldNotReachHere();
-}
+import sun.jvm.hotspot.debugger.*;
+import sun.jvm.hotspot.debugger.riscv64.*;
+import sun.jvm.hotspot.debugger.remote.*;
 
-void BarrierSetNMethod::disarm(nmethod* nm) {
-  ShouldNotReachHere();
-}
+public class RemoteRISCV64ThreadContext extends RISCV64ThreadContext {
+  private RemoteDebuggerClient debugger;
 
-bool BarrierSetNMethod::is_armed(nmethod* nm) {
-  ShouldNotReachHere();
-  return false;
+  public RemoteRISCV64ThreadContext(RemoteDebuggerClient debugger) {
+    super();
+    this.debugger = debugger;
+  }
+
+  public void setRegisterAsAddress(int index, Address value) {
+    setRegister(index, debugger.getAddressValue(value));
+  }
+
+  public Address getRegisterAsAddress(int index) {
+    return debugger.newAddress(getRegister(index));
+  }
 }
-#endif

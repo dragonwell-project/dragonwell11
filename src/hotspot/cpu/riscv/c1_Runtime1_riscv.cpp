@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1999, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -83,7 +83,6 @@ int StubAssembler::call_RT(Register oop_result, Register metadata_result, addres
   pop_reg(x10, sp);
 #endif
   reset_last_Java_frame(true);
-  ifence();
 
   // check for pending exceptions
   { Label L;
@@ -227,11 +226,11 @@ const int float_regs_as_doubles_size_in_slots = pd_nof_fpu_regs_frame_map * 2;
 //
 
 enum reg_save_layout {
-  reg_save_frame_size = 32 /* float */ + 32 /* integer */
+  reg_save_frame_size = 32 /* float */ + 30 /* integer excluding x3, x4 */
 };
 
 // Save off registers which might be killed by calls into the runtime.
-// Tries to smart of about FP registers.  In particular we separate
+// Tries to smart of about FPU registers.  In particular we separate
 // saving and describing the FPU registers for deoptimization since we
 // have to save the FPU registers twice if we describe them.  The
 // deopt blob is the only thing which needs to describe FPU registers.
@@ -248,11 +247,12 @@ static OopMap* generate_oop_map(StubAssembler* sasm, bool save_fpu_registers) {
   OopMap* oop_map = new OopMap(frame_size_in_slots, 0);
   assert_cond(oop_map != NULL);
 
-  // cpu_regs, caller save registers only, see FrameMap::initialize
-  // in c1_FrameMap_riscv64.cpp for detail.
-  const static Register caller_save_cpu_regs[FrameMap::max_nof_caller_save_cpu_regs] = {x7, x10, x11, x12,
-                                                                                        x13, x14, x15, x16, x17,
-                                                                                        x28,  x29, x30, x31};
+  // caller save registers only, see FrameMap::initialize
+  // in c1_FrameMap_riscv.cpp for detail.
+  const static Register caller_save_cpu_regs[FrameMap::max_nof_caller_save_cpu_regs] = {
+    x7, x10, x11, x12, x13, x14, x15, x16, x17, x28, x29, x30, x31
+  };
+
   for (int i = 0; i < FrameMap::max_nof_caller_save_cpu_regs; i++) {
     Register r = caller_save_cpu_regs[i];
     int sp_offset = cpu_reg_save_offsets[r->encoding()];
@@ -276,8 +276,8 @@ static OopMap* save_live_registers(StubAssembler* sasm,
                                    bool save_fpu_registers = true) {
   __ block_comment("save_live_registers");
 
-  // if the number of pushed regs is odd, zr will be added
-  __ push_reg(RegSet::range(x3, x31), sp);    // integer registers except ra(x1) & sp(x2)
+  // if the number of pushed regs is odd, one slot will be reserved for alignment
+  __ push_reg(RegSet::range(x5, x31), sp);    // integer registers except ra(x1) & sp(x2) & gp(x3) & tp(x4)
 
   if (save_fpu_registers) {
     // float registers
@@ -286,7 +286,7 @@ static OopMap* save_live_registers(StubAssembler* sasm,
       __ fsd(as_FloatRegister(i), Address(sp, i * wordSize));
     }
   } else {
-    // we define reg_save_layout = 64 as the fixed frame size,
+    // we define reg_save_layout = 62 as the fixed frame size,
     // we should also sub 32 * wordSize to sp when save_fpu_registers == false
     __ addi(sp, sp, -32 * wordSize);
   }
@@ -306,8 +306,8 @@ static void restore_live_registers(StubAssembler* sasm, bool restore_fpu_registe
     __ addi(sp, sp, 32 * wordSize);
   }
 
-  // if the number of popped regs is odd, zr will be added
-  __ pop_reg(RegSet::range(x3, x31), sp);   // integer registers except ra(x1) & sp(x2)
+  // if the number of popped regs is odd, the reserved slot for alignment will be removed
+  __ pop_reg(RegSet::range(x5, x31), sp);   // integer registers except ra(x1) & sp(x2) & gp(x3) & tp(x4)
 }
 
 static void restore_live_registers_except_r10(StubAssembler* sasm, bool restore_fpu_registers = true) {
@@ -322,10 +322,10 @@ static void restore_live_registers_except_r10(StubAssembler* sasm, bool restore_
     __ addi(sp, sp, 32 * wordSize);
   }
 
-  // if the number of popped regs is odd, zr will be added
-  // integer registers except ra(x1) & sp(x2) & x10
-  __ pop_reg(RegSet::range(x3, x9), sp);   // pop zr, x3 ~ x9
-  __ pop_reg(RegSet::range(x11, x31), sp); // pop x10 ~ x31, x10 will be loaded to zr
+  // pop integer registers except ra(x1) & sp(x2) & gp(x3) & tp(x4) & x10
+  // there is one reserved slot for alignment on the stack in save_live_registers().
+  __ pop_reg(RegSet::range(x5, x9), sp);   // pop x5 ~ x9 with the reserved slot for alignment
+  __ pop_reg(RegSet::range(x11, x31), sp); // pop x11 ~ x31; x10 will be automatically skipped here
 }
 
 void Runtime1::initialize_pd() {
@@ -339,11 +339,10 @@ void Runtime1::initialize_pd() {
     sp_offset += step;
   }
 
-  // we save x0, x3 ~ x31, except x1, x2
-  cpu_reg_save_offsets[0] = sp_offset;
+  // a slot reserved for stack 16-byte alignment, see MacroAssembler::push_reg
   sp_offset += step;
-  // 3: loop starts from x3
-  for (i = 3; i < FrameMap::nof_cpu_regs; i++) {
+  // we save x5 ~ x31, except x0 ~ x4: loop starts from x5
+  for (i = 5; i < FrameMap::nof_cpu_regs; i++) {
     cpu_reg_save_offsets[i] = sp_offset;
     sp_offset += step;
   }
@@ -397,7 +396,7 @@ OopMapSet* Runtime1::generate_handle_exception(StubID id, StubAssembler *sasm) {
       __ sd(zr, Address(xthread, Thread::pending_exception_offset()));
 
       // load issuing PC (the return address for this stub) into x13
-      __ ld(exception_pc, Address(fp, 1 * BytesPerWord));
+      __ ld(exception_pc, Address(fp, frame::return_addr_offset * BytesPerWord));
 
       // make sure that the vm_results are cleared (may be unnecessary)
       __ sd(zr, Address(xthread, JavaThread::vm_result_offset()));
@@ -410,7 +409,7 @@ OopMapSet* Runtime1::generate_handle_exception(StubID id, StubAssembler *sasm) {
       break;
     case handle_exception_from_callee_id: {
       // At this point all registers except exception oop (x10) and
-      // exception pc (lr) are dead.
+      // exception pc (ra) are dead.
       const int frame_size = 2 /* fp, return address */;
       oop_map = new OopMap(frame_size * VMRegImpl::slots_per_word, 0);
       sasm->set_frame_size(frame_size);
@@ -448,7 +447,7 @@ OopMapSet* Runtime1::generate_handle_exception(StubID id, StubAssembler *sasm) {
   __ sd(exception_pc, Address(xthread, JavaThread::exception_pc_offset()));
 
   // patch throwing pc into return address (has bci & oop map)
-  __ sd(exception_pc, Address(fp, 1 * BytesPerWord));
+  __ sd(exception_pc, Address(fp, frame::return_addr_offset * BytesPerWord));
 
   // compute the exception handler.
   // the exception oop and the throwing pc are read from the fields in JavaThread
@@ -464,7 +463,7 @@ OopMapSet* Runtime1::generate_handle_exception(StubID id, StubAssembler *sasm) {
   __ invalidate_registers(false, true, true, true, true, true);
 
   // patch the return address, this stub will directly return to the exception handler
-  __ sd(x10, Address(fp, 1 * BytesPerWord));
+  __ sd(x10, Address(fp, frame::return_addr_offset * BytesPerWord));
 
   switch (id) {
     case forward_exception_id:
@@ -478,7 +477,7 @@ OopMapSet* Runtime1::generate_handle_exception(StubID id, StubAssembler *sasm) {
       __ leave();
       __ ret();  // jump to exception handler
       break;
-    default:  ShouldNotReachHere();
+    default: ShouldNotReachHere();
   }
 
   return oop_maps;
@@ -514,10 +513,10 @@ void Runtime1::generate_unwind_exception(StubAssembler *sasm) {
   // save exception_oop
   __ addi(sp, sp, -2 * wordSize);
   __ sd(exception_oop, Address(sp, wordSize));
-  __ sd(lr, Address(sp));
+  __ sd(ra, Address(sp));
 
   // search the exception handler address of the caller (using the return address)
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::exception_handler_for_return_address), xthread, lr);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, SharedRuntime::exception_handler_for_return_address), xthread, ra);
   // x10: exception handler address of the caller
 
   // Only x10 is valid at this time; all other registers have been
@@ -528,11 +527,11 @@ void Runtime1::generate_unwind_exception(StubAssembler *sasm) {
   __ mv(handler_addr, x10);
 
   // get throwing pc (= return address).
-  // lr has been destroyed by the call
-  __ ld(lr, Address(sp));
+  // ra has been destroyed by the call
+  __ ld(ra, Address(sp));
   __ ld(exception_oop, Address(sp, wordSize));
   __ addi(sp, sp, 2 * wordSize);
-  __ mv(x13, lr);
+  __ mv(x13, ra);
 
   __ verify_not_null_oop(exception_oop);
 
@@ -581,17 +580,14 @@ OopMapSet* Runtime1::generate_patching(StubAssembler* sasm, address target) {
 #endif
   __ reset_last_Java_frame(true);
 
-  __ ifence();
-
   // check for pending exceptions
-  {
-    Label L;
+  { Label L;
     __ ld(t0, Address(xthread, Thread::pending_exception_offset()));
     __ beqz(t0, L);
     // exception pending => remove activation and forward to exception handler
 
     { Label L1;
-      __ bnez(x10, L1);                                  // have we deoptimized?
+      __ bnez(x10, L1);                                 // have we deoptimized?
       __ far_jump(RuntimeAddress(Runtime1::entry_for(Runtime1::forward_exception_id)));
       __ bind(L1);
     }
@@ -649,6 +645,7 @@ OopMapSet* Runtime1::generate_patching(StubAssembler* sasm, address target) {
 
   // Will reexecute. Proper return address is already on the stack we just restore
   // registers, pop all of our frame but the return address and jump to the deopt blob
+
   restore_live_registers(sasm);
   __ leave();
   __ far_jump(RuntimeAddress(deopt_blob->unpack_with_reexecution()));
@@ -794,8 +791,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         OopMap* map = save_live_registers(sasm);
         assert_cond(map != NULL);
 
-        const int bci_off = 2;
-        const int method_off = 3;
+        const int bci_off = 0;
+        const int method_off = 1;
         // Retrieve bci
         __ lw(bci, Address(fp, bci_off * BytesPerWord));
         // And a pointer to the Method*
@@ -859,8 +856,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
           __ sll(arr_size, length, t0);
           int lh_header_size_width = exact_log2(Klass::_lh_header_size_mask + 1);
           int lh_header_size_msb = Klass::_lh_header_size_shift + lh_header_size_width;
-          __ slli(tmp1, tmp1, registerSize - lh_header_size_msb);
-          __ srli(tmp1, tmp1, registerSize - lh_header_size_width);
+          __ slli(tmp1, tmp1, XLEN - lh_header_size_msb);
+          __ srli(tmp1, tmp1, XLEN - lh_header_size_width);
           __ add(arr_size, arr_size, tmp1);
           __ addi(arr_size, arr_size, MinObjAlignmentInBytesMask); // align up
           __ andi(arr_size, arr_size, ~(uint)MinObjAlignmentInBytesMask);

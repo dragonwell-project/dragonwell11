@@ -243,7 +243,7 @@ void Runtime1::generate_blob_for(BufferBlob* buffer_blob, StubID id) {
   case handle_exception_nofpu_id:  // Unused on sparc
 #endif
 #if defined(RISCV)
-  // TODO: Wisp
+  // TODO:Wisp
   case monitorexit_nofpu_proxy_id:
   case monitorexit_proxy_id:
 #endif

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2015, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,14 +42,14 @@ using MacroAssembler::null_check;
   void try_allocate(
     Register obj,                      // result: pointer to object after successful allocation
     Register var_size_in_bytes,        // object size in bytes if unknown at compile time; invalid otherwise
-    int      con_size_in_bytes,        // object size in bytes if   known at compile time
+    int      con_size_in_bytes,        // object size in bytes if known at compile time
     Register tmp1,                     // temp register
     Register tmp2,                     // temp register
     Label&   slow_case                 // continuation point if fast allocation fails
   );
 
   void initialize_header(Register obj, Register klass, Register len, Register tmp1, Register tmp2);
-  void initialize_body(Register obj, Register len_in_bytes, int hdr_size_in_bytes, Register tmp1);
+  void initialize_body(Register obj, Register len_in_bytes, int hdr_size_in_bytes, Register tmp);
 
   void float_cmp(bool is_float, int unordered_result,
                  FloatRegister f0, FloatRegister f1,
@@ -59,9 +59,9 @@ using MacroAssembler::null_check;
   // hdr     : must be x10, contents destroyed
   // obj     : must point to the object to lock, contents preserved
   // disp_hdr: must point to the displaced header location, contents preserved
-  // tmp     : temporary register, contents destroyed
+  // scratch : scratch register, contents destroyed
   // returns code offset at which to add null check debug information
-  int lock_object  (Register swap, Register obj, Register disp_hdr, Register tmp, Label& slow_case);
+  int lock_object  (Register swap, Register obj, Register disp_hdr, Register scratch, Label& slow_case);
 
   // unlocking
   // hdr     : contents destroyed

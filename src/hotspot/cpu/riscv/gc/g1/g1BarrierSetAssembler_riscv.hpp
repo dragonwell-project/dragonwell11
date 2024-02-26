@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef CPU_RISCV64_GC_G1_G1BARRIERSETASSEMBLER_RISCV_HPP
-#define CPU_RISCV64_GC_G1_G1BARRIERSETASSEMBLER_RISCV_HPP
+#ifndef CPU_RISCV_GC_G1_G1BARRIERSETASSEMBLER_RISCV_HPP
+#define CPU_RISCV_GC_G1_G1BARRIERSETASSEMBLER_RISCV_HPP
 
 #include "asm/macroAssembler.hpp"
 #include "gc/shared/modRefBarrierSetAssembler.hpp"
@@ -75,4 +75,4 @@ public:
                Register dst, Address src, Register tmp1, Register tmp_thread);
 };
 
-#endif // CPU_RISCV64_GC_G1_G1BARRIERSETASSEMBLER_RISCV_HPP
+#endif // CPU_RISCV_GC_G1_G1BARRIERSETASSEMBLER_RISCV_HPP

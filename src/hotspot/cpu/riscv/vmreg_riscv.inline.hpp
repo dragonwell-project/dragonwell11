@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2006, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,19 +26,19 @@
 #ifndef CPU_RISCV_VM_VMREG_RISCV_INLINE_HPP
 #define CPU_RISCV_VM_VMREG_RISCV_INLINE_HPP
 
-inline VMReg RegisterImpl::as_VMReg() {
-  if( this == noreg ) {
+inline VMReg RegisterImpl::as_VMReg() const {
+  if (this == noreg) {
     return VMRegImpl::Bad();
   }
   return VMRegImpl::as_VMReg(encoding() * RegisterImpl::max_slots_per_register);
 }
 
-inline VMReg FloatRegisterImpl::as_VMReg() {
+inline VMReg FloatRegisterImpl::as_VMReg() const {
   return VMRegImpl::as_VMReg((encoding() * FloatRegisterImpl::max_slots_per_register) +
                              ConcreteRegisterImpl::max_gpr);
 }
 
-inline VMReg VectorRegisterImpl::as_VMReg() {
+inline VMReg VectorRegisterImpl::as_VMReg() const {
   return VMRegImpl::as_VMReg((encoding() * VectorRegisterImpl::max_slots_per_register) +
                              ConcreteRegisterImpl::max_fpr);
 }

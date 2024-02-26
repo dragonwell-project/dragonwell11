@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,8 +39,5 @@ define_pd_global(uintx, JVMInvokeMethodSlack,     8192);
 
 // Used on 64 bit platforms for UseCompressedOops base address
 define_pd_global(uintx, HeapBaseMinAddress,       2 * G);
-
-class Thread;
-extern __thread Thread *riscv64_currentThread;
 
 #endif // OS_CPU_LINUX_RISCV_VM_GLOBALS_LINUX_RISCV_HPP

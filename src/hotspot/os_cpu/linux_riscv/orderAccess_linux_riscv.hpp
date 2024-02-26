@@ -49,6 +49,7 @@ inline void OrderAccess::fence() {
   FULL_MEM_BARRIER;
 }
 
+
 template<size_t byte_size>
 struct OrderAccess::PlatformOrderedLoad<byte_size, X_ACQUIRE>
 {

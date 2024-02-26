@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2021, Arm Limited. All rights reserved.
+ * Copyright (c) 2001, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Red Hat Inc.
  * Copyright (c) 2021, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -21,25 +21,33 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
+ *
  */
 
-#include "precompiled.hpp"
-#include "runtime/registerMap.hpp"
-#include "vmreg_riscv.inline.hpp"
+package sun.jvm.hotspot.runtime.riscv64;
 
-address RegisterMap::pd_location(VMReg base_reg, int slot_idx) const {
-  if (base_reg->is_VectorRegister()) {
-    assert(base_reg->is_concrete(), "must pass base reg");
-    int base_reg_enc = (base_reg->value() - ConcreteRegisterImpl::max_fpr) /
-                       VectorRegisterImpl::max_slots_per_register;
-    intptr_t offset_in_bytes = slot_idx * VMRegImpl::stack_slot_size;
-    address base_location = location(base_reg);
-    if (base_location != NULL) {
-      return base_location + offset_in_bytes;
-    } else {
-      return NULL;
-    }
-  } else {
-    return location(base_reg->next(slot_idx));
+import sun.jvm.hotspot.debugger.*;
+import sun.jvm.hotspot.runtime.*;
+
+public class RISCV64RegisterMap extends RegisterMap {
+
+  /** This is the only public constructor */
+  public RISCV64RegisterMap(JavaThread thread, boolean updateMap) {
+    super(thread, updateMap);
   }
+
+  protected RISCV64RegisterMap(RegisterMap map) {
+    super(map);
+  }
+
+  public Object clone() {
+    RISCV64RegisterMap retval = new RISCV64RegisterMap(this);
+    return retval;
+  }
+
+  // no PD state to clear or copy:
+  protected void clearPD() {}
+  protected void initializePD() {}
+  protected void initializeFromPD(RegisterMap map) {}
+  protected Address getLocationPD(VMReg reg) { return null; }
 }

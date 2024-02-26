@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -350,12 +349,10 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 void LIR_Assembler::arraycopy_prepare_params(Register src, Register src_pos, Register length,
                                              Register dst, Register dst_pos, BasicType basic_type) {
   int scale = array_element_size(basic_type);
-  __ slli(t0, src_pos, scale);
-  __ add(c_rarg0, src, t0);
+  __ shadd(c_rarg0, src_pos, src, t0, scale);
   __ add(c_rarg0, c_rarg0, arrayOopDesc::base_offset_in_bytes(basic_type));
   assert_different_registers(c_rarg0, dst, dst_pos, length);
-  __ slli(t0, dst_pos, scale);
-  __ add(c_rarg1, dst, t0);
+  __ shadd(c_rarg1, dst_pos, dst, t0, scale);
   __ add(c_rarg1, c_rarg1, arrayOopDesc::base_offset_in_bytes(basic_type));
   assert_different_registers(c_rarg1, dst, length);
   __ mv(c_rarg2, length);

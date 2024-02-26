@@ -122,8 +122,6 @@ class InterpreterMacroAssembler: public MacroAssembler {
   // Load cpool->resolved_klass_at(index).
   void load_resolved_klass_at_offset(Register cpool, Register index, Register klass, Register temp);
 
-  void load_resolved_method_at_index(int byte_no, Register method, Register cache);
-
   void pop_ptr(Register r = x10);
   void pop_i(Register r = x10);
   void pop_l(Register r = x10);
@@ -148,7 +146,7 @@ class InterpreterMacroAssembler: public MacroAssembler {
   void load_ptr(int n, Register val);
   void store_ptr(int n, Register val);
 
-// Load float value from 'address'. The value is loaded onto the FPU register v0.
+  // Load float value from 'address'. The value is loaded onto the FPU register v0.
   void load_float(Address src);
   void load_double(Address src);
 

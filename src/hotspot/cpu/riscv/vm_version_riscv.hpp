@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,33 +33,39 @@
 #include "utilities/sizes.hpp"
 
 class VM_Version : public Abstract_VM_Version {
-public:
-  // Initialization
-  static void initialize();
+#ifdef COMPILER2
+private:
+  static void c2_initialize();
+#endif // COMPILER2
 
 protected:
   static const char* _uarch;
   static uint32_t _initial_vector_length;
-  static void get_processor_features();
-  static uint32_t get_current_vector_length();
   static void get_os_cpu_info();
+  static uint32_t get_current_vector_length();
+
+public:
+  // Initialization
+  static void initialize();
 
   enum Feature_Flag {
-#define CPU_FEATURE_FLAGS(decl)             \
-  decl(I,            "i",            8)     \
-  decl(M,            "m",           12)     \
-  decl(A,            "a",            0)     \
-  decl(F,            "f",            5)     \
-  decl(D,            "d",            3)     \
-  decl(C,            "c",            2)     \
-  decl(V,            "v",           21)
+#define CPU_FEATURE_FLAGS(decl)               \
+    decl(I,            "i",            8)     \
+    decl(M,            "m",           12)     \
+    decl(A,            "a",            0)     \
+    decl(F,            "f",            5)     \
+    decl(D,            "d",            3)     \
+    decl(C,            "c",            2)     \
+    decl(V,            "v",           21)     \
+    decl(B,            "b",            1)
 
 #define DECLARE_CPU_FEATURE_FLAG(id, name, bit) CPU_##id = (1 << bit),
-      CPU_FEATURE_FLAGS(DECLARE_CPU_FEATURE_FLAG)
+    CPU_FEATURE_FLAGS(DECLARE_CPU_FEATURE_FLAG)
 #undef DECLARE_CPU_FEATURE_FLAG
   };
 
-public:
+  static void initialize_cpu_information(void);
+
   static bool is_checkvext_fault(address pc) {
     return pc != NULL && pc == _checkvext_fault_pc;
   }
@@ -71,6 +77,7 @@ public:
 
   static address _checkvext_fault_pc;
   static address _checkvext_continuation_pc;
+
 
 #ifdef COMPILER2
 private:

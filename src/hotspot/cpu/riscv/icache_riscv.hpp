@@ -26,14 +26,14 @@
 #ifndef CPU_RISCV_ICACHE_RISCV_HPP
 #define CPU_RISCV_ICACHE_RISCV_HPP
 
-// Interface for updating the instruction cache.  Whenever the VM
+// Interface for updating the instruction cache. Whenever the VM
 // modifies code, part of the processor instruction cache potentially
 // has to be flushed.
 
 class ICache : public AbstractICache {
 public:
   enum {
-    stub_size      = 16,                 // Size of the icache flush stub in bytes
+    stub_size      = 16,                // Size of the icache flush stub in bytes
     line_size      = BytesPerWord,      // conservative
     log2_line_size = LogBytesPerWord    // log2(line_size)
   };

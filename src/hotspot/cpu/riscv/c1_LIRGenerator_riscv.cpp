@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2005, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -142,7 +142,6 @@ bool LIRGenerator::can_inline_as_constant(Value v) const {
   return false;
 }
 
-
 bool LIRGenerator::can_inline_as_constant(LIR_Const* c) const {
   if (c->as_constant() != NULL) {
     long constant = 0;
@@ -158,7 +157,6 @@ bool LIRGenerator::can_inline_as_constant(LIR_Const* c) const {
   return false;
 }
 
-
 LIR_Opr LIRGenerator::safepoint_poll_register() {
   return LIR_OprFact::illegalOpr;
 }
@@ -166,6 +164,7 @@ LIR_Opr LIRGenerator::safepoint_poll_register() {
 LIR_Address* LIRGenerator::generate_address(LIR_Opr base, LIR_Opr index,
                                             int shift, int disp, BasicType type) {
   assert(base->is_register(), "must be");
+
   if (index->is_constant()) {
     LIR_Const *constant = index->as_constant_ptr();
     jlong c;
@@ -182,9 +181,9 @@ LIR_Address* LIRGenerator::generate_address(LIR_Opr base, LIR_Opr index,
       __ move(index, tmp);
       return new LIR_Address(base, tmp, type);
     }
-  } else {
-    return new LIR_Address(base, index, (LIR_Address::Scale)shift, disp, type);
   }
+
+  return new LIR_Address(base, index, (LIR_Address::Scale)shift, disp, type);
 }
 
 LIR_Address* LIRGenerator::emit_array_address(LIR_Opr array_opr, LIR_Opr index_opr,
@@ -192,28 +191,23 @@ LIR_Address* LIRGenerator::emit_array_address(LIR_Opr array_opr, LIR_Opr index_o
   int offset_in_bytes = arrayOopDesc::base_offset_in_bytes(type);
   int elem_size = type2aelembytes(type);
   int shift = exact_log2(elem_size);
-
-  LIR_Address* addr = NULL;
-  if (index_opr->is_constant()) {
-    addr = new LIR_Address(array_opr, offset_in_bytes + (intx)(index_opr->as_jint()) * elem_size, type);
-  } else {
-    if (index_opr->type() == T_INT) {
-      LIR_Opr tmp = new_register(T_LONG);
-      __ convert(Bytecodes::_i2l, index_opr, tmp);
-      index_opr = tmp;
-    }
-    addr = new LIR_Address(array_opr, index_opr, LIR_Address::scale(type), offset_in_bytes, type);
-  }
-  return addr;
+  return generate_address(array_opr, index_opr, shift, offset_in_bytes, type);
 }
 
 LIR_Opr LIRGenerator::load_immediate(int x, BasicType type) {
+  LIR_Opr r;
   switch (type) {
-    case T_LONG: return LIR_OprFact::longConst(x);
-    case T_INT:  return LIR_OprFact::intConst(x);
-    default:     ShouldNotReachHere();
+    case T_LONG:
+      r = LIR_OprFact::longConst(x);
+      break;
+    case T_INT:
+      r = LIR_OprFact::intConst(x);
+      break;
+    default:
+      ShouldNotReachHere();
+      r = NULL;
   }
-  return NULL;
+  return r;
 }
 
 void LIRGenerator::increment_counter(address counter, BasicType type, int step) {
@@ -283,10 +277,10 @@ void LIRGenerator::do_MonitorEnter(MonitorEnter* x) {
 
   // "lock" stores the address of the monitor stack slot, so this is not an oop
   LIR_Opr lock = new_register(T_INT);
-  // Need a tmp register for biased locking
-  LIR_Opr tmp = LIR_OprFact::illegalOpr;
+  // Need a scratch register for biased locking
+  LIR_Opr scratch = LIR_OprFact::illegalOpr;
   if (UseBiasedLocking) {
-    tmp = new_register(T_INT);
+    scratch = new_register(T_INT);
   }
 
   CodeEmitInfo* info_for_exception = NULL;
@@ -296,7 +290,7 @@ void LIRGenerator::do_MonitorEnter(MonitorEnter* x) {
   // this CodeEmitInfo must not have the xhandlers because here the
   // object is already locked (xhandlers expect object to be unlocked)
   CodeEmitInfo* info = state_for(x, x->state(), true);
-  monitor_enter(obj.result(), lock, syncTempOpr(), tmp,
+  monitor_enter(obj.result(), lock, syncTempOpr(), scratch,
                 x->monitor_no(), info_for_exception, info);
 }
 
@@ -380,7 +374,7 @@ void LIRGenerator::do_ArithmeticOp_FPU(ArithmeticOp* x) {
 void LIRGenerator::do_ArithmeticOp_Long(ArithmeticOp* x) {
 
   // missing test if instr is commutative and if we should swap
-  LIRItem left(x->x(),  this);
+  LIRItem left(x->x(), this);
   LIRItem right(x->y(), this);
 
   if (x->op() == Bytecodes::_ldiv || x->op() == Bytecodes::_lrem) {
@@ -393,7 +387,7 @@ void LIRGenerator::do_ArithmeticOp_Long(ArithmeticOp* x) {
       // no need to do div-by-zero check if the divisor is a non-zero constant
       if (c != 0) { need_zero_check = false; }
       // do not load right if the divisor is a power-of-2 constant
-      if (c > 0 && is_power_of_2(c)) {
+      if (c > 0 && is_power_of_2_long(c)) {
         right.dont_load_item();
       } else {
         right.load_item();
@@ -404,7 +398,7 @@ void LIRGenerator::do_ArithmeticOp_Long(ArithmeticOp* x) {
     if (need_zero_check) {
       CodeEmitInfo* info = state_for(x);
       __ cmp(lir_cond_equal, right.result(), LIR_OprFact::longConst(0));
-      __ branch(lir_cond_equal, T_INT, new DivByZeroStub(info));
+      __ branch(lir_cond_equal, T_LONG, new DivByZeroStub(info));
     }
 
     rlock_result(x);
@@ -561,7 +555,7 @@ void LIRGenerator::do_LogicOp(LogicOp* x) {
   left.load_item();
   rlock_result(x);
   ValueTag tag = right.type()->tag();
-  if(right.is_constant() &&
+  if (right.is_constant() &&
      ((tag == longTag && Assembler::operand_valid_for_add_immediate(right.get_jlong_constant())) ||
       (tag == intTag && Assembler::operand_valid_for_add_immediate(right.get_jint_constant()))))  {
     right.dont_load_item();
@@ -663,14 +657,22 @@ void LIRGenerator::do_MathIntrinsic(Intrinsic* x) {
       value.load_item();
       LIR_Opr dst = rlock_result(x);
 
-      if (x->id() == vmIntrinsics::_dsqrt) {
-        __ sqrt(value.result(), dst, LIR_OprFact::illegalOpr);
-      } else { // vmIntrinsics::_dabs
-        __ abs(value.result(), dst, LIR_OprFact::illegalOpr);
+      switch (x->id()) {
+        case vmIntrinsics::_dsqrt: {
+          __ sqrt(value.result(), dst, LIR_OprFact::illegalOpr);
+          break;
+        }
+        case vmIntrinsics::_dabs: {
+          __ abs(value.result(), dst, LIR_OprFact::illegalOpr);
+          break;
+        }
+        default:
+          ShouldNotReachHere();
       }
       break;
     }
-    default: ShouldNotReachHere();
+    default:
+      ShouldNotReachHere();
   }
 }
 
@@ -1088,9 +1090,5 @@ void LIRGenerator::volatile_field_store(LIR_Opr value, LIR_Address* address,
 
 void LIRGenerator::volatile_field_load(LIR_Address* address, LIR_Opr result,
                                        CodeEmitInfo* info) {
-  if (!UseBarriersForVolatile) {
-    __ membar();
-  }
-
   __ volatile_load_mem_reg(address, result, info);
 }

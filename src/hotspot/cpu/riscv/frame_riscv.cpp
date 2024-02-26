@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,6 @@
 #include "interpreter/interpreter.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
-#include "oops/markOop.hpp"
 #include "oops/method.hpp"
 #include "oops/oop.inline.hpp"
 #include "prims/methodHandles.hpp"
@@ -56,19 +55,19 @@ void RegisterMap::check_location_valid() {
 // Profiling/safepoint support
 
 bool frame::safe_for_sender(JavaThread *thread) {
-  address   addr_sp = (address)_sp;
-  address   addr_fp = (address)_fp;
+  address   sp = (address)_sp;
+  address   fp = (address)_fp;
   address   unextended_sp = (address)_unextended_sp;
 
   // consider stack guards when trying to determine "safe" stack pointers
   static size_t stack_guard_size = os::uses_stack_guard_pages() ?
                                    (JavaThread::stack_red_zone_size() + JavaThread::stack_yellow_zone_size()) : 0;
-  assert_cond(thread != NULL);
   size_t usable_stack_size = thread->stack_size() - stack_guard_size;
 
   // sp must be within the usable part of the stack (not in guards)
-  bool sp_safe = (addr_sp < thread->stack_base()) &&
-                 (addr_sp >= thread->stack_base() - usable_stack_size);
+  bool sp_safe = (sp < thread->stack_base()) &&
+                 (sp >= thread->stack_base() - usable_stack_size);
+
 
   if (!sp_safe) {
     return false;
@@ -95,8 +94,7 @@ bool frame::safe_for_sender(JavaThread *thread) {
 
   // an fp must be within the stack and above (but not equal) sp
   // second evaluation on fp+ is added to handle situation where fp is -1
-  bool fp_safe = (addr_fp < thread->stack_base() && (addr_fp > addr_sp) &&
-                  (((addr_fp + (return_addr_offset * sizeof(void*))) < thread->stack_base())));
+  bool fp_safe = (fp < thread->stack_base() && (fp > sp) && (((fp + (return_addr_offset * sizeof(void*))) < thread->stack_base())));
 
   // We know sp/unextended_sp are safe only fp is questionable here
 
@@ -104,7 +102,7 @@ bool frame::safe_for_sender(JavaThread *thread) {
   // to construct the sender and do some validation of it. This goes a long way
   // toward eliminating issues when we get in frame construction code
 
-  if (_cb != NULL ) {
+  if (_cb != NULL) {
 
     // First check if frame is complete and tester is reliable
     // Unfortunately we can only check frame complete for runtime stubs and nmethod
@@ -139,14 +137,13 @@ bool frame::safe_for_sender(JavaThread *thread) {
         return false;
       }
 
-      sender_pc = (address) this->fp()[return_addr_offset];
+      sender_pc = (address)this->fp()[return_addr_offset];
       // for interpreted frames, the value below is the sender "raw" sp,
       // which can be different from the sender unextended sp (the sp seen
       // by the sender) because of current frame local variables
       sender_sp = (intptr_t*) addr_at(sender_sp_offset);
       sender_unextended_sp = (intptr_t*) this->fp()[interpreter_frame_sender_sp_offset];
       saved_fp = (intptr_t*) this->fp()[link_offset];
-
     } else {
       // must be some sort of compiled/runtime frame
       // fp does not have to be safe (although it could be check for c1?)
@@ -161,10 +158,10 @@ bool frame::safe_for_sender(JavaThread *thread) {
       if ((address)sender_sp >= thread->stack_base()) {
         return false;
       }
+
       sender_unextended_sp = sender_sp;
-      sender_pc = (address) *(sender_sp-1);
-      // Note: frame::sender_sp_offset is only valid for compiled frame
-      saved_fp = (intptr_t*) *(sender_sp - frame::sender_sp_offset);
+      sender_pc = (address) *(sender_sp - 1);
+      saved_fp = (intptr_t*) *(sender_sp - 2);
     }
 
 
@@ -182,16 +179,14 @@ bool frame::safe_for_sender(JavaThread *thread) {
       }
 
       // construct the potential sender
-
       frame sender(sender_sp, sender_unextended_sp, saved_fp, sender_pc);
 
       return sender.is_interpreted_frame_valid(thread);
-
     }
 
     // We must always be able to find a recognizable pc
     CodeBlob* sender_blob = CodeCache::find_blob_unsafe(sender_pc);
-    if (sender_pc == NULL ||  sender_blob == NULL) {
+    if (sender_pc == NULL || sender_blob == NULL) {
       return false;
     }
 
@@ -219,7 +214,6 @@ bool frame::safe_for_sender(JavaThread *thread) {
       }
 
       // construct the potential sender
-
       frame sender(sender_sp, sender_unextended_sp, saved_fp, sender_pc);
 
       // Validate the JavaCallWrapper an entry frame must have
@@ -240,7 +234,6 @@ bool frame::safe_for_sender(JavaThread *thread) {
 
     // If the frame size is 0 something (or less) is bad because every nmethod has a non-zero frame size
     // because the return address counts against the callee's frame.
-
     if (sender_blob->frame_size() <= 0) {
       assert(!sender_blob->is_compiled(), "should count return address at least");
       return false;
@@ -250,7 +243,6 @@ bool frame::safe_for_sender(JavaThread *thread) {
     // code cache (current frame) is called by an entity within the code cache that entity
     // should not be anything but the call stub (already covered), the interpreter (already covered)
     // or an nmethod.
-
     if (!sender_blob->is_compiled()) {
         return false;
     }
@@ -266,20 +258,17 @@ bool frame::safe_for_sender(JavaThread *thread) {
 
   // Must be native-compiled frame. Since sender will try and use fp to find
   // linkages it must be safe
-
   if (!fp_safe) {
     return false;
   }
 
   // Will the pc we fetch be non-zero (which we'll find at the oldest frame)
-
-  if ((address) this->fp()[c_frame_return_addr_offset] == NULL) { return false; }
+  if ((address)this->fp()[return_addr_offset] == NULL) { return false; }
 
   return true;
 }
 
 void frame::patch_pc(Thread* thread, address pc) {
-  assert(_cb == CodeCache::find_blob(pc), "unexpected pc");
   address* pc_addr = &(((address*) sp())[-1]);
   if (TracePcPatching) {
     tty->print_cr("patch_pc at address " INTPTR_FORMAT " [" INTPTR_FORMAT " -> " INTPTR_FORMAT "]",
@@ -289,6 +278,7 @@ void frame::patch_pc(Thread* thread, address pc) {
   // patch in the same address that's already there.
   assert(_pc == *pc_addr || pc == *pc_addr, "must be");
   *pc_addr = pc;
+  _cb = CodeCache::find_blob(pc);
   address original_pc = CompiledMethod::get_deopt_original_pc(this);
   if (original_pc != NULL) {
     assert(original_pc == _pc, "expected original PC to be stored before patching");
@@ -395,7 +385,7 @@ void frame::verify_deopt_original_pc(CompiledMethod* nm, intptr_t* unextended_sp
 //------------------------------------------------------------------------------
 // frame::adjust_unextended_sp
 void frame::adjust_unextended_sp() {
-  // On riscv64, sites calling method handle intrinsics and lambda forms are treated
+  // On riscv, sites calling method handle intrinsics and lambda forms are treated
   // as any other call site. Therefore, no special action is needed when we are
   // returning to any of these call sites.
 
@@ -464,9 +454,9 @@ frame frame::sender_for_compiled_frame(RegisterMap* map) const {
   intptr_t* unextended_sp = l_sender_sp;
 
   // the return_address is always the word on the stack
-  address sender_pc = (address) *(l_sender_sp-1);
+  address sender_pc = (address) *(l_sender_sp + frame::return_addr_offset);
 
-  intptr_t** saved_fp_addr = (intptr_t**) (l_sender_sp - frame::sender_sp_offset);
+  intptr_t** saved_fp_addr = (intptr_t**) (l_sender_sp + frame::link_offset);
 
   assert(map != NULL, "map must be set");
   if (map->update_map()) {
@@ -489,8 +479,8 @@ frame frame::sender_for_compiled_frame(RegisterMap* map) const {
 }
 
 //------------------------------------------------------------------------------
-// frame::sender_raw
-frame frame::sender_raw(RegisterMap* map) const {
+// frame::sender
+frame frame::sender(RegisterMap* map) const {
   // Default is we done have to follow them. The sender_for_xxx will
   // update it accordingly
   assert(map != NULL, "map must be set");
@@ -515,10 +505,6 @@ frame frame::sender_raw(RegisterMap* map) const {
   return frame(sender_sp(), link(), sender_pc());
 }
 
-frame frame::sender(RegisterMap* map) const {
-  return sender_raw(map);
-}
-
 bool frame::is_interpreted_frame_valid(JavaThread* thread) const {
   assert(is_interpreted_frame(), "Not an interpreted frame");
   // These are reasonable sanity checks
@@ -540,13 +526,12 @@ bool frame::is_interpreted_frame_valid(JavaThread* thread) const {
   // do some validation of frame elements
 
   // first the method
-
   Method* m = *interpreter_frame_method_addr();
-
   // validate the method we'd find in this potential sender
   if (!Method::is_valid_method(m)) {
     return false;
   }
+
   // stack frames shouldn't be much larger than max_stack elements
   // this test requires the use of unextended_sp which is the sp as seen by
   // the current frame, and not sp which is the "raw" pc which could point
@@ -557,7 +542,7 @@ bool frame::is_interpreted_frame_valid(JavaThread* thread) const {
   }
 
   // validate bci/bcx
-  address  bcp    = interpreter_frame_bcp();
+  address bcp = interpreter_frame_bcp();
   if (m->validate_bci_from_bcp(bcp) < 0) {
     return false;
   }
@@ -567,12 +552,22 @@ bool frame::is_interpreted_frame_valid(JavaThread* thread) const {
   if (MetaspaceObj::is_valid(cp) == false) {
     return false;
   }
-  // validate locals
-  address locals =  (address) *interpreter_frame_locals_addr();
 
-  if (locals > thread->stack_base() || locals < (address) fp()) {
+  // validate locals
+  address locals = (address) *interpreter_frame_locals_addr();
+  if (locals > thread->stack_base()) {
     return false;
   }
+
+  if (m->max_locals() > 0 && locals < (address) fp()) {
+    // fp in interpreter frame on RISC-V is higher than that on AArch64,
+    // pointing to sender_sp and sender_sp-2 relatively.
+    // On RISC-V, if max_locals is 0, the 'locals' pointer may be below fp,
+    // pointing to sender_sp-1 (with one padding slot).
+    // So we verify the 'locals' pointer only if max_locals > 0.
+    return false;
+  }
+
   // We'd have to be pretty unlucky to be mislead at this point
   return true;
 }
@@ -652,7 +647,7 @@ void frame::describe_pd(FrameValues& values, int frame_no) {
 #endif
 
 intptr_t *frame::initial_deoptimization_info() {
-  // Not used on riscv64, but we must return something.
+  // Not used on riscv, but we must return something.
   return NULL;
 }
 

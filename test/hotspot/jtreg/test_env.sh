@@ -185,11 +185,6 @@ if [ $? = 0 ]
 then
   VM_CPU="arm"
 fi
-grep "riscv64" vm_version.out > ${NULL}
-if [ $? = 0 ]
-then
-  VM_CPU="riscv64"
-fi
 grep "ppc" vm_version.out > ${NULL}
 if [ $? = 0 ]
 then

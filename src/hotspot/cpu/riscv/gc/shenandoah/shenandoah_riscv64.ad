@@ -71,7 +71,7 @@ instruct compareAndSwapN_shenandoah(iRegINoSp res, indirect mem, iRegN oldval, i
 %}
 
 instruct compareAndSwapPAcq_shenandoah(iRegINoSp res, indirect mem, iRegP oldval, iRegP newval, iRegPNoSp tmp, rFlagsReg cr) %{
-  predicate(needs_acquiring_load_exclusive(n));
+  predicate(needs_acquiring_load_reserved(n));
   match(Set res (ShenandoahCompareAndSwapP mem (Binary oldval newval)));
   ins_cost(10 * DEFAULT_COST);
 
@@ -93,7 +93,7 @@ instruct compareAndSwapPAcq_shenandoah(iRegINoSp res, indirect mem, iRegP oldval
 %}
 
 instruct compareAndSwapNAcq_shenandoah(iRegINoSp res, indirect mem, iRegN oldval, iRegN newval, iRegNNoSp tmp, rFlagsReg cr) %{
-  predicate(needs_acquiring_load_exclusive(n));
+  predicate(needs_acquiring_load_reserved(n));
   match(Set res (ShenandoahCompareAndSwapN mem (Binary oldval newval)));
   ins_cost(10 * DEFAULT_COST);
 
@@ -118,9 +118,11 @@ instruct compareAndExchangeN_shenandoah(iRegNNoSp res, indirect mem, iRegN oldva
   match(Set res (ShenandoahCompareAndExchangeN mem (Binary oldval newval)));
   ins_cost(10 * DEFAULT_COST);
   effect(TEMP_DEF res, TEMP tmp, KILL cr);
+
   format %{
     "cmpxchgw_shenandoah $res = $mem, $oldval, $newval\t# (narrow oop, weak) if $mem == $oldval then $mem <-- $newval, #@compareAndExchangeN_shenandoah"
   %}
+
   ins_encode %{
     Register tmp = $tmp$$Register;
     __ mv(tmp, $oldval$$Register); // Must not clobber oldval.
@@ -128,6 +130,7 @@ instruct compareAndExchangeN_shenandoah(iRegNNoSp res, indirect mem, iRegN oldva
                                                    Assembler::relaxed /* acquire */, Assembler::rl /* release */,
                                                    true /* is_cae */, $res$$Register);
   %}
+
   ins_pipe(pipe_slow);
 %}
 
@@ -139,6 +142,7 @@ instruct compareAndExchangeP_shenandoah(iRegPNoSp res, indirect mem, iRegP oldva
   format %{
     "cmpxchg_shenandoah $mem, $oldval, $newval\t# (ptr) if $mem == $oldval then $mem <-- $newval with temp $tmp, #@compareAndExchangeP_shenandoah"
   %}
+
   ins_encode %{
     Register tmp = $tmp$$Register;
     __ mv(tmp, $oldval$$Register); // Must not clobber oldval.
@@ -146,6 +150,7 @@ instruct compareAndExchangeP_shenandoah(iRegPNoSp res, indirect mem, iRegP oldva
                                                    Assembler::relaxed /* acquire */, Assembler::rl /* release */,
                                                    true /* is_cae */, $res$$Register);
   %}
+
   ins_pipe(pipe_slow);
 %}
 
@@ -158,6 +163,7 @@ instruct weakCompareAndSwapN_shenandoah(iRegINoSp res, indirect mem, iRegN oldva
     "cmpxchgw_shenandoah $res = $mem, $oldval, $newval\t# (narrow oop, weak) if $mem == $oldval then $mem <-- $newval, #@weakCompareAndSwapN_shenandoah"
     "mv $res, EQ\t# $res <-- (EQ ? 1 : 0)"
   %}
+
   ins_encode %{
     Register tmp = $tmp$$Register;
     __ mv(tmp, $oldval$$Register); // Must not clobber oldval.
@@ -166,6 +172,7 @@ instruct weakCompareAndSwapN_shenandoah(iRegINoSp res, indirect mem, iRegN oldva
                                                    Assembler::relaxed /* acquire */, Assembler::rl /* release */,
                                                    false /* is_cae */, $res$$Register);
   %}
+
   ins_pipe(pipe_slow);
 %}
 
@@ -177,6 +184,7 @@ instruct weakCompareAndSwapP_shenandoah(iRegINoSp res, indirect mem, iRegP oldva
   format %{
     "cmpxchg_shenandoah $res = $mem, $oldval, $newval\t# (ptr, weak) if $mem == $oldval then $mem <-- $newval, #@weakCompareAndSwapP_shenandoah"
   %}
+
   ins_encode %{
     Register tmp = $tmp$$Register;
     __ mv(tmp, $oldval$$Register); // Must not clobber oldval.
@@ -184,5 +192,6 @@ instruct weakCompareAndSwapP_shenandoah(iRegINoSp res, indirect mem, iRegP oldva
                                                    Assembler::relaxed /* acquire */, Assembler::rl /* release */,
                                                    false /* is_cae */, $res$$Register);
   %}
+
   ins_pipe(pipe_slow);
 %}

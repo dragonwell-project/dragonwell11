@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2020, 2022, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,14 +23,14 @@
  *
  */
 
-#ifndef OS_CPU_LINUX_RISCV_VM_COPY_LINUX_RISCV_HPP
-#define OS_CPU_LINUX_RISCV_VM_COPY_LINUX_RISCV_HPP
+#ifndef OS_CPU_LINUX_RISCV_VM_COPY_LINUX_RISCV_INLINE_HPP
+#define OS_CPU_LINUX_RISCV_VM_COPY_LINUX_RISCV_INLINE_HPP
 
 static void pd_conjoint_words(const HeapWord* from, HeapWord* to, size_t count) {
   (void)memmove(to, from, count * HeapWordSize);
 }
 
-static inline void pd_disjoint_words_helper(const HeapWord* from, HeapWord* to, size_t count, bool is_atomic) {
+static void pd_disjoint_words(const HeapWord* from, HeapWord* to, size_t count) {
   switch (count) {
     case 8:  to[7] = from[7];   // fall through
     case 7:  to[6] = from[6];   // fall through
@@ -42,20 +42,28 @@ static inline void pd_disjoint_words_helper(const HeapWord* from, HeapWord* to, 
     case 1:  to[0] = from[0];   // fall through
     case 0:  break;
     default:
-      if(is_atomic) {
-        while (count-- > 0) { *to++ = *from++; }
-      } else {
-        memcpy(to, from, count * HeapWordSize);
-      }
+      memcpy(to, from, count * HeapWordSize);
+      break;
   }
 }
 
-static void pd_disjoint_words(const HeapWord* from, HeapWord* to, size_t count) {
-  pd_disjoint_words_helper(from, to, count, false);
-}
-
 static void pd_disjoint_words_atomic(const HeapWord* from, HeapWord* to, size_t count) {
-  pd_disjoint_words_helper(from, to, count, true);
+  switch (count) {
+    case 8:  to[7] = from[7];
+    case 7:  to[6] = from[6];
+    case 6:  to[5] = from[5];
+    case 5:  to[4] = from[4];
+    case 4:  to[3] = from[3];
+    case 3:  to[2] = from[2];
+    case 2:  to[1] = from[1];
+    case 1:  to[0] = from[0];
+    case 0:  break;
+    default:
+      while (count-- > 0) {
+        *to++ = *from++;
+      }
+      break;
+  }
 }
 
 static void pd_aligned_conjoint_words(const HeapWord* from, HeapWord* to, size_t count) {
@@ -113,4 +121,4 @@ static void pd_arrayof_conjoint_oops(const HeapWord* from, HeapWord* to, size_t 
   _Copy_arrayof_conjoint_jlongs(from, to, count);
 }
 
-#endif // OS_CPU_LINUX_RISCV_VM_COPY_LINUX_RISCV_HPP
+#endif // OS_CPU_LINUX_RISCV_VM_COPY_LINUX_RISCV_INLINE_HPP
