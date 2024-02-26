@@ -3240,7 +3240,6 @@ operand iRegP()
   match(RegP);
   match(iRegPNoSp);
   match(iRegP_R10);
-  match(iRegP_R15);
   match(javaThread_RegP);
   op_cost(0);
   format %{ %}
