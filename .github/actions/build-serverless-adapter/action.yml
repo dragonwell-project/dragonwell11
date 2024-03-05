@@ -1,0 +1,103 @@
+#
+# Copyright (c) 2024 Alibaba Group Holding Limited. All Rights Reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# This code is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation. Alibaba designates this
+# particular file as subject to the "Classpath" exception as provided
+# by Oracle in the LICENSE file that accompanied this code.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+# version 2 for more details (a copy is included in the LICENSE file that
+# accompanied this code).
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+
+name: 'Build serverless-adapter'
+description: 'Build it using built JDK'
+inputs:
+  platform:
+    description: 'Platform name'
+    required: true
+  debug-suffix:
+    description: 'File name suffix denoting debug level, possibly empty'
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: 'Found bundle'
+      id: bundle_found
+      run: |
+        # Only support linux now.
+        jdk_bundle_tar_gz="$(ls build/*/bundles/jdk-*_bin${{ inputs.debug-suffix }}.tar.gz 2> /dev/null || true)"
+
+        if [[ "$jdk_bundle_tar_gz" != "" ]]; then
+          jdk_bundle_name=${jdk_bundle_tar_gz##*/}
+          echo "jdk_pkg=$jdk_bundle_tar_gz" >> $GITHUB_OUTPUT
+          echo "jdk_pkg_name=$jdk_bundle_name" >> $GITHUB_OUTPUT
+          echo "decompress_cmd=tar zxf" >> $GITHUB_OUTPUT
+          echo "decompress_redirect_flag=-C" >> $GITHUB_OUTPUT
+          echo "decompress_extra_cmd=--strip-components=1" >> $GITHUB_OUTPUT
+          echo "compress_cmd=tar zcf" >> $GITHUB_OUTPUT
+        else
+          echo "jdk_pkg=" >> $GITHUB_OUTPUT
+          echo "jdk_pkg_name=" >> $GITHUB_OUTPUT
+          echo "decompress_cmd=" >> $GITHUB_OUTPUT
+          echo "decompress_redirect_flag=" >> $GITHUB_OUTPUT
+          echo "decompress_extra_cmd=" >> $GITHUB_OUTPUT
+          echo "compress_cmd=" >> $GITHUB_OUTPUT
+        fi
+      shell: bash
+
+    - name: 'Bundle decompression'
+      id: bundle_decompress
+      run: |
+        mkdir -p bundle_workdir
+        ${{ steps.bundle_found.outputs.decompress_cmd }} ${{ steps.bundle_found.outputs.jdk_pkg }} ${{ steps.bundle_found.outputs.decompress_redirect_flag }} bundle_workdir ${{ steps.bundle_found.outputs.decompress_extra_cmd }}
+        bin_path=$(find bundle_workdir -name bin)
+        pwd=$(pwd)
+        java_home_path=${bin_path%%'/bin'*}
+        echo "bundle_home=$pwd/bundle_workdir" >> $GITHUB_OUTPUT
+        echo "java_home=$pwd/$java_home_path" >> $GITHUB_OUTPUT
+      shell: bash
+      if: steps.bundle_found.outputs.jdk_pkg != '' && steps.bundle_found.outputs.decompress_cmd != ''
+
+    - name: 'Checkout serverless-adapter source code'
+      id: serverless_adapter_checkout
+      uses: actions/checkout@v3
+      with:
+        repository: dragonwell-project/serverless-adapter
+        ref: main
+        path: serverless-adapter
+
+    - name: 'Build serverless-adapter'
+      id: serverless_adapter_build
+      run: |
+        JAVA_HOME=${{ steps.bundle_decompress.outputs.java_home }};PATH=${{ steps.bundle_decompress.outputs.java_home }}/bin:$PATH mvn package
+      shell: bash
+      working-directory: serverless-adapter
+
+    - name: 'Copy serverless-adapter into boot jdk'
+      run: |
+        mkdir -p ${{ steps.bundle_decompress.outputs.java_home }}/lib/serverless
+        cp -f serverless-adapter/target/serverless-adapter-0.1.jar ${{ steps.bundle_decompress.outputs.java_home }}/lib/serverless/serverless-adapter.jar
+        cp -f serverless-adapter/output/libloadclassagent.so ${{ steps.bundle_decompress.outputs.java_home }}/lib/serverless/libloadclassagent.so
+      shell: bash
+
+    - name: 'Regenerate bundle'
+      run: |
+        cd ${{ steps.bundle_decompress.outputs.bundle_home }}
+        if [[ -f "${{ steps.bundle_found.outputs.jdk_pkg_name }}" ]]; then
+          rm -rf ${{ steps.bundle_found.outputs.jdk_pkg_name }}
+        fi
+        ${{ steps.bundle_found.outputs.compress_cmd }} ${{ steps.bundle_found.outputs.jdk_pkg_name }} *
+        cd -
+        mv -f ${{ steps.bundle_decompress.outputs.bundle_home }}/${{ steps.bundle_found.outputs.jdk_pkg_name }} ${{ steps.bundle_found.outputs.jdk_pkg }}
+      shell: bash
