@@ -101,6 +101,9 @@
                                                                             \
   product(bool, CRaCUnprivileged, false,                                    \
           "Run criuengine as unprivileged")                                 \
+  product(ccstr, CRaCRestoreInheritPipeFds, NULL,                           \
+        "Specify the pipe fds that inherit from parent process that need"   \
+        "to restore.If there are multiple fds, separate them with comma.")  \
   //add new AJDK specific flags here
 
 
