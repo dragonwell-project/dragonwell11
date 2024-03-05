@@ -7286,7 +7286,8 @@ static int call_crengine() {
     execl(_crengine, _crengine, "checkpoint", CRaCCheckpointTo,
           CRaCValidateBeforeRestore ? "true" : "false",
           VM_Version::internal_vm_info_string(),
-          CRaCUnprivileged ? "true" : "false", NULL);
+          CRaCUnprivileged ? "true" : "false",
+          CRaCRestoreInheritPipeFds != NULL ? CRaCRestoreInheritPipeFds : "", NULL);
     perror("execl");
     exit(1);
   }
