@@ -36,6 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -46,6 +47,9 @@
 #define METADATA "metadata"
 #define PSEUDO_FILE_SUFFIX ".dat"
 #define PSEUDO_FILE_PREFIX "pp"
+#define PIPE_FDS "pipefds"
+#define MAX_PIPE_FDS 5
+#define PIPEFS_MAGIC 0x50495045
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
@@ -60,6 +64,11 @@ enum PseudoPersistentMode {
 };
 
 static int create_cppath(const char *imagedir);
+
+static int write_config_pipefds(const char *imagedir, const char *config_pipefds);
+static int append_pipeinfo(const char* imagedir, const char* jvm_pid);
+static int is_exist_pipefd(const char *jvm_pid, int fd);
+static int read_fd_link(const char *jvm_pid, int fd, char *link, size_t len);
 
 static int restore_validate(char *criu, char *image_dir, char *jvm_version, const char* unprivileged);
 static int check_metadata(char *image_dir, char *jvm_version);
@@ -102,7 +111,8 @@ static int checkpoint(pid_t jvm, const char *basedir, const char *self,
                       const char *criu, const char *imagedir,
                       const char *validate_before_restore,
                       const char *jvm_version,
-                      const char *unprivileged) {
+                      const char *unprivileged,
+                      const char *config_pipefds) {
   const char *dump_cpuinfo[32] = {criu, "cpuinfo", "dump",
                                   "-D", imagedir,  NULL};
   pid_t pid = fork();
@@ -152,6 +162,14 @@ static int checkpoint(pid_t jvm, const char *basedir, const char *self,
       return 1;
     }
     if (exec_criu_command(criu, dump_cpuinfo)) {
+      return 1;
+    }
+  }
+
+  //write pipe fds to file first, then write actually pipe info in post_dump
+  //because the dumpee process is freeze,if write before checkpoint there some files may changed.
+  if (strlen(config_pipefds) > 0) {
+    if (write_config_pipefds(imagedir, config_pipefds)) {
       return 1;
     }
   }
@@ -281,6 +299,55 @@ static int restore(const char *basedir,
     }
     if (!strcmp("true", unprivileged)) {
       *arg++ = "--unprivileged";
+    }
+
+    char *pipefds_path;
+    struct stat st;
+    if (-1 == asprintf(&pipefds_path, "%s/" PIPE_FDS, imagedir)) {
+      return 1;
+    }
+    if (stat(pipefds_path, &st) == 0) {
+      FILE *f = fopen(pipefds_path, "r");
+      if (f == NULL) {
+        perror("open pipefds when restore failed");
+        return 1;
+      }
+      char buff[1024];
+      //the first line is the config,need skip
+      if (fgets(buff, sizeof(buff), f) == NULL) {
+        perror("read the first line of pipefds failed");
+        fclose(f);
+        return 1;
+      }
+
+      int cnt = 0;
+      while (fgets(buff, sizeof(buff), f) != NULL) {
+        if (cnt > MAX_PIPE_FDS) {
+          fprintf(stderr, "Support max pipe fds : %d, others are ignored!\n", MAX_PIPE_FDS);
+          break;
+        }
+        char *p = strchr(buff, '\n');
+        if (p) {
+          *p = 0;
+        }
+        p = strchr(buff, ',');
+        if (!p) {
+          fprintf(stderr, "invalid %s file, miss comma. %s \n", pipefds_path, buff);
+          fclose(f);
+          return 1;
+        }
+        *p = 0;
+        int pipe_fd = atoi(buff);
+        *arg++ = "--inherit-fd";
+        char *inherit_fd_value = NULL;
+        if (-1 == asprintf(&inherit_fd_value, "fd[%d]:%s", pipe_fd, p+1)) {
+          fclose(f);
+          return 1;
+        }
+        *arg++ = inherit_fd_value;
+        cnt++;
+      }
+      fclose(f);
     }
 
     const char* tail[] = {
@@ -504,6 +571,12 @@ static int post_dump(void) {
     fprintf(stderr, MSGPREFIX "cannot find CRTOOLS_IMAGE_DIR env\n");
     return 1;
   }
+  char *jvm_pid= getenv("CRTOOLS_INIT_PID");
+  if (!jvm_pid) {
+    fprintf(stderr, MSGPREFIX "cannot find CRTOOLS_INIT_PID env in post_dump callback\n");
+    return 1;
+  }
+  append_pipeinfo(imagedir, jvm_pid);
   return read_pseudo_file(imagedir, checkpoint_pseudo_persistent_file, "checkpoint pseudo persistent file ");
 }
 
@@ -623,7 +696,7 @@ int main(int argc, char *argv[]) {
         if (!strcmp(action, "checkpoint")) {
           pid_t jvm = getppid();
           return checkpoint(jvm, basedir, argv[0], criu, imagedir, argv[3],
-                            argv[4], argv[5]);
+                            argv[4], argv[5], argv[6]);
         } else if (!strcmp(action, "restore")) {
           return restore(basedir, argv[0], criu, imagedir, argv[3]);
         } else if (!strcmp(action,
@@ -781,4 +854,104 @@ static int exec_criu_command(const char *criu, const char *args[]) {
     return -1;
   }
   return WEXITSTATUS(status) == 0 ? 0 : -1;
+}
+
+static int write_config_pipefds(const char *imagedir, const char *config_pipefds) {
+  char *path = NULL;
+  int ret = 0;
+  if (-1 == asprintf(&path, "%s/" PIPE_FDS, imagedir)) {
+    return -1;
+  }
+  FILE *f = fopen(path, "w");
+  if (f == NULL) {
+    ret = -1;
+    perror("open pipefds when write config failed");
+    goto err;
+  }
+
+  if (fprintf(f, "%s\n", config_pipefds) < 0) {
+    ret = -1;
+    perror("write config to pipefds failed");
+    goto err;
+  }
+
+err:
+  if (f != NULL) {
+    fclose(f);
+  }
+  free(path);
+  return ret;
+}
+
+static int append_pipeinfo(const char* imagedir,const char* jvm_pid) {
+  struct stat st;
+  char *path = NULL;
+  char buff[1024];
+
+  if (-1 == asprintf(&path, "%s/" PIPE_FDS, imagedir)) {
+    return -1;
+  }
+
+  if (stat(path, &st) != 0) {
+    free(path);
+    return 0;
+  }
+
+  FILE* f = fopen(path, "a+");
+  if (f == NULL) {
+    perror("open pipefds for appending failed");
+    free(path);
+    return -1;
+  }
+
+  if (fgets(buff, sizeof(buff), f) == NULL) {
+    perror("read from pipefds error");
+    free(path);
+    fclose(f);
+    return -1;
+  }
+
+  char *p = strchr(buff, '\n');
+  if (p) {
+    *p = 0;
+  }
+  char fdpath[PATH_MAX];
+  char *token = strtok(buff, ",");
+  while (token != NULL) {
+    int fd = atoi(token);
+    if (is_exist_pipefd(jvm_pid, fd)) {
+      if (read_fd_link(jvm_pid, fd, fdpath, sizeof(fdpath)) == -1) {
+        fclose(f);
+        free(path);
+        return -1;
+      }
+      fprintf(f, "%d,%s\n", fd, fdpath);
+    }
+    token = strtok(NULL, ",");
+  }
+  fclose(f);
+  free(path);
+  return 0;
+}
+
+static int is_exist_pipefd(const char *jvm_pid, int fd) {
+  struct statfs fsbuf;
+  char fdpath[64];
+  snprintf(fdpath, sizeof(fdpath), "/proc/%s/fd/%d", jvm_pid, fd);
+  if (statfs(fdpath, &fsbuf) < 0) {
+    return 0;
+  }
+  return fsbuf.f_type == PIPEFS_MAGIC;
+}
+
+static int read_fd_link(const char* jvm_pid, int fd, char *link, size_t len) {
+  char fdpath[64];
+  snprintf(fdpath, sizeof(fdpath), "/proc/%s/fd/%d", jvm_pid, fd);
+  int ret = readlink(fdpath, link, len);
+  if (ret == -1) {
+    perror(fdpath);
+    return ret;
+  }
+  link[(unsigned)ret < len ? (unsigned)ret : len - 1] = '\0';
+  return ret;
 }

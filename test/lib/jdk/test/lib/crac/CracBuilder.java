@@ -52,6 +52,7 @@ public class CracBuilder {
     // If run the one-stop mode, this problem is disappeared.
     boolean oneStopDockerRun;
     boolean allowSelfAttach;
+    boolean restorePipeStdOutErr;
 
     boolean bumpPid;
 
@@ -78,6 +79,11 @@ public class CracBuilder {
 
     public CracBuilder debug(boolean debug) {
         this.debug = debug;
+        return this;
+    }
+
+    public CracBuilder restorePipeStdOutErr(boolean restorePipeStdOutErr) {
+        this.restorePipeStdOutErr = restorePipeStdOutErr;
         return this;
     }
 
@@ -443,6 +449,9 @@ public class CracBuilder {
         }
         if (allowSelfAttach) {
             cmd.add("-Djdk.attach.allowAttachSelf=true");
+        }
+        if (restorePipeStdOutErr) {
+            cmd.add("-XX:CRaCRestoreInheritPipeFds=1,2");
         }
         return cmd;
     }
