@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019 Alibaba Group Holding Limited. All Rights Reserved.
+# Copyright (c) 2024 Alibaba Group Holding Limited. All Rights Reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -19,91 +19,105 @@
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
-name: Dragonwell_11_build_test
+name: Prerequisites
 
-on: [pull_request]
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        required: true
+        type: string
+    outputs:
+      should_run:
+        value: ${{ jobs.prerequisites.outputs.should_run }}
+      bundle_id:
+        value: ${{ jobs.prerequisites.outputs.bundle_id }}
+      jdk_version:
+        value: ${{ jobs.prerequisites.outputs.jdk_version }}
+      platform_linux_x64:
+        value: ${{ jobs.prerequisites.outputs.platform_linux_x64 }}
+      platform_linux_aarch64:
+        value: ${{ jobs.prerequisites.outputs.platform_linux_aarch64 }}
+      platform_windows_x64:
+        value: ${{ jobs.prerequisites.outputs.platform_windows_x64 }}
+      platform_riscv64:
+        value: ${{ jobs.prerequisites.outputs.platform_riscv64 }}
+      dependencies:
+        value: ${{ jobs.prerequisites.outputs.dependencies }}
 
 jobs:
   check_commit:
+    name: 'Check Commit Message'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: dragonwell-releng/check_commit_action@master
+    if: github.event_name == 'pull_request'
 
-  build_release_amd64_jdk:
+  prerequisites:
+    name: 'Prerequisites'
     runs-on: ubuntu-latest
-    container:
-      image: docker.io/alibabadragonwelljdk/build_jdk:11-latest
+    outputs:
+      should_run: ${{ steps.check_submit.outputs.should_run }}
+      bundle_id: ${{ steps.check_bundle_id.outputs.bundle_id }}
+      jdk_version: ${{ steps.check_jdk_versions.outputs.jdk_version }}
+      platform_linux_x64: ${{ steps.check_platforms.outputs.platform_linux_x64 }}
+      platform_linux_aarch64: ${{ steps.check_platforms.outputs.platform_linux_aarch64 }}
+      platform_windows_x64: ${{ steps.check_platforms.outputs.platform_windows_x64 }}
+      platform_riscv64: ${{ steps.check_platforms.outputs.platform_riscv64 }}
+      dependencies: ${{ steps.check_deps.outputs.dependencies }}
+
     steps:
-      - uses: actions/checkout@v2
-      - name: Compile release mode on amd64
-        run: |
-          chmod 755 configure
-          bash make.sh release
+      - name: 'Check if submit tests should actually run depending on secrets and manual triggering'
+        id: check_submit
+        run: echo "::set-output name=should_run::${{ inputs.platforms != '' || (!secrets.JDK_SUBMIT_FILTER || startsWith(github.ref, 'refs/heads/submit/')) }}"
 
-      - name: Sanity test
+      - name: 'Check which platforms should be included'
+        id: check_platforms
         run: |
-          TEST_JDK_HOME=build/linux-x86_64-normal-server-release/images/jdk
-          ${TEST_JDK_HOME}/bin/java -version
+          echo "::set-output name=platform_linux_x64::${{ contains(inputs.platforms, 'linux x64') || (inputs.platforms == '') }}"
+          echo "::set-output name=platform_linux_aarch64::${{ contains(inputs.platforms, 'linux aarch64') || (inputs.platforms == '') }}"
+          echo "::set-output name=platform_windows_x64::${{ contains(inputs.platforms, 'windows x64') || (inputs.platforms == '') }}"
+          echo "::set-output name=platform_riscv64::${{ contains(inputs.platforms, 'riscv64') || (inputs.platforms == '') }}"
+        if: steps.check_submit.outputs.should_run != false
 
-  build_release_arm64_jdk:
-    runs-on: [self-hosted , ARM64]
-    container:
-      image: docker.io/alibabadragonwelljdk/build_jdk:11-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Compile release mode on arm64
-        run: |
-          chmod 755 configure
-          bash make.sh release
+      - name: 'Determine unique bundle identifier'
+        id: check_bundle_id
+        run: echo "::set-output name=bundle_id::${GITHUB_ACTOR}_${GITHUB_SHA:0:8}"
+        if: steps.check_submit.outputs.should_run != 'false'
 
-      - name: Sanity test
-        run: |
-          TEST_JDK_HOME=build/linux-aarch64-normal-server-release/images/jdk
-          ${TEST_JDK_HOME}/bin/java -version
+      - name: 'Checkout the source'
+        uses: actions/checkout@v3
+        with:
+          path: jdk
+        if: steps.check_submit.outputs.should_run != 'false'
 
-  build_fastdebug_amd64_jdk:
-    runs-on: ubuntu-latest
-    container:
-      image: docker.io/alibabadragonwelljdk/build_jdk:11-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Compile slowdebug mode
-        run: |
-          chmod 755 configure
-          bash make.sh fastdebug
+      - name: 'Determine versions and locations to be used for dependencies'
+        id: check_deps
+        run: "echo ::set-output name=dependencies::`cat make/autoconf/version-numbers make/conf/test-dependencies | sed -e '1i {' -e 's/#.*//g' -e 's/\"//g' -e 's/\\(.*\\)=\\(.*\\)/\"\\1\": \"\\2\",/g' -e '$s/,\\s\\{0,\\}$/\\}/'`"
+        working-directory: jdk
+        if: steps.check_submit.outputs.should_run != 'false'
 
-      - name: Sanity test
-        run: |
-          TEST_JDK_HOME=build/linux-x86_64-normal-server-fastdebug/images/jdk
-          ${TEST_JDK_HOME}/bin/java -version
+      - name: 'Print extracted dependencies to the log'
+        run: "echo '${{ steps.check_deps.outputs.dependencies }}'"
+        if: steps.check_submit.outputs.should_run != 'false'
 
-  build_slowdebug_amd64_jdk:
-    runs-on: ubuntu-latest
-    container:
-      image: docker.io/alibabadragonwelljdk/build_jdk:11-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Compile slowdebug mode
+      - name: 'Determine full JDK versions'
+        id: check_jdk_versions
+        shell: bash
         run: |
-          chmod 755 configure
-          bash make.sh debug
-
-      - name: Sanity test
-        run: |
-          TEST_JDK_HOME=build/linux-x86_64-normal-server-slowdebug/images/jdk
-          ${TEST_JDK_HOME}/bin/java -version
-
-  build_release_riscv_jdk:
-    runs-on: [self-hosted , X64]
-    container:
-      image: docker.io/alibabadragonwelljdk/centos7_gcc7_build_image:latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Compile release mode riscv jdk
-        run: |
-          chmod 755 configure
-          LD_LIBRARY_PATH=/opt/riscv_toolchain_linux/lib64 \
-          PATH=/opt/riscv_toolchain_linux/bin:/usr/local/gcc/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-          bash configure --verbose --with-vendor-name=Alibaba --with-vendor-url=http://www.alibabagroup.com --with-vendor-bug-url='mailto:dragonwell_use@googlegroups.com' --with-vendor-vm-bug-url='mailto:dragonwell_use@googlegroups.com' --with-vendor-name=Alibaba --with-vendor-url=http://www.alibabagroup.com --with-vendor-bug-url='mailto:dragonwell_use@googlegroups.com' --with-vendor-vm-bug-url='mailto:dragonwell_use@googlegroups.com' --without-version-opt --without-version-pre --with-version-build=9 --with-version-patch=14 --with-boot-jdk=/usr/lib/jvm/jdk-10 --with-debug-level=release --with-native-debug-symbols=external --with-jvm-variants=server --disable-warnings-as-errors --openjdk-target=riscv64-unknown-linux-gnu --with-sysroot=/opt/fedora28_riscv_root -with-boot-jdk=/usr/lib/jvm/jdk-10 --openjdk-target=riscv64-unknown-linux-gnu --with-sysroot=/opt/fedora28_riscv_root
-          make images
+          FEATURE=${{ fromJson(steps.check_deps.outputs.dependencies).DEFAULT_VERSION_FEATURE }}
+          INTERIM=${{ fromJson(steps.check_deps.outputs.dependencies).DEFAULT_VERSION_INTERIM }}
+          UPDATE=${{ fromJson(steps.check_deps.outputs.dependencies).DEFAULT_VERSION_UPDATE }}
+          PATCH=${{ fromJson(steps.check_deps.outputs.dependencies).DEFAULT_VERSION_PATCH }}
+          if [ "x${PATCH}" != "x0" ]; then
+             V=${FEATURE}.${INTERIM}.${UPDATE}.${PATCH}
+          elif [ "x${UPDATE}" != "x0" ]; then
+             V=${FEATURE}.${INTERIM}.${UPDATE}
+          elif [ "x${INTERIM}" != "x0" ]; then
+             V={FEATURE}.${INTERIM}
+          else
+             V=${FEATURE}
+          fi
+          echo "::set-output name=jdk_version::${V}"
+        if: steps.check_submit.outputs.should_run != 'false'

@@ -46,7 +46,10 @@ env:
 jobs:
   test:
     name: test
-    runs-on: ${{ inputs.runs-on }}
+    #runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{fromJson(inputs.runs-on)}}
+    outputs:
+      should_run: ${{ steps.check_if_run.outputs.should_run }}
     defaults:
       run:
         shell: bash
@@ -64,6 +67,8 @@ jobs:
           - 'hs/tier1 gc'
           - 'hs/tier1 runtime'
           - 'hs/tier1 serviceability'
+          - 'dragonwell/hs feature'
+          - 'dragonwell/jdk feature'
 
         include:
           - test-name: 'jdk/tier1 part 1'
@@ -98,23 +103,51 @@ jobs:
             test-suite: 'test/hotspot/jtreg/:tier1_serviceability'
             debug-suffix: -debug
 
+          - test-name: 'dragonwell/hs feature'
+            test-suite: 'test/hotspot/jtreg/:dragonwell_hs'
+
+          - test-name: 'dragonwell/jdk feature'
+            test-suite: 'test/jdk/:dragonwell_jdk'
+
     steps:
+      - name: 'Check if the test suite should run'
+        id: check_if_run
+        run: |
+          if [[ "${{ inputs.platform }}" == "windows-x64" ]]; then
+            case "${{ matrix.test-name }}" in
+              "jdk/tier1 part 1"|"jdk/tier1 part 2"|"jdk/tier1 part 3"|"hs/tier1 common")
+                echo "should_run=true" >> $GITHUB_OUTPUT
+                ;;
+              *)
+                echo "should_run=false" >> $GITHUB_OUTPUT
+                ;;
+            esac
+          elif [[ "${{ inputs.platform }}" == "linux-x64" ]] || [[ "${{ inputs.platform }}" == "linux-aarch64" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
       - name: 'Checkout the JDK source'
         uses: actions/checkout@v4
+        if: steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Get MSYS2'
         uses: ./.github/actions/get-msys2
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Get the BootJDK'
         id: bootjdk
         uses: ./.github/actions/get-bootjdk
         with:
           platform: ${{ inputs.bootjdk-platform }}
+        if: steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Get JTReg'
         id: jtreg
         uses: ./.github/actions/get-jtreg
+        if: steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Get bundles'
         id: bundles
@@ -122,6 +155,8 @@ jobs:
         with:
           platform: ${{ inputs.platform }}
           debug-suffix: ${{ matrix.debug-suffix }}
+        continue-on-error: true
+        if: steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Install dependencies'
         run: |
@@ -130,7 +165,7 @@ jobs:
           sudo xcode-select --switch /Applications/Xcode_11.7.app/Contents/Developer
           # This will make GNU make available as 'make' and not only as 'gmake'
           echo '/usr/local/opt/make/libexec/gnubin' >> $GITHUB_PATH
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Set PATH'
         id: path
@@ -142,6 +177,7 @@ jobs:
           else
             echo "value=$PATH" >> $GITHUB_OUTPUT
           fi
+        if: steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Run tests'
         id: run-tests
@@ -157,12 +193,13 @@ jobs:
           && bash ./.github/scripts/gen-test-summary.sh "$GITHUB_STEP_SUMMARY" "$GITHUB_OUTPUT"
         env:
           PATH: ${{ steps.path.outputs.value }}
+        if: steps.check_if_run.outputs.should_run != 'false'
 
         # This is a separate step, since if the markdown from a step gets bigger than
         # 1024 kB it is skipped, but then the short summary above is still generated
       - name: 'Generate test report'
         run: bash ./.github/scripts/gen-test-results.sh "$GITHUB_STEP_SUMMARY"
-        if: always()
+        if: steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Package test results'
         id: package
@@ -188,18 +225,18 @@ jobs:
 
           artifact_name="results-${{ inputs.platform }}-$(echo ${{ matrix.test-name }} | tr '/ ' '__')"
           echo "artifact-name=$artifact_name" >> $GITHUB_OUTPUT
-        if: always()
+        if: steps.check_if_run.outputs.should_run != 'false'
 
       - name: 'Upload test results'
         uses: actions/upload-artifact@v3
         with:
           path: results
           name: ${{ steps.package.outputs.artifact-name }}
-        if: always()
+        if: steps.check_if_run.outputs.should_run != 'false'
 
         # This is the best way I found to abort the job with an error message
       - name: 'Notify about test failures'
         uses: actions/github-script@v6
         with:
           script: core.setFailed('${{ steps.run-tests.outputs.error-message }}')
-        if: steps.run-tests.outputs.failure == 'true'
+        if: steps.run-tests.outputs.failure == 'true' && steps.check_if_run.outputs.should_run != 'false'

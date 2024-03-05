@@ -57,7 +57,9 @@ runs:
     - name: 'Build JTReg'
       run: |
         # Build JTReg and move files to the proper locations
-        bash make/build.sh --jdk "$JAVA_HOME_11_X64"
+        jdkPath="$(which java)"
+        javaHome=${jdkPath%%'/bin'*}
+        bash make/build.sh --jdk "$javaHome"
         mkdir ../installed
         mv build/images/jtreg/* ../installed
       working-directory: jtreg/src

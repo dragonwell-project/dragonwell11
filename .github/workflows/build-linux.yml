@@ -61,11 +61,15 @@ on:
       make-arguments:
         required: false
         type: string
+      runs-on:
+        required: true
+        type: string
 
 jobs:
   build-linux:
     name: build
-    runs-on: ubuntu-22.04
+    runs-on: ${{fromJson(inputs.runs-on)}}
+    #runs-on: 'ubuntu-20.04'
 
     strategy:
       fail-fast: false
@@ -80,11 +84,11 @@ jobs:
       - name: 'Checkout the JDK source'
         uses: actions/checkout@v4
 
-      - name: 'Get the BootJDK'
+      - name: 'Get boot JDK'
         id: bootjdk
         uses: ./.github/actions/get-bootjdk
         with:
-          platform: linux-x64
+          platform: ${{ inputs.platform }}
 
       - name: 'Get JTReg'
         id: jtreg
@@ -105,9 +109,14 @@ jobs:
           if [[ '${{ inputs.apt-architecture }}' != '' ]]; then
             sudo dpkg --add-architecture ${{ inputs.apt-architecture }}
           fi
-          sudo apt-get update
-          sudo apt-get install --only-upgrade apt
-          sudo apt-get install gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} libxrandr-dev${{ steps.arch.outputs.suffix }} libxtst-dev${{ steps.arch.outputs.suffix }} libcups2-dev${{ steps.arch.outputs.suffix }} libasound2-dev${{ steps.arch.outputs.suffix }} ${{ inputs.apt-extra-packages }}
+          sudo apt-get update -y
+          sudo apt-get install -y --only-upgrade apt
+          if [[ '${{ inputs.platform }}' == 'linux-aarch64' ]]; then
+            extra_packages='libx11-dev libxext-dev libxrender-dev libxtst-dev libxt-dev libfontconfig1-dev maven tar zip unzip'
+          else
+            extra_packages=
+          fi
+          sudo apt-get install -y gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} libxrandr-dev${{ steps.arch.outputs.suffix }} libxtst-dev${{ steps.arch.outputs.suffix }} libcups2-dev${{ steps.arch.outputs.suffix }} libasound2-dev${{ steps.arch.outputs.suffix }} ${{ inputs.apt-extra-packages }} $extra_packages
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ inputs.gcc-major-version }} 100 --slave /usr/bin/g++ g++ /usr/bin/g++-${{ inputs.gcc-major-version }}
 
       - name: 'Configure'
@@ -116,6 +125,7 @@ jobs:
           --with-conf-name=${{ inputs.platform }}
           ${{ matrix.flags }}
           --with-version-opt=${GITHUB_ACTOR}-${GITHUB_SHA}
+          --with-version-build=0
           --with-boot-jdk=${{ steps.bootjdk.outputs.path }}
           --with-jtreg=${{ steps.jtreg.outputs.path }}
           --enable-jtreg-failure-handler
@@ -130,6 +140,13 @@ jobs:
         uses: ./.github/actions/do-build
         with:
           make-target: '${{ inputs.make-target }} ${{ inputs.make-arguments }}'
+          platform: ${{ inputs.platform }}
+          debug-suffix: '${{ matrix.suffix }}'
+
+      - name: 'Build serverless-adapter'
+        id: build-serverless-adapter
+        uses: ./.github/actions/build-serverless-adapter
+        with:
           platform: ${{ inputs.platform }}
           debug-suffix: '${{ matrix.suffix }}'
 
