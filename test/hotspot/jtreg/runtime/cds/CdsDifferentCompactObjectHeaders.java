@@ -29,6 +29,7 @@
  *          is different from compact headers for creating a CDS file
  *          should fail when loading.
  * @requires vm.cds
+ * @requires vm.gc.G1 | vm.gc.Parallel
  * @requires vm.bits == 64
  * @library /test/lib
  * @run driver CdsDifferentCompactObjectHeaders
