@@ -31,7 +31,7 @@ exclusiveAccess.dirs=java/rmi/Naming java/util/prefs sun/management/jmxremote su
 sun/security/mscapi java/util/stream java/util/Arrays/largeMemory \
 java/util/BitSet/stream javax/rmi java/net/httpclient/websocket \
 sanity/client sun/tools/jhsdb \
-com/alibaba/wisp/exclusive com/alibaba/wisp2/exclusive
+com/alibaba/wisp/exclusive com/alibaba/wisp2/exclusive jdk/crac/java
 
 # Group definitions
 groups=TEST.groups
