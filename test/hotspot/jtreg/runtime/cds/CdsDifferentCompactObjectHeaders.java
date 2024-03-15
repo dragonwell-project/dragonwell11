@@ -30,7 +30,7 @@
  *          should fail when loading.
  * @requires vm.cds
  * @requires vm.bits == 64
- * @requires os.arch != riscv64
+ * @requires os.arch != "riscv64"
  * @library /test/lib
  * @run driver CdsDifferentCompactObjectHeaders
  */
