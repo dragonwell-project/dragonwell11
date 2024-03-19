@@ -37,7 +37,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
-#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -72,7 +71,6 @@ static int read_fd_link(const char *jvm_pid, int fd, char *link, size_t len);
 
 static int restore_validate(char *criu, char *image_dir, char *jvm_version, const char* unprivileged);
 static int check_metadata(char *image_dir, char *jvm_version);
-static int check_os(char *checkpoint_os);
 static int create_metadata(const char *image_dir, const char *jvm_version);
 static int read_pseudo_file(const char *imagedir, pseudo_file_func func, const char* desc);
 static int restore_pseudo_persistent_file(const char *imagedir, int id, int mode, const char *src);
@@ -739,7 +737,6 @@ static int restore_validate(char *criu, char *image_dir, char *jvm_version, cons
 static int check_metadata(char *image_dir, char *jvm_version) {
   char *metadata_path;
   char buff[1024];
-  int status = 1; // 1 : check os , 2: check vm version, others ignore
   int ret = -1;
   if (-1 == asprintf(&metadata_path, "%s/" METADATA, image_dir)) {
     return -1;
@@ -752,20 +749,12 @@ static int check_metadata(char *image_dir, char *jvm_version) {
     return -1;
   }
 
-  while (fgets(buff, sizeof(buff), f) != NULL) {
-    if (status == 1) {
-      if (!check_os(buff)) {
-        status = 2;
-      } else {
-        fprintf(stderr, "os version check failed\n");
-        break;
-      }
-    } else if (status == 2) {
-      ret = strncmp(jvm_version, buff, strlen(jvm_version));
-      if (ret) {
-        fprintf(stderr, "vm version %s != %s\n", buff, jvm_version);
-      }
-      break;
+  if (fgets(buff, sizeof(buff), f) == NULL) {
+    fprintf(stderr, "empty metadata\n");
+  } else {
+    ret = strncmp(jvm_version, buff, strlen(jvm_version));
+    if (ret) {
+      fprintf(stderr, "vm version %s != %s\n", buff, jvm_version);
     }
   }
   fclose(f);
@@ -773,31 +762,8 @@ static int check_metadata(char *image_dir, char *jvm_version) {
   return ret;
 }
 
-static int check_os(char *checkpoint_os) {
-  struct utsname _uname;
-  uint32_t r_major;
-  uint32_t r_minor;
-  uint32_t r_fix;
-  uint32_t c_major;
-  uint32_t c_minor;
-  uint32_t c_fix;
-
-  if (uname(&_uname) != -1 &&
-      sscanf(_uname.release, "%d.%d.%d", &r_major, &r_minor, &r_fix) == 3 &&
-      sscanf(checkpoint_os, "%d.%d.%d", &c_major, &c_minor, &c_fix) == 3 &&
-      ((r_major == c_major) && (r_minor == c_minor))) {
-    return 0;
-  }
-  return -1;
-}
-
 static int create_metadata(const char *image_dir, const char *jvm_version) {
   char *metadata_path;
-  char buff[1024];
-  struct utsname _uname;
-  uint32_t major;
-  uint32_t minor;
-  uint32_t fix;
   int ret = -1;
 
   if (-1 == asprintf(&metadata_path, "%s/" METADATA, image_dir)) {
@@ -811,21 +777,10 @@ static int create_metadata(const char *image_dir, const char *jvm_version) {
     return -1;
   }
 
-  if (uname(&_uname) != -1 &&
-      sscanf(_uname.release, "%d.%d.%d", &major, &minor, &fix) == 3) {
-    snprintf(buff, sizeof(buff), "%d.%d.%d\n", major, minor, fix);
-    if (fputs(buff, f) < 0) {
-      fprintf(stderr, "write os version to metadata failed!");
-    } else {
-      snprintf(buff, sizeof(buff), "%s\n", jvm_version);
-      if (fputs(buff, f) < 0) {
-        fprintf(stderr, "write jvm version to metadata failed!\n");
-      } else {
-        ret = 0;
-      }
-    }
+  if (fprintf(f, "%s\n", jvm_version) < 0) {
+    fprintf(stderr, "write jvm version to metadata failed!\n");
   } else {
-    fprintf(stderr, "get os version for write metadata failed!\n");
+    ret = 0;
   }
 
   fclose(f);
