@@ -28,6 +28,7 @@ import jdk.crac.Resource;
 import jdk.crac.RestoreException;
 import sun.security.action.GetBooleanAction;
 
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,17 +60,23 @@ public abstract class AbstractContextImpl<R extends Resource, P> extends Context
 
         CheckpointException exception = new CheckpointException();
         for (Resource r : resources) {
+            long start = 0L;
+            boolean ok = false;
             if (FlagsHolder.DEBUG) {
-                System.err.println("jdk.crac beforeCheckpoint " + r.toString());
+                start = System.currentTimeMillis();
             }
             try {
                 r.beforeCheckpoint(this);
+                ok = true;
             } catch (CheckpointException e) {
                 for (Throwable t : e.getSuppressed()) {
                     exception.addSuppressed(t);
                 }
             } catch (Exception e) {
                 exception.addSuppressed(e);
+            }
+            if (FlagsHolder.DEBUG) {
+                printDebugLog("beforeCheckpoint", r, start, ok);
             }
         }
 
@@ -85,11 +92,14 @@ public abstract class AbstractContextImpl<R extends Resource, P> extends Context
     public synchronized void afterRestore(Context<? extends Resource> context) throws RestoreException {
         RestoreException exception = new RestoreException();
         for (Resource r : restoreQ) {
+            long start = 0L;
+            boolean ok = false;
             if (FlagsHolder.DEBUG) {
-                System.err.println("jdk.crac afterRestore " + r.toString());
+                start = System.currentTimeMillis();
             }
             try {
                 r.afterRestore(this);
+                ok = true;
             } catch (RestoreException e) {
                 for (Throwable t : e.getSuppressed()) {
                     exception.addSuppressed(t);
@@ -97,11 +107,23 @@ public abstract class AbstractContextImpl<R extends Resource, P> extends Context
             } catch (Exception e) {
                 exception.addSuppressed(e);
             }
+            if (FlagsHolder.DEBUG) {
+                printDebugLog("afterRestore", r, start, ok);
+            }
         }
         restoreQ = null;
 
         if (0 < exception.getSuppressed().length) {
             throw exception;
         }
+    }
+
+    private void printDebugLog(String msg, Resource resource, long start, boolean ok) {
+        StringBuffer sb = new StringBuffer(256);
+        sb.append('[').append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date())).append(']');
+        sb.append(msg).append(' ').append(resource);
+        sb.append(" cost:").append(System.currentTimeMillis() - start).append("ms");
+        sb.append(" result:").append(ok);
+        System.err.println(sb);
     }
 }
