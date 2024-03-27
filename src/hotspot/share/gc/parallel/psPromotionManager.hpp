@@ -93,7 +93,6 @@ class PSPromotionManager {
   static MutableSpace* young_space() { return _young_space; }
 
   inline static PSPromotionManager* manager_array(uint index);
-  template <class T> inline void claim_or_forward_internal_depth(T* p);
 
   // On the task queues we push reference locations as well as
   // partially-scanned arrays (in the latter case, we push an oop to
