@@ -33,6 +33,7 @@ import java.util.function.IntConsumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import jdk.internal.HotSpotIntrinsicCandidate;
+import jdk.internal.util.DecimalDigits;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.DontInline;
 
@@ -1377,6 +1378,7 @@ final class StringUTF16 {
      * @return index of the most significant digit or minus sign, if present
      */
     static int getChars(int i, int index, byte[] buf) {
+        // Used by trusted callers.  Assumes all necessary bounds checks have been done by the caller.
         int q, r;
         int charPos = index;
 
@@ -1390,18 +1392,16 @@ final class StringUTF16 {
             q = i / 100;
             r = (q * 100) - i;
             i = q;
-            putChar(buf, --charPos, Integer.DigitOnes[r]);
-            putChar(buf, --charPos, Integer.DigitTens[r]);
+            charPos -= 2;
+            putPair(buf, charPos, r);
         }
 
         // We know there are at most two digits left at this point.
-        q = i / 10;
-        r = (q * 10) - i;
-        putChar(buf, --charPos, '0' + r);
-
-        // Whatever left is the remaining digit.
-        if (q < 0) {
-            putChar(buf, --charPos, '0' - q);
+        if (i < -9) {
+            charPos -= 2;
+            putPair(buf, charPos, -i);
+        } else {
+            putChar(buf, --charPos, '0' - i);
         }
 
         if (negative) {
@@ -1420,8 +1420,8 @@ final class StringUTF16 {
      * @return index of the most significant digit or minus sign, if present
      */
     static int getChars(long i, int index, byte[] buf) {
+        // Used by trusted callers.  Assumes all necessary bounds checks have been done by the caller.
         long q;
-        int r;
         int charPos = index;
 
         boolean negative = (i < 0);
@@ -1432,10 +1432,9 @@ final class StringUTF16 {
         // Get 2 digits/iteration using longs until quotient fits into an int
         while (i <= Integer.MIN_VALUE) {
             q = i / 100;
-            r = (int)((q * 100) - i);
+            charPos -= 2;
+            putPair(buf, charPos, (int)((q * 100) - i));
             i = q;
-            putChar(buf, --charPos, Integer.DigitOnes[r]);
-            putChar(buf, --charPos, Integer.DigitTens[r]);
         }
 
         // Get 2 digits/iteration using ints
@@ -1443,26 +1442,29 @@ final class StringUTF16 {
         int i2 = (int)i;
         while (i2 <= -100) {
             q2 = i2 / 100;
-            r  = (q2 * 100) - i2;
+            charPos -= 2;
+            putPair(buf, charPos, (q2 * 100) - i2);
             i2 = q2;
-            putChar(buf, --charPos, Integer.DigitOnes[r]);
-            putChar(buf, --charPos, Integer.DigitTens[r]);
         }
 
         // We know there are at most two digits left at this point.
-        q2 = i2 / 10;
-        r  = (q2 * 10) - i2;
-        putChar(buf, --charPos, '0' + r);
-
-        // Whatever left is the remaining digit.
-        if (q2 < 0) {
-            putChar(buf, --charPos, '0' - q2);
+        if (i2 < -9) {
+            charPos -= 2;
+            putPair(buf, charPos, -i2);
+        } else {
+            putChar(buf, --charPos, '0' - i2);
         }
 
         if (negative) {
             putChar(buf, --charPos, '-');
         }
         return charPos;
+    }
+
+    static void putPair(byte[] buf, int charPos, int v) {
+        int packed = (int) DecimalDigits.digitPair(v);
+        putChar(buf, charPos, packed & 0xFF);
+        putChar(buf, charPos + 1, packed >> 8);
     }
     // End of trusted methods.
 

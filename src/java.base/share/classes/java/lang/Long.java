@@ -29,6 +29,7 @@ import java.lang.annotation.Native;
 import java.math.*;
 import java.util.Objects;
 import jdk.internal.HotSpotIntrinsicCandidate;
+import jdk.internal.util.DecimalDigits;
 
 import static java.lang.String.COMPACT_STRINGS;
 import static java.lang.String.LATIN1;
@@ -516,8 +517,8 @@ public final class Long extends Number implements Comparable<Long> {
      * @return index of the most significant digit or minus sign, if present
      */
     static int getChars(long i, int index, byte[] buf) {
+        // Used by trusted callers.  Assumes all necessary bounds checks have been done by the caller.
         long q;
-        int r;
         int charPos = index;
 
         boolean negative = (i < 0);
@@ -528,10 +529,9 @@ public final class Long extends Number implements Comparable<Long> {
         // Get 2 digits/iteration using longs until quotient fits into an int
         while (i <= Integer.MIN_VALUE) {
             q = i / 100;
-            r = (int)((q * 100) - i);
+            charPos -= 2;
+            DecimalDigits.putPair(buf, charPos, (int)((q * 100) - i));
             i = q;
-            buf[--charPos] = Integer.DigitOnes[r];
-            buf[--charPos] = Integer.DigitTens[r];
         }
 
         // Get 2 digits/iteration using ints
@@ -539,20 +539,17 @@ public final class Long extends Number implements Comparable<Long> {
         int i2 = (int)i;
         while (i2 <= -100) {
             q2 = i2 / 100;
-            r  = (q2 * 100) - i2;
+            charPos -= 2;
+            DecimalDigits.putPair(buf, charPos, (q2 * 100) - i2);
             i2 = q2;
-            buf[--charPos] = Integer.DigitOnes[r];
-            buf[--charPos] = Integer.DigitTens[r];
         }
 
         // We know there are at most two digits left at this point.
-        q2 = i2 / 10;
-        r  = (q2 * 10) - i2;
-        buf[--charPos] = (byte)('0' + r);
-
-        // Whatever left is the remaining digit.
-        if (q2 < 0) {
-            buf[--charPos] = (byte)('0' - q2);
+        if (i2 < -9) {
+            charPos -= 2;
+            DecimalDigits.putPair(buf, charPos, -i2);
+        } else {
+            buf[--charPos] = (byte)('0' - i2);
         }
 
         if (negative) {
