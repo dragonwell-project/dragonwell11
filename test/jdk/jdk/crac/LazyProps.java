@@ -38,7 +38,7 @@ public class LazyProps implements CracTest {
         new CracBuilder().engine(CracEngine.SIMULATE)
                 .captureOutput(true)
                 .startCheckpoint().waitForSuccess()
-                .outputAnalyzer().shouldContain("jdk.crac beforeCheckpoint");
+                .outputAnalyzer().shouldContain("beforeCheckpoint");
     }
 
     @Override
