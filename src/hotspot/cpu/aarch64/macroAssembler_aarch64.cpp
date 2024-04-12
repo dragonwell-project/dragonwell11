@@ -5532,6 +5532,113 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
         cbnzw(tmp5, DONE);
       }
     }
+  } else if (UseCompactObjectHeaders) {
+    Label NEXT_64BYTE, NEXT_16BYTE, TAIL, TAIL03, TAIL01, SHORT;
+    mov(result, false);
+    // if (a1 == null || a2 == null)
+    //     return false;
+    cbz(a1, DONE);
+    ldrw(cnt1, Address(a1, length_offset));
+    cbz(a2, DONE);
+    // if (a1.length != a2.length)
+    //      return false;
+    ldrw(cnt2, Address(a2, length_offset));
+    cmpw(cnt2, cnt1);
+    br(NE, DONE);
+    // if (a1.length == 0)
+    //      return true;
+    cbz(cnt1, SAME);
+    lea(a1, Address(a1, base_offset));
+    lea(a2, Address(a2, base_offset));
+
+    cmpw(cnt1, elem_per_word);
+    br(LT, SHORT);
+    if (UseSIMDForArrayEquals) {
+      cmpw(cnt1, elem_per_word * 8);
+      br(GE, NEXT_64BYTE);
+    }
+
+    // 16 byte comparison loop
+    bind(NEXT_16BYTE);
+    ldr(tmp1, Address(post(a1, wordSize)));
+    ldr(tmp3, Address(post(a2, wordSize)));
+    sub(cnt1, cnt1, elem_per_word);
+    eor(tmp1, tmp1, tmp3);
+    cbnz(tmp1, DONE);
+    cmpw(cnt1, elem_per_word);
+    br(LT, TAIL);
+    ldr(tmp2, Address(post(a1, wordSize)));
+    ldr(tmp4, Address(post(a2, wordSize)));
+    sub(cnt1, cnt1, elem_per_word);
+    eor(tmp2, tmp2, tmp4);
+    cbnz(tmp2, DONE);
+    cmpw(cnt1, elem_per_word);
+    br(LT, TAIL);
+    b(NEXT_16BYTE);
+
+    bind(TAIL);
+    cbz(cnt1, SAME);
+    sub(cnt1, cnt1, elem_per_word);
+    if (log_elem_size > 0)
+      lsl(cnt1, cnt1, log_elem_size);
+    ldr(tmp1, Address(a1, cnt1));
+    ldr(tmp2, Address(a2, cnt1));
+    eor(tmp5, tmp1, tmp2);
+    cbnz(tmp5, DONE);
+    b(SAME);
+
+    bind(SHORT);
+    tbz(cnt1, 2 - log_elem_size, TAIL03); // 0-7 bytes left.
+    {
+      ldrw(tmp1, Address(post(a1, 4)));
+      ldrw(tmp2, Address(post(a2, 4)));
+      eorw(tmp5, tmp1, tmp2);
+      cbnzw(tmp5, DONE);
+    }
+    bind(TAIL03);
+    tbz(cnt1, 1 - log_elem_size, TAIL01); // 0-3 bytes left.
+    {
+      ldrh(tmp3, Address(post(a1, 2)));
+      ldrh(tmp4, Address(post(a2, 2)));
+      eorw(tmp5, tmp3, tmp4);
+      cbnzw(tmp5, DONE);
+    }
+    bind(TAIL01);
+    if (elem_size == 1) { // Only needed when comparing byte arrays.
+      tbz(cnt1, 0, SAME); // 0-1 bytes left.
+      {
+        ldrb(tmp1, a1);
+        ldrb(tmp2, a2);
+        eorw(tmp5, tmp1, tmp2);
+        cbnzw(tmp5, DONE);
+      }
+    }
+    b(SAME);
+
+    if (UseSIMDForArrayEquals) {
+      // 64 byte comparison loop(vector)
+      bind(NEXT_64BYTE);
+      ld1(v0, v1, v2, v3, T16B, Address(post(a1, wordSize * 8)));
+      ld1(v4, v5, v6, v7, T16B, Address(post(a2, wordSize * 8)));
+      sub(cnt1, cnt1, 8 * elem_per_word);
+      eor(v0, T16B, v0, v4);
+      eor(v1, T16B, v1, v5);
+      eor(v2, T16B, v2, v6);
+      eor(v3, T16B, v3, v7);
+      orr(v0, T16B, v0, v1);
+      orr(v2, T16B, v2, v3);
+      orr(v0, T16B, v0, v2);
+      umov(tmp1, v0, D, 0);
+      cbnz(tmp1, DONE);
+      umov(tmp1, v0, D, 1);
+      cbnz(tmp1, DONE);
+      cmpw(cnt1, elem_per_word * 8);
+      br(GE, NEXT_64BYTE);
+
+      cmpw(cnt1, elem_per_word);
+      br(LT, TAIL);
+      b(NEXT_16BYTE);
+    }
   } else {
     Label NEXT_DWORD, SHORT, TAIL, TAIL2, STUB,
         CSET_EQ, LAST_CHECK;
