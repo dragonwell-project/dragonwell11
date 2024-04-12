@@ -5533,91 +5533,102 @@ address MacroAssembler::arrays_equals(Register a1, Register a2, Register tmp3,
       }
     }
   } else {
-    Label NEXT_DWORD, SHORT, TAIL, TAIL2, STUB,
-        CSET_EQ, LAST_CHECK;
+    Label NEXT_64BYTE, NEXT_16BYTE, SHORT, TAIL, TAIL03, TAIL01;
     mov(result, false);
+    // if (a1 == null || a2 == null)
+    //     return false;
     cbz(a1, DONE);
-    ldrw(cnt1, Address(a1, length_offset));
     cbz(a2, DONE);
+    // if (a1.length != a2.length)
+    //      return false;
+    ldrw(cnt1, Address(a1, length_offset));
     ldrw(cnt2, Address(a2, length_offset));
-    // on most CPUs a2 is still "locked"(surprisingly) in ldrw and it's
-    // faster to perform another branch before comparing a1 and a2
-    cmp(cnt1, elem_per_word);
-    br(LE, SHORT); // short or same
-    ldr(tmp3, Address(pre(a1, base_offset)));
-    cmp(cnt1, stubBytesThreshold);
-    br(GE, STUB);
-    ldr(tmp4, Address(pre(a2, base_offset)));
-    sub(tmp5, zr, cnt1, LSL, 3 + log_elem_size);
-    cmp(cnt2, cnt1);
+    cmpw(cnt2, cnt1);
     br(NE, DONE);
+    // if (a1.length == 0)
+    //      return true;
+    cbz(cnt1, SAME);
+    lea(a1, Address(a1, base_offset));
+    lea(a2, Address(a2, base_offset));
 
-    // Main 16 byte comparison loop with 2 exits
-    bind(NEXT_DWORD); {
-      ldr(tmp1, Address(pre(a1, wordSize)));
-      ldr(tmp2, Address(pre(a2, wordSize)));
-      subs(cnt1, cnt1, 2 * elem_per_word);
-      br(LE, TAIL);
-      eor(tmp4, tmp3, tmp4);
-      cbnz(tmp4, DONE);
-      ldr(tmp3, Address(pre(a1, wordSize)));
-      ldr(tmp4, Address(pre(a2, wordSize)));
-      cmp(cnt1, elem_per_word);
-      br(LE, TAIL2);
-      cmp(tmp1, tmp2);
-    } br(EQ, NEXT_DWORD);
-    b(DONE);
+    cmpw(cnt1, elem_per_word);
+    br(GE, NEXT_64BYTE);
+
+    tbz(cnt1, 2 - log_elem_size, TAIL03); // 0-7 bytes left.
+    {
+      ldrw(tmp1, Address(post(a1, 4)));
+      ldrw(tmp2, Address(post(a2, 4)));
+      eorw(tmp5, tmp1, tmp2);
+      cbnzw(tmp5, DONE);
+    }
+    bind(TAIL03);
+    tbz(cnt1, 1 - log_elem_size, TAIL01); // 0-3 bytes left.
+    {
+      ldrh(tmp3, Address(post(a1, 2)));
+      ldrh(tmp4, Address(post(a2, 2)));
+      eorw(tmp5, tmp3, tmp4);
+      cbnzw(tmp5, DONE);
+    }
+    bind(TAIL01);
+    if (elem_size == 1) { // Only needed when comparing byte arrays.
+      tbz(cnt1, 0, SAME); // 0-1 bytes left.
+      {
+        ldrb(tmp1, a1);
+        ldrb(tmp2, a2);
+        eorw(tmp5, tmp1, tmp2);
+        cbnzw(tmp5, DONE);
+      }
+    }
+    b(SAME);
+
+    // 64 byte comparison loop(vector)
+    bind(NEXT_64BYTE);
+    cmpw(cnt1, elem_per_word * 8);
+    br(LT, NEXT_16BYTE);
+    ld1(v0, v1, v2, v3, T16B, Address(post(a1, wordSize * 8)));
+    ld1(v4, v5, v6, v7, T16B, Address(post(a2, wordSize * 8)));
+    sub(cnt1, cnt1, 8 * elem_per_word);
+    eor(v0, T16B, v0, v4);
+    eor(v1, T16B, v1, v5);
+    eor(v2, T16B, v2, v6);
+    eor(v3, T16B, v3, v7);
+    orr(v0, T16B, v0, v1);
+    orr(v0, T16B, v0, v2);
+    orr(v0, T16B, v0, v3);
+    umov(tmp1, v0, D, 0);
+    cbnz(tmp1, DONE);
+    umov(tmp1, v0, D, 1);
+    cbnz(tmp1, DONE);
+    b(NEXT_64BYTE);
+
+    // 16 byte comparison loop
+    bind(NEXT_16BYTE);
+    cmpw(cnt1, elem_per_word);
+    br(LT, TAIL);
+    ldr(tmp1, Address(post(a1, wordSize)));
+    ldr(tmp3, Address(post(a2, wordSize)));
+    sub(cnt1, cnt1, elem_per_word);
+    eor(tmp1, tmp1, tmp3);
+    cbnz(tmp1, DONE);
+    cmpw(cnt1, elem_per_word);
+    br(LT, TAIL);
+    ldr(tmp2, Address(post(a1, wordSize)));
+    ldr(tmp4, Address(post(a2, wordSize)));
+    sub(cnt1, cnt1, elem_per_word);
+    eor(tmp2, tmp2, tmp4);
+    cbnz(tmp2, DONE);
+    b(NEXT_16BYTE);
 
     bind(TAIL);
-    eor(tmp4, tmp3, tmp4);
-    eor(tmp2, tmp1, tmp2);
-    lslv(tmp2, tmp2, tmp5);
-    orr(tmp5, tmp4, tmp2);
-    cmp(tmp5, zr);
-    b(CSET_EQ);
-
-    bind(TAIL2);
-    eor(tmp2, tmp1, tmp2);
-    cbnz(tmp2, DONE);
-    b(LAST_CHECK);
-
-    bind(STUB);
-    ldr(tmp4, Address(pre(a2, base_offset)));
-    cmp(cnt2, cnt1);
-    br(NE, DONE);
-    if (elem_size == 2) { // convert to byte counter
-      lsl(cnt1, cnt1, 1);
-    }
-    eor(tmp5, tmp3, tmp4);
-    cbnz(tmp5, DONE);
-    RuntimeAddress stub = RuntimeAddress(StubRoutines::aarch64::large_array_equals());
-    assert(stub.target() != NULL, "array_equals_long stub has not been generated");
-    address tpc = trampoline_call(stub);
-    if (tpc == NULL) {
-      DEBUG_ONLY(reset_labels5(SHORT, LAST_CHECK, CSET_EQ, SAME, DONE));
-      postcond(pc() == badAddress);
-      return NULL;
-    }
-    b(DONE);
-
-    // (a1 != null && a2 == null) || (a1 != null && a2 != null && a1 == a2)
-    // so, if a2 == null => return false(0), else return true, so we can return a2
-    mov(result, a2);
-    b(DONE);
-    bind(SHORT);
-    cmp(cnt2, cnt1);
-    br(NE, DONE);
     cbz(cnt1, SAME);
-    sub(tmp5, zr, cnt1, LSL, 3 + log_elem_size);
-    ldr(tmp3, Address(a1, base_offset));
-    ldr(tmp4, Address(a2, base_offset));
-    bind(LAST_CHECK);
-    eor(tmp4, tmp3, tmp4);
-    lslv(tmp5, tmp4, tmp5);
-    cmp(tmp5, zr);
-    bind(CSET_EQ);
-    cset(result, EQ);
-    b(DONE);
+    sub(cnt1, cnt1, elem_per_word);
+    if (log_elem_size > 0)
+      lsl(cnt1, cnt1, log_elem_size);
+    ldr(tmp1, Address(a1, cnt1));
+    ldr(tmp2, Address(a2, cnt1));
+    eor(tmp5, tmp1, tmp2);
+    cbnz(tmp5, DONE);
+    b(SAME);
   }
 
   bind(SAME);
