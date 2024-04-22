@@ -516,7 +516,6 @@ else
     LIBFREETYPE_LIBS := -lfreetype
   endif
 
-  # gcc_ftobjs.c := maybe-uninitialized required for GCC 7 builds.
   $(eval $(call SetupJdkLibrary, BUILD_LIBFREETYPE, \
       NAME := freetype, \
       OPTIMIZATION := HIGHEST, \
@@ -529,7 +528,6 @@ else
       DISABLED_WARNINGS_microsoft := 4018 4267 4244 4312 4819, \
       DISABLED_WARNINGS_gcc := implicit-fallthrough cast-function-type bad-function-cast, \
       DISABLED_WARNINGS_clang := missing-declarations, \
-      DISABLED_WARNINGS_gcc_ftobjs.c := maybe-uninitialized, \
       LDFLAGS := $(LDFLAGS_JDKLIB) \
           $(call SET_SHARED_LIBRARY_ORIGIN), \
   ))
@@ -561,6 +559,11 @@ else
   endif
   # hb-ft.cc is not presently needed, and requires freetype 2.4.2 or later.
   LIBFONTMANAGER_EXCLUDE_FILES += libharfbuzz/hb-ft.cc
+
+   # list of disabled warnings and the compilers for which it was specifically added.
+   # array-bounds         -> GCC 12 on Alpine Linux
+   # parentheses          -> GCC 6
+   # range-loop-analysis  -> clang on Xcode12
 
   HARFBUZZ_DISABLED_WARNINGS_gcc := type-limits missing-field-initializers strict-aliasing \
        array-bounds
