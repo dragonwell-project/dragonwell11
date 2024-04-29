@@ -262,6 +262,7 @@ bool ciMethodData::load_data() {
   return true;
 }
 
+
 void ciReceiverTypeData::translate_receiver_data_from(const ProfileData* data) {
   for (uint row = 0; row < row_limit(); row++) {
     Klass* k = data->as_ReceiverTypeData()->receiver(row);
@@ -305,6 +306,42 @@ ciProfileData* ciMethodData::data_at(int data_index) {
   }
   DataLayout* data_layout = data_layout_at(data_index);
 
+  switch (data_layout->tag()) {
+  case DataLayout::no_tag:
+  default:
+    ShouldNotReachHere();
+    return NULL;
+  case DataLayout::bit_data_tag:
+    return new ciBitData(data_layout);
+  case DataLayout::counter_data_tag:
+    return new ciCounterData(data_layout);
+  case DataLayout::jump_data_tag:
+    return new ciJumpData(data_layout);
+  case DataLayout::receiver_type_data_tag:
+    return new ciReceiverTypeData(data_layout);
+  case DataLayout::virtual_call_data_tag:
+    return new ciVirtualCallData(data_layout);
+  case DataLayout::ret_data_tag:
+    return new ciRetData(data_layout);
+  case DataLayout::branch_data_tag:
+    return new ciBranchData(data_layout);
+  case DataLayout::multi_branch_data_tag:
+    return new ciMultiBranchData(data_layout);
+  case DataLayout::arg_info_data_tag:
+    return new ciArgInfoData(data_layout);
+  case DataLayout::call_type_data_tag:
+    return new ciCallTypeData(data_layout);
+  case DataLayout::virtual_call_type_data_tag:
+    return new ciVirtualCallTypeData(data_layout);
+  case DataLayout::parameters_type_data_tag:
+    return new ciParametersTypeData(data_layout);
+  };
+}
+
+ciProfileData* ciMethodData::data_at_layout(DataLayout* data_layout) {
+  if (data_layout == NULL) {
+    return NULL;
+  }
   switch (data_layout->tag()) {
   case DataLayout::no_tag:
   default:

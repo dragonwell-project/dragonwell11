@@ -146,6 +146,7 @@ IRScope::IRScope(Compilation* compilation, IRScope* caller, int caller_bci, ciMe
   _wrote_fields       = false;
   _wrote_volatile     = false;
   _start              = NULL;
+  _caller_bci = caller_bci;
 
   if (osr_bci != -1) {
     // selective creation of phi functions is not possibel in osr-methods

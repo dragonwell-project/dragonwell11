@@ -245,6 +245,9 @@ class GraphBuilder {
   void increment();
   void _goto(int from_bci, int to_bci);
   void if_node(Value x, If::Condition cond, Value y, ValueStack* stack_before);
+
+  void hash_inline_context_for_if_node(If* if_node);
+
   void if_zero(ValueType* type, If::Condition cond);
   void if_null(ValueType* type, If::Condition cond);
   void if_same(ValueType* type, If::Condition cond);

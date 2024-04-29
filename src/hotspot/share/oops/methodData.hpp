@@ -288,7 +288,7 @@ private:
 
   char* print_data_on_helper(const MethodData* md) const;
 
-protected:
+public:
   DataLayout* data() { return _data; }
   const DataLayout* data() const { return _data; }
 
@@ -2491,6 +2491,93 @@ public:
   void clean_weak_method_links();
   DEBUG_ONLY(void verify_clean_weak_method_links();)
   Mutex* extra_data_lock() { return &_extra_data_lock; }
+};
+
+class ExpandedMethodData : public Metadata {
+private:
+  int _size;
+  intptr_t _data[1];
+
+private:
+  static ByteSize data_offset() {
+    return byte_offset_of(ExpandedMethodData, _data[0]);
+  }
+
+  static int compute_allocation_size_in_bytes() {
+    int byte_size = in_bytes(data_offset());
+    byte_size += FineProfilingExtraSize * DataLayout::compute_size_in_bytes(BranchData::static_cell_count());
+    return byte_size;
+  }
+
+  static int compute_allocation_size_in_words() {
+    int byte_size = compute_allocation_size_in_bytes();
+    int word_size = align_up(byte_size, BytesPerWord) / BytesPerWord;
+    return align_metadata_size(word_size);
+  }
+
+public:
+  ExpandedMethodData();
+  int  size()                  const { return _size; }
+  MetaspaceObj::Type type()  const  { return ExpandedMethodDataType; }
+  const char* internal_name()  const { return "{ expanded method data}"; }
+
+  void print_value_on(outputStream* st) const {
+    st->print("expanded method data");
+  }
+
+  static ExpandedMethodData* allocate(TRAPS);
+  DataLayout* data_layout_at(int data_index) const;
+  DataLayout* init_method_data(int bci, int index);
+
+  address data_start() { return (address)_data; }
+};
+
+class ExpandedMethodDataFinder : public Metadata {
+private:
+  int _size;
+  Mutex _expand_data_finder_lock;
+  int _index_to_data[1];
+
+  static ByteSize data_offset() {
+    return byte_offset_of(ExpandedMethodDataFinder, _index_to_data[0]);
+  }
+
+  static int compute_allocation_size_in_bytes() {
+    int byte_size = in_bytes(data_offset());
+    byte_size += (FineProfilingExtraSize * sizeof(int));
+    return byte_size;
+  }
+
+  static int compute_allocation_size_in_words() {
+    int byte_size = compute_allocation_size_in_bytes();
+    int word_size = align_up(byte_size, BytesPerWord) / BytesPerWord;
+    return align_metadata_size(word_size);
+  }
+
+public:
+  ExpandedMethodDataFinder();
+
+  int  size()                  const { return _size; }
+  MetaspaceObj::Type type()    const { return ExpandedMethodDataFinderType; }
+  const char* internal_name()  const { return "{ expanded method data finder }"; }
+  void print_value_on(outputStream* st) const {
+    st->print("expanded method data finder");
+  }
+
+  static ExpandedMethodDataFinder* allocate(TRAPS);
+  int find_avaiable_index(int hash);
+  int find_inserted_index(int hash);
+};
+
+class ExpandedMethodDataManager : AllStatic {
+public:
+  static ExpandedMethodData* _expanded_method_data;
+  static ExpandedMethodDataFinder* _expanded_method_data_finder;
+
+  static void initialize(TRAPS);
+  static DataLayout* get_expanded_method_data(int hash);
+  static DataLayout* init_expanded_data(int bci, int hash);
+  static address data_start();
 };
 
 #endif // SHARE_VM_OOPS_METHODDATAOOP_HPP

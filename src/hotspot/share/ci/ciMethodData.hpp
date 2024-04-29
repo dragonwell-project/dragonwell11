@@ -469,10 +469,13 @@ private:
 
   ciArgInfoData *arg_info() const;
 
+public:
   address data_base() const {
     return (address) _data;
   }
+  static ciProfileData* data_at_layout(DataLayout* data_layout);
 
+private:
   void prepare_metadata();
   void load_remaining_extra_data();
   ciProfileData* bci_to_extra_data(int bci, ciMethod* m, bool& two_free_slots);

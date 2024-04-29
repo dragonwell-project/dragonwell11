@@ -1275,6 +1275,23 @@ static bool has_injected_profile(BoolTest::mask btest, Node* test, int& taken, i
   }
   return false;
 }
+
+int Parse::hash_inline_context_for_branch_prediction(ciMethodData* methodData) {
+  JVMState* caller = this->caller();
+  if (caller == NULL) {
+    return 0;
+  }
+
+  int h = INLINE_HASH_FIRST;
+  this->method()->compute_hash_for_method_and_bci(bci(), h);
+  while (caller != NULL) {
+    if (caller->has_method()) {
+      caller->method()->compute_hash_for_method_and_bci(caller->bci(), h);
+    }
+    caller = caller->caller();
+  }
+  return h;
+}
 //--------------------------dynamic_branch_prediction--------------------------
 // Try to gather dynamic branch prediction behavior.  Return a probability
 // of the branch being taken and set the "cnt" field.  Returns a -1.0
@@ -1292,9 +1309,28 @@ float Parse::dynamic_branch_prediction(float &cnt, BoolTest::mask btest, Node* t
   if (use_mdo) {
     // Use MethodData information if it is available
     // FIXME: free the ProfileData structure
+
     ciMethodData* methodData = method()->method_data();
+
     if (!methodData->is_mature())  return PROB_UNKNOWN;
-    ciProfileData* data = methodData->bci_to_data(bci());
+
+    int hash = 0;
+    if (EnableLevel3FineProfiling) {
+      hash = hash_inline_context_for_branch_prediction(methodData);
+    }
+    ciProfileData* data = NULL;
+    if (hash != 0) {
+      DataLayout* data_layout = ExpandedMethodDataManager::get_expanded_method_data(hash);
+      if (data_layout == NULL) {
+        hash = 0; // use default data if not inlined during C1
+      } else {
+        data = ciMethodData::data_at_layout(data_layout);
+      }
+    }
+
+    if (hash == 0) {
+      data = methodData->bci_to_data(bci());
+    }
     if (data == NULL) {
       return PROB_UNKNOWN;
     }
@@ -1310,6 +1346,8 @@ float Parse::dynamic_branch_prediction(float &cnt, BoolTest::mask btest, Node* t
     // scale the counts to be commensurate with invocation counts:
     taken = method()->scale_count(taken);
     not_taken = method()->scale_count(not_taken);
+
+    log_info(compilation)("c2 get branch prediction, meta: %p, bci: %d, hash: %x, data: %p, method name: %s, taken: %d, not_taken: %d", methodData->constant_encoding(), bci(), hash, data->data(), method()->get_Method()->external_name(), taken, not_taken);
   }
 
   // Give up if too few (or too many, in which case the sum will overflow) counts to be meaningful.

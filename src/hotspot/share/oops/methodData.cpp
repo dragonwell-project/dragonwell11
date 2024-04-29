@@ -926,6 +926,7 @@ int MethodData::compute_allocation_size_in_bytes(const methodHandle& method) {
   if (args_cell > 0) {
     object_size += DataLayout::compute_size_in_bytes(args_cell);
   }
+
   return object_size;
 }
 
@@ -1150,6 +1151,7 @@ void MethodData::initialize() {
   // corresponding data cells.
   int data_size = 0;
   int empty_bc_count = 0;  // number of bytecodes lacking data
+
   _data[0] = 0;  // apparently not set below.
   BytecodeStream stream(method());
   Bytecodes::Code c;
@@ -1771,6 +1773,115 @@ void MethodData::clean_weak_method_links() {
   CleanExtraDataMethodClosure cl;
   clean_extra_data(&cl);
   verify_extra_data_clean(&cl);
+}
+
+
+ExpandedMethodData::ExpandedMethodData() {
+  _size = compute_allocation_size_in_bytes();
+  log_info(compilation)("ExpandedMethodData _data: %p, total size: %x", _data, _size);
+}
+
+ExpandedMethodData* ExpandedMethodData::allocate(TRAPS) {
+  int size = ExpandedMethodData::compute_allocation_size_in_words();
+  return new (ClassLoaderData::the_null_class_loader_data(), size, MetaspaceObj::MethodDataType, THREAD) ExpandedMethodData();
+}
+
+DataLayout* ExpandedMethodData::data_layout_at(int data_index) const {
+  assert(data_index < FineProfilingExtraSize, "out of bound");
+  int data_offset = data_index * DataLayout::compute_size_in_bytes(BranchData::static_cell_count());
+  assert(data_offset % sizeof(intptr_t) == 0, "unaligned");
+  return (DataLayout*) (((address)_data) + data_offset);
+}
+
+DataLayout* ExpandedMethodData::init_method_data(int bci, int index) {
+  DataLayout* data_layout = data_layout_at(index);
+  log_info(compilation)("Init expanded data at %p with index %d", data_layout, index);
+  data_layout->initialize(DataLayout::branch_data_tag, bci, BranchData::static_cell_count());
+  return data_layout;
+}
+
+ExpandedMethodDataFinder::ExpandedMethodDataFinder() :
+  _expand_data_finder_lock(Mutex::special, "Expanded method data lock", true, Monitor::_safepoint_check_never) {
+  // init hash table
+  for (int i = 0; i < FineProfilingExtraSize; i++) {
+    _index_to_data[i] = 0;
+  }
+
+  _size = compute_allocation_size_in_bytes();
+  log_info(compilation)("ExpandedMethodDataFinder start: %p, size: %x", _index_to_data, _size);
+}
+
+ExpandedMethodDataFinder* ExpandedMethodDataFinder::allocate(TRAPS) {
+  int size = compute_allocation_size_in_words();
+  return new (ClassLoaderData::the_null_class_loader_data(), size, MetaspaceObj::MethodDataType, THREAD)
+    ExpandedMethodDataFinder();
+}
+
+int ExpandedMethodDataFinder::find_avaiable_index(int hash) {
+  int index = (FineProfilingExtraSize - 1) & hash;
+  {
+    MutexLockerEx ml(&_expand_data_finder_lock, Mutex::_no_safepoint_check_flag);
+    if (_index_to_data[index] == 0) {
+      _index_to_data[index] = hash;
+      return index;
+    }
+    while(true) {
+      if (index >= FineProfilingExtraSize) {
+        return -1;
+      }
+      if (_index_to_data[index] == 0) {
+        _index_to_data[index] = hash;
+        return index;
+      }
+      index++;
+    }
+  }
+}
+
+int ExpandedMethodDataFinder::find_inserted_index(int hash) {
+  int index = (FineProfilingExtraSize - 1) & hash;
+  {
+    if (_index_to_data[index] == hash) {
+      return index;
+    }
+    while(true) {
+      if (index >= FineProfilingExtraSize) {
+        return -1;
+      }
+      if (_index_to_data[index] == hash) {
+        return index;
+      }
+      index++;
+    }
+  }
+}
+
+ExpandedMethodData* ExpandedMethodDataManager::_expanded_method_data;
+ExpandedMethodDataFinder* ExpandedMethodDataManager::_expanded_method_data_finder;
+
+void ExpandedMethodDataManager::initialize(TRAPS) {
+  _expanded_method_data = ExpandedMethodData::allocate(THREAD);
+  _expanded_method_data_finder = ExpandedMethodDataFinder::allocate(THREAD);
+}
+
+DataLayout* ExpandedMethodDataManager::get_expanded_method_data(int hash) {
+  int index = _expanded_method_data_finder->find_inserted_index(hash);
+  if (index < 0) {
+    return NULL;
+  }
+  return _expanded_method_data->data_layout_at(index);
+}
+
+DataLayout* ExpandedMethodDataManager::init_expanded_data(int bci, int hash) {
+  int index = _expanded_method_data_finder->find_avaiable_index(hash);
+  if (index < 0) {
+    return NULL;
+  }
+  return _expanded_method_data->init_method_data(bci, index);
+}
+
+address ExpandedMethodDataManager::data_start() {
+  return _expanded_method_data->data_start();
 }
 
 #ifdef ASSERT

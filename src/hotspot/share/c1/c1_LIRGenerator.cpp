@@ -965,19 +965,47 @@ void LIRGenerator::profile_branch(If* if_instr, If::Condition cond) {
     assert(method != NULL, "method should be set if branch is profiled");
     ciMethodData* md = method->method_data_or_null();
     assert(md != NULL, "Sanity");
-    ciProfileData* data = md->bci_to_data(if_instr->profiled_bci());
-    assert(data != NULL, "must have profiling data");
-    assert(data->is_BranchData(), "need BranchData for two-way branches");
-    int taken_count_offset     = md->byte_offset_of_slot(data, BranchData::taken_offset());
-    int not_taken_count_offset = md->byte_offset_of_slot(data, BranchData::not_taken_offset());
+
+    int inline_hash = 0;
+
+    if (EnableLevel3FineProfiling) {
+      inline_hash = if_instr->get_fine_profile_inline_hash();
+    }
+
+    int taken_count_offset = 0;
+    int not_taken_count_offset = 0;
+    DataLayout* expanded_data = NULL;
+    if (inline_hash != 0) {
+      expanded_data = ExpandedMethodDataManager::init_expanded_data(if_instr->profiled_bci(), inline_hash);
+      // might be null if expand data is full
+      if (expanded_data != NULL) {
+        taken_count_offset     = in_bytes(BranchData::taken_offset());
+        not_taken_count_offset = in_bytes(BranchData::not_taken_offset());
+      }
+    }
+    if (expanded_data == NULL) {
+      ciProfileData* data = md->bci_to_data(if_instr->profiled_bci());
+      assert(data != NULL, "must have profiling data");
+      assert(data->is_BranchData(), "need BranchData for two-way branches");
+      taken_count_offset     = md->byte_offset_of_slot(data, BranchData::taken_offset());
+      not_taken_count_offset = md->byte_offset_of_slot(data, BranchData::not_taken_offset());
+    }
     if (if_instr->is_swapped()) {
       int t = taken_count_offset;
       taken_count_offset = not_taken_count_offset;
       not_taken_count_offset = t;
     }
 
-    LIR_Opr md_reg = new_register(T_METADATA);
-    __ metadata2reg(md->constant_encoding(), md_reg);
+    LIR_Opr md_reg = NULL;
+    if (expanded_data == NULL) {
+      log_debug(compilation)("fine profile inline hash: default, method: %s, meta: %p, taken_offset: %d, not_taken_offset: %d", method->get_Method()->external_name(), md->constant_encoding(), taken_count_offset, not_taken_count_offset);
+      md_reg = new_register(T_METADATA);
+      __ metadata2reg(md->constant_encoding(), md_reg);
+    } else {
+      log_debug(compilation)("fine profile inline hash: %x, method: %s, data: %p, taken_offset: %d, not_taken_offset: %d", inline_hash, method->get_Method()->external_name(), expanded_data, taken_count_offset, not_taken_count_offset);
+      md_reg = new_pointer_register();
+      __ move(LIR_OprFact::intptrConst(expanded_data), md_reg);
+    }
 
     LIR_Opr data_offset_reg = new_pointer_register();
     __ cmove(lir_cond(cond),

@@ -2698,6 +2698,12 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
                                                                             \
   product(bool, UseCompactObjectHeaders, false,                             \
           "Use compact 64-bit object headers in 64-bit VM.")                \
+                                                                            \
+  product(bool, EnableLevel3FineProfiling, false,                           \
+          "Insert finer profile data during level 3 compiling")             \
+                                                                            \
+  product(intx, FineProfilingExtraSize, 262144,                            \
+          "Extra branch data size for finer profile, default is 256K")
 
 #define VM_FLAGS(develop,                                                   \
                  develop_pd,                                                \

@@ -713,6 +713,11 @@ jint universe_init() {
   // DumpSharedSpaces.
   ClassLoaderData::init_null_class_loader_data();
 
+  // for expanded profiling data
+  if (EnableLevel3FineProfiling) {
+    ExpandedMethodDataManager::initialize(Thread::current());
+  }
+
   // We have a heap so create the Method* caches before
   // Metaspace::initialize_shared_spaces() tries to populate them.
   Universe::_finalizer_register_cache = new LatestMethodCache();

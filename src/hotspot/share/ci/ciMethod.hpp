@@ -33,6 +33,10 @@
 #include "prims/methodHandles.hpp"
 #include "utilities/bitMap.hpp"
 
+#define INLINE_HASH_A 54059 /* a prime */
+#define INLINE_HASH_B 76963 /* another prime */
+#define INLINE_HASH_FIRST 37 /* also prime */
+
 class ciMethodBlocks;
 class MethodLiveness;
 class Arena;
@@ -170,6 +174,16 @@ class ciMethod : public ciMetadata {
     Method* m = (Method*)_metadata;
     assert(m != NULL, "illegal use of unloaded method");
     return m;
+  }
+
+  void compute_hash_for_method_and_bci(int bci, int& h) {
+    const char* method_full_name = get_Method()->external_name();
+    size_t idx = 0;
+    while (method_full_name[idx]) {
+      h = (h * INLINE_HASH_A) ^ (method_full_name[idx] * INLINE_HASH_B);
+      idx++;
+    }
+    h = (h * INLINE_HASH_A) ^ (bci * INLINE_HASH_B);
   }
 
   // Method code and related information.
