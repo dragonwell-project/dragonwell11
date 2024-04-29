@@ -1217,6 +1217,19 @@ void GraphBuilder::_goto(int from_bci, int to_bci) {
   append(x);
 }
 
+void GraphBuilder::hash_inline_context_for_if_node(If* if_node) {
+  int h = INLINE_HASH_FIRST;
+  IRScope* s = if_node->scope();
+  int caller_bci = bci();
+  while (s != NULL) {
+    s->method()->compute_hash_for_method_and_bci(caller_bci, h);
+
+    log_info(compilation)("C1 insert profiling method: %s, hash: %x, caller bci: %d, caller level: %d", s->method()->get_Method()->external_name(), h, caller_bci, s->level());
+    caller_bci = s->caller_bci();
+    s = s->caller();
+  }
+  if_node->set_fine_profile_inline_hash(h);
+}
 
 void GraphBuilder::if_node(Value x, If::Condition cond, Value y, ValueStack* state_before) {
   BlockBegin* tsux = block_at(stream()->get_dest());
@@ -1241,6 +1254,7 @@ void GraphBuilder::if_node(Value x, If::Condition cond, Value y, ValueStack* sta
       if (profile_branches()) {
         // Successors can be rotated by the canonicalizer, check for this case.
         if_node->set_profiled_method(method());
+        hash_inline_context_for_if_node(if_node);
         if_node->set_should_profile(true);
         if (if_node->tsux() == fsux) {
           if_node->set_swapped(true);

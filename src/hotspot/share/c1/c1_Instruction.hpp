@@ -1988,6 +1988,7 @@ LEAF(If, BlockEnd)
   int         _profiled_bci; // Canonicalizer may alter bci of If node
   bool        _swapped;      // Is the order reversed with respect to the original If in the
                              // bytecode stream?
+  int _fine_profile_inline_hash;
  public:
   // creation
   // unordered_is_true is valid for float/double compares only
@@ -1999,6 +2000,7 @@ LEAF(If, BlockEnd)
   , _profiled_method(NULL)
   , _profiled_bci(0)
   , _swapped(false)
+  , _fine_profile_inline_hash(0)
   {
     ASSERT_VALUES
     set_flag(UnorderedIsTrueFlag, unordered_is_true);
@@ -2022,6 +2024,12 @@ LEAF(If, BlockEnd)
   ciMethod* profiled_method() const              { return _profiled_method; } // set only for profiled branches
   int profiled_bci() const                       { return _profiled_bci; }    // set for profiled branches and tiered
   bool is_swapped() const                        { return _swapped; }
+
+  void set_fine_profile_inline_hash(int hash)   {
+    assert(_fine_profile_inline_hash == 0, "_fine_profile_inline_hash should not been set");
+    _fine_profile_inline_hash = hash;
+  }
+  int get_fine_profile_inline_hash()   { return _fine_profile_inline_hash; }
 
   // manipulation
   void swap_operands() {

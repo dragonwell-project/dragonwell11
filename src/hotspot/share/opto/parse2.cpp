@@ -1275,6 +1275,23 @@ static bool has_injected_profile(BoolTest::mask btest, Node* test, int& taken, i
   }
   return false;
 }
+
+int Parse::hash_inline_context_for_branch_prediction(ciMethodData* methodData) {
+  JVMState* caller = this->caller();
+  if (caller == NULL) {
+    return 0;
+  }
+
+  int h = INLINE_HASH_FIRST;
+  this->method()->compute_hash_for_method_and_bci(bci(), h);
+  while (caller != NULL) {
+    if (caller->has_method()) {
+      caller->method()->compute_hash_for_method_and_bci(caller->bci(), h);
+    }
+    caller = caller->caller();
+  }
+  return h;
+}
 //--------------------------dynamic_branch_prediction--------------------------
 // Try to gather dynamic branch prediction behavior.  Return a probability
 // of the branch being taken and set the "cnt" field.  Returns a -1.0
@@ -1292,9 +1309,24 @@ float Parse::dynamic_branch_prediction(float &cnt, BoolTest::mask btest, Node* t
   if (use_mdo) {
     // Use MethodData information if it is available
     // FIXME: free the ProfileData structure
+
     ciMethodData* methodData = method()->method_data();
+
     if (!methodData->is_mature())  return PROB_UNKNOWN;
-    ciProfileData* data = methodData->bci_to_data(bci());
+
+    int hash = 0;
+    if (EnableLevel3FineProfiling) {
+      hash = hash_inline_context_for_branch_prediction(methodData);
+    }
+    ciProfileData* data = NULL;
+    if (hash != 0) {
+      DataLayout* data_layout = methodData->get_expanded_data(hash);
+      assert(data_layout != NULL, "C2 get null expanded data");
+      data = methodData->data_at_layout(data_layout);
+    } else {
+      data = methodData->bci_to_data(bci());
+    }
+    log_info(compilation)("c2 get branch prediction, method_data: %p, meta: %p, dp: %p", methodData, methodData->constant_encoding(), data->dp());
     if (data == NULL) {
       return PROB_UNKNOWN;
     }

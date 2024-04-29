@@ -469,10 +469,16 @@ private:
 
   ciArgInfoData *arg_info() const;
 
+public:
   address data_base() const {
     return (address) _data;
   }
 
+  DataLayout* expand_profile_data(int bci, int inline_hash) {
+    return get_MethodData()->expand_data_for_branch(bci, inline_hash);
+  }
+
+private:
   void prepare_metadata();
   void load_remaining_extra_data();
   ciProfileData* bci_to_extra_data(int bci, ciMethod* m, bool& two_free_slots);
@@ -528,10 +534,14 @@ public:
   // Get the data at an arbitrary (sort of) data index.
   ciProfileData* data_at(int data_index);
 
+  ciProfileData* data_at_layout(DataLayout* data);
+
   // Walk through the data in order.
   ciProfileData* first_data() { return data_at(first_di()); }
   ciProfileData* next_data(ciProfileData* current);
   bool is_valid(ciProfileData* current) { return current != NULL; }
+
+  DataLayout* get_expanded_data(int hash);
 
   DataLayout* extra_data_base() const  { return data_layout_at(data_size()); }
   DataLayout* args_data_limit() const  { return data_layout_at(data_size() + extra_data_size() -
@@ -591,7 +601,9 @@ public:
 
   // Code generation helper
   ByteSize offset_of_slot(ciProfileData* data, ByteSize slot_offset_in_data);
+  ByteSize offset_of_raw_slot(Metadata* mdo, DataLayout* data, ByteSize slot_offset_in_data);
   int      byte_offset_of_slot(ciProfileData* data, ByteSize slot_offset_in_data) { return in_bytes(offset_of_slot(data, slot_offset_in_data)); }
+  int      byte_offset_of_raw_slot(Metadata* mdo, DataLayout* data, ByteSize slot_offset_in_data) { return in_bytes(offset_of_raw_slot(mdo, data, slot_offset_in_data)); }
 
 #ifndef PRODUCT
   // printing support for method data

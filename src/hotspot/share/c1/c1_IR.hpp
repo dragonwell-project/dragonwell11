@@ -138,6 +138,7 @@ class IRScope: public CompilationResourceObj {
   // hierarchy
   Compilation*  _compilation;                    // the current compilation
   IRScope*      _caller;                         // the caller scope, or NULL
+  int           _caller_bci;
   int           _level;                          // the inlining level
   ciMethod*     _method;                         // the corresponding method
   IRScopeList   _callees;                        // the inlined method scopes
@@ -163,6 +164,7 @@ class IRScope: public CompilationResourceObj {
   // accessors
   Compilation*  compilation() const              { return _compilation; }
   IRScope*      caller() const                   { return _caller; }
+  int      caller_bci() const                   { return _caller_bci; }
   int           level() const                    { return _level; }
   ciMethod*     method() const                   { return _method; }
   int           max_stack() const;               // NOTE: expensive

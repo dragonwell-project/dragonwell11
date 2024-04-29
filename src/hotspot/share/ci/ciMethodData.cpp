@@ -262,6 +262,7 @@ bool ciMethodData::load_data() {
   return true;
 }
 
+
 void ciReceiverTypeData::translate_receiver_data_from(const ProfileData* data) {
   for (uint row = 0; row < row_limit(); row++) {
     Klass* k = data->as_ReceiverTypeData()->receiver(row);
@@ -337,12 +338,50 @@ ciProfileData* ciMethodData::data_at(int data_index) {
   };
 }
 
+ciProfileData* ciMethodData::data_at_layout(DataLayout* data_layout) {
+  switch (data_layout->tag()) {
+  case DataLayout::no_tag:
+  default:
+    ShouldNotReachHere();
+    return NULL;
+  case DataLayout::bit_data_tag:
+    return new ciBitData(data_layout);
+  case DataLayout::counter_data_tag:
+    return new ciCounterData(data_layout);
+  case DataLayout::jump_data_tag:
+    return new ciJumpData(data_layout);
+  case DataLayout::receiver_type_data_tag:
+    return new ciReceiverTypeData(data_layout);
+  case DataLayout::virtual_call_data_tag:
+    return new ciVirtualCallData(data_layout);
+  case DataLayout::ret_data_tag:
+    return new ciRetData(data_layout);
+  case DataLayout::branch_data_tag:
+    return new ciBranchData(data_layout);
+  case DataLayout::multi_branch_data_tag:
+    return new ciMultiBranchData(data_layout);
+  case DataLayout::arg_info_data_tag:
+    return new ciArgInfoData(data_layout);
+  case DataLayout::call_type_data_tag:
+    return new ciCallTypeData(data_layout);
+  case DataLayout::virtual_call_type_data_tag:
+    return new ciVirtualCallTypeData(data_layout);
+  case DataLayout::parameters_type_data_tag:
+    return new ciParametersTypeData(data_layout);
+  };
+}
+
 // Iteration over data.
 ciProfileData* ciMethodData::next_data(ciProfileData* current) {
   int current_index = dp_to_di(current->dp());
   int next_index = current_index + current->size_in_bytes();
   ciProfileData* next = data_at(next_index);
   return next;
+}
+
+DataLayout* ciMethodData::get_expanded_data(int hash) {
+  assert(hash != 0, "Illegal expanded data");
+  return get_MethodData()->find_expanded_data_with_hash(hash);
 }
 
 ciProfileData* ciMethodData::bci_to_extra_data(int bci, ciMethod* m, bool& two_free_slots) {
@@ -592,7 +631,15 @@ ByteSize ciMethodData::offset_of_slot(ciProfileData* data, ByteSize slot_offset_
 
   // Add in counter_offset, the # of bytes into the ProfileData of counter or flag
   int offset = in_bytes(data_offset) + cell_offset + in_bytes(slot_offset_in_data);
+  return in_ByteSize(offset);
+}
 
+ByteSize ciMethodData::offset_of_raw_slot(Metadata* mdo, DataLayout* data, ByteSize slot_offset_in_data) {
+  // Get cell offset of the ProfileData within data array
+  int cell_offset = (address) data - (address) mdo;
+
+  // Add in counter_offset, the # of bytes into the ProfileData of counter or flag
+  int offset = cell_offset + in_bytes(slot_offset_in_data);
   return in_ByteSize(offset);
 }
 

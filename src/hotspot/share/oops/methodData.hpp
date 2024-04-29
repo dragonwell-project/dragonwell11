@@ -1982,6 +1982,9 @@ public:
   bool is_methodData() const volatile { return true; }
   void initialize();
 
+  DataLayout* expand_data_for_branch(int bci, int hash);
+  DataLayout* find_expanded_data_with_hash(int hash);
+
   // Whole-method sticky bits and flags
   enum {
     _trap_hist_limit    = Deoptimization::Reason_TRAP_HISTORY_LENGTH,
@@ -2106,10 +2109,14 @@ private:
   // Size of _data array in bytes.  (Excludes header and extra_data fields.)
   int _data_size;
 
+  int _non_expand_data_size;
+
   // data index for the area dedicated to parameters. -1 if no
   // parameter profiling.
   enum { no_parameters = -2, parameters_uninitialized = -1 };
   int _parameters_type_data_di;
+
+  int* _index_to_expand_profile_data;
 
   // Beginning of the data entries
   intptr_t _data[1];
@@ -2185,6 +2192,10 @@ private:
   static int profile_parameters_flag();
   static bool profile_parameters_jsr292_only();
   static bool profile_all_parameters();
+
+  static int expand_data_size_in_bytes() {
+    return FineProfilingExtraSize * DataLayout::compute_size_in_bytes(BranchData::static_cell_count());
+  }
 
   void clean_extra_data_helper(DataLayout* dp, int shift, bool reset = false);
   void verify_extra_data_clean(CleanExtraDataClosure* cl);
@@ -2375,9 +2386,21 @@ public:
 
   // Add a handful of extra data records, for trap tracking.
   DataLayout* extra_data_base() const  { return limit_data_position(); }
-  DataLayout* extra_data_limit() const { return (DataLayout*)((address)this + size_in_bytes()); }
-  DataLayout* args_data_limit() const  { return (DataLayout*)((address)this + size_in_bytes() -
-                                                              parameters_size_in_bytes()); }
+  DataLayout* extra_data_limit() const {
+    int expand_size = 0;
+    if (EnableLevel3FineProfiling) {
+      expand_size = MethodData::expand_data_size_in_bytes();
+    }
+    return (DataLayout*)((address)this + size_in_bytes() - expand_size);
+  }
+  DataLayout* args_data_limit() const  {
+    int expand_size = 0;
+    if (EnableLevel3FineProfiling) {
+      expand_size = MethodData::expand_data_size_in_bytes();
+    }
+    return (DataLayout*)((address)this + size_in_bytes() - parameters_size_in_bytes() - expand_size);
+  }
+  int non_expand_data_size() const  { return _non_expand_data_size; }
   int extra_data_size() const          { return (address)extra_data_limit() - (address)extra_data_base(); }
   static DataLayout* next_extra(DataLayout* dp);
 

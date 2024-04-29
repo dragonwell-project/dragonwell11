@@ -965,11 +965,27 @@ void LIRGenerator::profile_branch(If* if_instr, If::Condition cond) {
     assert(method != NULL, "method should be set if branch is profiled");
     ciMethodData* md = method->method_data_or_null();
     assert(md != NULL, "Sanity");
-    ciProfileData* data = md->bci_to_data(if_instr->profiled_bci());
-    assert(data != NULL, "must have profiling data");
-    assert(data->is_BranchData(), "need BranchData for two-way branches");
-    int taken_count_offset     = md->byte_offset_of_slot(data, BranchData::taken_offset());
-    int not_taken_count_offset = md->byte_offset_of_slot(data, BranchData::not_taken_offset());
+
+    int inline_hash = 0;
+
+    if (EnableLevel3FineProfiling) {
+      inline_hash = if_instr->get_fine_profile_inline_hash();
+    }
+
+    int taken_count_offset, not_taken_count_offset = 0;
+    if (inline_hash != 0) {
+      DataLayout* expanded_data = md->expand_profile_data(if_instr->profiled_bci(), inline_hash);
+      assert(expanded_data != NULL, "must have expanded data");
+      taken_count_offset     = md->byte_offset_of_raw_slot(md->constant_encoding(), expanded_data, BranchData::taken_offset());
+      not_taken_count_offset = md->byte_offset_of_raw_slot(md->constant_encoding(), expanded_data, BranchData::not_taken_offset());
+    } else {
+      ciProfileData* data = md->bci_to_data(if_instr->profiled_bci());
+      assert(data != NULL, "must have profiling data");
+      assert(data->is_BranchData(), "need BranchData for two-way branches");
+      taken_count_offset     = md->byte_offset_of_slot(data, BranchData::taken_offset());
+      not_taken_count_offset = md->byte_offset_of_slot(data, BranchData::not_taken_offset());
+    }
+    log_info(compilation)("fine profile inline hash: %x, method: %s, meta: %p, taken_offset: %d, not_taken_offset: %d", inline_hash, method->get_Method()->external_name(), md->constant_encoding(), taken_count_offset, not_taken_count_offset);
     if (if_instr->is_swapped()) {
       int t = taken_count_offset;
       taken_count_offset = not_taken_count_offset;

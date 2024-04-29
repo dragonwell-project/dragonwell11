@@ -926,6 +926,12 @@ int MethodData::compute_allocation_size_in_bytes(const methodHandle& method) {
   if (args_cell > 0) {
     object_size += DataLayout::compute_size_in_bytes(args_cell);
   }
+
+  // for expanded
+  if (EnableLevel3FineProfiling) {
+    object_size += MethodData::expand_data_size_in_bytes();
+  }
+
   return object_size;
 }
 
@@ -1052,7 +1058,7 @@ int MethodData::initialize_data(BytecodeStream* stream,
            tag == DataLayout::counter_data_tag ||
            tag == DataLayout::virtual_call_type_data_tag ||
            tag == DataLayout::virtual_call_data_tag)) ||
-         cell_count == bytecode_cell_count(c), "cell counts must agree");
+         cell_count == bytecode_cell_count(c), "cell counts must agree %d, cell count: %d, verify count: %d", static_cast<int>(c), cell_count, bytecode_cell_count(c));
   if (cell_count >= 0) {
     assert(tag != DataLayout::no_tag, "bad tag");
     assert(bytecode_has_profile(c), "agree w/ BHP");
@@ -1140,6 +1146,50 @@ MethodData::MethodData(const methodHandle& method)
   initialize();
 }
 
+DataLayout* MethodData::expand_data_for_branch(int bci, int hash) {
+  // find avaiable space
+  size_t insert_index = 0;
+  for (; insert_index < FineProfilingExtraSize; insert_index++) {
+    if (_index_to_expand_profile_data[insert_index] == hash) {
+      int cell_count = BranchData::static_cell_count();
+      int total_size = DataLayout::compute_size_in_bytes(cell_count) * insert_index;
+      log_info(compilation)("expand data exist for hash: %x, data start: %p, expand start: %x, total size: %x", hash, data_base(), non_expand_data_size(), total_size);
+      return data_layout_at(non_expand_data_size() + total_size);
+    } else if (_index_to_expand_profile_data[insert_index] == 0) {
+      _index_to_expand_profile_data[insert_index] = hash;
+      break;
+    }
+  }
+  if (insert_index == FineProfilingExtraSize) {
+    log_info(compilation)("expanded data for %p is full", this);
+    return NULL;
+  }
+
+  // init expanded profile data
+  int cell_count = BranchData::static_cell_count();
+  int total_size = DataLayout::compute_size_in_bytes(cell_count) * insert_index;
+  int tag = DataLayout::branch_data_tag;
+  log_info(compilation)("expand data init for hash: %x, data start: %p, expand start: %x, total size: %x", hash, data_base(), non_expand_data_size(), total_size);
+  DataLayout* data_layout = data_layout_at(non_expand_data_size() + total_size);
+  data_layout->initialize(tag, bci, cell_count);
+
+  return data_layout;
+}
+
+DataLayout* MethodData::find_expanded_data_with_hash(int hash) {
+  size_t insert_index = 0;
+  for (; insert_index < FineProfilingExtraSize; insert_index++) {
+    if (_index_to_expand_profile_data[insert_index] == hash) {
+      int total_size = DataLayout::compute_size_in_bytes(BranchData::static_cell_count()) * insert_index;
+      DataLayout* data = data_layout_at(non_expand_data_size() + total_size);
+      log_info(compilation)("find data %p for hash: %x, data start %p, expand start: %x, total size: %x", data, hash, data_base(), non_expand_data_size(), total_size);
+      return data;
+    }
+  }
+  log_info(compilation)("not find data for hash: %x", hash);
+  return NULL;
+}
+
 void MethodData::initialize() {
   NoSafepointVerifier no_safepoint;  // init function atomic wrt GC
   ResourceMark rm;
@@ -1150,6 +1200,15 @@ void MethodData::initialize() {
   // corresponding data cells.
   int data_size = 0;
   int empty_bc_count = 0;  // number of bytecodes lacking data
+
+  if (EnableLevel3FineProfiling) {
+    _index_to_expand_profile_data = (int*) AllocateHeap(FineProfilingExtraSize * sizeof(int), mtClass);
+
+    for (size_t i = 0; i < FineProfilingExtraSize; i++) {
+      _index_to_expand_profile_data[i] = 0;
+    }
+  }
+
   _data[0] = 0;  // apparently not set below.
   BytecodeStream stream(method());
   Bytecodes::Code c;
@@ -1206,6 +1265,10 @@ void MethodData::initialize() {
 
   post_initialize(&stream);
 
+  _non_expand_data_size = data_size + extra_size + arg_data_size;
+  if (EnableLevel3FineProfiling) {
+    object_size += MethodData::expand_data_size_in_bytes();
+  }
   assert(object_size == compute_allocation_size_in_bytes(methodHandle(_method)), "MethodData: computed size != initialized size");
   set_size(object_size);
 }
