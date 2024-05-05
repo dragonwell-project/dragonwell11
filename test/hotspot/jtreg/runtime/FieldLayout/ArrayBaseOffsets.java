@@ -42,6 +42,7 @@
  * @library /test/lib
  * @requires vm.bits == "64"
  * @requires vm.opt.UseCompressedClassPointers != false
+ * @requires vm.opt.UseCompactObjectHeaders != true
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:-UseCompactObjectHeaders -XX:+UseCompressedClassPointers ArrayBaseOffsets
  */
@@ -49,6 +50,7 @@
  * @test id=no-coh-no-ccp
  * @library /test/lib
  * @requires vm.bits == "64"
+ * @requires vm.opt.UseCompactObjectHeaders != true
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:-UseCompactObjectHeaders -XX:-UseCompressedClassPointers ArrayBaseOffsets
  */
