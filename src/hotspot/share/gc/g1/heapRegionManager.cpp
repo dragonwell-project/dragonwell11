@@ -361,6 +361,41 @@ void HeapRegionManager::par_iterate(HeapRegionClosure* blk, HeapRegionClaimer* h
   }
 }
 
+void HeapRegionManager::par_iterate(HeapRegionClosure* blk,
+                                    HeapRegionChunkClaimer* chunk_claimer,
+                                    const uint start_index) const {
+  const uint n_regions = chunk_claimer->n_regions();
+  for (uint count = 0; count < n_regions; count++) {
+    const uint index = (start_index + count) % n_regions;
+    assert(index < n_regions, "Sanity");
+    if (!is_available(index)) {
+      continue;
+    }
+    HeapRegion* r = _regions.get_by_index(index);
+    assert(r->hrm_index() == index, "Sanity");
+    if (chunk_claimer->is_region_claimed(index)) {
+      continue;
+    }
+
+    // We don't directly claim the chunk or the region, in case the user want different flavors
+    // of iteration, e.g., forward/backward iteration.
+    // Instead, we let the hr closure to process the region and trust it will claim the chunks.
+    // If it processed a region without claiming any chunk, an assertion will fire.
+#ifndef PRODUCT
+    HeapRegionChunkClaimer::RegionClaimState state = chunk_claimer->region_state(index);
+#endif
+    bool res = blk->do_heap_region(r);
+#ifndef PRODUCT
+    HeapRegionChunkClaimer::RegionClaimState new_state = chunk_claimer->region_state(index);
+    assert(state == HeapRegionChunkClaimer::RegionClaimed || new_state != state,
+           "Should change region claim state");
+#endif
+    if (res) {
+      return;
+    }
+  }
+}
+
 uint HeapRegionManager::shrink_by(uint num_regions_to_remove) {
   assert(length() > 0, "the region sequence should not be empty");
   assert(length() <= _allocated_heapregions_length, "invariant");
@@ -506,4 +541,42 @@ bool HeapRegionClaimer::claim_region(uint region_index) {
   assert(region_index < _n_regions, "Invalid index.");
   uint old_val = Atomic::cmpxchg(Claimed, &_claims[region_index], Unclaimed);
   return old_val == Unclaimed;
+}
+
+HeapRegionChunkClaimer::HeapRegionChunkClaimer(uint n_workers) :
+    _n_workers(n_workers),
+    _n_regions(G1CollectedHeap::heap()->_hrm._allocated_heapregions_length),
+    _n_chunks(_n_regions * ChunksPerRegion),
+    _claims(NULL) {
+  assert(n_workers > 0, "Need at least one worker");
+  assert(HeapRegion::GrainWords % ChunksPerRegion == 0, "Chunk size must be multiple of word");
+  uint8_t* new_claims = NEW_C_HEAP_ARRAY(uint8_t, _n_chunks, mtGC);
+  memset(new_claims, Unclaimed, sizeof(*_claims) * _n_chunks);
+  _claims = new_claims;
+}
+
+HeapRegionChunkClaimer::~HeapRegionChunkClaimer() {
+  assert(_claims != NULL, "Must be initialized");
+  FREE_C_HEAP_ARRAY(jbyte, _claims);
+}
+
+uint HeapRegionChunkClaimer::offset_for_worker(uint worker_id) const {
+  assert(worker_id < _n_workers, "Invalid worker id");
+  return _n_regions * worker_id / _n_workers;
+}
+
+bool HeapRegionChunkClaimer::claim_chunk(uint chunk_index) {
+  assert(chunk_index < _n_chunks, "Invalid chunk index");
+  uint old_val = Atomic::cmpxchg(Claimed, &_claims[chunk_index], Unclaimed,
+                                 memory_order_relaxed);
+  return old_val == Unclaimed;
+}
+
+bool HeapRegionChunkClaimer::claim_region(uint region_index) {
+  assert(region_index < _n_regions, "Invalid region index");
+  // This only works for a completely unclaimed region. If any part of the region is claimed
+  // by another thread, we cannot claim the whole region.
+  uint old_val = Atomic::cmpxchg(RegionClaimed, ((RegionClaimState*)_claims) + region_index,
+                                 RegionUnclaimed, memory_order_relaxed);
+  return old_val == RegionUnclaimed;
 }

@@ -482,7 +482,188 @@ public:
   size_t cards_skipped() const { return _cards_skipped; }
 };
 
-void G1RemSet::update_rem_set(G1ParScanThreadState* pss, uint worker_i) {
+class G1ScanDirtyCardsHRClosure : public HeapRegionClosure {
+  G1CollectedHeap* _g1h;
+  G1CardTable* _ct;
+  G1RemSetScanState* _scan_state;
+  HeapRegionChunkClaimer* _chunk_claimer;
+  G1ScanObjsDuringUpdateRSClosure* _update_rs_cl;
+
+  HeapRegion* _current_hr;
+  HeapWord* _scan_top;
+
+  // This data structure stores consecutive dirty cards. [cards_start, cards_end) are dirty.
+  struct DirtyCardRange {
+    jbyte* cards_start;
+    jbyte* cards_end;
+    DirtyCardRange() : cards_start(NULL), cards_end(NULL) {}
+    bool is_empty() const {
+      return cards_start == NULL;
+    }
+    size_t len() const {
+      assert(cards_start < cards_end, "Sanity");
+      return cards_end - cards_start;
+    }
+    void add(jbyte* card) {
+      if (cards_start == NULL) {
+        assert(cards_end == NULL, "Sanity");
+        cards_start = card;
+        cards_end = card + 1;
+      } else {
+        assert(cards_end != NULL, "Sanity");
+        assert(card == cards_start - 1, "Must decrement");
+        cards_start = card;
+      }
+    }
+    void clear() {
+      cards_start = NULL;
+      cards_end = NULL;
+    }
+  };
+  DirtyCardRange _dirties;
+
+  size_t _dirty_card_num;
+
+  void process_consecutive() {
+    assert(_current_hr != NULL, "Sanity");
+    assert(_scan_top == _scan_state->scan_top(_current_hr->hrm_index()), "Sanity");
+    assert(!_dirties.is_empty(), "Sanity");
+    _scan_state->add_dirty_region(_current_hr->hrm_index());
+    size_t len = _dirties.len();
+
+    HeapWord* mr_addr = _ct->addr_for(_dirties.cards_start);
+    HeapWord* mr_end = mr_addr + len * G1CardTable::card_size_in_words;
+    MemRegion mr(mr_addr, MIN2(mr_end, _scan_top));
+
+    bool res = _current_hr->oops_on_card_seq_iterate_careful<true>(mr, _update_rs_cl);
+    assert(res, "Must have iterated objects");
+    _update_rs_cl->trim_queue_partially();
+
+    _dirty_card_num += len;
+    _dirties.clear();
+  }
+
+  // Walk the card table by words (multiple of cards).
+  jbyte* walk_through_words(jbyte* processed_card, jbyte* const limit) {
+    if (is_aligned(processed_card, BytesPerWord)) {
+      assert(is_aligned(limit, BytesPerWord), "Sanity");
+      // This potentially reads a few bytes over the top, which costs only a little extra work,
+      // so we don't check.
+      while (processed_card >= limit + BytesPerWord &&
+             *(intptr_t*)(processed_card - BytesPerWord) == CardTableRS::clean_card_row_val()) {
+        // The whole word under processed_card is clean. We skip it.
+
+        processed_card -= BytesPerWord;
+      }
+    }
+    return processed_card;
+  }
+
+  void scan_chunk(HeapWord* chunk_start, HeapWord* chunk_end) {
+    jbyte* const scan_start = _ct->byte_for(chunk_start);
+    jbyte* const scan_end = _ct->byte_for(chunk_end - 1) + 1; // We don't do this card
+    jbyte* processed_card = scan_end;
+    assert(_dirties.is_empty(), "Sanity");
+
+    // Backward scan of cards in [scan_start, scan_end).
+    assert(is_aligned(scan_start, BytesPerWord), "Chunk must be aligned");
+    while (processed_card > scan_start) {
+      if (processed_card >= scan_start + BytesPerWord) {
+        processed_card = walk_through_words(processed_card, scan_start);
+        if (processed_card <= scan_start) {
+          break;
+        }
+      }
+
+      // Check the card under processed_card.
+      jbyte* curr = processed_card - 1;
+      jbyte card_val = *curr;
+      if (card_val == G1CardTable::dirty_card_val()) {
+        if (!_dirties.is_empty() && curr != _dirties.cards_start - 1) {
+          // We are adding a dirty card that is not connected to the previous ones.
+          process_consecutive();
+        }
+        // Remember it. Process later.
+        _dirties.add(curr);
+
+        *curr = G1CardTable::claimed_card_val();
+      } else {
+        // It's claimed or deferred because of scan_rem_set(). We ignore them.
+        assert(card_val == G1CardTable::clean_card_val() ||
+               card_val & G1CardTable::claimed_card_val() ||
+               card_val & G1CardTable::deferred_card_val(),
+               "If it's not dirty, it must be clean, claimed, or deferred");;
+      }
+
+      --processed_card;
+    }
+
+    if (!_dirties.is_empty()) {
+      process_consecutive();
+    }
+  }
+
+public:
+  G1ScanDirtyCardsHRClosure(G1RemSetScanState* scan_state,
+                            HeapRegionChunkClaimer* chunk_claimer,
+                            G1ScanObjsDuringUpdateRSClosure* update_rs_cl) :
+    _g1h(G1CollectedHeap::heap()),
+    _ct(_g1h->card_table()),
+    _scan_state(scan_state),
+    _chunk_claimer(chunk_claimer),
+    _update_rs_cl(update_rs_cl),
+    _current_hr(NULL),
+    _scan_top(NULL),
+    _dirties(),
+    _dirty_card_num(0) {}
+
+  bool do_heap_region(HeapRegion* r) {
+    uint hrm_index = r->hrm_index();
+    HeapWord* scan_top = _scan_state->scan_top(hrm_index);
+    if (scan_top == NULL) {
+      // Either empty or in collection set.
+      _chunk_claimer->claim_region(hrm_index);
+      return false;
+    }
+    _update_rs_cl->set_region(r);
+    _current_hr = r;
+    assert(scan_top > r->bottom(), "Must be non-empty");
+    _scan_top = scan_top;
+
+    const uint chunks_per_region = HeapRegionChunkClaimer::ChunksPerRegion;
+    assert(HeapRegion::GrainWords % chunks_per_region == 0, "Chunk size must be multiple of word");
+    const size_t words_per_chunk = HeapRegion::GrainWords / chunks_per_region;
+    // Claim chunks backwards. Block offset table has an affinity for backward iteration.
+    uint chunk = chunks_per_region;
+    do {
+      --chunk;
+      HeapWord* chunk_start = r->bottom() + chunk * words_per_chunk;
+      // We have to claim this chunk even it's over scan top, so that other workers
+      // can quickly skip this region by checking is_region_claimed().
+      bool res = _chunk_claimer->claim_chunk(_chunk_claimer->get_chunk_index(hrm_index, chunk));
+      if (res == false) {
+        // Failed to claim this chunk. Another thread must have succeeded.
+        continue;
+      }
+      if (chunk_start >= scan_top) {
+        // Nothing to scan.
+        continue;
+      }
+      HeapWord* chunk_end = chunk_start + words_per_chunk;
+      scan_chunk(chunk_start, MIN2(chunk_end, scan_top));
+    } while (chunk > 0);
+
+    _current_hr = NULL;
+    _scan_top = NULL;
+    return false;
+  }
+
+  size_t dirty_card_num() const {
+    return _dirty_card_num;
+  }
+};
+
+void G1RemSet::update_rem_set(G1ParScanThreadState* pss, uint worker_i, HeapRegionChunkClaimer* chunk_claimer) {
   G1GCPhaseTimes* p = _g1p->phase_times();
 
   // Apply closure to log entries in the HCC.
@@ -499,11 +680,18 @@ void G1RemSet::update_rem_set(G1ParScanThreadState* pss, uint worker_i) {
     G1EvacPhaseTimesTracker x(p, pss, G1GCPhaseTimes::UpdateRS, worker_i);
 
     G1ScanObjsDuringUpdateRSClosure update_rs_cl(_g1h, pss, worker_i);
-    G1RefineCardClosure refine_card_cl(_g1h, &update_rs_cl);
-    _g1h->iterate_dirty_card_closure(&refine_card_cl, worker_i);
+    if (G1BarrierSimple) {
+      G1ScanDirtyCardsHRClosure cl(_scan_state, chunk_claimer, &update_rs_cl);
+      _g1h->heap_region_par_iterate_chunk_based(&cl, chunk_claimer, worker_i);
+      pss->record_pending_cards(cl.dirty_card_num());
+      p->record_thread_work_item(G1GCPhaseTimes::UpdateRS, worker_i, cl.dirty_card_num(), G1GCPhaseTimes::UpdateRSScannedCards);
+    } else {
+      G1RefineCardClosure refine_card_cl(_g1h, &update_rs_cl);
+      _g1h->iterate_dirty_card_closure(&refine_card_cl, worker_i);
 
-    p->record_thread_work_item(G1GCPhaseTimes::UpdateRS, worker_i, refine_card_cl.cards_scanned(), G1GCPhaseTimes::UpdateRSScannedCards);
-    p->record_thread_work_item(G1GCPhaseTimes::UpdateRS, worker_i, refine_card_cl.cards_skipped(), G1GCPhaseTimes::UpdateRSSkippedCards);
+      p->record_thread_work_item(G1GCPhaseTimes::UpdateRS, worker_i, refine_card_cl.cards_scanned(), G1GCPhaseTimes::UpdateRSScannedCards);
+      p->record_thread_work_item(G1GCPhaseTimes::UpdateRS, worker_i, refine_card_cl.cards_skipped(), G1GCPhaseTimes::UpdateRSSkippedCards);
+    }
   }
 }
 
@@ -511,14 +699,17 @@ void G1RemSet::cleanupHRRS() {
   HeapRegionRemSet::cleanup();
 }
 
-void G1RemSet::oops_into_collection_set_do(G1ParScanThreadState* pss, uint worker_i) {
-  update_rem_set(pss, worker_i);
-  scan_rem_set(pss, worker_i);;
+void G1RemSet::oops_into_collection_set_do(G1ParScanThreadState* pss, uint worker_i, HeapRegionChunkClaimer* chunk_claimer) {
+  update_rem_set(pss, worker_i, chunk_claimer);
+  scan_rem_set(pss, worker_i);
 }
 
 void G1RemSet::prepare_for_oops_into_collection_set_do() {
   DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
   dcqs.concatenate_logs();
+  if (G1BarrierSimple) {
+    assert(dcqs.completed_buffers_num() == 0, "DCQS should be empty");
+  }
 
   _scan_state->reset();
 }
@@ -547,6 +738,7 @@ inline void check_card_ptr(jbyte* card_ptr, G1CardTable* ct) {
 void G1RemSet::refine_card_concurrently(jbyte* card_ptr,
                                         uint worker_i) {
   assert(!_g1h->is_gc_active(), "Only call concurrently");
+  assert(!G1BarrierSimple, "Concurrent Refinement should be disabled");
 
   // Construct the region representing the card.
   HeapWord* start = _ct->addr_for(card_ptr);

@@ -465,7 +465,11 @@ void G1Policy::record_collection_pause_start(double start_time_sec) {
          _g1h->used(), _g1h->recalculate_used());
 
   phase_times()->record_cur_collection_start_sec(start_time_sec);
-  _pending_cards = _g1h->pending_card_num();
+  if (G1BarrierSimple) {
+    _pending_cards = 0;
+  } else {
+    _pending_cards = _g1h->pending_card_num();
+  }
 
   _collection_set->reset_bytes_used_before();
   _bytes_copied_during_gc = 0;

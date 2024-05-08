@@ -41,6 +41,8 @@
 
 #define __ masm->
 
+#define TIMES_OOP (UseCompressedOops ? Address::times_4 : Address::times_8)
+
 void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                             Register addr, Register count) {
   bool dest_uninitialized = (decorators & IS_DEST_UNINITIALIZED) != 0;
@@ -97,6 +99,35 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register tmp) {
+  if (G1BarrierSimple) {
+    CardTableBarrierSet* ct =
+      barrier_set_cast<CardTableBarrierSet>(BarrierSet::barrier_set());
+    intptr_t disp = (intptr_t) ct->card_table()->byte_map_base();
+
+    Label L_loop, L_done;
+    const Register end = count;
+    assert_different_registers(addr, end);
+
+    __ testl(count, count);
+    __ jcc(Assembler::zero, L_done); // zero count - nothing to do
+
+    __ leaq(end, Address(addr, count, TIMES_OOP, 0));  // end == addr+count*oop_size
+    __ subptr(end, BytesPerHeapOop); // end - 1 to make inclusive
+    __ shrptr(addr, CardTable::card_shift);
+    __ shrptr(end, CardTable::card_shift);
+    __ subptr(end, addr); // end --> cards count
+
+    __ mov64(tmp, disp);
+    __ addptr(addr, tmp);
+    __ bind(L_loop);
+    __ movb(Address(addr, count, Address::times_1), 0);
+    __ decrement(count);
+    __ jcc(Assembler::greaterEqual, L_loop);
+    __ bind(L_done);
+
+    return;
+  }
+
   __ pusha();             // push registers (overkill)
 #ifdef _LP64
   if (c_rarg0 == count) { // On win64 c_rarg0 == rcx
@@ -301,6 +332,12 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   // a valid address and therefore is not properly handled by the relocation code.
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
   __ addptr(card_addr, cardtable);
+
+  if (G1BarrierSimple) {
+    __ movb(Address(card_addr, 0), (int)G1CardTable::dirty_card_val());
+    __ bind(done);
+    return;
+  }
 
   __ cmpb(Address(card_addr, 0), (int)G1CardTable::g1_young_card_val());
   __ jcc(Assembler::equal, done);
@@ -550,6 +587,17 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
   __ addptr(card_addr, cardtable);
 
   NOT_LP64(__ get_thread(thread);)
+
+  if (G1BarrierSimple) {
+    __ movb(Address(card_addr, 0), (int)G1CardTable::dirty_card_val());
+    __ bind(done);
+    __ pop(rcx);
+    __ pop(rax);
+
+    __ epilogue();
+
+    return;
+  }
 
   __ cmpb(Address(card_addr, 0), (int)G1CardTable::g1_young_card_val());
   __ jcc(Assembler::equal, done);

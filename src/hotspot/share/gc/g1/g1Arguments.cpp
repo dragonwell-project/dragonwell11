@@ -83,7 +83,16 @@ void G1Arguments::initialize() {
     vm_exit_during_initialization("The flag -XX:+UseG1GC can not be combined with -XX:ParallelGCThreads=0", NULL);
   }
 
-  if (FLAG_IS_DEFAULT(G1ConcRefinementThreads)) {
+  if (G1BarrierSimple) {
+#if !defined(_LP64) || !(defined(X86) || defined(AARCH64))
+    warning("G1BarrierSimple is not supported with current platform"
+            "; ignoring G1BarrierSimple flag.");
+    FLAG_SET_DEFAULT(G1BarrierSimple, false);
+#else
+    FLAG_SET_DEFAULT(G1ConcRefinementThreads, 0);
+    FLAG_SET_DEFAULT(G1ConcRSLogCacheSize, 0);
+#endif
+  } else if (FLAG_IS_DEFAULT(G1ConcRefinementThreads)) {
     FLAG_SET_ERGO(uint, G1ConcRefinementThreads, ParallelGCThreads);
   }
 

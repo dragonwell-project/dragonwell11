@@ -30,6 +30,7 @@ package gc.g1;
  * includes the expected necessary messages.
  * @key gc
  * @requires vm.gc.G1
+ * @requires vm.opt.final.G1BarrierSimple != true
  * @library /test/lib
  * @modules java.base/jdk.internal.misc
  *          java.management
