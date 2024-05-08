@@ -447,6 +447,13 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
   // Combine card table base and card offset
   Node* card_adr = __ AddP(no_base, byte_map_base_node(kit), card_offset );
 
+  if (G1BarrierSimple) {
+    __ store(__ ctrl(), card_adr, dirty_card, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
+    // Final sync IdealKit and GraphKit.
+    kit->final_sync(ideal);
+    return;
+  }
+
   // If we know the value being stored does it cross regions?
 
   if (val != NULL) {
@@ -658,6 +665,39 @@ bool G1BarrierSetC2::is_gc_barrier_node(Node* node) const {
 
 void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) const {
   assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
+
+  if (G1BarrierSimple) {
+    Node* this_region = node->in(0);
+    // Search "if (marking != 0)" check and set it to "false".
+    // There is no G1 pre barrier if previous stored value is NULL
+    // (for example, after initialization).
+    if (this_region->is_Region() && this_region->req() == 3) {
+      int ind = 1;
+      if (!this_region->in(ind)->is_IfFalse()) {
+        ind = 2;
+      }
+      if (this_region->in(ind)->is_IfFalse() &&
+          this_region->in(ind)->in(0)->Opcode() == Op_If) {
+        Node* bol = this_region->in(ind)->in(0)->in(1);
+        assert(bol->is_Bool(), "");
+        Node* cmpx = bol->in(1);
+        if (bol->as_Bool()->_test._test == BoolTest::ne &&
+            cmpx->is_Cmp() && cmpx->in(2) == macro->intcon(0) &&
+            cmpx->in(1)->is_Load()) {
+          Node* adr = cmpx->in(1)->as_Load()->in(MemNode::Address);
+          const int marking_offset = in_bytes(G1ThreadLocalData::satb_mark_queue_active_offset());
+          if (adr->is_AddP() && adr->in(AddPNode::Base) == macro->top() &&
+              adr->in(AddPNode::Address)->Opcode() == Op_ThreadLocal &&
+              adr->in(AddPNode::Offset) == macro->MakeConX(marking_offset)) {
+            macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
+          }
+        }
+      }
+    }
+    CardTableBarrierSetC2::eliminate_gc_barrier(macro, node);
+    return;
+  }
+
   assert(node->outcnt() <= 2, "expects 1 or 2 users: Xor and URShift nodes");
   // It could be only one user, URShift node, in Object.clone() intrinsic
   // but the new allocation is passed to arraycopy stub and it could not

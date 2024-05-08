@@ -70,6 +70,8 @@ class G1ParScanThreadState : public CHeapObj<mtGC> {
   // this points into the array, as we use the first few entries for padding
   size_t* _surviving_young_words;
 
+  size_t _pending_cards;
+
   // Indicates whether in the last generation (old) there is no more space
   // available for allocation.
   bool _old_gen_is_full;
@@ -137,7 +139,11 @@ public:
     return _surviving_young_words + 1;
   }
 
-  size_t flush(size_t* surviving_young_words);
+  void record_pending_cards(size_t pending_cards) {
+    _pending_cards = pending_cards;
+  }
+
+  size_t flush(size_t* surviving_young_words, size_t& pending_cards);
 
 private:
   #define G1_PARTIAL_ARRAY_MASK 0x2

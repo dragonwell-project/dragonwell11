@@ -90,6 +90,7 @@ void G1ConcurrentRefineThread::deactivate() {
 }
 
 void G1ConcurrentRefineThread::run_service() {
+  assert(!G1BarrierSimple, "Concurrent Refinement should be disabled");
   _vtime_start = os::elapsedVTime();
 
   while (!should_terminate()) {

@@ -87,6 +87,29 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register start, Register count, Register scratch, RegSet saved_regs) {
+  if (G1BarrierSimple) {
+
+    Label L_loop, L_done;
+    const Register end = count;
+
+    __ cbz(count, L_done); // zero count - nothing to do
+
+    __ lea(end, Address(start, count, Address::lsl(LogBytesPerHeapOop))); // end = start + count << LogBytesPerHeapOop
+    __ sub(end, end, BytesPerHeapOop); // last element address to make inclusive
+    __ lsr(start, start, CardTable::card_shift);
+    __ lsr(end, end, CardTable::card_shift);
+    __ sub(count, end, start); // number of bytes to copy
+
+    __ load_byte_map_base(scratch);
+    __ add(start, start, scratch);
+    __ bind(L_loop);
+    __ strb(zr, Address(start, count));
+    __ subs(count, count, 1);
+    __ br(Assembler::GE, L_loop);
+    __ bind(L_done);
+    return;
+  }
+
   __ push(saved_regs, sp);
   assert_different_registers(start, count, scratch);
   assert_different_registers(c_rarg0, count);
@@ -209,6 +232,15 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   Label done;
   Label runtime;
 
+  if (G1BarrierSimple) {
+    const Register card_addr = tmp;
+    __ lsr(card_addr, store_addr, CardTable::card_shift);
+    __ load_byte_map_base(tmp2);
+    __ add(card_addr, card_addr, tmp2);
+    __ strb(zr, Address(card_addr));
+    __ bind(done);
+    return;
+  }
   // Does store cross heap regions?
 
   __ eor(tmp, store_addr, new_val);
@@ -449,6 +481,13 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
   __ load_parameter(0, card_offset);
   __ lsr(card_offset, card_offset, CardTable::card_shift);
   __ load_byte_map_base(byte_map_base);
+
+  if (G1BarrierSimple) {
+    __ strb(zr, Address(byte_map_base, card_offset));
+    __ bind(done);
+    __ epilogue();
+    return;
+  }
   __ ldrb(rscratch1, Address(byte_map_base, card_offset));
   __ cmpw(rscratch1, (int)G1CardTable::g1_young_card_val());
   __ br(Assembler::EQ, done);

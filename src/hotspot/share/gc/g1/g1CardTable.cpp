@@ -53,6 +53,8 @@ bool G1CardTable::mark_card_deferred(size_t card_index) {
 }
 
 void G1CardTable::g1_mark_as_young(const MemRegion& mr) {
+  assert(!G1BarrierSimple, "Should not be called with G1BarrierSimple");
+
   jbyte *const first = byte_for(mr.start());
   jbyte *const last = byte_after(mr.last());
 
@@ -61,7 +63,9 @@ void G1CardTable::g1_mark_as_young(const MemRegion& mr) {
 
 #ifndef PRODUCT
 void G1CardTable::verify_g1_young_region(MemRegion mr) {
-  verify_region(mr, g1_young_gen,  true);
+  if (!G1BarrierSimple) {
+    verify_region(mr, g1_young_gen,  true);
+  }
 }
 #endif
 
@@ -97,6 +101,9 @@ void G1CardTable::initialize(G1RegionToSpaceMapper* mapper) {
 }
 
 bool G1CardTable::is_in_young(oop obj) const {
+  if (G1BarrierSimple) {
+    return G1CollectedHeap::heap()->heap_region_containing(obj)->is_young();
+  }
   volatile jbyte* p = byte_for(obj);
   return *p == G1CardTable::g1_young_card_val();
 }

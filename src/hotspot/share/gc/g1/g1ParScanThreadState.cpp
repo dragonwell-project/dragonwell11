@@ -51,6 +51,7 @@ G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h, uint worker_id,
     _stack_trim_upper_threshold(GCDrainStackTargetSize * 2 + 1),
     _stack_trim_lower_threshold(GCDrainStackTargetSize),
     _trim_ticks(),
+    _pending_cards(0),
     _old_gen_is_full(false)
 {
   // we allocate G1YoungSurvRateNumRegions plus one entries, since
@@ -81,7 +82,7 @@ G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h, uint worker_id,
 }
 
 // Pass locally gathered statistics to global state.
-size_t G1ParScanThreadState::flush(size_t* surviving_young_words) {
+size_t G1ParScanThreadState::flush(size_t* surviving_young_words, size_t& pending_cards) {
   _dcq.flush();
   // Update allocation statistics.
   _plab_allocator->flush_and_retire_stats();
@@ -95,6 +96,8 @@ size_t G1ParScanThreadState::flush(size_t* surviving_young_words) {
     surviving_young_words[region_index] += G1ParScanThreadState::surviving_young_words()[region_index];
     sum += G1ParScanThreadState::surviving_young_words()[region_index];
   }
+  assert(G1BarrierSimple || _pending_cards == 0, "Sanity");
+  pending_cards += _pending_cards;
   return sum;
 }
 
@@ -351,6 +354,7 @@ const size_t* G1ParScanThreadStateSet::surviving_young_words() const {
 void G1ParScanThreadStateSet::flush() {
   assert(!_flushed, "thread local state from the per thread states should be flushed once");
 
+  size_t pending_cards = 0;
   size_t copied_words = 0;
   for (uint worker_index = 0; worker_index < _n_workers; ++worker_index) {
     G1ParScanThreadState* pss = _states[worker_index];
@@ -359,9 +363,13 @@ void G1ParScanThreadStateSet::flush() {
       continue;
     }
 
-    copied_words += pss->flush(_surviving_young_words_total);
+    copied_words += pss->flush(_surviving_young_words_total, pending_cards);
     delete pss;
     _states[worker_index] = NULL;
+  }
+  assert(G1BarrierSimple || pending_cards == 0, "Only available for G1BarrierSimple");
+  if (G1BarrierSimple) {
+    _g1h->g1_policy()->record_pending_cards(pending_cards);
   }
   _g1h->g1_policy()->record_copied_bytes(copied_words << LogBytesPerWord);
   _flushed = true;

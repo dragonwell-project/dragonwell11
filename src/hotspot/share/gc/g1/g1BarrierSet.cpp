@@ -97,6 +97,7 @@ void G1BarrierSet::write_ref_array_pre(narrowOop* dst, size_t count, bool dest_u
 }
 
 void G1BarrierSet::write_ref_field_post_slow(volatile jbyte* byte) {
+  assert(!G1BarrierSimple, "sanity");
   // In the slow path, we know a card is not young
   assert(*byte != G1CardTable::g1_young_card_val(), "slow path invoked without filtering");
   OrderAccess::storeload();
@@ -120,6 +121,10 @@ void G1BarrierSet::invalidate(MemRegion mr) {
   volatile jbyte* byte = _card_table->byte_for(mr.start());
   jbyte* last_byte = _card_table->byte_for(mr.last());
   Thread* thr = Thread::current();
+  if (G1BarrierSimple) {
+    memset((void*)byte, G1CardTable::dirty_card_val(), last_byte - byte + 1);
+    return;
+  }
     // skip all consecutive young cards
   for (; byte <= last_byte && *byte == G1CardTable::g1_young_card_val(); byte++);
 

@@ -28,6 +28,7 @@ package gc.arguments;
  * @key gc
  * @bug 8047976
  * @requires vm.gc.G1
+ * @requires vm.opt.final.G1BarrierSimple != true
  * @summary Tests argument processing for G1ConcRefinementThreads
  * @library /test/lib
  * @library /

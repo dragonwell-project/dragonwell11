@@ -50,6 +50,7 @@ class G1Policy;
 class G1ScanObjsDuringScanRSClosure;
 class G1ScanObjsDuringUpdateRSClosure;
 class HeapRegionClaimer;
+class HeapRegionChunkClaimer;
 
 // A G1RemSet in which each heap region has a rem set that records the
 // external heap references into it.  Uses a mod ref bs to track updates,
@@ -66,7 +67,7 @@ private:
 
   // Flush remaining refinement buffers for cross-region references to either evacuate references
   // into the collection set or update the remembered set.
-  void update_rem_set(G1ParScanThreadState* pss, uint worker_i);
+  void update_rem_set(G1ParScanThreadState* pss, uint worker_i, HeapRegionChunkClaimer* claimer);
 
   G1CollectedHeap* _g1h;
   size_t _num_conc_refined_cards; // Number of cards refined concurrently to the mutator.
@@ -101,7 +102,7 @@ public:
   //
   // Further applies heap_region_codeblobs on the oops of the unmarked nmethods on the strong code
   // roots list for each region in the collection set.
-  void oops_into_collection_set_do(G1ParScanThreadState* pss, uint worker_i);
+  void oops_into_collection_set_do(G1ParScanThreadState* pss, uint worker_i, HeapRegionChunkClaimer* claimer);
 
   // Prepare for and cleanup after an oops_into_collection_set_do
   // call.  Must call each of these once before and after (in sequential

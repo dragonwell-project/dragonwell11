@@ -135,6 +135,10 @@ public:
     _max_rs_lengths = rs_lengths;
   }
 
+  void record_pending_cards(size_t pending_cards) {
+    _pending_cards = pending_cards;
+  }
+
   void record_copied_bytes(size_t copied_bytes) {
     _copied_bytes = copied_bytes;
   }

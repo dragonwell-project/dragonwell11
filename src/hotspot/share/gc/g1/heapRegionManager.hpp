@@ -33,6 +33,7 @@
 class HeapRegion;
 class HeapRegionClosure;
 class HeapRegionClaimer;
+class HeapRegionChunkClaimer;
 class FreeRegionList;
 class WorkGang;
 
@@ -70,6 +71,7 @@ class G1HeapRegionTable : public G1BiasedMappedArray<HeapRegion*> {
 class HeapRegionManager: public CHeapObj<mtGC> {
   friend class VMStructs;
   friend class HeapRegionClaimer;
+  friend class HeapRegionChunkClaimer;
 
   G1HeapRegionTable _regions;
 
@@ -246,6 +248,10 @@ public:
 
   void par_iterate(HeapRegionClosure* blk, HeapRegionClaimer* hrclaimer, const uint start_index) const;
 
+  void par_iterate(HeapRegionClosure* blk,
+                   HeapRegionChunkClaimer* chunk_claimer,
+                   const uint start_index) const;
+
   // Uncommit up to num_regions_to_remove regions that are completely free.
   // Return the actual number of uncommitted regions.
   uint shrink_by(uint num_regions_to_remove);
@@ -287,4 +293,58 @@ class HeapRegionClaimer : public StackObj {
   // Claim the given region, returns true if successfully claimed.
   bool claim_region(uint region_index);
 };
+
+// Split a region into chunks for better parallelization granularity.
+class HeapRegionChunkClaimer {
+  friend class HeapRegionManager;
+
+  uint _n_workers;
+  uint _n_regions;
+  uint _n_chunks;
+  volatile uint8_t* _claims;
+
+  static const uint8_t Unclaimed = 0;
+  static const uint8_t Claimed   = 0xff;
+
+  typedef uint64_t RegionClaimState;
+
+  static const RegionClaimState RegionUnclaimed = 0;
+  static const RegionClaimState RegionClaimed   = (RegionClaimState)(-1);
+
+ public:
+  static const uint ChunksPerRegion = (uint)(sizeof(RegionClaimState) / sizeof(uint8_t));
+
+  HeapRegionChunkClaimer(uint n_workers);
+  ~HeapRegionChunkClaimer();
+
+  uint n_regions() const { return _n_regions; }
+
+  uint get_chunk_index(uint region_index, uint chunk) const {
+    assert(region_index < _n_regions, "Invalid region index");
+    assert(chunk < ChunksPerRegion, "Sanity");
+    return region_index * ChunksPerRegion + chunk;
+  }
+
+  uint offset_for_worker(uint worker_id) const;
+
+  RegionClaimState region_state(uint region_index) const {
+    assert(region_index < _n_regions, "Invalid region index");
+    volatile RegionClaimState* state = ((volatile RegionClaimState*)_claims) + region_index;
+    return *state;
+  }
+
+  bool is_chunk_claimed(uint chunk_index) const {
+    assert(chunk_index < _n_chunks, "Invalid chunk index");
+    volatile uint8_t* state = _claims + chunk_index;
+    return *state == Claimed;
+  }
+
+  bool is_region_claimed(uint region_index) const {
+    return region_state(region_index) == RegionClaimed;
+  }
+
+  bool claim_chunk(uint chunk_index);
+  bool claim_region(uint region_index);
+};
+
 #endif // SHARE_VM_GC_G1_HEAPREGIONMANAGER_HPP
