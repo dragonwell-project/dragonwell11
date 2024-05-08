@@ -148,6 +148,7 @@ class G1CollectedHeap : public CollectedHeap {
 
   // Other related classes.
   friend class HeapRegionClaimer;
+  friend class HeapRegionChunkClaimer;
 
   // Testing classes.
   friend class G1CheckCSetFastTableClosure;
@@ -1166,6 +1167,10 @@ public:
 
   void heap_region_par_iterate_from_start(HeapRegionClosure* cl,
                                           HeapRegionClaimer* hrclaimer) const;
+
+  void heap_region_par_iterate_chunk_based(HeapRegionClosure* cl,
+                                           HeapRegionChunkClaimer* chunk_claimer,
+                                           uint worker_id) const;
 
   // Iterate over the regions (if any) in the current collection set.
   void collection_set_iterate(HeapRegionClosure* blk);

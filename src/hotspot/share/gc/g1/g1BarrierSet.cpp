@@ -120,6 +120,12 @@ void G1BarrierSet::invalidate(MemRegion mr) {
   volatile jbyte* byte = _card_table->byte_for(mr.start());
   jbyte* last_byte = _card_table->byte_for(mr.last());
   Thread* thr = Thread::current();
+  if (G1BarrierSimple) {
+    for (; byte <= last_byte; byte++) {
+      *byte = G1CardTable::dirty_card_val();
+    }
+    return;
+  }
     // skip all consecutive young cards
   for (; byte <= last_byte && *byte == G1CardTable::g1_young_card_val(); byte++);
 

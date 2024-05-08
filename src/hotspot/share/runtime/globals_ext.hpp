@@ -87,6 +87,9 @@
   product(bool, AppCDSVerifyClassPathOrder, true,                           \
           "Verify classpath order between the dump phase and replay phase") \
                                                                             \
+  product(bool, G1BarrierSimple, true,                                      \
+          "Use simple G1 post barrier")                                     \
+                                                                            \
   //add new AJDK specific flags here
 
 

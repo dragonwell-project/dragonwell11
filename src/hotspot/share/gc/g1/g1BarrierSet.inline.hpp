@@ -48,6 +48,10 @@ inline void G1BarrierSet::write_ref_field_pre(T* field) {
 template <DecoratorSet decorators, typename T>
 inline void G1BarrierSet::write_ref_field_post(T* field, oop new_val) {
   volatile jbyte* byte = _card_table->byte_for(field);
+  if (G1BarrierSimple) {
+    *byte = G1CardTable::dirty_card_val();
+    return;
+  }
   if (*byte != G1CardTable::g1_young_card_val()) {
     // Take a slow path for cards in old
     write_ref_field_post_slow(byte);

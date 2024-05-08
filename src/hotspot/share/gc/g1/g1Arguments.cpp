@@ -83,7 +83,10 @@ void G1Arguments::initialize() {
     vm_exit_during_initialization("The flag -XX:+UseG1GC can not be combined with -XX:ParallelGCThreads=0", NULL);
   }
 
-  if (FLAG_IS_DEFAULT(G1ConcRefinementThreads)) {
+  if (G1BarrierSimple) {
+    FLAG_SET_DEFAULT(G1ConcRefinementThreads, 0);
+    FLAG_SET_DEFAULT(G1ConcRSLogCacheSize, 0);
+  } else if (FLAG_IS_DEFAULT(G1ConcRefinementThreads)) {
     FLAG_SET_ERGO(uint, G1ConcRefinementThreads, ParallelGCThreads);
   }
 
