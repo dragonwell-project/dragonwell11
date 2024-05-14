@@ -26,6 +26,7 @@
  * @library /test/lib
  * @requires vm.bits == "64"
  * @requires vm.opt.UseCompressedClassPointers != false
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders -XX:+UseCompressedOops ArrayBaseOffsets
  */
@@ -34,6 +35,7 @@
  * @library /test/lib
  * @requires vm.bits == "64"
  * @requires vm.opt.UseCompressedClassPointers != false
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders -XX:-UseCompressedOops ArrayBaseOffsets
  */
@@ -43,6 +45,7 @@
  * @requires vm.bits == "64"
  * @requires vm.opt.UseCompressedClassPointers != false
  * @requires vm.opt.UseCompactObjectHeaders != true
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:-UseCompactObjectHeaders -XX:+UseCompressedClassPointers ArrayBaseOffsets
  */
@@ -51,6 +54,7 @@
  * @library /test/lib
  * @requires vm.bits == "64"
  * @requires vm.opt.UseCompactObjectHeaders != true
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:-UseCompactObjectHeaders -XX:-UseCompressedClassPointers ArrayBaseOffsets
  */
