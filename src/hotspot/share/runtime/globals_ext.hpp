@@ -90,6 +90,9 @@
   product(bool, G1BarrierSimple, false,                                     \
           "Use simple G1 post barrier")                                     \
                                                                             \
+  product(bool, ReduceNMethodSize, false,                                   \
+          "Move immutable data of nmethod out of code cache")               \
+                                                                            \
   //add new AJDK specific flags here
 
 

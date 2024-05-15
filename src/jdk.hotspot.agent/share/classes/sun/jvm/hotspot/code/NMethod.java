@@ -38,6 +38,8 @@ public class NMethod extends CompiledMethod {
   private static CIntegerField entryBCIField;
   /** To support simple linked-list chaining of nmethods */
   private static AddressField  osrLinkField;
+  private static AddressField  immutableDataField;
+  private static CIntegerField immutableDataSizeField;
   private static AddressField  scavengeRootLinkField;
   private static JByteField    scavengeRootStateField;
 
@@ -88,6 +90,8 @@ public class NMethod extends CompiledMethod {
 
     entryBCIField               = type.getCIntegerField("_entry_bci");
     osrLinkField                = type.getAddressField("_osr_link");
+    immutableDataField          = type.getAddressField("_immutable_data");
+    immutableDataSizeField      = type.getCIntegerField("_immutable_data_size");
     scavengeRootLinkField       = type.getAddressField("_scavenge_root_link");
     scavengeRootStateField      = type.getJByteField("_scavenge_root_state");
 
@@ -126,6 +130,8 @@ public class NMethod extends CompiledMethod {
   public boolean isOSRMethod()    { return getEntryBCI() != VM.getVM().getInvocationEntryBCI(); }
 
   /** Boundaries for different parts */
+  public Address immutableDataBegin()   { return immutableDataField.getValue(addr);                         }
+  public Address immutableDataEnd()     { return immutableDataBegin().addOffsetTo(getImmutableDataSize());  }
   public Address constantsBegin()       { return contentBegin();                                     }
   public Address constantsEnd()         { return getEntryPoint();                                    }
   public Address instsBegin()           { return codeBegin();                                        }
@@ -136,16 +142,76 @@ public class NMethod extends CompiledMethod {
   public Address oopsBegin()            { return headerBegin().addOffsetTo(getOopsOffset());         }
   public Address oopsEnd()              { return headerBegin().addOffsetTo(getMetadataOffset());     }
   public Address metadataBegin()        { return headerBegin().addOffsetTo(getMetadataOffset());     }
-  public Address metadataEnd()          { return scopesDataBegin();                                  }
-  public Address scopesDataEnd()        { return headerBegin().addOffsetTo(getScopesPCsOffset());    }
-  public Address scopesPCsBegin()       { return headerBegin().addOffsetTo(getScopesPCsOffset());    }
-  public Address scopesPCsEnd()         { return headerBegin().addOffsetTo(getDependenciesOffset()); }
-  public Address dependenciesBegin()    { return headerBegin().addOffsetTo(getDependenciesOffset()); }
-  public Address dependenciesEnd()      { return headerBegin().addOffsetTo(getHandlerTableOffset()); }
-  public Address handlerTableBegin()    { return headerBegin().addOffsetTo(getHandlerTableOffset()); }
-  public Address handlerTableEnd()      { return headerBegin().addOffsetTo(getNulChkTableOffset());  }
-  public Address nulChkTableBegin()     { return headerBegin().addOffsetTo(getNulChkTableOffset());  }
-  public Address nulChkTableEnd()       { return headerBegin().addOffsetTo(getNMethodEndOffset());   }
+  public Address metadataEnd()          {
+    if (getImmutableDataSize() > 0) {
+      return dataEnd();
+    } else {
+      return scopesDataBegin();
+    }
+  }
+  public Address scopesDataEnd()        {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getScopesPCsOffset());
+    } else {
+      return headerBegin().addOffsetTo(getScopesPCsOffset());
+    }
+  }
+  public Address scopesPCsBegin()       {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getScopesPCsOffset());
+    } else {
+      return headerBegin().addOffsetTo(getScopesPCsOffset());
+    }
+  }
+  public Address scopesPCsEnd()         {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getDependenciesOffset());
+    } else {
+      return headerBegin().addOffsetTo(getDependenciesOffset());
+    }
+  }
+  public Address dependenciesBegin()    {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getDependenciesOffset());
+    } else {
+      return headerBegin().addOffsetTo(getDependenciesOffset());
+    }
+  }
+  public Address dependenciesEnd()      {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getHandlerTableOffset());
+    } else {
+      return headerBegin().addOffsetTo(getHandlerTableOffset());
+    }
+  }
+  public Address handlerTableBegin()    {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getHandlerTableOffset());
+    } else {
+      return headerBegin().addOffsetTo(getHandlerTableOffset());
+    }
+  }
+  public Address handlerTableEnd()      {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getNulChkTableOffset());
+    } else {
+      return headerBegin().addOffsetTo(getNulChkTableOffset());
+    }
+  }
+  public Address nulChkTableBegin()     {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getNulChkTableOffset());
+    } else {
+      return headerBegin().addOffsetTo(getNulChkTableOffset());
+    }
+  }
+  public Address nulChkTableEnd()       {
+    if (getImmutableDataSize() > 0) {
+      return immutableDataBegin().addOffsetTo(getImmutableDataSize());
+    } else {
+      return headerBegin().addOffsetTo(getNMethodEndOffset());
+    }
+  }
 
   public int constantsSize()            { return (int) constantsEnd()   .minus(constantsBegin());    }
   public int instsSize()                { return (int) instsEnd()       .minus(instsBegin());        }
@@ -160,7 +226,13 @@ public class NMethod extends CompiledMethod {
   public int origPCOffset()             { return (int) origPCOffsetField.getValue(addr);             }
 
   public int totalSize() {
-    return
+    if (getImmutableDataSize() > 0) {
+      return
+      constantsSize()    +
+      instsSize()        +
+      stubSize();
+    } else {
+      return
       constantsSize()    +
       instsSize()        +
       stubSize()         +
@@ -169,6 +241,7 @@ public class NMethod extends CompiledMethod {
       dependenciesSize() +
       handlerTableSize() +
       nulChkTableSize();
+    }
   }
 
   public boolean constantsContains   (Address addr) { return constantsBegin()   .lessThanOrEqual(addr) && constantsEnd()   .greaterThan(addr); }
@@ -536,4 +609,5 @@ public class NMethod extends CompiledMethod {
   private int getNulChkTableOffset()  { return (int) nulChkTableOffsetField .getValue(addr); }
   private int getNMethodEndOffset()   { return (int) nmethodEndOffsetField  .getValue(addr); }
   private int getCompLevel()          { return (int) compLevelField         .getValue(addr); }
+  private int getImmutableDataSize()  { return (int) immutableDataSizeField .getValue(addr); }
 }
