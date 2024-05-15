@@ -109,7 +109,8 @@
 // and make it simpler to print from the debugger.
 struct java_nmethod_stats_struct {
   int nmethod_count;
-  int total_size;
+  int total_nm_size;
+  int total_immut_size;
   int relocation_size;
   int consts_size;
   int insts_size;
@@ -124,7 +125,8 @@ struct java_nmethod_stats_struct {
 
   void note_nmethod(nmethod* nm) {
     nmethod_count += 1;
-    total_size          += nm->size();
+    total_nm_size       += nm->size();
+    total_immut_size    += nm->immutable_data_size();
     relocation_size     += nm->relocation_size();
     consts_size         += nm->consts_size();
     insts_size          += nm->insts_size();
@@ -140,7 +142,14 @@ struct java_nmethod_stats_struct {
   void print_nmethod_stats(const char* name) {
     if (nmethod_count == 0)  return;
     tty->print_cr("Statistics for %d bytecoded nmethods for %s:", nmethod_count, name);
-    if (total_size != 0)          tty->print_cr(" total in heap  = %d", total_size);
+    int total_size = total_nm_size + total_immut_size;
+    if (ReduceNMethodSize) {
+      tty->print_cr(" total size     = %u (100%%)", total_size);
+      tty->print_cr(" in CodeCache   = %u (%f%%)", total_nm_size, (total_nm_size * 100.0f)/total_size);
+    } else {
+      assert(total_nm_size == total_size, "no immutable data");
+      if (total_nm_size != 0)     tty->print_cr(" total in heap  = %d", total_size);
+    }
     if (nmethod_count != 0)       tty->print_cr(" header         = " SIZE_FORMAT, nmethod_count * sizeof(nmethod));
     if (relocation_size != 0)     tty->print_cr(" relocation     = %d", relocation_size);
     if (consts_size != 0)         tty->print_cr(" constants      = %d", consts_size);
@@ -493,17 +502,36 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
   code_buffer->finalize_oop_references(method);
   // create nmethod
   nmethod* nm = NULL;
-  { MutexLockerEx mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
-    int nmethod_size =
-      CodeBlob::allocation_size(code_buffer, sizeof(nmethod))
+  int nmethod_size = 0;
+  int immutable_data_size = 0;
+  if (ReduceNMethodSize) {
+    nmethod_size = CodeBlob::allocation_size(code_buffer, sizeof(nmethod));
+    immutable_data_size = adjust_pcs_size(debug_info->pcs_size())
+      + align_up((int)dependencies->size_in_bytes(), oopSize)
+      + align_up(handler_table->size_in_bytes()    , oopSize)
+      + align_up(nul_chk_table->size_in_bytes()    , oopSize)
+      + align_up(debug_info->data_size()           , oopSize);
+  } else {
+    nmethod_size = CodeBlob::allocation_size(code_buffer, sizeof(nmethod))
       + adjust_pcs_size(debug_info->pcs_size())
       + align_up((int)dependencies->size_in_bytes(), oopSize)
       + align_up(handler_table->size_in_bytes()    , oopSize)
       + align_up(nul_chk_table->size_in_bytes()    , oopSize)
       + align_up(debug_info->data_size()           , oopSize);
-
+  }
+  // First, allocate space for immutable data in C heap.
+  address immutable_data = NULL;
+  if (immutable_data_size > 0) {
+    immutable_data = (address)os::malloc(immutable_data_size, mtCode);
+    if (immutable_data == NULL) {
+      vm_exit_out_of_memory(immutable_data_size, OOM_MALLOC_ERROR, "nmethod: no space for immutable data");
+      return NULL;
+    }
+  }
+  { MutexLockerEx mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
     nm = new (nmethod_size, comp_level)
-    nmethod(method(), compiler->type(), nmethod_size, compile_id, entry_bci, offsets,
+    nmethod(method(), compiler->type(), nmethod_size, immutable_data_size,
+            compile_id, entry_bci, immutable_data, offsets,
             orig_pc_offset, debug_info, dependencies, code_buffer, frame_size,
             oop_maps,
             handler_table,
@@ -565,6 +593,7 @@ nmethod::nmethod(
   OopMapSet* oop_maps )
   : CompiledMethod(method, "native nmethod", type, nmethod_size, sizeof(nmethod), code_buffer, offsets->value(CodeOffsets::Frame_Complete), frame_size, oop_maps, false),
   ZGC_ONLY_ARG(_is_unloading_state(0))
+  _immutable_data_size(0),
   _native_receiver_sp_offset(basic_lock_owner_sp_offset),
   _native_basic_lock_sp_offset(basic_lock_sp_offset)
 {
@@ -602,6 +631,7 @@ nmethod::nmethod(
     _pc_desc_container.reset_to(NULL);
     _hotness_counter         = NMethodSweeper::hotness_counter_reset_val();
 
+    _immutable_data          = data_end();
     _scopes_data_begin = (address) this + scopes_data_offset;
     _deopt_handler_begin = (address) this + deoptimize_offset;
     _deopt_mh_handler_begin = (address) this + deoptimize_mh_offset;
@@ -654,8 +684,10 @@ nmethod::nmethod(
   Method* method,
   CompilerType type,
   int nmethod_size,
+  int immutable_data_size,
   int compile_id,
   int entry_bci,
+  address immutable_data,
   CodeOffsets* offsets,
   int orig_pc_offset,
   DebugInformationRecorder* debug_info,
@@ -674,6 +706,7 @@ nmethod::nmethod(
   )
   : CompiledMethod(method, "nmethod", type, nmethod_size, sizeof(nmethod), code_buffer, offsets->value(CodeOffsets::Frame_Complete), frame_size, oop_maps, false),
   ZGC_ONLY_ARG(_is_unloading_state(0))
+  _immutable_data_size(immutable_data_size),
   _native_receiver_sp_offset(in_ByteSize(-1)),
   _native_basic_lock_sp_offset(in_ByteSize(-1))
 {
@@ -746,21 +779,32 @@ nmethod::nmethod(
       _unwind_handler_offset = -1;
     }
 
+    bool use_immutable_data = immutable_data_size > 0;
+    if (immutable_data_size > 0) {
+      assert(ReduceNMethodSize && immutable_data != NULL, "required");
+      _immutable_data     = immutable_data;
+    } else {
+      // We need unique not null address
+      _immutable_data     = data_end();
+    }
     _oops_offset             = data_offset();
     _metadata_offset         = _oops_offset          + align_up(code_buffer->total_oop_size(), oopSize);
-    int scopes_data_offset   = _metadata_offset      + align_up(code_buffer->total_metadata_size(), wordSize);
+    int scopes_data_offset   = use_immutable_data ? 0 // start of immutable data
+                               : _metadata_offset      + align_up(code_buffer->total_metadata_size(), wordSize);
 
     _scopes_pcs_offset       = scopes_data_offset    + align_up(debug_info->data_size       (), oopSize);
     _dependencies_offset     = _scopes_pcs_offset    + adjust_pcs_size(debug_info->pcs_size());
     _handler_table_offset    = _dependencies_offset  + align_up((int)dependencies->size_in_bytes (), oopSize);
     _nul_chk_table_offset    = _handler_table_offset + align_up(handler_table->size_in_bytes(), oopSize);
-    _nmethod_end_offset      = _nul_chk_table_offset + align_up(nul_chk_table->size_in_bytes(), oopSize);
+    _nmethod_end_offset      = use_immutable_data ? _data_end - (address)this
+                               : _nul_chk_table_offset + align_up(nul_chk_table->size_in_bytes(), oopSize);
     _entry_point             = code_begin()          + offsets->value(CodeOffsets::Entry);
     _verified_entry_point    = code_begin()          + offsets->value(CodeOffsets::Verified_Entry);
     _osr_entry_point         = code_begin()          + offsets->value(CodeOffsets::OSR_Entry);
     _exception_cache         = NULL;
 
-    _scopes_data_begin = (address) this + scopes_data_offset;
+    _scopes_data_begin = use_immutable_data ? _immutable_data
+                         : (address) this + scopes_data_offset;
 
     _pc_desc_container.reset_to(scopes_pcs_begin());
 
@@ -2377,6 +2421,10 @@ void nmethod::print() const {
                                               p2i(metadata_begin()),
                                               p2i(metadata_end()),
                                               metadata_size());
+  if (immutable_data_size() > 0) tty->print_cr(" immutable data [" INTPTR_FORMAT "," INTPTR_FORMAT "] = %d",
+                                              p2i(immutable_data_begin()),
+                                              p2i(immutable_data_end()),
+                                              immutable_data_size());
   if (scopes_data_size  () > 0) tty->print_cr(" scopes data    [" INTPTR_FORMAT "," INTPTR_FORMAT "] = %d",
                                               p2i(scopes_data_begin()),
                                               p2i(scopes_data_end()),

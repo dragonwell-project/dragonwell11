@@ -58,9 +58,12 @@ class nmethod : public CompiledMethod {
   friend class NMethodSweeper;
   friend class CodeCache;  // scavengable oops
  private:
+  // nmethod's read-only data
+  address _immutable_data;
 
   // Shared fields for all nmethod's
   int       _entry_bci;        // != InvocationEntryBci if this nmethod is an on-stack replacement method
+  int       _immutable_data_size;
 
 #if INCLUDE_JVMCI
   // A weak reference to an InstalledCode object associated with
@@ -101,11 +104,13 @@ class nmethod : public CompiledMethod {
   int _stub_offset;
   int _oops_offset;                       // offset to where embedded oop table begins (inside data)
   int _metadata_offset;                   // embedded meta data table
+  // Offset in immutable data section
   int _scopes_data_offset;
   int _scopes_pcs_offset;
   int _dependencies_offset;
   int _handler_table_offset;
   int _nul_chk_table_offset;
+
   int _nmethod_end_offset;
 
   int code_offset() const { return (address) code_begin() - header_begin(); }
@@ -197,8 +202,10 @@ class nmethod : public CompiledMethod {
   nmethod(Method* method,
           CompilerType type,
           int nmethod_size,
+          int immutable_data_size,
           int compile_id,
           int entry_bci,
+          address immutable_data,
           CodeOffsets* offsets,
           int orig_pc_offset,
           DebugInformationRecorder *recorder,
@@ -220,6 +227,7 @@ class nmethod : public CompiledMethod {
   void* operator new(size_t size, int nmethod_size, int comp_level) throw();
 
   const char* reloc_string_for(u_char* begin, u_char* end);
+
   // Returns true if this thread changed the state of the nmethod or
   // false if another thread performed the transition.
   bool make_not_entrant_or_zombie(int state);
@@ -281,23 +289,89 @@ class nmethod : public CompiledMethod {
   address stub_end              () const          { return           header_begin() + _oops_offset          ; }
   address exception_begin       () const          { return           header_begin() + _exception_offset     ; }
   address unwind_handler_begin  () const          { return _unwind_handler_offset != -1 ? (header_begin() + _unwind_handler_offset) : NULL; }
+  // mutable data
   oop*    oops_begin            () const          { return (oop*)   (header_begin() + _oops_offset)         ; }
   oop*    oops_end              () const          { return (oop*)   (header_begin() + _metadata_offset)     ; }
 
   Metadata** metadata_begin   () const            { return (Metadata**)  (header_begin() + _metadata_offset)     ; }
-  Metadata** metadata_end     () const            { return (Metadata**)  _scopes_data_begin; }
+  Metadata** metadata_end     () const            {
+    if (_immutable_data_size > 0) {
+      return (Metadata**) data_end();
+    } else {
+      return (Metadata**) _scopes_data_begin;
+    }
+  }
 
-  address scopes_data_end       () const          { return           header_begin() + _scopes_pcs_offset    ; }
-  PcDesc* scopes_pcs_begin      () const          { return (PcDesc*)(header_begin() + _scopes_pcs_offset   ); }
-  PcDesc* scopes_pcs_end        () const          { return (PcDesc*)(header_begin() + _dependencies_offset) ; }
-  address dependencies_begin    () const          { return           header_begin() + _dependencies_offset  ; }
-  address dependencies_end      () const          { return           header_begin() + _handler_table_offset ; }
-  address handler_table_begin   () const          { return           header_begin() + _handler_table_offset ; }
-  address handler_table_end     () const          { return           header_begin() + _nul_chk_table_offset ; }
-  address nul_chk_table_begin   () const          { return           header_begin() + _nul_chk_table_offset ; }
-  address nul_chk_table_end     () const          { return           header_begin() + _nmethod_end_offset   ; }
+  // immutable data
+  address immutable_data_begin() const { return _immutable_data; }
+  address immutable_data_end  () const { return _immutable_data + _immutable_data_size; }
+
+  address scopes_data_end() const {
+    if (_immutable_data_size > 0) {
+      return immutable_data_begin() + _scopes_pcs_offset;
+    } else {
+      return header_begin() + _scopes_pcs_offset;
+    }
+  }
+  PcDesc* scopes_pcs_begin() const {
+    if (_immutable_data_size > 0) {
+      return (PcDesc *) (immutable_data_begin() + _scopes_pcs_offset);
+    } else {
+      return (PcDesc *) (header_begin() + _scopes_pcs_offset);
+    }
+  }
+  PcDesc* scopes_pcs_end() const {
+    if (_immutable_data_size > 0) {
+      return (PcDesc *) (immutable_data_begin() + _dependencies_offset);
+    } else {
+      return (PcDesc *) (header_begin() + _dependencies_offset);
+    }
+  }
+  address dependencies_begin() const {
+    if (_immutable_data_size > 0) {
+      return immutable_data_begin() + _dependencies_offset;
+    } else {
+      return header_begin() + _dependencies_offset;
+    }
+  }
+  address dependencies_end() const {
+    if (_immutable_data_size > 0) {
+      return immutable_data_begin() + _handler_table_offset;
+    } else {
+      return header_begin() + _handler_table_offset;
+    }
+  }
+  address handler_table_begin() const {
+    if (_immutable_data_size > 0) {
+      return immutable_data_begin() + _handler_table_offset;
+    } else {
+      return header_begin() + _handler_table_offset;
+    }
+  }
+  address handler_table_end() const {
+    if (_immutable_data_size > 0) {
+      return immutable_data_begin() + _nul_chk_table_offset;
+    } else {
+      return header_begin() + _nul_chk_table_offset;
+    }
+  }
+  address nul_chk_table_begin   () const {
+    if (_immutable_data_size > 0) {
+      return immutable_data_begin() + _nul_chk_table_offset;
+    } else {
+      return header_begin() + _nul_chk_table_offset;
+    }
+  }
+  address nul_chk_table_end     () const {
+    if (_immutable_data_size > 0) {
+      return immutable_data_end();
+    } else {
+      return header_begin() + _nmethod_end_offset;
+    }
+  }
 
   // Sizes
+  int immutable_data_size() const                 { return _immutable_data_size;                                              }
   int oops_size         () const                  { return (address)  oops_end         () - (address)  oops_begin         (); }
   int metadata_size     () const                  { return (address)  metadata_end     () - (address)  metadata_begin     (); }
   int dependencies_size () const                  { return            dependencies_end () -            dependencies_begin (); }
