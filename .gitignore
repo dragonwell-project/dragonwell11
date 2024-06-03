@@ -15,3 +15,5 @@ NashornProfile.txt
 **/JTwork/**
 /compile_commands.json
 /.cache
+*.swp
+.vscode/*
