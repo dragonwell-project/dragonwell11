@@ -4115,6 +4115,10 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     DumpAppCDSWithKlassId = true;
   }
 
+  if (UseBigDecimalOpt) {
+    PropertyList_add(&_system_properties, new SystemProperty("java.math.BigDecimal.optimization", "true", true));
+  }
+
   // Set object alignment values.
   set_object_alignment();
 
