@@ -69,7 +69,6 @@ jobs:
   build-linux:
     name: build
     runs-on: ${{fromJson(inputs.runs-on)}}
-    #runs-on: 'ubuntu-20.04'
 
     strategy:
       fail-fast: false
@@ -118,6 +117,7 @@ jobs:
           fi
           sudo apt-get install -y gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} libxrandr-dev${{ steps.arch.outputs.suffix }} libxtst-dev${{ steps.arch.outputs.suffix }} libcups2-dev${{ steps.arch.outputs.suffix }} libasound2-dev${{ steps.arch.outputs.suffix }} ${{ inputs.apt-extra-packages }} $extra_packages
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ inputs.gcc-major-version }} 100 --slave /usr/bin/g++ g++ /usr/bin/g++-${{ inputs.gcc-major-version }}
+        if: inputs.platform != 'linux-aarch64'
 
       - name: 'Configure'
         run: >
