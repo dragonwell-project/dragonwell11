@@ -61,9 +61,7 @@ on:
 jobs:
   build-linux:
     name: build
-    runs-on: [self-hosted , X64]
-    container:
-      image: docker.io/alibabadragonwelljdk/centos7_gcc7_build_image:latest
+    runs-on: ubuntu-20.04
 
     strategy:
       fail-fast: false
@@ -73,6 +71,19 @@ jobs:
     steps:
       - name: 'Checkout the JDK source'
         uses: actions/checkout@v2
+
+      - name: 'Install Boot JDK'
+        run: |
+          wget https://dragonwell.oss-cn-shanghai.aliyuncs.com/11.0.23.20.9/Alibaba_Dragonwell_Extended_11.0.23.20.9_x64_linux.tar.gz -O jdk.tar.gz
+          mkdir -p /usr/lib/jvm/jdk-11
+          tar zxvf jdk.tar.gz -C /usr/lib/jvm/jdk-11 --strip-components=1
+          rm -rf jdk.tar.gz
+
+      - name: 'Install riscv64 toolchain'
+        run: |
+          wget https://compiler-tools.oss-cn-hangzhou.aliyuncs.com/riscv64-build/riscv_opt.tar.gz -O riscv_opt.tar.gz
+          tar zxvf riscv_opt.tar.gz -C /opt/
+          rm -rf riscv_opt.tar.gz
 
       - name: 'Configure'
         run: >
@@ -88,7 +99,7 @@ jobs:
           --without-version-pre
           --with-version-build=9
           --with-version-patch=14
-          --with-boot-jdk=/usr/lib/jvm/jdk-10
+          --with-boot-jdk=/usr/lib/jvm/jdk-11
           --with-native-debug-symbols=external
           --with-jvm-variants=server
           --disable-warnings-as-errors
