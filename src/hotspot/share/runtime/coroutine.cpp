@@ -380,6 +380,20 @@ void Coroutine::frames_do(void f(frame*, const RegisterMap* map)) {
   frames_do(&fc);
 }
 
+class frames_do_with_javathread_Closure : public FrameClosure {
+private:
+  JavaThread* _jt;
+  void (*_f)(JavaThread*, frame*, RegisterMap*);
+public:
+  frames_do_with_javathread_Closure(JavaThread* jt, void f(JavaThread*, frame*, RegisterMap*)): _jt(jt), _f(f) { }
+  void frames_do(frame* fr, RegisterMap* map) { _f(_jt, fr, map); }
+};
+
+void Coroutine::frames_do(JavaThread* jt, void f(JavaThread*, frame*, RegisterMap*)) {
+  frames_do_with_javathread_Closure fc(jt, f);
+  frames_do(&fc);
+}
+
 bool Coroutine::is_disposable() {
   //_handle_area == NULL indicates this coroutine has not been initialized,
   //we should delete it directly.

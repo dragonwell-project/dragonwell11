@@ -226,6 +226,7 @@ public:
   void compiledMethods_do(CodeBlobClosure* cf);
   void metadata_do(void f(Metadata*));
   void frames_do(void f(frame*, const RegisterMap* map));
+  void frames_do(JavaThread* jt, void f(JavaThread*, frame*, RegisterMap*));
 
   static ByteSize thread_offset()             { return byte_offset_of(Coroutine, _thread); }
 

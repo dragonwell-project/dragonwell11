@@ -2935,6 +2935,11 @@ void JavaThread::make_zombies() {
 }
 #endif // PRODUCT
 
+static void coroutine_deoptimized_wrt_marked_nmethods(JavaThread* jt, frame* f, RegisterMap* map) { 
+  if (f->should_be_deoptimized()) {
+    Deoptimization::deoptimize(jt, *f, map);
+  }
+}
 
 void JavaThread::deoptimized_wrt_marked_nmethods() {
   if (!has_last_Java_frame()) return;
@@ -2944,6 +2949,15 @@ void JavaThread::deoptimized_wrt_marked_nmethods() {
     if (fst.current()->should_be_deoptimized()) {
       Deoptimization::deoptimize(this, *fst.current(), fst.register_map());
     }
+  }
+
+  if (EnableCoroutine) {
+    // traverse the coroutine stack frames
+    Coroutine* current = _coroutine_list;
+    do {
+      current->frames_do(this, coroutine_deoptimized_wrt_marked_nmethods);
+      current = current->next();
+    } while (current != _coroutine_list);
   }
 }
 
