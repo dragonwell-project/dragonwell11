@@ -78,6 +78,12 @@
           "Delay in scheduling GC workers (in milliseconds)")               \
                                                                             \
   product(bool, PSChunkLargeArrays, true,                                   \
-          "Process large arrays in chunks")
+          "Process large arrays in chunks")                                 \
+                                                                            \
+  product(bool, UseIOPrioritySizePolicy, false,                             \
+          "eagerly decrease heap when io wait is high")                     \
+                                                                            \
+  product(float, IOPrioritySizePolicyEdenScale, 8.0,                        \
+          "how much eden to decrease when io wait is high")                 \
 
 #endif // SHARE_GC_PARALLEL_PARALLEL_GLOBALS_HPP
