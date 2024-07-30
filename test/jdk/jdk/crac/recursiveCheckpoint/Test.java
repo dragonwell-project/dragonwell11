@@ -41,9 +41,13 @@ public class Test implements Resource, CracTest {
     public void test() throws Exception {
         CracBuilder builder = new CracBuilder().engine(CracEngine.PAUSE);
         CracProcess process = builder.startCheckpoint();
+        //If image dir not exist, process.waitForPausePid() can throw an java.nio.file.NoSuchFileException.
+        //This can happen when run this testcase on host with high load.
+        process.ensureFileIntegrityForPausePid();
         process.waitForPausePid();
         for (int i = 1; i <= numThreads + 1; ++i) {
             System.err.printf("Restore #%d%n", i);
+            process.ensureFileIntegrityForPausePid();
             builder.doRestore();
         }
         process.waitForSuccess();
