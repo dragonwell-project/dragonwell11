@@ -15,6 +15,8 @@ import static jdk.test.lib.Asserts.*;
 public class CracProcess {
     private final CracBuilder builder;
     private final Process process;
+    private static final long WAIT_IMAGE_DIR_CREATED_TIMEOUT = 30 * 1000L;
+    private static final long POLL_INTERVAL = 100L;
 
     public CracProcess(CracBuilder builder, List<String> cmd) throws IOException {
         this.builder = builder;
@@ -49,6 +51,27 @@ public class CracProcess {
             Path imageDir = builder.imageDir().toAbsolutePath();
             waitForFileCreated(watcher, imageDir.getParent(), path -> "cr".equals(path.toFile().getName()));
             waitForFileCreated(watcher, imageDir, path -> "pid".equals(path.toFile().getName()));
+        }
+    }
+
+    /**
+     * wait until image dir exists and non-empty pid file until {@code WAIT_IMAGE_DIR_CREATED_TIMEOUT} milliseconds.
+     *
+     * @throws InterruptedException Interrupt by other threads.
+     * @throws RuntimeException     When reach {@code WAIT_IMAGE_DIR_CREATED_TIMEOUT}, but {@code dir} not exist.
+     */
+    public void ensureFileIntegrityForPausePid() throws InterruptedException {
+        Path imageDir = builder.imageDir().toAbsolutePath();
+        Path pidFile = imageDir.resolve("pid");
+        long start = System.currentTimeMillis();
+        while (true) {
+            if (Files.exists(imageDir) && Files.exists(pidFile) && pidFile.toFile().length() > 0) {
+                return;
+            }
+            if (System.currentTimeMillis() - start > WAIT_IMAGE_DIR_CREATED_TIMEOUT) {
+                throw new RuntimeException("Check image dir and pid file failed after " + WAIT_IMAGE_DIR_CREATED_TIMEOUT + "ms.");
+            }
+            Thread.sleep(POLL_INTERVAL);
         }
     }
 
