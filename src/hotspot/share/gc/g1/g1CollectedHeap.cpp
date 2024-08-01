@@ -2477,7 +2477,7 @@ G1CollectedHeap* G1CollectedHeap::heap() {
 
 void G1CollectedHeap::gc_prologue(bool full) {
   // always_do_update_barrier = false;
-  assert(InlineCacheBuffer::is_empty(), "should have cleaned up ICBuffer");
+  assert(UseCompactObjectHeaders || InlineCacheBuffer::is_empty(), "should have cleaned up ICBuffer");
 
   // This summary needs to be printed before incrementing total collections.
   g1_rem_set()->print_periodic_summary_info("Before GC RS summary", total_collections());
