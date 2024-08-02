@@ -83,7 +83,7 @@
   product(bool, UseIOPrioritySizePolicy, false,                             \
           "eagerly decrease heap when io wait is high")                     \
                                                                             \
-  product(float, IOPrioritySizePolicyEdenScale, 8.0,                        \
+  product(uint, IOPrioritySizePolicyEdenScale, 8,                           \
           "how much eden to decrease when io wait is high")                 \
 
 #endif // SHARE_GC_PARALLEL_PARALLEL_GLOBALS_HPP
