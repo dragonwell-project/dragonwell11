@@ -32,6 +32,7 @@ class ProfileData;
 class vframeArray;
 class MonitorValue;
 class ObjectValue;
+class Coroutine;
 
 class Deoptimization : AllStatic {
   friend class VMStructs;
@@ -139,6 +140,7 @@ class Deoptimization : AllStatic {
   // Deoptimizes a frame lazily. nmethod gets patched deopt happens on return to the frame
   static void deoptimize(JavaThread* thread, frame fr, RegisterMap *reg_map);
   static void deoptimize(JavaThread* thread, frame fr, RegisterMap *reg_map, DeoptReason reason);
+  static void deoptimize(Coroutine* coroutine, frame fr, RegisterMap *reg_map);
 
 #if INCLUDE_JVMCI
   static address deoptimize_for_missing_exception_handler(CompiledMethod* cm);
@@ -147,6 +149,7 @@ class Deoptimization : AllStatic {
   private:
   // Does the actual work for deoptimizing a single frame
   static void deoptimize_single_frame(JavaThread* thread, frame fr, DeoptReason reason);
+  static void deoptimize_single_frame(Coroutine* coroutine, frame fr, DeoptReason reason);
 
   // Helper function to revoke biases of all monitors in frame if UseBiasedLocking
   // is enabled

@@ -39,6 +39,7 @@ typedef class BytecodeInterpreter* interpreterState;
 class CodeBlob;
 class FrameValues;
 class vframeArray;
+class Coroutine;
 
 
 // A frame represents a physical stack frame (an activation).  Frames
@@ -206,7 +207,7 @@ class frame {
 
   // Support for deoptimization
   void deoptimize(JavaThread* thread);
-
+  void deoptimize(Coroutine* coroutine);
   // The frame's original SP, before any extension by an interpreted callee;
   // used for packing debug info into vframeArray objects and vframeArray lookup.
   intptr_t* unextended_sp() const;

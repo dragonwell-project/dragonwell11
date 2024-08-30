@@ -144,6 +144,7 @@ private:
 public:
   virtual ~Coroutine();
 
+  frame last_frame();
   void run(jobject coroutine);
   bool is_coroutine_frame(javaVFrame* jvf);
 
@@ -226,7 +227,7 @@ public:
   void compiledMethods_do(CodeBlobClosure* cf);
   void metadata_do(void f(Metadata*));
   void frames_do(void f(frame*, const RegisterMap* map));
-  void frames_do(JavaThread* jt, void f(JavaThread*, frame*, RegisterMap*));
+  void frames_do(void f(Coroutine*, frame*, RegisterMap*));
 
   static ByteSize thread_offset()             { return byte_offset_of(Coroutine, _thread); }
 

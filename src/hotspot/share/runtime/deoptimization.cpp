@@ -46,6 +46,7 @@
 #include "prims/vectorSupport.hpp"
 #include "runtime/biasedLocking.hpp"
 #include "runtime/compilationPolicy.hpp"
+#include "runtime/coroutine.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
@@ -1399,6 +1400,33 @@ void Deoptimization::deoptimize_single_frame(JavaThread* thread, frame fr, Deopt
   fr.deoptimize(thread);
 }
 
+void Deoptimization::deoptimize_single_frame(Coroutine* coroutine, frame fr, Deoptimization::DeoptReason reason) {
+  assert(fr.can_be_deoptimized(), "checking frame type");
+
+  gather_statistics(reason, Action_none, Bytecodes::_illegal);
+
+  if (LogCompilation && xtty != NULL) {
+    CompiledMethod* cm = fr.cb()->as_compiled_method_or_null();
+    assert(cm != NULL, "only compiled methods can deopt");
+
+    ttyLocker ttyl;
+    xtty->begin_head("deoptimized coroutine='" UINTX_FORMAT "' reason='%s' pc='" INTPTR_FORMAT "'",(uintx)coroutine->wisp_task_id(), trap_reason_name(reason), p2i(fr.pc()));
+    cm->log_identity(xtty);
+    xtty->end_head();
+    for (ScopeDesc* sd = cm->scope_desc_at(fr.pc()); ; sd = sd->sender()) {
+      xtty->begin_elem("jvms bci='%d'", sd->bci());
+      xtty->method(sd->method());
+      xtty->end_elem();
+      if (sd->is_top())  break;
+    }
+    xtty->tail("deoptimized");
+  }
+
+  // Patch the compiled method so that when execution returns to it we will
+  // deopt the execution state and return to the interpreter.
+  fr.deoptimize(coroutine);
+}
+
 void Deoptimization::deoptimize(JavaThread* thread, frame fr, RegisterMap *map) {
   deoptimize(thread, fr, map, Reason_constraint);
 }
@@ -1417,6 +1445,19 @@ void Deoptimization::deoptimize(JavaThread* thread, frame fr, RegisterMap *map, 
   }
   deoptimize_single_frame(thread, fr, reason);
 
+}
+
+void Deoptimization::deoptimize(Coroutine* coroutine, frame fr, RegisterMap *reg_map) {
+  // Deoptimize only if the frame comes from compile code.
+  // Do not deoptimize the frame which is already patched
+  // during the execution of the loops below.
+  if (!fr.is_compiled_frame() || fr.is_deoptimized_frame()) {
+    return;
+  }
+  ResourceMark rm;
+  DeoptimizationMarker dm;
+  // wisp will turn off UseBiasedLocking
+  deoptimize_single_frame(coroutine, fr, Reason_constraint);
 }
 
 #if INCLUDE_JVMCI

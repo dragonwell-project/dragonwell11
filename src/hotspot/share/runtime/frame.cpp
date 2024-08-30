@@ -38,6 +38,7 @@
 #include "oops/oop.inline.hpp"
 #include "oops/verifyOopClosure.hpp"
 #include "prims/methodHandles.hpp"
+#include "runtime/coroutine.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/javaCalls.hpp"
@@ -352,6 +353,35 @@ void frame::deoptimize(JavaThread* thread) {
   {
     RegisterMap map(thread, false);
     frame check = thread->last_frame();
+    while (id() != check.id()) {
+      check = check.sender(&map);
+    }
+    assert(check.is_deoptimized_frame(), "missed deopt");
+  }
+#endif // ASSERT
+}
+
+  void frame::deoptimize(Coroutine* coroutine) {
+  // Schedule deoptimization of an nmethod activation with this frame.
+  assert(_cb != NULL && _cb->is_compiled(), "must be");
+
+ // wisp don't support in sparc, don't need to add `if (NeedsDeoptSuspend && Thread::current() != thread)` logic
+
+  // If the call site is a MethodHandle call site use the MH deopt
+  // handler.
+  CompiledMethod* cm = (CompiledMethod*) _cb;
+  address deopt = cm->is_method_handle_return(pc()) ?
+                        cm->deopt_mh_handler_begin() :
+                        cm->deopt_handler_begin();
+
+  // Save the original pc before we patch in the new one
+  cm->set_original_pc(this, pc());
+  patch_pc(coroutine->thread(), deopt); // the first arg is useless in this call
+
+#ifdef ASSERT
+  {
+    RegisterMap map(coroutine->thread(), false);
+    frame check = coroutine->last_frame();
     while (id() != check.id()) {
       check = check.sender(&map);
     }

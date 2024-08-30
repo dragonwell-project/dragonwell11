@@ -223,6 +223,13 @@ void Coroutine::frames_do(FrameClosure* fc) {
   }
 }
 
+frame Coroutine::last_frame() {
+  assert(_state == Coroutine::_onstack, "should not get last frame if the coroutine is not in the state of_onstack");
+  RegisterMap reg_map(_thread);
+  frame last_frame = _stack->last_frame(this, reg_map);
+  return last_frame;
+}
+
 bool Coroutine::is_coroutine_frame(javaVFrame* jvf) {
   ResourceMark resMark;
   const char* k_name = jvf->method()->method_holder()->name()->as_C_string();
@@ -380,17 +387,17 @@ void Coroutine::frames_do(void f(frame*, const RegisterMap* map)) {
   frames_do(&fc);
 }
 
-class frames_do_with_javathread_Closure : public FrameClosure {
+class frames_do_with_coroutine_Closure : public FrameClosure {
 private:
-  JavaThread* _jt;
-  void (*_f)(JavaThread*, frame*, RegisterMap*);
+  Coroutine* _c;
+  void (*_f)(Coroutine*, frame*, RegisterMap*);
 public:
-  frames_do_with_javathread_Closure(JavaThread* jt, void f(JavaThread*, frame*, RegisterMap*)): _jt(jt), _f(f) { }
-  void frames_do(frame* fr, RegisterMap* map) { _f(_jt, fr, map); }
+  frames_do_with_coroutine_Closure(Coroutine* c, void f(Coroutine*, frame*, RegisterMap*)): _c(c), _f(f) { }
+  void frames_do(frame* fr, RegisterMap* map) { _f(_c, fr, map); }
 };
 
-void Coroutine::frames_do(JavaThread* jt, void f(JavaThread*, frame*, RegisterMap*)) {
-  frames_do_with_javathread_Closure fc(jt, f);
+void Coroutine::frames_do(void f(Coroutine*, frame*, RegisterMap*)) {
+  frames_do_with_coroutine_Closure fc(this, f);
   frames_do(&fc);
 }
 
