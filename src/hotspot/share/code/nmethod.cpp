@@ -1396,6 +1396,11 @@ void nmethod::flush() {
   assert(_speculation_log == NULL, "should have been nulled out when transitioned to zombie");
 #endif
 
+  if (ReduceNMethodSize && _immutable_data_size > 0) {
+    assert(_immutable_data != data_end(), "must be");
+    os::free(_immutable_data);
+    _immutable_data = data_end();
+  }
   CodeBlob::flush();
   CodeCache::free(this);
 }
