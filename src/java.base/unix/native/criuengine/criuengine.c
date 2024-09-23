@@ -214,6 +214,7 @@ static int checkpoint(pid_t jvm, const char *basedir, const char *self,
     }
     *arg++ = NULL;
 
+    setenv("CRAC_IMAGE_DIR", imagedir, 1);
     execv(criu, (char **)args);
     perror("criu dump");
     exit(1);
@@ -564,9 +565,13 @@ static int read_pseudo_file(const char *imagedir, pseudo_file_func func, const c
 }
 
 static int post_dump(void) {
-  char *imagedir = getenv("CRTOOLS_IMAGE_DIR");
+  //"CRTOOLS_IMAGE_DIR" is a symbol link like "/proc/227/fd/100/",
+  //and 227 is the pid of criu.If run with unprivileged mode, current
+  //process has no permission to access the fd 100.
+  //So use CRAC_IMAGE_DIR environment which setting before checkpointing.
+  char *imagedir = getenv("CRAC_IMAGE_DIR");
   if (!imagedir) {
-    fprintf(stderr, MSGPREFIX "cannot find CRTOOLS_IMAGE_DIR env\n");
+    fprintf(stderr, MSGPREFIX "cannot find CRAC_IMAGE_DIR env\n");
     return 1;
   }
   char *jvm_pid= getenv("CRTOOLS_INIT_PID");
@@ -574,7 +579,9 @@ static int post_dump(void) {
     fprintf(stderr, MSGPREFIX "cannot find CRTOOLS_INIT_PID env in post_dump callback\n");
     return 1;
   }
-  append_pipeinfo(imagedir, jvm_pid);
+  if (append_pipeinfo(imagedir, jvm_pid)) {
+    return 1;
+  }
   return read_pseudo_file(imagedir, checkpoint_pseudo_persistent_file, "checkpoint pseudo persistent file ");
 }
 
@@ -844,10 +851,12 @@ static int append_pipeinfo(const char* imagedir,const char* jvm_pid) {
   char buff[1024];
 
   if (-1 == asprintf(&path, "%s/" PIPE_FDS, imagedir)) {
+    fprintf(stderr, "asprintf for pipefds failed. imagedir:%s", imagedir);
     return -1;
   }
 
   if (stat(path, &st) != 0) {
+    fprintf(stderr, "%s not exist.", path);
     free(path);
     return 0;
   }
@@ -859,9 +868,10 @@ static int append_pipeinfo(const char* imagedir,const char* jvm_pid) {
     return -1;
   }
 
+  free(path);
+
   if (fgets(buff, sizeof(buff), f) == NULL) {
     perror("read from pipefds error");
-    free(path);
     fclose(f);
     return -1;
   }
@@ -877,7 +887,6 @@ static int append_pipeinfo(const char* imagedir,const char* jvm_pid) {
     if (is_exist_pipefd(jvm_pid, fd)) {
       if (read_fd_link(jvm_pid, fd, fdpath, sizeof(fdpath)) == -1) {
         fclose(f);
-        free(path);
         return -1;
       }
       fprintf(f, "%d,%s\n", fd, fdpath);
@@ -885,7 +894,6 @@ static int append_pipeinfo(const char* imagedir,const char* jvm_pid) {
     token = strtok(NULL, ",");
   }
   fclose(f);
-  free(path);
   return 0;
 }
 
