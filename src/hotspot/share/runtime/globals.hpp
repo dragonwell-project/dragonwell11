@@ -2787,7 +2787,6 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
  *  Macros for factoring of globals
  */
 
-
 // Interface macros
 #define DECLARE_PRODUCT_FLAG(type, name, value, doc)      extern "C" type name;
 #define DECLARE_PD_PRODUCT_FLAG(type, name, doc)          extern "C" type name;

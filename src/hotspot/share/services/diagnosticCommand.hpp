@@ -930,6 +930,7 @@ public:
 };
 
 
+#ifdef LINUX
 class CheckpointDCmd : public DCmd {
 public:
   CheckpointDCmd(outputStream* output, bool heap) : DCmd(output, heap) { }
@@ -943,5 +944,6 @@ public:
     static int num_arguments() { return 0; }
     virtual void execute(DCmdSource source, TRAPS);
 };
+#endif
 
 #endif // SHARE_SERVICES_DIAGNOSTICCOMMAND_HPP

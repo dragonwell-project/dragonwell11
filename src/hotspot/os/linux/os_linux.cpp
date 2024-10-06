@@ -32,6 +32,7 @@
 #include "code/vtableStubs.hpp"
 #include "compiler/compileBroker.hpp"
 #include "compiler/disassembler.hpp"
+#include "crac_linux.hpp"
 #include "interpreter/interpreter.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
@@ -270,80 +271,6 @@ struct PersistentResourceDesc {
   {}
 };
 
-struct PseudoPersistentFileDesc {
-    int _mode;
-    bool _mark;
-    const char* _path;
-    PseudoPersistentFileDesc(int mode, const char *path) :
-    _mode(mode),
-    _path(path),
-    _mark(false)
-    {}
-
-    PseudoPersistentFileDesc():
-    _mode(0),
-    _path(NULL),
-    _mark(false)
-    {}
-};
-
-class PseudoPersistent {
-private:
-    GrowableArray<PseudoPersistentFileDesc>* _ppfd;
-public:
-    PseudoPersistent(GrowableArray<PseudoPersistentFileDesc>* ppfd):
-    _ppfd(ppfd)
-    {}
-
-    bool test_and_mark(const char *path) {
-      if (!_ppfd) {
-        return false;
-      }
-      int j = 0;
-      while (j < _ppfd->length()) {
-        PseudoPersistentFileDesc *ppfd = _ppfd->adr_at(j);
-        int r = strcmp(ppfd->_path, path);
-        if (r == 0) {
-          ppfd->_mark = true;
-          return true;
-          break;
-        } else if (r > 0) {
-          return false;
-          break;
-        }
-        ++j;
-      }
-      return false;
-    }
-
-    bool write_marked(const char *image_dir) {
-      if (!_ppfd) {
-        return true;
-      }
-      char *path;
-      if (-1 == asprintf(&path, "%s/pseudopersistent", image_dir)) {
-        return false;
-      }
-      FILE *f = fopen(path, "w");
-      if (f == NULL) {
-        fprintf(stderr, "open file: %s for write failed, error: %s\n",
-                path, strerror(errno));
-        free(path);
-        return false;
-      }
-      int j = 0;
-      while (j < _ppfd->length()) {
-        PseudoPersistentFileDesc *ppfd = _ppfd->adr_at(j);
-        if (ppfd->_mark) {
-          fprintf(f, "%d,%s\n", ppfd->_mode, ppfd->_path);
-        }
-        ++j;
-      }
-      fclose(f);
-      free(path);
-      return true;
-    }
-};
 
 struct CracFailDep {
   int _type;
@@ -7009,11 +6936,6 @@ int os::compare_file_modified_times(const char* file1, const char* file2) {
   return diff;
 }
 
-void os::wake_up(Thread *thread) {
-  pthread_t tid = thread->osthread()->pthread_id();
-  pthread_kill(tid, SIG_WAKE_UP);
-}
-
 // CRaC
 
 jlong os::Linux::restore_start_time() {
@@ -7502,7 +7424,7 @@ void VM_Crac::doit() {
   do_classpaths(mark_all_in, &fds, Arguments::get_ext_dirs());
   mark_persistent(&fds);
 
-  PseudoPersistent pp(_pseudo_persistent);
+  PseudoPersistent pp(_pseudo_persistent, CRaCAppendOnlyLogFiles);
   int markcnt = 0;
 
   // dry-run fails checkpoint
@@ -7518,8 +7440,9 @@ void VM_Crac::doit() {
     const char* details = 0 < linkret ? detailsbuf : "";
     print_resources("JVM: FD fd=%d type=%s: details1=\"%s\" ",
         i, stat2strtype(fds.get_stat(i)->st_mode), details);
+    struct stat* st = fds.get_stat(i);
 
-    if (pp.test_and_mark(detailsbuf)) {
+    if (S_ISREG(st->st_mode) && pp.test_and_mark(detailsbuf, i)) {
       markcnt++;
       print_resources("OK: user registered pseudo persistent file \n");
       continue;
@@ -7530,7 +7453,6 @@ void VM_Crac::doit() {
       continue;
     }
 
-    struct stat* st = fds.get_stat(i);
     if (S_ISCHR(st->st_mode)) {
       const int mjr = major(st->st_rdev);
       const int mnr = minor(st->st_rdev);

@@ -3855,6 +3855,7 @@ void Threads::initialize_jsr292_core_classes(TRAPS) {
 }
 
 jint Threads::check_for_restore(JavaVMInitArgs* args) {
+#ifdef LINUX
   if (Arguments::is_restore_option_set(args)) {
     Arguments::parse_options_for_restore(args);
     os::Linux::restore();
@@ -3864,6 +3865,7 @@ jint Threads::check_for_restore(JavaVMInitArgs* args) {
       return JNI_ERR;
     }
   }
+#endif
   return JNI_OK;
 }
 
@@ -3935,7 +3937,9 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
     os::pause();
   }
 
+#ifdef LINUX
   os::Linux::vm_create_start();
+#endif
 
   HOTSPOT_VM_INIT_BEGIN();
 

@@ -45,7 +45,7 @@ Java_jdk_crac_Core_checkpointRestore0(JNIEnv *env, jclass ignore, jboolean dry_r
 JNIEXPORT void JNICALL Java_jdk_internal_crac_Core_registerPersistent0
   (JNIEnv *env, jclass ignore, jobject fileDesc)
 {
-    jint fd = THIS_FD(fileDesc);
+    jint fd = (jint)THIS_FD(fileDesc);
 
     struct stat st;
     if (-1 == fstat(fd, &st)) {

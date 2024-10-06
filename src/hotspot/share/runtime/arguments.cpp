@@ -3324,9 +3324,16 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
   UNSUPPORTED_OPTION(ShowRegistersOnAssert);
 #endif // CAN_SHOW_REGISTERS_ON_ASSERT
 
+#ifdef LINUX
   if (CRaCCheckpointTo && !os::Linux::prepare_checkpoint()) {
     return JNI_ERR;
   }
+#else
+  if (CRaCCheckpointTo) {
+    warning("CRaC supports linux only,ignore the CRaCCheckpointTo flag.");
+    CRaCCheckpointTo = NULL;
+  }
+#endif
 
   return JNI_OK;
 }
