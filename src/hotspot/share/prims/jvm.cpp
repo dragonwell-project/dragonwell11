@@ -3937,52 +3937,9 @@ JVM_ENTRY(void, JVM_NotifyDump(JNIEnv *env, jclass ignored))
   QuickStart::notify_dump();
 JVM_END
 
-JVM_LEAF(void, JVM_CollectJVMConf(JNIEnv *env, jclass ignored))
-  JVMWrapper("JVM_CollectJVMConf");
-  QuickStart::collect_jvm_conf();
-JVM_END
-
 JVM_ENTRY(jboolean, JVM_CheckpointEnabled(JNIEnv *env, jclass ignored))
   JVMWrapper("JVM_CheckpointEnabled");
   return CRaCCheckpointTo ? JNI_TRUE : JNI_FALSE;
-JVM_END
-
-JVM_ENTRY(jobjectArray, JVM_GetModuleNames(JNIEnv *env, jclass ignored))
-  JVMWrapper("JVM_GetModuleNames");
-
-  if (!DumpModuleNames) {
-    return NULL;
-  }
-
-  JarFileTable* jarTable = SystemDictionary::jarFileTable();
-  MutexLocker mu(OpenedJarFile_lock, THREAD);
-  ResourceMark rm;
-  const int len = jarTable->number_of_entries();
-  const char *arr[len];
-  int idx = 0;
-  for (int pindex = 0; pindex < jarTable->table_size(); pindex++) {
-    for (JarFileEntry* probe = jarTable->bucket(pindex);
-         probe != NULL;
-         probe = probe->next()) {
-      arr[idx++] = probe->literal()->as_C_string();
-    }
-  }
-  assert(idx <= len, "out of bound");
-
-  // Allocate result array
-  objArrayOop r = oopFactory::new_objArray(SystemDictionary::String_klass(), len, CHECK_NULL);
-  objArrayHandle result (THREAD, r);
-  for (int i = 0; i < len; i++) {
-    Handle str = java_lang_String::create_from_str(arr[i], CHECK_NULL);
-    result->obj_at_put(i, str());
-  }
-  return (jobjectArray) JNIHandles::make_local(env, result());
-JVM_END
-
-JVM_ENTRY(jstring, JVM_GetJDKBootClassPathAppend(JNIEnv *env, jclass ignored))
-  JVMWrapper("JVM_GetJDKBootClassPathAppend");
-  Handle str = java_lang_String::create_from_str(Arguments::get_jdk_boot_class_path_append(), CHECK_NULL);
-  return (jstring) JNIHandles::make_local(env, str());
 JVM_END
 
 JVM_ENTRY(jobjectArray, JVM_Checkpoint(JNIEnv *env, jboolean dry_run, jlong jcmd_stream))

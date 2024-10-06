@@ -104,6 +104,13 @@
   product(ccstr, CRaCRestoreInheritPipeFds, NULL,                           \
         "Specify the pipe fds that inherit from parent process that need"   \
         "to restore.If there are multiple fds, separate them with comma.")  \
+                                                                            \
+  product(ccstr, CRaCAppendOnlyLogFiles, NULL,                              \
+        "Files that no need to be closed when do checkpointing."            \
+        "These files must open with write and append mode first."           \
+        "*: all matched files."                                             \
+        "*.log,*.txt: match given extension files."                         \
+        "/x/a.log,/y/b.log: match by full file path")                       \
   //add new AJDK specific flags here
 
 

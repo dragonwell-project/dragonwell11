@@ -56,6 +56,8 @@ public class CracBuilder {
 
     boolean bumpPid;
 
+    String appendOnlyFilesParam;
+
     static {
         String path = System.getenv("CRAC_CRIU_PATH");
         if (path == null) {
@@ -174,6 +176,12 @@ public class CracBuilder {
     public CracBuilder dockerOptions(String... options) {
         assertNull(dockerOptions);
         this.dockerOptions = options;
+        return this;
+    }
+
+    public CracBuilder appendOnlyFiles(String param) {
+        assertNull(appendOnlyFilesParam);
+        this.appendOnlyFilesParam = param;
         return this;
     }
 
@@ -452,6 +460,9 @@ public class CracBuilder {
         }
         if (restorePipeStdOutErr) {
             cmd.add("-XX:CRaCRestoreInheritPipeFds=1,2");
+        }
+        if (appendOnlyFilesParam != null) {
+            cmd.add("-XX:CRaCAppendOnlyLogFiles=" + appendOnlyFilesParam);
         }
         return cmd;
     }
