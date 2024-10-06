@@ -24,12 +24,18 @@
 
 #include "precompiled.hpp"
 #include "jvm.h"
+#ifdef LINUX
+#include "attachListener_linux.hpp"
+#endif
 #include "classfile/classLoaderHierarchyDCmd.hpp"
 #include "classfile/classLoaderStats.hpp"
 #include "classfile/compactHashtable.hpp"
 #include "compiler/compileBroker.hpp"
 #include "compiler/directivesParser.hpp"
 #include "gc/shared/vmGCOperations.hpp"
+#ifdef LINUX
+#include "linuxAttachOperation.hpp"
+#endif
 #include "memory/metaspace/metaspaceDCmd.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/objArrayOop.inline.hpp"
@@ -48,8 +54,6 @@
 #include "services/heapDumper.hpp"
 #include "services/management.hpp"
 #include "services/writeableFlags.hpp"
-#include "attachListener_linux.hpp"
-#include "linuxAttachOperation.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/macros.hpp"
@@ -129,7 +133,9 @@ void DCmdRegistrant::register_dcmds(){
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CompilerDirectivesRemoveDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CompilerDirectivesClearDCmd>(full_export, true, false));
 
+#ifdef LINUX
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CheckpointDCmd>(full_export, true,false));
+#endif
 
   // Enhanced JMX Agent Support
   // These commands won't be exported via the DiagnosticCommandMBean until an
@@ -1191,6 +1197,7 @@ void QuickStartDumpDCMD::execute(DCmdSource source, TRAPS) {
   output()->print_cr("It took %lu ms to execute Quickstart.dump .", ms);
 }
 
+#ifdef LINUX
 void CheckpointDCmd::execute(DCmdSource source, TRAPS) {
   Klass* k = SystemDictionary::resolve_or_fail(vmSymbols::jdk_crac_Core(),
                                                  true, CHECK);
@@ -1212,3 +1219,4 @@ void CheckpointDCmd::execute(DCmdSource source, TRAPS) {
     }
   }
 }
+#endif

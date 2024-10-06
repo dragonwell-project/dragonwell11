@@ -3937,81 +3937,50 @@ JVM_ENTRY(void, JVM_NotifyDump(JNIEnv *env, jclass ignored))
   QuickStart::notify_dump();
 JVM_END
 
-JVM_LEAF(void, JVM_CollectJVMConf(JNIEnv *env, jclass ignored))
-  JVMWrapper("JVM_CollectJVMConf");
-  QuickStart::collect_jvm_conf();
-JVM_END
-
 JVM_ENTRY(jboolean, JVM_CheckpointEnabled(JNIEnv *env, jclass ignored))
   JVMWrapper("JVM_CheckpointEnabled");
   return CRaCCheckpointTo ? JNI_TRUE : JNI_FALSE;
 JVM_END
 
-JVM_ENTRY(jobjectArray, JVM_GetModuleNames(JNIEnv *env, jclass ignored))
-  JVMWrapper("JVM_GetModuleNames");
-
-  if (!DumpModuleNames) {
-    return NULL;
-  }
-
-  JarFileTable* jarTable = SystemDictionary::jarFileTable();
-  MutexLocker mu(OpenedJarFile_lock, THREAD);
-  ResourceMark rm;
-  const int len = jarTable->number_of_entries();
-  const char *arr[len];
-  int idx = 0;
-  for (int pindex = 0; pindex < jarTable->table_size(); pindex++) {
-    for (JarFileEntry* probe = jarTable->bucket(pindex);
-         probe != NULL;
-         probe = probe->next()) {
-      arr[idx++] = probe->literal()->as_C_string();
-    }
-  }
-  assert(idx <= len, "out of bound");
-
-  // Allocate result array
-  objArrayOop r = oopFactory::new_objArray(SystemDictionary::String_klass(), len, CHECK_NULL);
-  objArrayHandle result (THREAD, r);
-  for (int i = 0; i < len; i++) {
-    Handle str = java_lang_String::create_from_str(arr[i], CHECK_NULL);
-    result->obj_at_put(i, str());
-  }
-  return (jobjectArray) JNIHandles::make_local(env, result());
-JVM_END
-
-JVM_ENTRY(jstring, JVM_GetJDKBootClassPathAppend(JNIEnv *env, jclass ignored))
-  JVMWrapper("JVM_GetJDKBootClassPathAppend");
-  Handle str = java_lang_String::create_from_str(Arguments::get_jdk_boot_class_path_append(), CHECK_NULL);
-  return (jstring) JNIHandles::make_local(env, str());
-JVM_END
-
 JVM_ENTRY(jobjectArray, JVM_Checkpoint(JNIEnv *env, jboolean dry_run, jlong jcmd_stream))
+#ifdef LINUX
   Handle ret = os::Linux::checkpoint(dry_run, jcmd_stream, CHECK_NULL);
   return (jobjectArray) JNIHandles::make_local(THREAD, ret());
+#else
+  return NULL;
+#endif
 JVM_END
 
 JVM_ENTRY(void, JVM_RegisterPersistent(JNIEnv *env, int fd, int st_dev, int st_ino))
+#ifdef LINUX
   os::Linux::register_persistent_fd(fd, st_dev, st_ino);
+#endif
 JVM_END
 
 JVM_ENTRY(void, JVM_DeregisterPersistent(JNIEnv *env, int fd, int st_dev, int st_ino))
+#ifdef LINUX
   os::Linux::deregister_persistent_fd(fd, st_dev, st_ino);
+#endif
 JVM_END
 
 JVM_ENTRY(void, JVM_RegisterPseudoPersistent(JNIEnv *env, jstring absolute_file_path, int mode))
+#ifdef LINUX
   JVMWrapper("JVM_RegisterPseudoPersistent");
   ResourceMark rm;
   const char* path = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(absolute_file_path));
   if (path != NULL) {
     os::Linux::register_pseudo_persistent(path, mode);
   }
+#endif
 JVM_END
 
 JVM_ENTRY(void, JVM_UnregisterPseudoPersistent(JNIEnv *env, jstring absolute_file_path))
+#ifdef LINUX
   JVMWrapper("JVM_UnregisterPseudoPersistent");
   ResourceMark rm;
   const char* path = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(absolute_file_path));
   if (path != NULL) {
     os::Linux::unregister_pseudo_persistent(path);
   }
+#endif
 JVM_END

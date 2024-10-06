@@ -60,6 +60,7 @@ enum PseudoPersistentMode {
     OVERRIDE_WHEN_RESTORE = 0x04,
     COPY_WHEN_RESTORE = 0x08,
     SYMLINK_WHEN_RESTORE = 0x10,
+    SKIP_LOG_FILES = 0x20
 };
 
 static int create_cppath(const char *imagedir);
@@ -490,7 +491,7 @@ int mkpath(const char *path, mode_t mode) {
 }
 
 static int restore_pseudo_persistent_file(const char *imagedir, int id, int mode, const char *dest) {
-  if (!(mode & SAVE_RESTORE)) {
+  if (!(mode & SAVE_RESTORE) && !(mode & SKIP_LOG_FILES)) {
     return 0;
   }
   struct stat st;
@@ -519,6 +520,19 @@ static int restore_pseudo_persistent_file(const char *imagedir, int id, int mode
               dest, src, strerror(errno));
       return 1;
     }
+  } else if (mode & SKIP_LOG_FILES) {
+    if (mkpath(dest, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) {
+      perror(dest);
+      return 1;
+    }
+    //create empty file for skip log files.
+    FILE *f = fopen(dest, "a");
+    if (f == NULL) {
+      fprintf(stderr, "create file %s for log file failed. error: %s\n",
+              dest, strerror(errno));
+      return 1;
+    }
+    fclose(f);
   }
   return 0;
 }

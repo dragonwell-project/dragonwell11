@@ -94,6 +94,7 @@ WinMain(HINSTANCE inst, HINSTANCE previnst, LPSTR cmdline, int cmdshow)
 
 #else /* JAVAW */
 
+#ifdef LINUX
 #include <sys/wait.h>
 
 static int is_checkpoint = 0;
@@ -166,6 +167,7 @@ static void setup_sighandler() {
         perror("sigprocmask");
     }
 }
+#endif /* LINUX */
 
 JNIEXPORT int
 main(int argc, char **argv)
@@ -257,7 +259,9 @@ main(int argc, char **argv)
         }
         // Iterate the rest of command line
         for (i = 1; i < argc; i++) {
+#ifdef LINUX
             parse_checkpoint(argv[i]);
+#endif
             JLI_List argsInFile = JLI_PreprocessArg(argv[i], JNI_TRUE);
             if (NULL == argsInFile) {
                 JLI_List_add(args, JLI_StringDup(argv[i]));
@@ -278,6 +282,7 @@ main(int argc, char **argv)
         margv = args->elements;
     }
 
+#ifdef LINUX
     // Avoid unexpected process completion when checkpointing under docker container run
     // by creating the main process waiting for children before exit.
     if (is_checkpoint && 1 == getpid()) {
@@ -289,6 +294,7 @@ main(int argc, char **argv)
             exit(status);
         }
     }
+#endif /* LINUX */
 #endif /* WIN32 */
     return JLI_Launch(margc, margv,
                    jargc, (const char**) jargv,

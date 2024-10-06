@@ -942,6 +942,7 @@ static jlong get_long_attribute(jmmLongAttribute att) {
   case JMM_OS_MEM_TOTAL_PHYSICAL_BYTES:
     return os::physical_memory();
 
+#ifdef LINUX
   case JMM_JVM_RESTORE_START_TIME_MS:
     return os::Linux::restore_start_time();
 
@@ -953,6 +954,7 @@ static jlong get_long_attribute(jmmLongAttribute att) {
       }
       return Management::ticks_to_ms(ticks);
     }
+#endif
 
   default:
     return -1;

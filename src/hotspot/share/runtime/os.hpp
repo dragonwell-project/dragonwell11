@@ -1075,7 +1075,6 @@ class os: AllStatic {
                                 char fileSep,
                                 char pathSep);
   static bool set_boot_path(char fileSep, char pathSep);
-
 };
 
 #ifndef _WINDOWS
