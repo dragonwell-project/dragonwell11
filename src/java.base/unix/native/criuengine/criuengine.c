@@ -214,7 +214,12 @@ static int checkpoint(pid_t jvm, const char *basedir, const char *self,
     }
     *arg++ = NULL;
 
-    setenv("CRAC_IMAGE_DIR", imagedir, 1);
+    char resolved_path[PATH_MAX];
+    if (realpath(imagedir, resolved_path) == NULL) {
+      perror("get real path for image dir error");
+      exit(1);
+    }
+    setenv("CRAC_IMAGE_DIR", resolved_path, 1);
     execv(criu, (char **)args);
     perror("criu dump");
     exit(1);
