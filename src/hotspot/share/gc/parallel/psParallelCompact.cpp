@@ -1714,6 +1714,13 @@ void PSParallelCompact::invoke(bool maximum_heap_compaction) {
                                       maximum_heap_compaction);
 }
 
+static void zero_cap(MutableSpace* ms) {
+  os::cleanup_memory((char*)ms->top(), (char*)ms->end() - (char*)ms->top());
+}
+static void zero_all(MutableSpace* ms) {
+  os::cleanup_memory((char*)ms->bottom(), (char*)ms->end() - (char*)ms->bottom());
+}
+
 // This method contains no policy. You should probably
 // be calling invoke() instead.
 bool PSParallelCompact::invoke_no_policy(bool maximum_heap_compaction) {
@@ -1882,6 +1889,13 @@ bool PSParallelCompact::invoke_no_policy(bool maximum_heap_compaction) {
       }
 
       log_debug(gc, ergo)("AdaptiveSizeStop: collection: %d ", heap->total_collections());
+    }
+
+    if (heap->do_cleanup_unused()) {
+      zero_cap(young_gen->eden_space());
+      zero_cap(young_gen->from_space());
+      zero_all(young_gen->to_space());
+      zero_cap(old_gen->object_space());
     }
 
     if (UsePerfData) {

@@ -90,3 +90,41 @@ ifeq ($(call isTargetOs, macosx solaris aix linux), true)
 endif
 
 ################################################################################
+
+ifeq ($(OPENJDK_TARGET_OS), linux)
+  $(eval $(call SetupJdkExecutable, BUILD_CRIUENGINE, \
+      NAME := criuengine, \
+      SRC := $(TOPDIR)/src/$(MODULE)/unix/native/criuengine, \
+      INCLUDE_FILES := criuengine.c, \
+      OPTIMIZATION := HIGH, \
+      CFLAGS := $(CFLAGS_JDKEXE), \
+      LDFLAGS := $(LDFLAGS), \
+      OUTPUT_DIR := $(SUPPORT_OUTPUTDIR)/modules_libs/$(MODULE), \
+  ))
+  TARGETS += $(BUILD_CRIUENGINE)
+
+  $(eval $(call SetupJdkExecutable, BUILD_PAUSEENGINE, \
+      NAME := pauseengine, \
+      SRC := $(TOPDIR)/src/$(MODULE)/unix/native/pauseengine, \
+      INCLUDE_FILES := pauseengine.c, \
+      OPTIMIZATION := LOW, \
+      CFLAGS := $(CFLAGS_JDKEXE), \
+      LDFLAGS := $(LDFLAGS), \
+      OUTPUT_DIR := $(SUPPORT_OUTPUTDIR)/modules_libs/$(MODULE), \
+  ))
+  TARGETS += $(BUILD_PAUSEENGINE)
+
+  $(eval $(call SetupJdkExecutable, BUILD_SIMENGINE, \
+      NAME := simengine, \
+      SRC := $(TOPDIR)/src/$(MODULE)/unix/native/simengine, \
+      INCLUDE_FILES := simengine.c, \
+      OPTIMIZATION := LOW, \
+      CFLAGS := $(CFLAGS_JDKEXE), \
+      LDFLAGS := $(LDFLAGS), \
+      OUTPUT_DIR := $(SUPPORT_OUTPUTDIR)/modules_libs/$(MODULE), \
+  ))
+  TARGETS += $(BUILD_SIMENGINE)
+
+endif
+
+################################################################################

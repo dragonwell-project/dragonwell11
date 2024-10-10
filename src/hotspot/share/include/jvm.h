@@ -1231,6 +1231,8 @@ JVM_GetEnclosingMethodInfo(JNIEnv* env, jclass ofClass);
 JNIEXPORT void JNICALL
 JVM_NotifyDump(JNIEnv *env, jclass ignored);
 
+JNIEXPORT jboolean JNICALL
+JVM_CheckpointEnabled(JNIEnv *env, jclass ignored);
 /* =========================================================================
  * The following defines a private JVM interface that the JDK can query
  * for the JVM version and capabilities.  sun.misc.Version defines
@@ -1344,6 +1346,33 @@ typedef struct JDK1_1InitArgs {
 
 JNIEXPORT void JNICALL
 JVM_SetWispTask(JNIEnv* env, jclass clz, jlong coroutinePtr, jint task_id, jobject task, jobject engine);
+enum {
+  JVM_CHECKPOINT_OK,
+  JVM_CHECKPOINT_ERROR,
+  JVM_CHECKPOINT_NONE,
+};
+
+enum cr_fail_type {
+  JVM_CR_FAIL      = 0,
+  JVM_CR_FAIL_FILE = 1,
+  JVM_CR_FAIL_SOCK = 2,
+  JVM_CR_FAIL_PIPE = 3,
+};
+
+JNIEXPORT jobjectArray JNICALL
+JVM_Checkpoint(JNIEnv *env, jboolean dry_run, jlong jcmd_stream);
+
+JNIEXPORT void JNICALL
+JVM_RegisterPersistent(JNIEnv *env, int fd, int st_dev, int st_ino);
+
+JNIEXPORT void JNICALL
+JVM_DeregisterPersistent(JNIEnv *env, int fd, int st_dev, int st_ino);
+
+JNIEXPORT void JNICALL
+JVM_RegisterPseudoPersistent(JNIEnv *env, jstring absolute_file_path, int mode);
+
+JNIEXPORT void JNICALL
+JVM_UnregisterPseudoPersistent(JNIEnv *env, jstring absolute_file_path);
 
 JNIEXPORT jint JNICALL
 JVM_GetProxyUnpark(JNIEnv* env, jclass clz, jintArray res);

@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.EOFException;
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.lang.ref.Cleaner.Cleanable;
@@ -61,6 +62,7 @@ import java.util.stream.StreamSupport;
 import jdk.internal.misc.JavaLangAccess;
 import jdk.internal.misc.JavaUtilZipFileAccess;
 import jdk.internal.misc.SharedSecrets;
+import jdk.internal.crac.Core;
 import jdk.internal.misc.VM;
 import jdk.internal.perf.PerfCounter;
 import jdk.internal.ref.CleanerFactory;
@@ -87,13 +89,6 @@ import static java.util.zip.ZipUtils.*;
  * {@link #finalize()} in order to perform cleanup should be modified to use alternative
  * cleanup mechanisms such as {@link java.lang.ref.Cleaner} and remove the overriding
  * {@code finalize} method.
- *
- * @implSpec
- * If this {@code ZipFile} has been subclassed and the {@code close} method has
- * been overridden, the {@code close} method will be called by the finalization
- * when {@code ZipFile} is unreachable. But the subclasses should not depend on
- * this specific implementation; the finalization is not reliable and the
- * {@code finalize} method is deprecated to be removed.
  *
  * @author      David Connelly
  * @since 1.1
@@ -255,7 +250,7 @@ class ZipFile implements ZipConstants, Closeable {
         this.name = name;
         long t0 = System.nanoTime();
 
-        this.res = CleanableResource.get(this, file, mode);
+        this.res = new CleanableResource(this, file, mode);
 
         PerfCounter.getZipFileOpenTime().addElapsedTimeFrom(t0);
         PerfCounter.getZipFileCount().increment();
@@ -841,42 +836,11 @@ class ZipFile implements ZipConstants, Closeable {
             this.zsrc = Source.get(file, (mode & OPEN_DELETE) != 0, zc);
         }
 
-        /*
-         * If {@code ZipFile} has been subclassed and the {@code close} method is
-         * overridden, uses the {@code finalizer} mechanism for resource cleanup.
-         * So {@code close} method can be called when the the {@code ZipFile} is
-         * unreachable. This mechanism will be removed when {@code finalize} method
-         * is removed from {@code ZipFile}.
-         */
-        static CleanableResource get(ZipFile zf, File file, int mode)
-            throws IOException {
-            Class<?> clz = zf.getClass();
-            while (clz != ZipFile.class && clz != JarFile.class) {
-                if (JLA.getDeclaredPublicMethods(clz, "close").size() != 0) {
-                    return new FinalizableResource(zf, file, mode);
+        public void beforeCheckpoint() {
+            if (zsrc != null) {
+                synchronized (zsrc) {
+                    zsrc.beforeCheckpoint();
                 }
-                clz = clz.getSuperclass();
-            }
-            return new CleanableResource(zf, file, mode);
-        }
-
-        static class FinalizableResource extends CleanableResource {
-            ZipFile zf;
-            FinalizableResource(ZipFile zf, File file, int mode)
-                throws IOException {
-                super(file, mode, zf.zc);
-                this.zf = zf;
-            }
-
-            @Override
-            void clean() {
-                run();
-            }
-
-            @Override
-            @SuppressWarnings("deprecation")
-            protected void finalize() throws IOException {
-                zf.close();
             }
         }
     }
@@ -906,25 +870,6 @@ class ZipFile implements ZipConstants, Closeable {
             }
         }
     }
-
-    /**
-     * Ensures that the system resources held by this ZipFile object are
-     * released when there are no more references to it.
-     *
-     * @deprecated The {@code finalize} method has been deprecated and will be
-     *     removed. It is implemented as a no-op. Subclasses that override
-     *     {@code finalize} in order to perform cleanup should be modified to
-     *     use alternative cleanup mechanisms and to remove the overriding
-     *     {@code finalize} method. The recommended cleanup for ZipFile object
-     *     is to explicitly invoke {@code close} method when it is no longer in
-     *     use, or use try-with-resources. If the {@code close} is not invoked
-     *     explicitly the resources held by this object will be released when
-     *     the instance becomes unreachable.
-     *
-     * @throws IOException if an I/O error has occurred
-     */
-    @Deprecated(since="9", forRemoval=true)
-    protected void finalize() throws IOException {}
 
     private void ensureOpen() {
         if (closeRequested) {
@@ -1129,6 +1074,10 @@ class ZipFile implements ZipConstants, Closeable {
         }
     }
 
+    private synchronized void beforeCheckpoint() {
+        res.beforeCheckpoint();
+    }
+
     private static boolean isWindows;
     private static final JavaLangAccess JLA;
 
@@ -1190,8 +1139,11 @@ class ZipFile implements ZipConstants, Closeable {
                 public void setExtraAttributes(ZipEntry ze, int extraAttrs) {
                     ze.extraAttributes = extraAttrs;
                 }
-
-             }
+                @Override
+                public void beforeCheckpoint(ZipFile zip) {
+                    zip.beforeCheckpoint();
+                }
+            }
         );
         JLA = jdk.internal.misc.SharedSecrets.getJavaLangAccess();
         isWindows = VM.getSavedProperty("os.name").contains("Windows");
@@ -1227,7 +1179,7 @@ class ZipFile implements ZipConstants, Closeable {
         // private Entry[] entries;             // array of hashed cen entry
         //
         // To reduce the total size of entries further, we use a int[] here to store 3 "int"
-        // {@code hash}, {@code next and {@code "pos for each entry. The entry can then be
+        // {@code hash}, {@code next} and {@code "pos"} for each entry. The entry can then be
         // referred by their index of their positions in the {@code entries}.
         //
         private int[] entries;                  // array of hashed cen entry
@@ -1882,6 +1834,19 @@ class ZipFile implements ZipConstants, Closeable {
                  p += CENHDR + CENNAM(cen, p) + CENEXT(cen, p) + CENCOM(cen, p))
                 count++;
             return count;
+        }
+
+        public void beforeCheckpoint() {
+            synchronized (zfile) {
+                FileDescriptor fd = null;
+                try {
+                    fd = zfile.getFD();
+                } catch (IOException e) {
+                }
+                if (fd != null) {
+                    Core.registerPersistent(fd);
+                }
+            }
         }
     }
 }

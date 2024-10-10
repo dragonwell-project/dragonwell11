@@ -72,7 +72,9 @@ import java.util.zip.ZipFile;
 import jdk.internal.misc.JavaNetURLAccess;
 import jdk.internal.misc.JavaUtilZipFileAccess;
 import jdk.internal.misc.SharedSecrets;
+import jdk.crac.Context;
 import jdk.internal.util.jar.InvalidJarIndexError;
+import jdk.internal.util.jar.PersistentJarFile;
 import jdk.internal.util.jar.JarIndex;
 import sun.net.util.URLUtil;
 import sun.net.www.ParseUtil;
@@ -810,7 +812,7 @@ public class URLClassPath {
                 if (!p.exists()) {
                     throw new FileNotFoundException(p.getPath());
                 }
-                return checkJar(new JarFile(new File(p.getPath()), true, ZipFile.OPEN_READ,
+                return checkJar(new PersistentJarFile(new File(p.getPath()), true, ZipFile.OPEN_READ,
                         JarFile.runtimeVersion()));
             }
             URLConnection uc = (new URL(getBaseURL(), "#runtime")).openConnection();

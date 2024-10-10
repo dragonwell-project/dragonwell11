@@ -127,10 +127,12 @@ public class DockerTestUtils {
      * The jdk will be placed under the "/jdk/" folder inside the image/container file system.
      *
      * @param imageName name of the image to be created, including version tag
+      *@param buildDirName  name of the docker build/staging directory, which will
+      *                      be created in the jtreg's scratch folder
      * @throws Exception
      */
-    public static void buildJdkContainerImage(String imageName) throws Exception {
-        buildJdkContainerImage(imageName, null);
+    public static void buildJdkContainerImage(String imageName, String buildDirName) throws Exception {
+        buildJdkContainerImage(imageName, null, buildDirName);
     }
 
      /**
@@ -139,14 +141,13 @@ public class DockerTestUtils {
      *
      * @param imageName         name of the image to be created, including version tag
      * @param dockerfileContent content of the Dockerfile; use null to generate default content
+      * @param buildDirName  name of the docker build/staging directory, which will
+      *                      be created in the jtreg's scratch folder
      * @throws Exception
      */
-    public static void buildJdkContainerImage(String imageName, String dockerfileContent) throws Exception {
-        // image name may contain tag, hence replace ':'
-        String imageDirName = imageName.replace(":", "-");
+    public static void buildJdkContainerImage(String imageName, String dockerfileContent, String buildDirName) throws Exception {
 
-        // Create an image build/staging directory
-        Path buildDir = Paths.get(imageDirName);
+        Path buildDir = Paths.get(".", buildDirName);
         if (Files.exists(buildDir)) {
             throw new RuntimeException("The docker build directory already exists: " + buildDir);
         }

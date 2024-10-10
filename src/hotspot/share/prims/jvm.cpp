@@ -3936,3 +3936,39 @@ JVM_ENTRY(void, JVM_NotifyDump(JNIEnv *env, jclass ignored))
   JVMWrapper("JVM_NotifyDump");
   QuickStart::notify_dump();
 JVM_END
+
+JVM_ENTRY(jboolean, JVM_CheckpointEnabled(JNIEnv *env, jclass ignored))
+  JVMWrapper("JVM_CheckpointEnabled");
+  return CRaCCheckpointTo ? JNI_TRUE : JNI_FALSE;
+JVM_END
+
+JVM_ENTRY(jobjectArray, JVM_Checkpoint(JNIEnv *env, jboolean dry_run, jlong jcmd_stream))
+  Handle ret = os::Linux::checkpoint(dry_run, jcmd_stream, CHECK_NULL);
+  return (jobjectArray) JNIHandles::make_local(THREAD, ret());
+JVM_END
+
+JVM_ENTRY(void, JVM_RegisterPersistent(JNIEnv *env, int fd, int st_dev, int st_ino))
+  os::Linux::register_persistent_fd(fd, st_dev, st_ino);
+JVM_END
+
+JVM_ENTRY(void, JVM_DeregisterPersistent(JNIEnv *env, int fd, int st_dev, int st_ino))
+  os::Linux::deregister_persistent_fd(fd, st_dev, st_ino);
+JVM_END
+
+JVM_ENTRY(void, JVM_RegisterPseudoPersistent(JNIEnv *env, jstring absolute_file_path, int mode))
+  JVMWrapper("JVM_RegisterPseudoPersistent");
+  ResourceMark rm;
+  const char* path = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(absolute_file_path));
+  if (path != NULL) {
+    os::Linux::register_pseudo_persistent(path, mode);
+  }
+JVM_END
+
+JVM_ENTRY(void, JVM_UnregisterPseudoPersistent(JNIEnv *env, jstring absolute_file_path))
+  JVMWrapper("JVM_UnregisterPseudoPersistent");
+  ResourceMark rm;
+  const char* path = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(absolute_file_path));
+  if (path != NULL) {
+    os::Linux::unregister_pseudo_persistent(path);
+  }
+JVM_END

@@ -398,6 +398,10 @@ class Arguments : AllStatic {
   static exit_hook_t      _exit_hook;
   static vfprintf_hook_t  _vfprintf_hook;
 
+  // prop points to a string of the form key=value
+  // Parse the string to extract key and the value
+  static void get_key_value(const char* prop, const char** key, const char** value);
+
   // System properties
   static bool add_property(const char* prop, PropertyWriteable writeable=WriteableProperty,
                            PropertyInternal internal=ExternalProperty);
@@ -664,6 +668,10 @@ class Arguments : AllStatic {
   static bool check_unsupported_cds_runtime_properties() NOT_CDS_RETURN0;
 
   static bool atojulong(const char *s, julong* result);
+
+  static bool is_restore_option_set(const JavaVMInitArgs* args);
+
+  static bool parse_options_for_restore(const JavaVMInitArgs* args);
 };
 
 // Disable options not supported in this release, with a warning if they

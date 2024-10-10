@@ -83,6 +83,7 @@ public class SharedSecrets {
     private static IOEventAccess ioEventAccess;
     private static RCMAccesss rcmAccesss;
     private static WispFileSyncIOAccess wispFileSyncIOAccess;
+    private static JavaAppClassLoaderAccess javaAppClassLoaderAccess;
 
     public static JavaUtilJarAccess javaUtilJarAccess() {
         if (javaUtilJarAccess == null) {
@@ -417,4 +418,11 @@ public class SharedSecrets {
         SharedSecrets.wispFileSyncIOAccess = wispAsyncIOAccess;
     }
 
+    public static JavaAppClassLoaderAccess getJavaAppClassLoaderAccess() {
+        return javaAppClassLoaderAccess;
+    }
+
+    public static void setJavaAppClassLoaderAccess(JavaAppClassLoaderAccess javaAppClassLoaderAccess) {
+        SharedSecrets.javaAppClassLoaderAccess = javaAppClassLoaderAccess;
+    }
 }

@@ -79,6 +79,8 @@ typedef enum {
   JMM_GC_TIME_MS                     = 9,    /* Total accumulated time spent in collection */
   JMM_GC_COUNT                       = 10,   /* Total number of collections */
   JMM_JVM_UPTIME_MS                  = 11,   /* The JVM uptime in milliseconds */
+  JMM_JVM_RESTORE_START_TIME_MS      = 12,   /* Time when the JVM started restore operation */
+  JMM_JVM_UPTIME_SINCE_RESTORE_MS    = 13,   /* The JVM uptime since restore */
 
   JMM_INTERNAL_ATTRIBUTE_INDEX       = 100,
   JMM_CLASS_LOADED_BYTES             = 101,  /* Number of bytes loaded instance classes */

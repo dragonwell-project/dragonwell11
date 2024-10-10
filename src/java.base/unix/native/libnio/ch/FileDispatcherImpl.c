@@ -75,6 +75,27 @@ Java_sun_nio_ch_FileDispatcherImpl_init(JNIEnv *env, jclass cl)
     close(sp[1]);
 }
 
+JNIEXPORT void JNICALL
+Java_sun_nio_ch_FileDispatcherImpl_beforeCheckpoint0(JNIEnv *env, jclass cl)
+{
+    /* synchronized by closeLock */
+    close(preCloseFD);
+    preCloseFD = -1;
+}
+
+JNIEXPORT void JNICALL
+Java_sun_nio_ch_FileDispatcherImpl_afterRestore0(JNIEnv *env, jclass cl)
+{
+    /* synchronized by closeLock */
+    int sp[2];
+    if (socketpair(PF_UNIX, SOCK_STREAM, 0, sp) < 0) {
+        JNU_ThrowIOExceptionWithLastError(env, "socketpair failed");
+        return;
+    }
+    preCloseFD = sp[0];
+    close(sp[1]);
+}
+
 JNIEXPORT jint JNICALL
 Java_sun_nio_ch_FileDispatcherImpl_read0(JNIEnv *env, jclass clazz,
                              jobject fdo, jlong address, jint len)

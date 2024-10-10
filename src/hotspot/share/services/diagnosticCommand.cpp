@@ -48,6 +48,8 @@
 #include "services/heapDumper.hpp"
 #include "services/management.hpp"
 #include "services/writeableFlags.hpp"
+#include "attachListener_linux.hpp"
+#include "linuxAttachOperation.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/macros.hpp"
@@ -126,6 +128,8 @@ void DCmdRegistrant::register_dcmds(){
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CompilerDirectivesAddDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CompilerDirectivesRemoveDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CompilerDirectivesClearDCmd>(full_export, true, false));
+
+  DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CheckpointDCmd>(full_export, true,false));
 
   // Enhanced JMX Agent Support
   // These commands won't be exported via the DiagnosticCommandMBean until an
@@ -948,7 +952,6 @@ JMXStatusDCmd::JMXStatusDCmd(outputStream *output, bool heap_allocated) :
 void JMXStatusDCmd::execute(DCmdSource source, TRAPS) {
   ResourceMark rm(THREAD);
   HandleMark hm(THREAD);
-
   // Load and initialize the jdk.internal.agent.Agent class
   // invoke getManagementAgentStatus() method to generate the status info
   // throw java.lang.NoSuchMethodError if method doesn't exist
@@ -960,8 +963,8 @@ void JMXStatusDCmd::execute(DCmdSource source, TRAPS) {
   JavaValue result(T_OBJECT);
   JavaCalls::call_static(&result, k, vmSymbols::getAgentStatus_name(), vmSymbols::void_string_signature(), CHECK);
 
-  jvalue* jv = (jvalue*) result.get_value_addr();
-  oop str = (oop) jv->l;
+  jvalue* jv = (jvalue*)result.get_value_addr();
+  oop str = cast_to_oop(jv->l);
   if (str != NULL) {
       char* out = java_lang_String::as_utf8_string(str);
       if (out) {
@@ -1186,4 +1189,26 @@ void QuickStartDumpDCMD::execute(DCmdSource source, TRAPS) {
   Tickspan duration = end_time - start_time;
   long ms = TimeHelper::counter_to_millis(duration.value());
   output()->print_cr("It took %lu ms to execute Quickstart.dump .", ms);
+}
+
+void CheckpointDCmd::execute(DCmdSource source, TRAPS) {
+  Klass* k = SystemDictionary::resolve_or_fail(vmSymbols::jdk_crac_Core(),
+                                                 true, CHECK);
+  JavaValue result(T_OBJECT);
+  JavaCallArguments args;
+  args.push_long((jlong)output());
+  LinuxAttachOperation* current_op;
+  JavaCalls::call_static(&result, k,
+                         vmSymbols::checkpointRestoreInternal_name(),
+                         vmSymbols::checkpointRestoreInternal_signature(), &args, CHECK);
+  oop str = (oop)result.get_jobject();
+  if (str != NULL) {
+    char* out = java_lang_String::as_utf8_string(str);
+    if (out[0] != '\0') {
+      current_op = LinuxAttachListener::get_current_op();
+      outputStream* stream = current_op->is_effectively_completed() ? tty : output();
+      stream->print_cr("An exception during a checkpoint operation:");
+      stream->print("%s", out);
+    }
+  }
 }

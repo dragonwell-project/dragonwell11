@@ -756,6 +756,15 @@ CallJavaMainInNewThread(jlong stack_size, void* args) {
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
+    {
+      const int restore_signal = SIGRTMIN + 2;
+      // block restore_signal in launcher thread to allow JVM handle it
+      sigset_t block_sig;
+      sigemptyset(&block_sig);
+      sigaddset(&block_sig, restore_signal);
+      pthread_sigmask(SIG_BLOCK, &block_sig, NULL);
+    }
+
     if (stack_size > 0) {
         pthread_attr_setstacksize(&attr, stack_size);
     }

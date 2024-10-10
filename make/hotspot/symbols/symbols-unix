@@ -199,3 +199,5 @@ JVM_AddModuleExportsToAllUnnamed
 JVM_AddReadsModule
 JVM_DefineModule
 JVM_SetBootLoaderUnnamedModule
+
+JVM_CheckpointEnabled

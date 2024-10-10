@@ -46,6 +46,11 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
+
+import jdk.crac.Context;
+import jdk.internal.crac.Core;
+import jdk.internal.crac.JDKResource;
+import jdk.crac.Resource;
 import sun.rmi.runtime.Log;
 import sun.rmi.runtime.NewThreadAction;
 import sun.rmi.transport.Channel;
@@ -78,6 +83,8 @@ public class TCPEndpoint implements Endpoint {
     private static String localHost;
     /** true if real local host name is known yet */
     private static boolean localHostKnown;
+    /** Resample localhost */
+    private static JDKResource localHostResource;
 
     // this should be a *private* method since it is privileged
     private static int getInt(String name, int def) {
@@ -105,42 +112,64 @@ public class TCPEndpoint implements Endpoint {
      * inablility to get fully qualified host name from VM.
      */
     static {
-        localHostKnown = true;
-        localHost = getHostnameProperty();
+        Runnable getLocalHostRunnable = () -> {
+            localHostKnown = true;
+            localHost = getHostnameProperty();
 
-        // could try querying CGI program here?
-        if (localHost == null) {
-            try {
-                InetAddress localAddr = InetAddress.getLocalHost();
-                byte[] raw = localAddr.getAddress();
-                if ((raw[0] == 127) &&
-                    (raw[1] ==   0) &&
-                    (raw[2] ==   0) &&
-                    (raw[3] ==   1)) {
-                    localHostKnown = false;
-                }
+            // could try querying CGI program here?
+            if (localHost == null) {
+                try {
+                    InetAddress localAddr = InetAddress.getLocalHost();
+                    byte[] raw = localAddr.getAddress();
+                    if ((raw[0] == 127) &&
+                                (raw[1] == 0) &&
+                                (raw[2] == 0) &&
+                                (raw[3] == 1)) {
+                        localHostKnown = false;
+                    }
 
-                /* if the user wishes to use a fully qualified domain
-                 * name then attempt to find one.
-                 */
-                if (getBoolean("java.rmi.server.useLocalHostName")) {
-                    localHost = FQDN.attemptFQDN(localAddr);
-                } else {
-                    /* default to using ip addresses, names will
-                     * work across seperate domains.
+                    /* if the user wishes to use a fully qualified domain
+                     * name then attempt to find one.
                      */
-                    localHost = localAddr.getHostAddress();
+                    if (getBoolean("java.rmi.server.useLocalHostName")) {
+                        localHost = FQDN.attemptFQDN(localAddr);
+                    } else {
+                        /* default to using ip addresses, names will
+                         * work across seperate domains.
+                         */
+                        localHost = localAddr.getHostAddress();
+                    }
+                } catch (Exception e) {
+                    localHostKnown = false;
+                    localHost = null;
                 }
-            } catch (Exception e) {
-                localHostKnown = false;
-                localHost = null;
             }
-        }
 
-        if (TCPTransport.tcpLog.isLoggable(Log.BRIEF)) {
-            TCPTransport.tcpLog.log(Log.BRIEF,
-                "localHostKnown = " + localHostKnown +
-                ", localHost = " + localHost);
+            if (TCPTransport.tcpLog.isLoggable(Log.BRIEF)) {
+                TCPTransport.tcpLog.log(Log.BRIEF,
+                        "localHostKnown = " + localHostKnown +
+                                ", localHost = " + localHost);
+            }
+        };
+        getLocalHostRunnable.run();
+
+        if (jdk.crac.Configuration.checkpointEnabled()) {
+            localHostResource = new JDKResource() {
+                @Override
+                public Priority getPriority() {
+                    return Priority.NORMAL;
+                }
+
+                @Override
+                public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
+                }
+
+                @Override
+                public void afterRestore(Context<? extends Resource> context) throws Exception {
+                    getLocalHostRunnable.run();
+                }
+            };
+            Core.getJDKContext().register(localHostResource);
         }
     }
 

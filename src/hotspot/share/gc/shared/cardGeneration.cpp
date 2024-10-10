@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -295,6 +296,9 @@ void CardGeneration::compute_new_size() {
                         _capacity_at_prologue / (double) K,
                         expansion_for_promotion / (double) K,
                         shrink_bytes / (double) K);
+  }
+  if (Universe::heap()->do_cleanup_unused()) {
+    shrink_bytes = capacity_after_gc - used_after_gc;
   }
   // Don't shrink unless it's significant
   if (shrink_bytes >= _min_heap_delta_bytes) {

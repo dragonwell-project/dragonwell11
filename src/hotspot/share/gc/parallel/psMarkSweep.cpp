@@ -111,6 +111,13 @@ void PSMarkSweep::invoke(bool maximum_heap_compaction) {
   PSMarkSweep::invoke_no_policy(clear_all_soft_refs || maximum_heap_compaction);
 }
 
+static void zero_cap(MutableSpace* ms) {
+  os::cleanup_memory((char*)ms->top(), (char*)ms->end() - (char*)ms->top());
+}
+static void zero_all(MutableSpace* ms) {
+  os::cleanup_memory((char*)ms->bottom(), (char*)ms->end() - (char*)ms->bottom());
+}
+
 // This method contains no policy. You should probably
 // be calling invoke() instead.
 bool PSMarkSweep::invoke_no_policy(bool clear_all_softrefs) {
@@ -328,6 +335,13 @@ bool PSMarkSweep::invoke_no_policy(bool clear_all_softrefs) {
                                size_policy->calculated_survivor_size_in_bytes());
       }
       log_debug(gc, ergo)("AdaptiveSizeStop: collection: %d ", heap->total_collections());
+    }
+
+    if (heap->do_cleanup_unused()) {
+      zero_cap(young_gen->eden_space());
+      zero_cap(young_gen->from_space());
+      zero_all(young_gen->to_space());
+      zero_cap(old_gen->object_space());
     }
 
     if (UsePerfData) {

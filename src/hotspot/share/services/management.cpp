@@ -942,6 +942,18 @@ static jlong get_long_attribute(jmmLongAttribute att) {
   case JMM_OS_MEM_TOTAL_PHYSICAL_BYTES:
     return os::physical_memory();
 
+  case JMM_JVM_RESTORE_START_TIME_MS:
+    return os::Linux::restore_start_time();
+
+  case JMM_JVM_UPTIME_SINCE_RESTORE_MS:
+    {
+      jlong ticks = os::Linux::uptime_since_restore();
+      if (ticks == -1) {
+        return -1;
+      }
+      return Management::ticks_to_ms(ticks);
+    }
+
   default:
     return -1;
   }
