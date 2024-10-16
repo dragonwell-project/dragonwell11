@@ -10550,6 +10550,97 @@ void Assembler::notq(Register dst) {
   emit_int8((unsigned char)(0xD0 | encode));
 }
 
+int8_t Assembler::get_prefixq(Address adr) {
+  int8_t prfx = get_prefixq(adr, rax);
+  assert(REX_W <= prfx && prfx <= REX_WXB, "must be");
+  return prfx;
+}
+
+int8_t Assembler::get_prefixq(Address adr, Register src) {
+  int8_t prfx = (int8_t)(REX_W +
+                         ((int)adr.base_needs_rex()) +
+                         ((int)adr.index_needs_rex() << 1) +
+                         ((int)(src->encoding() >= 8) << 2));
+#ifdef ASSERT
+  if (src->encoding() < 8) {
+    if (adr.base_needs_rex()) {
+      if (adr.index_needs_rex()) {
+        assert(prfx == REX_WXB, "must be");
+      } else {
+        assert(prfx == REX_WB, "must be");
+      }
+    } else {
+      if (adr.index_needs_rex()) {
+        assert(prfx == REX_WX, "must be");
+      } else {
+        assert(prfx == REX_W, "must be");
+      }
+    }
+  } else {
+    if (adr.base_needs_rex()) {
+      if (adr.index_needs_rex()) {
+        assert(prfx == REX_WRXB, "must be");
+      } else {
+        assert(prfx == REX_WRB, "must be");
+      }
+    } else {
+      if (adr.index_needs_rex()) {
+        assert(prfx == REX_WRX, "must be");
+      } else {
+        assert(prfx == REX_WR, "must be");
+      }
+    }
+  }
+#endif
+  return prfx;
+}
+
+#ifdef _LP64
+void Assembler::salq(Address dst, int imm8) {
+  InstructionMark im(this);
+  assert(isShiftCount(imm8 >> 1), "illegal shift count");
+  if (imm8 == 1) {
+    emit_int16(get_prefixq(dst), (unsigned char)0xD1);
+    emit_operand(as_Register(4), dst, 0);
+  }
+  else {
+    emit_int16(get_prefixq(dst), (unsigned char)0xC1);
+    emit_operand(as_Register(4), dst, 1);
+    emit_int8(imm8);
+  }
+}
+
+void Assembler::salq(Address dst) {
+  InstructionMark im(this);
+  emit_int16(get_prefixq(dst), (unsigned char)0xD3);
+  emit_operand(as_Register(4), dst, 0);
+}
+
+void Assembler::salq(Register dst, int imm8) {
+  assert(isShiftCount(imm8 >> 1), "illegal shift count");
+  int encode = prefixq_and_encode(dst->encoding());
+  if (imm8 == 1) {
+    emit_int16((unsigned char)0xD1, (0xE0 | encode));
+  } else {
+    emit_int24((unsigned char)0xC1, (0xE0 | encode), imm8);
+  }
+}
+
+void Assembler::salq(Register dst) {
+  int encode = prefixq_and_encode(dst->encoding());
+  emit_int16((unsigned char)0xD3, (0xE0 | encode));
+}
+#endif
+
+void Assembler::btq(Register src, int imm8) {
+  assert(isByte(imm8), "not a byte");
+  InstructionMark im(this);
+  int encode = prefixq_and_encode(src->encoding());
+  emit_int16(0x0f, 0xba);
+  emit_int8(0xe0|encode);
+  emit_int8(imm8);
+}
+
 void Assembler::orq(Address dst, int32_t imm32) {
   InstructionMark im(this);
   prefixq(dst);

@@ -774,6 +774,9 @@
                                                                             \
   product(bool, UseProfiledLoopPredicate, true,                             \
           "move predicates out of loops based on profiling data")           \
+                                                                            \
+  diagnostic(bool, InlineSecondarySupersTest, true,                \
+          "Inline the secondary supers hash lookup.")                       \
 
 C2_FLAGS(DECLARE_DEVELOPER_FLAG, \
          DECLARE_PD_DEVELOPER_FLAG, \

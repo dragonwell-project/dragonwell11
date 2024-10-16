@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2015, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2024 Alibaba Group Holding Limited. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -101,6 +102,7 @@ class MacroAssembler: public Assembler {
   void safepoint_poll(Label& slow_path);
   void safepoint_poll_acquire(Label& slow_path);
 
+  void rt_call(address dest, Register tmp = rscratch1);
   // Biased locking support
   // lock_reg and obj_reg must be loaded up with the appropriate values.
   // swap_reg is killed.
@@ -945,6 +947,31 @@ public:
                                      Label* L_success,
                                      Label* L_failure,
                                      bool set_cond_codes = false);
+
+  // As above, but with a constant super_klass.
+  // The result is in Register result, not the condition codes.
+  bool lookup_secondary_supers_table(Register r_sub_klass,
+                                     Register r_super_klass,
+                                     Register temp1,
+                                     Register temp2,
+                                     Register temp3,
+                                     FloatRegister vtemp,
+                                     Register result,
+                                     u1 super_klass_slot,
+                                     bool stub_is_near = false);
+
+  void verify_secondary_supers_table(Register r_sub_klass,
+                                     Register r_super_klass,
+                                     Register temp1,
+                                     Register temp2,
+                                     Register result);
+
+  void lookup_secondary_supers_table_slow_path(Register r_super_klass,
+                                               Register r_array_base,
+                                               Register r_array_index,
+                                               Register r_bitmap,
+                                               Register temp1,
+                                               Register result);
 
   // Simplified, combined version, good for typical uses.
   // Falls through on failure.

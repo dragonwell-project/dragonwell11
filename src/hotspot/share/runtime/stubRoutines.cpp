@@ -26,6 +26,7 @@
 #include "asm/codeBuffer.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/access.inline.hpp"
+#include "oops/klass.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/timerTrace.hpp"
@@ -176,7 +177,8 @@ address StubRoutines::_safefetch32_continuation_pc       = NULL;
 address StubRoutines::_safefetchN_entry                  = NULL;
 address StubRoutines::_safefetchN_fault_pc               = NULL;
 address StubRoutines::_safefetchN_continuation_pc        = NULL;
-
+address StubRoutines::_lookup_secondary_supers_table_slow_path_stub = NULL;
+address StubRoutines::_lookup_secondary_supers_table_stubs[Klass::SECONDARY_SUPERS_TABLE_SIZE] = { NULL };
 // Initialization
 //
 // Note: to break cycle with universe initialization, stubs are generated in two phases.

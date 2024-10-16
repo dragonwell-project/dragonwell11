@@ -212,6 +212,8 @@ class ClassLoader: AllStatic {
 
   static PerfCounter* _unsafe_defineClassCallCounter;
   static PerfCounter* _load_instance_class_failCounter;
+  // Count the time taken to hash the scondary superclass arrays.
+  static PerfCounter* _perf_secondary_hash_time;
 
   // The boot class path consists of 3 ordered pieces:
   //  1. the module/path pairs specified to --patch-module
@@ -319,6 +321,7 @@ class ClassLoader: AllStatic {
   static PerfCounter* perf_class_parse_selftime()     { return _perf_class_parse_selftime; }
   static PerfCounter* perf_sys_class_lookup_time()    { return _perf_sys_class_lookup_time; }
   static PerfCounter* perf_shared_classload_time()    { return _perf_shared_classload_time; }
+  static PerfCounter* perf_secondary_hash_time()      { return _perf_secondary_hash_time; }
   static PerfCounter* perf_sys_classload_time()       { return _perf_sys_classload_time; }
   static PerfCounter* perf_app_classload_time()       { return _perf_app_classload_time; }
   static PerfCounter* perf_app_classload_selftime()   { return _perf_app_classload_selftime; }

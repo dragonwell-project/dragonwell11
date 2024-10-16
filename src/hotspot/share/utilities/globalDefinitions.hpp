@@ -136,6 +136,11 @@
 #define INTX_FORMAT           "%" PRIdPTR
 #define UINTX_FORMAT          "%" PRIuPTR
 #define INTX_FORMAT_W(width)  "%" #width PRIdPTR
+#ifdef _LP64
+#define UINTX_FORMAT_X_0         "0x%016"     PRIxPTR
+#else
+#define UINTX_FORMAT_X_0         "0x%08"      PRIxPTR
+#endif
 #define UINTX_FORMAT_W(width) "%" #width PRIuPTR
 
 //----------------------------------------------------------------------------------------------------
