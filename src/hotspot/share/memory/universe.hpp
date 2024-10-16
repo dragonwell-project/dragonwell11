@@ -170,6 +170,9 @@ class Universe: AllStatic {
 
   static Array<Klass*>*  _the_array_interfaces_array;
 
+  static uintx _the_array_interfaces_bitmap;
+  static uintx _the_empty_klass_bitmap;
+
   // array of preallocated error objects with backtrace
   static objArrayOop   _preallocated_out_of_memory_error_array;
 
@@ -326,6 +329,7 @@ class Universe: AllStatic {
 
   static objArrayOop  the_empty_class_klass_array ()  { return _the_empty_class_klass_array;   }
   static Array<Klass*>* the_array_interfaces_array() { return _the_array_interfaces_array;   }
+  static uintx        the_array_interfaces_bitmap()   { return _the_array_interfaces_bitmap; }
   static oop          the_null_string()               { return _the_null_string;               }
   static oop          the_min_jint_string()          { return _the_min_jint_string;          }
 
@@ -364,6 +368,8 @@ class Universe: AllStatic {
   static Array<u2>*        the_empty_short_array()  { return _the_empty_short_array; }
   static Array<Method*>* the_empty_method_array() { return _the_empty_method_array; }
   static Array<Klass*>*  the_empty_klass_array()  { return _the_empty_klass_array; }
+  static uintx            the_empty_klass_bitmap() { return _the_empty_klass_bitmap; }
+
 
   // OutOfMemoryError support. Returns an error with the required message. The returned error
   // may or may not have a backtrace. If error has a backtrace then the stack trace is already
