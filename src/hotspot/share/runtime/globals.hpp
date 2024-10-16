@@ -2735,6 +2735,17 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
                                                                             \
   product(bool, CRTrace, true, "Minimal C/R tracing")                       \
                                                                             \
+  diagnostic(bool, UseSecondarySupersCache, true,                           \
+                "Use secondary supers cache during subtype checks.")        \
+                                                                            \
+  diagnostic(bool, UseSecondarySupersTable, false,                          \
+                "Use hash table to lookup secondary supers.")               \
+                                                                            \
+  diagnostic(bool, VerifySecondarySupers, false,                            \
+          "Check that linear and hashed secondary lookups return the same result.") \
+                                                                            \
+  diagnostic(bool, StressSecondarySupers, false,                            \
+          "Use a terrible hash function in order to generate many collisions.") \
 
 #define VM_FLAGS(develop,                                                   \
                  develop_pd,                                                \
