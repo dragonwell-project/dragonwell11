@@ -115,7 +115,7 @@ jobs:
           else
             extra_packages=
           fi
-          sudo apt-get install -y gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} libxrandr-dev${{ steps.arch.outputs.suffix }} libxtst-dev${{ steps.arch.outputs.suffix }} libcups2-dev${{ steps.arch.outputs.suffix }} libasound2-dev${{ steps.arch.outputs.suffix }} ${{ inputs.apt-extra-packages }} $extra_packages
+          sudo apt-get install -y gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} libxrandr-dev${{ steps.arch.outputs.suffix }} libxtst-dev${{ steps.arch.outputs.suffix }} libcups2-dev${{ steps.arch.outputs.suffix }} libasound2-dev${{ steps.arch.outputs.suffix }} ${{ inputs.apt-extra-packages }} $extra_packages jq
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ inputs.gcc-major-version }} 100 --slave /usr/bin/g++ g++ /usr/bin/g++-${{ inputs.gcc-major-version }}
         if: inputs.platform != 'linux-aarch64'
 
@@ -143,9 +143,9 @@ jobs:
           platform: ${{ inputs.platform }}
           debug-suffix: '${{ matrix.suffix }}'
 
-      - name: 'Build serverless-adapter'
-        id: build-serverless-adapter
-        uses: ./.github/actions/build-serverless-adapter
+      - name: 'Build additional components'
+        id: build-additional-components
+        uses: ./.github/actions/build-additional-components
         with:
           platform: ${{ inputs.platform }}
           debug-suffix: '${{ matrix.suffix }}'

@@ -19,7 +19,7 @@
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
-name: 'Build serverless-adapter'
+name: 'Build additional components'
 description: 'Build it using built JDK'
 inputs:
   platform:
@@ -89,6 +89,45 @@ runs:
         mkdir -p ${{ steps.bundle_decompress.outputs.java_home }}/lib/serverless
         cp -f serverless-adapter/target/serverless-adapter-0.1.jar ${{ steps.bundle_decompress.outputs.java_home }}/lib/serverless/serverless-adapter.jar
         cp -f serverless-adapter/output/libloadclassagent.so ${{ steps.bundle_decompress.outputs.java_home }}/lib/serverless/libloadclassagent.so
+      shell: bash
+
+    - name: 'Get latest criu release'
+      id: get_criu_release
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const repoOwner = 'dragonwell-project';
+          const repoName = 'criu';
+          const { data: release } = await github.rest.repos.getLatestRelease({
+            owner: repoOwner,
+            repo: repoName,
+          });
+          return release;
+
+    - name: 'Download asset and copy into jdk'
+      run: |
+          if [ "${{ inputs.platform }}" = "linux-aarch64" ];then
+            keyword=arm64
+          elif [ "${{ inputs.platform }}" = "linux-x64" ];then
+            keyword=x64
+          else
+            echo "unsupport platform ${{ inputs.platform }}"
+            exit 1
+          fi
+          url=""
+          echo "${{ steps.get_criu_release.outputs.assets }}" | jq -c '.[]' | while read asset; do
+            name="$(echo ${asset} | jq -r '.name')"
+            if [ -n "$(echo ${name} | grep ${keyword})" ];then
+              url="$(echo ${asset} | jq -r '.url')"
+              break
+            fi
+          done
+          if [ -n "${url}" ];then
+            curl -OLSk -C - --retry 5 ${url} -o criu.tar.gz
+            tar zxvf criu.tar.gz
+            chmod +x criu
+            mv criu ${{ steps.bundle_decompress.outputs.java_home }}/lib/
+          fi
       shell: bash
 
     - name: 'Regenerate bundle'
