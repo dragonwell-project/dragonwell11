@@ -30,7 +30,7 @@
 JVMFlag::Error ParallelGCThreadsConstraintFuncParallel(uint value, bool verbose) {
   // Parallel GC passes ParallelGCThreads when creating GrowableArray as 'int' type parameter.
   // So can't exceed with "max_jint"
-
+  JVMFlag::printError(false, "ParallelGCThreadsConstraintFuncParallel\n");
   if (UseParallelGC && (value > (uint)max_jint)) {
     JVMFlag::printError(verbose,
                         "ParallelGCThreads (" UINT32_FORMAT ") must be "
@@ -42,6 +42,7 @@ JVMFlag::Error ParallelGCThreadsConstraintFuncParallel(uint value, bool verbose)
 }
 
 JVMFlag::Error InitialTenuringThresholdConstraintFuncParallel(uintx value, bool verbose) {
+  JVMFlag::printError(false, "InitialTenuringThresholdConstraintFuncParallel\n");
   // InitialTenuringThreshold is only used for ParallelGC.
   if (UseParallelGC && (value > MaxTenuringThreshold)) {
       JVMFlag::printError(verbose,
@@ -54,6 +55,7 @@ JVMFlag::Error InitialTenuringThresholdConstraintFuncParallel(uintx value, bool 
 }
 
 JVMFlag::Error MaxTenuringThresholdConstraintFuncParallel(uintx value, bool verbose) {
+  JVMFlag::printError(false, "MaxTenuringThresholdConstraintFuncParallel\n");
   // As only ParallelGC uses InitialTenuringThreshold,
   // we don't need to compare InitialTenuringThreshold with MaxTenuringThreshold.
   if (UseParallelGC && (value < InitialTenuringThreshold)) {

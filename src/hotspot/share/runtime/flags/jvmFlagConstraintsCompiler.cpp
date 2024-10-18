@@ -35,6 +35,7 @@
 #include "runtime/globals_extension.hpp"
 
 JVMFlag::Error AliasLevelConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "AliasLevelConstraintFunc\n");
   if ((value <= 1) && (Arguments::mode() == Arguments::_comp || Arguments::mode() == Arguments::_mixed)) {
     JVMFlag::printError(verbose,
                         "AliasLevel (" INTX_FORMAT ") is not "
@@ -62,6 +63,7 @@ JVMFlag::Error AliasLevelConstraintFunc(intx value, bool verbose) {
  *    the minimum number of compiler threads is 2.
  */
 JVMFlag::Error CICompilerCountConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "CICompilerCountConstraintFunc\n");
   int min_number_of_compiler_threads = 0;
 #if !defined(COMPILER1) && !defined(COMPILER2) && !INCLUDE_JVMCI
   // case 1
@@ -91,6 +93,7 @@ JVMFlag::Error CICompilerCountConstraintFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error AllocatePrefetchDistanceConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "AllocatePrefetchDistanceConstraintFunc\n");
   if (value < 0 || value > 512) {
     JVMFlag::printError(verbose,
                         "AllocatePrefetchDistance (" INTX_FORMAT ") must be "
@@ -103,6 +106,7 @@ JVMFlag::Error AllocatePrefetchDistanceConstraintFunc(intx value, bool verbose) 
 }
 
 JVMFlag::Error AllocatePrefetchStepSizeConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "AllocatePrefetchStepSizeConstraintFunc\n");
   if (AllocatePrefetchStyle == 3) {
     if (value % wordSize != 0) {
       JVMFlag::printError(verbose,
@@ -115,6 +119,7 @@ JVMFlag::Error AllocatePrefetchStepSizeConstraintFunc(intx value, bool verbose) 
 }
 
 JVMFlag::Error AllocatePrefetchInstrConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "AllocatePrefetchInstrConstraintFunc\n");
   intx max_value = max_intx;
 #if defined(SPARC)
   max_value = 1;
@@ -132,6 +137,7 @@ JVMFlag::Error AllocatePrefetchInstrConstraintFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error CompileThresholdConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "CompileThresholdConstraintFunc\n");
   if (value < 0 || value > INT_MAX >> InvocationCounter::count_shift) {
     JVMFlag::printError(verbose,
                         "CompileThreshold (" INTX_FORMAT ") "
@@ -145,6 +151,7 @@ JVMFlag::Error CompileThresholdConstraintFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error OnStackReplacePercentageConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "OnStackReplacePercentageConstraintFunc\n");
   int backward_branch_limit;
   if (ProfileInterpreter) {
     if (OnStackReplacePercentage < InterpreterProfilePercentage) {
@@ -193,6 +200,7 @@ JVMFlag::Error OnStackReplacePercentageConstraintFunc(intx value, bool verbose) 
 }
 
 JVMFlag::Error CodeCacheSegmentSizeConstraintFunc(uintx value, bool verbose) {
+  JVMFlag::printError(true, "CodeCacheSegmentSizeConstraintFunc\n");
   if (CodeCacheSegmentSize < (uintx)CodeEntryAlignment) {
     JVMFlag::printError(verbose,
                         "CodeCacheSegmentSize  (" UINTX_FORMAT ") must be "
@@ -225,6 +233,7 @@ JVMFlag::Error CodeCacheSegmentSizeConstraintFunc(uintx value, bool verbose) {
 }
 
 JVMFlag::Error CompilerThreadPriorityConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "CompilerThreadPriorityConstraintFunc\n");
 #ifdef SOLARIS
   if ((value < MinimumPriority || value > MaximumPriority) &&
       (value != -1) && (value != -FXCriticalPriority)) {
@@ -241,6 +250,7 @@ JVMFlag::Error CompilerThreadPriorityConstraintFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error CodeEntryAlignmentConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "CodeEntryAlignmentConstraintFunc\n");
 #ifdef SPARC
   if (CodeEntryAlignment % relocInfo::addr_unit() != 0) {
     JVMFlag::printError(verbose,
@@ -269,6 +279,7 @@ JVMFlag::Error CodeEntryAlignmentConstraintFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error OptoLoopAlignmentConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "OptoLoopAlignmentConstraintFunc\n");
   if (!is_power_of_2(value)) {
     JVMFlag::printError(verbose,
                         "OptoLoopAlignment (" INTX_FORMAT ") "
@@ -291,6 +302,7 @@ JVMFlag::Error OptoLoopAlignmentConstraintFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error ArraycopyDstPrefetchDistanceConstraintFunc(uintx value, bool verbose) {
+  JVMFlag::printError(true, "ArraycopyDstPrefetchDistanceConstraintFunc\n");
   if (value >= 4032) {
     JVMFlag::printError(verbose,
                         "ArraycopyDstPrefetchDistance (" UINTX_FORMAT ") must be"
@@ -302,6 +314,7 @@ JVMFlag::Error ArraycopyDstPrefetchDistanceConstraintFunc(uintx value, bool verb
 }
 
 JVMFlag::Error ArraycopySrcPrefetchDistanceConstraintFunc(uintx value, bool verbose) {
+  JVMFlag::printError(true, "ArraycopySrcPrefetchDistanceConstraintFunc\n");
   if (value >= 4032) {
     JVMFlag::printError(verbose,
                         "ArraycopySrcPrefetchDistance (" UINTX_FORMAT ") must be"
@@ -313,6 +326,7 @@ JVMFlag::Error ArraycopySrcPrefetchDistanceConstraintFunc(uintx value, bool verb
 }
 
 JVMFlag::Error TypeProfileLevelConstraintFunc(uintx value, bool verbose) {
+  JVMFlag::printError(true, "TypeProfileLevelConstraintFunc\n");
   for (int i = 0; i < 3; i++) {
     if (value % 10 > 2) {
       JVMFlag::printError(verbose,
@@ -327,6 +341,7 @@ JVMFlag::Error TypeProfileLevelConstraintFunc(uintx value, bool verbose) {
 }
 
 JVMFlag::Error InitArrayShortSizeConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "InitArrayShortSizeConstraintFunc\n");
   if (value % BytesPerLong != 0) {
     return JVMFlag::VIOLATES_CONSTRAINT;
   } else {
@@ -336,6 +351,7 @@ JVMFlag::Error InitArrayShortSizeConstraintFunc(intx value, bool verbose) {
 
 #ifdef COMPILER2
 JVMFlag::Error InteriorEntryAlignmentConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "InteriorEntryAlignmentConstraintFunc\n");
   if (InteriorEntryAlignment > CodeEntryAlignment) {
     JVMFlag::printError(verbose,
                        "InteriorEntryAlignment (" INTX_FORMAT ") must be "
@@ -379,6 +395,7 @@ JVMFlag::Error InteriorEntryAlignmentConstraintFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error NodeLimitFudgeFactorConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "NodeLimitFudgeFactorConstraintFunc\n");
   if (value < MaxNodeLimit * 2 / 100 || value > MaxNodeLimit * 40 / 100) {
     JVMFlag::printError(verbose,
                         "NodeLimitFudgeFactor must be between 2%% and 40%% "
@@ -392,6 +409,7 @@ JVMFlag::Error NodeLimitFudgeFactorConstraintFunc(intx value, bool verbose) {
 #endif // COMPILER2
 
 JVMFlag::Error RTMTotalCountIncrRateConstraintFunc(int value, bool verbose) {
+  JVMFlag::printError(true, "RTMTotalCountIncrRateConstraintFunc\n");
 #if INCLUDE_RTM_OPT
   if (UseRTMLocking && !is_power_of_2(RTMTotalCountIncrRate)) {
     JVMFlag::printError(verbose,

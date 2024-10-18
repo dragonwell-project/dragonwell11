@@ -31,6 +31,7 @@
 #include "runtime/task.hpp"
 
 JVMFlag::Error ObjectAlignmentInBytesConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "ObjectAlignmentInBytesConstraintFunc\n");
   if (!is_power_of_2(value)) {
     JVMFlag::printError(verbose,
                         "ObjectAlignmentInBytes (" INTX_FORMAT ") must be "
@@ -52,6 +53,7 @@ JVMFlag::Error ObjectAlignmentInBytesConstraintFunc(intx value, bool verbose) {
 // Need to enforce the padding not to break the existing field alignments.
 // It is sufficient to check against the largest type size.
 JVMFlag::Error ContendedPaddingWidthConstraintFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "ContendedPaddingWidthConstraintFunc\n");
   if ((value % BytesPerLong) != 0) {
     JVMFlag::printError(verbose,
                         "ContendedPaddingWidth (" INTX_FORMAT ") must be "
@@ -64,6 +66,7 @@ JVMFlag::Error ContendedPaddingWidthConstraintFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error BiasedLockingBulkRebiasThresholdFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "BiasedLockingBulkRebiasThresholdFunc\n");
   if (value > BiasedLockingBulkRevokeThreshold) {
     JVMFlag::printError(verbose,
                         "BiasedLockingBulkRebiasThreshold (" INTX_FORMAT ") must be "
@@ -76,6 +79,7 @@ JVMFlag::Error BiasedLockingBulkRebiasThresholdFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error BiasedLockingStartupDelayFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "BiasedLockingStartupDelayFunc\n");
   if ((value % PeriodicTask::interval_gran) != 0) {
     JVMFlag::printError(verbose,
                         "BiasedLockingStartupDelay (" INTX_FORMAT ") must be "
@@ -88,6 +92,7 @@ JVMFlag::Error BiasedLockingStartupDelayFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error BiasedLockingBulkRevokeThresholdFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "BiasedLockingBulkRevokeThresholdFunc\n");
   if (value < BiasedLockingBulkRebiasThreshold) {
     JVMFlag::printError(verbose,
                         "BiasedLockingBulkRevokeThreshold (" INTX_FORMAT ") must be "
@@ -107,6 +112,7 @@ JVMFlag::Error BiasedLockingBulkRevokeThresholdFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error BiasedLockingDecayTimeFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "BiasedLockingDecayTimeFunc\n");
   if (BiasedLockingBulkRebiasThreshold/(double)value > 0.1) {
     JVMFlag::printError(verbose,
                         "The ratio of BiasedLockingBulkRebiasThreshold (" INTX_FORMAT ")"
@@ -120,6 +126,7 @@ JVMFlag::Error BiasedLockingDecayTimeFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error PerfDataSamplingIntervalFunc(intx value, bool verbose) {
+  JVMFlag::printError(true, "PerfDataSamplingIntervalFunc\n");
   if ((value % PeriodicTask::interval_gran != 0)) {
     JVMFlag::printError(verbose,
                         "PerfDataSamplingInterval (" INTX_FORMAT ") must be "
@@ -132,6 +139,7 @@ JVMFlag::Error PerfDataSamplingIntervalFunc(intx value, bool verbose) {
 }
 
 JVMFlag::Error ThreadLocalHandshakesConstraintFunc(bool value, bool verbose) {
+  JVMFlag::printError(true, "ThreadLocalHandshakesConstraintFunc\n");
   if (value) {
     if (!SafepointMechanism::supports_thread_local_poll()) {
       JVMFlag::printError(verbose, "ThreadLocalHandshakes not yet supported on this platform\n");
