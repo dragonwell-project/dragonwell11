@@ -30,8 +30,12 @@
 JVMFlag::Error ParallelGCThreadsConstraintFuncParallel(uint value, bool verbose) {
   // Parallel GC passes ParallelGCThreads when creating GrowableArray as 'int' type parameter.
   // So can't exceed with "max_jint"
-
   if (UseParallelGC && (value > (uint)max_jint)) {
+    if (VerifyFlagConstraints) {
+      ParallelGCThreads = max_jint;
+      JVMFlag::printError(true, "ParallelGCThreads:"UINT32_FORMAT"\n", ParallelGCThreads);
+      return JVMFlag::SUCCESS;
+    }
     JVMFlag::printError(verbose,
                         "ParallelGCThreads (" UINT32_FORMAT ") must be "
                         "less than or equal to " UINT32_FORMAT " for Parallel GC\n",
@@ -44,6 +48,11 @@ JVMFlag::Error ParallelGCThreadsConstraintFuncParallel(uint value, bool verbose)
 JVMFlag::Error InitialTenuringThresholdConstraintFuncParallel(uintx value, bool verbose) {
   // InitialTenuringThreshold is only used for ParallelGC.
   if (UseParallelGC && (value > MaxTenuringThreshold)) {
+      if (VerifyFlagConstraints) {
+        InitialTenuringThreshold = MaxTenuringThreshold;
+        JVMFlag::printError(true, "InitialTenuringThreshold"UINTX_FORMAT"\n", InitialTenuringThreshold);
+        return JVMFlag::SUCCESS;
+      }
       JVMFlag::printError(verbose,
                           "InitialTenuringThreshold (" UINTX_FORMAT ") must be "
                           "less than or equal to MaxTenuringThreshold (" UINTX_FORMAT ")\n",
@@ -57,6 +66,11 @@ JVMFlag::Error MaxTenuringThresholdConstraintFuncParallel(uintx value, bool verb
   // As only ParallelGC uses InitialTenuringThreshold,
   // we don't need to compare InitialTenuringThreshold with MaxTenuringThreshold.
   if (UseParallelGC && (value < InitialTenuringThreshold)) {
+    if (VerifyFlagConstraints) {
+      MaxTenuringThreshold = InitialTenuringThreshold;
+      JVMFlag::printError(true, "MaxTenuringThreshold"UINTX_FORMAT"\n", InitialTenuringThreshold);
+      return JVMFlag::SUCCESS;
+    }
     JVMFlag::printError(verbose,
                         "MaxTenuringThreshold (" UINTX_FORMAT ") must be "
                         "greater than or equal to InitialTenuringThreshold (" UINTX_FORMAT ")\n",

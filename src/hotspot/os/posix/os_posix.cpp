@@ -1516,10 +1516,16 @@ jint os::Posix::set_minimum_stack_sizes() {
     // The '-Xss' and '-XX:ThreadStackSize=N' options both set
     // ThreadStackSize so we go with "Java thread stack size" instead
     // of "ThreadStackSize" to be more friendly.
-    tty->print_cr("\nThe Java thread stack size specified is too small. "
+    if (VerifyFlagConstraints) {
+      ThreadStackSize = _java_thread_min_stack_allowed / K;
+      stack_size_in_bytes = ThreadStackSize * K;
+      tty->print_cr("ThreadStackSize:"SIZE_FORMAT"\n", ThreadStackSize);
+    } else {
+      tty->print_cr("\nThe Java thread stack size specified is too small. "
                   "Specify at least " SIZE_FORMAT "k",
                   _java_thread_min_stack_allowed / K);
-    return JNI_ERR;
+      return JNI_ERR;
+    }
   }
 
   // Make the stack size a multiple of the page size so that
@@ -1537,10 +1543,16 @@ jint os::Posix::set_minimum_stack_sizes() {
   stack_size_in_bytes = CompilerThreadStackSize * K;
   if (stack_size_in_bytes != 0 &&
       stack_size_in_bytes < _compiler_thread_min_stack_allowed) {
-    tty->print_cr("\nThe CompilerThreadStackSize specified is too small. "
+    if (VerifyFlagConstraints) {
+      CompilerThreadStackSize = _compiler_thread_min_stack_allowed / K;
+      stack_size_in_bytes = CompilerThreadStackSize * K;
+      tty->print_cr("CompilerThreadStackSize:"SIZE_FORMAT"\n", CompilerThreadStackSize);
+    } else {
+      tty->print_cr("\nThe CompilerThreadStackSize specified is too small. "
                   "Specify at least " SIZE_FORMAT "k",
                   _compiler_thread_min_stack_allowed / K);
-    return JNI_ERR;
+      return JNI_ERR;
+    }
   }
 
   _vm_internal_thread_min_stack_allowed = align_up(_vm_internal_thread_min_stack_allowed, vm_page_size());
@@ -1549,10 +1561,16 @@ jint os::Posix::set_minimum_stack_sizes() {
   stack_size_in_bytes = VMThreadStackSize * K;
   if (stack_size_in_bytes != 0 &&
       stack_size_in_bytes < _vm_internal_thread_min_stack_allowed) {
-    tty->print_cr("\nThe VMThreadStackSize specified is too small. "
+    if (VerifyFlagConstraints) {
+      VMThreadStackSize = _vm_internal_thread_min_stack_allowed / K;
+      stack_size_in_bytes = VMThreadStackSize * K;
+      tty->print_cr("VMThreadStackSize:"SIZE_FORMAT"\n", VMThreadStackSize);
+    } else {
+      tty->print_cr("\nThe VMThreadStackSize specified is too small. "
                   "Specify at least " SIZE_FORMAT "k",
                   _vm_internal_thread_min_stack_allowed / K);
-    return JNI_ERR;
+      return JNI_ERR;
+    }
   }
   return JNI_OK;
 }

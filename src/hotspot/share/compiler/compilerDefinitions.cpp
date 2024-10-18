@@ -293,31 +293,61 @@ bool CompilerConfig::check_args_consistency(bool status) {
   // Template Interpreter code is approximately 3X larger in debug builds.
   uint min_code_cache_size = CodeCacheMinimumUseSpace DEBUG_ONLY(* 3);
   if (ReservedCodeCacheSize < InitialCodeCacheSize) {
-    jio_fprintf(defaultStream::error_stream(),
+    if (VerifyFlagConstraints) {
+      ReservedCodeCacheSize = InitialCodeCacheSize;
+      jio_fprintf(defaultStream::error_stream(), "ReservedCodeCacheSize:%d\n", ReservedCodeCacheSize);
+      status = true;
+    } else {
+      jio_fprintf(defaultStream::error_stream(),
                 "Invalid ReservedCodeCacheSize: %dK. Must be at least InitialCodeCacheSize=%dK.\n",
                 ReservedCodeCacheSize/K, InitialCodeCacheSize/K);
-    status = false;
+      status = false;
+    }
   } else if (ReservedCodeCacheSize < min_code_cache_size) {
-    jio_fprintf(defaultStream::error_stream(),
+    if (VerifyFlagConstraints) {
+      ReservedCodeCacheSize = min_code_cache_size;
+      jio_fprintf(defaultStream::error_stream(), "ReservedCodeCacheSize:%d\n", ReservedCodeCacheSize);
+      status = true;
+    } else {
+      jio_fprintf(defaultStream::error_stream(),
                 "Invalid ReservedCodeCacheSize=%dK. Must be at least %uK.\n", ReservedCodeCacheSize/K,
                 min_code_cache_size/K);
-    status = false;
+      status = false;
+    }
   } else if (ReservedCodeCacheSize > CODE_CACHE_SIZE_LIMIT) {
-    // Code cache size larger than CODE_CACHE_SIZE_LIMIT is not supported.
-    jio_fprintf(defaultStream::error_stream(),
-                "Invalid ReservedCodeCacheSize=%dM. Must be at most %uM.\n", ReservedCodeCacheSize/M,
-                CODE_CACHE_SIZE_LIMIT/M);
-    status = false;
+      if (VerifyFlagConstraints) {
+        ReservedCodeCacheSize = CODE_CACHE_SIZE_LIMIT;
+        jio_fprintf(defaultStream::error_stream(), "ReservedCodeCacheSize=%d\n", ReservedCodeCacheSize);
+        status = true;
+      } else {
+        // Code cache size larger than CODE_CACHE_SIZE_LIMIT is not supported.
+        jio_fprintf(defaultStream::error_stream(),
+                      "Invalid ReservedCodeCacheSize=%dM. Must be at most %uM.\n", ReservedCodeCacheSize/M,
+                      CODE_CACHE_SIZE_LIMIT/M);
+        status = false;
+      }
   } else if (NonNMethodCodeHeapSize < min_code_cache_size) {
-    jio_fprintf(defaultStream::error_stream(),
-                "Invalid NonNMethodCodeHeapSize=%dK. Must be at least %uK.\n", NonNMethodCodeHeapSize/K,
-                min_code_cache_size/K);
-    status = false;
+    if (VerifyFlagConstraints) {
+      NonNMethodCodeHeapSize = min_code_cache_size;
+      jio_fprintf(defaultStream::error_stream(), "NonNMethodCodeHeapSize=%d\n", NonNMethodCodeHeapSize);
+      status = true;
+    } else {
+      jio_fprintf(defaultStream::error_stream(),
+                  "Invalid NonNMethodCodeHeapSize=%dK. Must be at least %uK.\n", NonNMethodCodeHeapSize/K,
+                  min_code_cache_size/K);
+      status = false;
+    }
   } else if (InlineCacheBufferSize > NonNMethodCodeHeapSize / 2) {
-    jio_fprintf(defaultStream::error_stream(),
-                "Invalid InlineCacheBufferSize=" SIZE_FORMAT "K. Must be less than or equal to " SIZE_FORMAT "K.\n",
-                InlineCacheBufferSize/K, NonNMethodCodeHeapSize/2/K);
-    status = false;
+    if (VerifyFlagConstraints) {
+      InlineCacheBufferSize = NonNMethodCodeHeapSize / 2;
+      jio_fprintf(defaultStream::error_stream(), "InlineCacheBufferSize=%d\n", InlineCacheBufferSize);
+      status = true;
+    } else {
+      jio_fprintf(defaultStream::error_stream(),
+                  "Invalid InlineCacheBufferSize=" SIZE_FORMAT "K. Must be less than or equal to " SIZE_FORMAT "K.\n",
+                  InlineCacheBufferSize/K, NonNMethodCodeHeapSize/2/K);
+      status = false;
+    }
   }
 
 #ifdef _LP64
