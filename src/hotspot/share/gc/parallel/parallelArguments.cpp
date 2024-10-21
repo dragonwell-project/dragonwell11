@@ -66,9 +66,12 @@ void ParallelArguments::initialize() {
     if (FLAG_IS_DEFAULT(MaxHeapFreeRatio)) {
       FLAG_SET_DEFAULT(MaxHeapFreeRatio, 100);
     }
+#ifdef LINUX
+    // Auto-Enabled only on linux
     if (FLAG_IS_DEFAULT(UseIOPrioritySizePolicy)) {
       FLAG_SET_DEFAULT(UseIOPrioritySizePolicy, true);
     }
+#endif
   }
 
   if (UseIOPrioritySizePolicy && !UseAdaptiveSizePolicy) {
