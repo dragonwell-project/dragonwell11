@@ -35,6 +35,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import jdk.jshell.tool.JavaShellToolBuilder;
 import org.testng.annotations.Test;
@@ -88,7 +89,9 @@ public class CustomInputToolBuilder extends KullaTesting {
                     .out(printOut, printOut, printOut)
                     .interactiveTerminal(interactiveTerminal)
                     .promptCapture(true)
-                    .start("--no-startup");
+                    .persistence(new HashMap<>())
+                    .start("--no-startup",
+                           "--execution", Presets.TEST_DEFAULT_EXECUTION);
 
             String actual = new String(out.toByteArray());
             List<String> actualLines = Arrays.asList(actual.split("\\R"));

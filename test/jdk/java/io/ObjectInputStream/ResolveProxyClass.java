@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2021 Alibaba Group Holding Limited. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -38,7 +38,6 @@
  * @run main/othervm -Dcom.alibaba.enableFastSerialization=true ResolveProxyClass
  */
 
-import java.lang.reflect.*;
 import java.io.*;
 
 public class ResolveProxyClass {
@@ -54,7 +53,7 @@ public class ResolveProxyClass {
             super();
         }
 
-        protected Class resolveProxyClass(String[] interfaces)
+        protected Class<?> resolveProxyClass(String[] interfaces)
             throws IOException, ClassNotFoundException
         {
             return super.resolveProxyClass(interfaces);
@@ -84,7 +83,7 @@ public class ResolveProxyClass {
             ClassLoader expectedLoader = ResolveProxyClass.class.getClassLoader();
 
             TestObjectInputStream in = new TestObjectInputStream();
-            Class proxyClass = in.resolveProxyClass(
+            Class<?> proxyClass = in.resolveProxyClass(
                 new String[] { Runnable.class.getName() });
             ClassLoader proxyLoader = proxyClass.getClassLoader();
             System.err.println("proxy class \"" + proxyClass +
