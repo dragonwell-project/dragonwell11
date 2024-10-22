@@ -1290,6 +1290,10 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   product(bool, PrintFlagsInitial, false,                                   \
           "Print all VM flags before argument processing and exit VM")      \
                                                                             \
+  diagnostic(bool, VerifyFlagConstraints, false,                            \
+          "Verify flags, calculate suggested legal values for that "        \
+          "violate the constraints, and then exit VM")                      \
+                                                                            \
   product(bool, PrintFlagsFinal, false,                                     \
           "Print all VM flags after argument and ergonomic processing")     \
                                                                             \

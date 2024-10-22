@@ -36,6 +36,10 @@
 static JVMFlag::Error ParallelGCThreadsAndCMSWorkQueueDrainThreshold(uint threads, uintx threshold, bool verbose) {
   // CMSWorkQueueDrainThreshold is verified to be less than max_juint
   if (UseConcMarkSweepGC && (threads > (uint)(max_jint / (uint)threshold))) {
+    if (VerifyFlagConstraints) {
+      //JVMFlag::printError(true, "ParallelGCThreads:"UINT32_FORMAT"\n", )
+      return JVMFlag::SUCCESS;
+    }
     JVMFlag::printError(verbose,
                         "ParallelGCThreads (" UINT32_FORMAT ") or CMSWorkQueueDrainThreshold ("
                         UINTX_FORMAT ") is too large\n",
