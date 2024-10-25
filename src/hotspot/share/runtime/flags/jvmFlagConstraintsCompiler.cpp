@@ -37,8 +37,8 @@
 
 JVMFlag::Error AliasLevelConstraintFunc(intx value, bool verbose) {
   if ((value <= 1) && (Arguments::mode() == Arguments::_comp || Arguments::mode() == Arguments::_mixed)) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
+      AliasLevel = 2;
       JVMFlag::printError(true, "AliasLevel:2\n");
       return JVMFlag::SUCCESS;
     }
@@ -86,8 +86,8 @@ JVMFlag::Error CICompilerCountConstraintFunc(intx value, bool verbose) {
   min_number_of_compiler_threads = MIN2(min_number_of_compiler_threads, CI_COMPILER_COUNT);
 
   if (value < (intx)min_number_of_compiler_threads) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
+      CICompilerCount = min_number_of_compiler_threads;
       JVMFlag::printError(true, "CICompilerCount:"INTX_FORMAT"\n", min_number_of_compiler_threads);
       return JVMFlag::SUCCESS;
     }
@@ -103,18 +103,9 @@ JVMFlag::Error CICompilerCountConstraintFunc(intx value, bool verbose) {
 
 JVMFlag::Error AllocatePrefetchDistanceConstraintFunc(intx value, bool verbose) {
   if (value < 0 || value > 512) {
-    if (VerifyFlagConstraints)
-    {
-      int suggestValue;
-      if (value < 0)
-      {
-        suggestValue = 0;
-      }
-      else
-      {
-        suggestValue = 512;
-      }
-      JVMFlag::printError(true, "AllocatePrefetchDistance:" INTX_FORMAT "\n", suggestValue);
+    if (VerifyFlagConstraints) {
+      AllocatePrefetchDistance = value < 0 ? 0 : 512;
+      JVMFlag::printError(true, "AllocatePrefetchDistance:" INTX_FORMAT "\n", AllocatePrefetchDistance);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -129,12 +120,11 @@ JVMFlag::Error AllocatePrefetchDistanceConstraintFunc(intx value, bool verbose) 
 
 JVMFlag::Error AllocatePrefetchStepSizeConstraintFunc(intx value, bool verbose) {
   if (AllocatePrefetchStyle == 3) {
-    if (value % wordSize != 0)
-    {
-      if (VerifyFlagConstraints)
-      {
+    if (value % wordSize != 0) {
+      if (VerifyFlagConstraints) {
         int remainder = value % wordSize;
-        JVMFlag::printError(true, "AllocatePrefetchStepSize:" INTX_FORMAT "\n", (value - remainder));
+        AllocatePrefetchStepSize = value - remainder;
+        JVMFlag::printError(true, "AllocatePrefetchStepSize:" INTX_FORMAT "\n", AllocatePrefetchStepSize);
         return JVMFlag::SUCCESS;
       }
       JVMFlag::printError(verbose,
@@ -154,9 +144,9 @@ JVMFlag::Error AllocatePrefetchInstrConstraintFunc(intx value, bool verbose) {
   max_value = 3;
 #endif
   if (value < 0 || value > max_value) {
-    if (VerifyFlagConstraints)
-    {
-      JVMFlag::printError(true, "AllocatePrefetchInstr:" INTX_FORMAT "\n", (value < 0 ? 0 : max_value));
+    if (VerifyFlagConstraints) {
+      AllocatePrefetchInstr = value < 0 ? 0 : max_value;
+      JVMFlag::printError(true, "AllocatePrefetchInstr:" INTX_FORMAT "\n", AllocatePrefetchInstr);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -170,9 +160,9 @@ JVMFlag::Error AllocatePrefetchInstrConstraintFunc(intx value, bool verbose) {
 
 JVMFlag::Error CompileThresholdConstraintFunc(intx value, bool verbose) {
   if (value < 0 || value > INT_MAX >> InvocationCounter::count_shift) {
-    if (VerifyFlagConstraints)
-    {
-      JVMFlag::printError(true, "CompileThreshold:" INTX_FORMAT "\n", (value < 0 ? 0 : INT_MAX >> InvocationCounter::count_shift));
+    if (VerifyFlagConstraints) {
+      CompileThreshold = value < 0 ? 0 : INT_MAX >> InvocationCounter::count_shift;
+      JVMFlag::printError(true, "CompileThreshold:" INTX_FORMAT "\n", CompileThreshold);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -190,30 +180,25 @@ JVMFlag::Error OnStackReplacePercentageConstraintFunc(intx value, bool verbose) 
   int backward_branch_limit;
   if (ProfileInterpreter) {
     if (OnStackReplacePercentage < InterpreterProfilePercentage) {
-      if (VerifyFlagConstraints)
-      {
-        JVMFlag::printError(true,
-                            "OnStackReplacePercentage:"INTX_FORMAT"\n", InterpreterProfilePercentage);
+      if (VerifyFlagConstraints) {
+        OnStackReplacePercentage = InterpreterProfilePercentage;
+        JVMFlag::printError(true, "OnStackReplacePercentage:"INTX_FORMAT"\n", OnStackReplacePercentage);
         return JVMFlag::SUCCESS;
       }
-      else
-      {
-        JVMFlag::printError(verbose,
+      JVMFlag::printError(verbose,
                             "OnStackReplacePercentage (" INTX_FORMAT ") must be "
                             "larger than InterpreterProfilePercentage (" INTX_FORMAT ")\n",
                             OnStackReplacePercentage, InterpreterProfilePercentage);
-        return JVMFlag::VIOLATES_CONSTRAINT;
-      }
+      return JVMFlag::VIOLATES_CONSTRAINT;
     }
-
+    //InvocationCounter::count_shift = 3
     backward_branch_limit = ((CompileThreshold * (OnStackReplacePercentage - InterpreterProfilePercentage)) / 100)
                             << InvocationCounter::count_shift;
 
     if (backward_branch_limit < 0) {
-      if (VerifyFlagConstraints)
-      {
-        JVMFlag::printError(true,
-                            "OnStackReplacePercentage:"INTX_FORMAT"\n", ((INT_MAX >> InvocationCounter::count_shift) / CompileThreshold + InterpreterProfilePercentage));
+      if (VerifyFlagConstraints) {
+        OnStackReplacePercentage = (INT_MAX >> InvocationCounter::count_shift) / CompileThreshold + InterpreterProfilePercentage;
+        JVMFlag::printError(true, "OnStackReplacePercentage:"INTX_FORMAT"\n", OnStackReplacePercentage);
         return JVMFlag::SUCCESS;
       }
       JVMFlag::printError(verbose,
@@ -227,10 +212,10 @@ JVMFlag::Error OnStackReplacePercentageConstraintFunc(intx value, bool verbose) 
     }
   } else {
     if (OnStackReplacePercentage < 0 ) {
-      if (VerifyFlagConstraints)
-      {
+      if (VerifyFlagConstraints) {
+        OnStackReplacePercentage = 0;
         JVMFlag::printError(true,
-                            "OnStackReplacePercentage:"INTX_FORMAT"\n", 0);
+                            "OnStackReplacePercentage:"INTX_FORMAT"\n", OnStackReplacePercentage);
         return JVMFlag::SUCCESS;
       }
       JVMFlag::printError(verbose,
@@ -243,9 +228,9 @@ JVMFlag::Error OnStackReplacePercentageConstraintFunc(intx value, bool verbose) 
                             << InvocationCounter::count_shift;
 
     if (backward_branch_limit < 0) {
-      if (VerifyFlagConstraints)
-      {
-        JVMFlag::printError(true, "OnStackReplacePercentage:"INTX_FORMAT"\n", ((INT_MAX >> InvocationCounter::count_shift) / CompileThreshold));
+      if (VerifyFlagConstraints) {
+        OnStackReplacePercentage = (INT_MAX >> InvocationCounter::count_shift) / CompileThreshold;
+        JVMFlag::printError(true, "OnStackReplacePercentage:"INTX_FORMAT"\n", OnStackReplacePercentage);
         return JVMFlag::SUCCESS;
       }
       JVMFlag::printError(verbose,
