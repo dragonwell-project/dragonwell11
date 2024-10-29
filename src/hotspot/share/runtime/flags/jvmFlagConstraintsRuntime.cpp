@@ -34,14 +34,11 @@
 JVMFlag::Error ObjectAlignmentInBytesConstraintFunc(intx value, bool verbose) {
   bool verifyFailed = false;
   if (!is_power_of_2(value)) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
       verifyFailed = true;
       int logValue = log2_intptr(value);
       value = (intx)pow(2, logValue);
-    }
-    else
-    {
+    } else {
       JVMFlag::printError(verbose,
                           "ObjectAlignmentInBytes (" INTX_FORMAT ") must be "
                           "power of 2\n",
@@ -51,21 +48,20 @@ JVMFlag::Error ObjectAlignmentInBytesConstraintFunc(intx value, bool verbose) {
   }
   // In case page size is very small.
   if (value >= (intx)os::vm_page_size()) {
-    if (VerifyFlagConstraints)
-    {
-      JVMFlag::printError(true, "ObjectAlignmentInBytes:" INTX_FORMAT "\n", (intx)(os::vm_page_size()/2));
-      return JVMFlag::SUCCESS;
-    }
-    JVMFlag::printError(verbose,
+    if (VerifyFlagConstraints) {
+      verifyFailed = true;
+      value = (intx)(os::vm_page_size()/2);
+    } else {
+      JVMFlag::printError(verbose,
                         "ObjectAlignmentInBytes (" INTX_FORMAT ") must be "
                         "less than page size (" INTX_FORMAT ")\n",
                         value, (intx)os::vm_page_size());
-    return JVMFlag::VIOLATES_CONSTRAINT;
+      return JVMFlag::VIOLATES_CONSTRAINT;
+    }
   }
-  if (verifyFailed)
-  {
+  if (verifyFailed) {
+    ObjectAlignmentInBytes = value;
     JVMFlag::printError(true, "ObjectAlignmentInBytes:" INTX_FORMAT "\n", value);
-    return JVMFlag::SUCCESS;
   }
   return JVMFlag::SUCCESS;
 }
@@ -74,10 +70,10 @@ JVMFlag::Error ObjectAlignmentInBytesConstraintFunc(intx value, bool verbose) {
 // It is sufficient to check against the largest type size.
 JVMFlag::Error ContendedPaddingWidthConstraintFunc(intx value, bool verbose) {
   if ((value % BytesPerLong) != 0) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
       int remainder = value % BytesPerLong;
-      JVMFlag::printError(true, "ContendedPaddingWidth:" INTX_FORMAT "\n", (value - remainder));
+      ContendedPaddingWidth = value - remainder;
+      JVMFlag::printError(true, "ContendedPaddingWidth:" INTX_FORMAT "\n", ContendedPaddingWidth);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -92,8 +88,8 @@ JVMFlag::Error ContendedPaddingWidthConstraintFunc(intx value, bool verbose) {
 
 JVMFlag::Error BiasedLockingBulkRebiasThresholdFunc(intx value, bool verbose) {
   if (value > BiasedLockingBulkRevokeThreshold) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
+      BiasedLockingBulkRebiasThreshold = BiasedLockingBulkRevokeThreshold;
       JVMFlag::printError(true, "BiasedLockingBulkRebiasThreshold:" INTX_FORMAT "\n", BiasedLockingBulkRevokeThreshold);
       return JVMFlag::SUCCESS;
     }
@@ -109,10 +105,10 @@ JVMFlag::Error BiasedLockingBulkRebiasThresholdFunc(intx value, bool verbose) {
 
 JVMFlag::Error BiasedLockingStartupDelayFunc(intx value, bool verbose) {
   if ((value % PeriodicTask::interval_gran) != 0) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
       int remainder = value % PeriodicTask::interval_gran;
-      JVMFlag::printError(true, "BiasedLockingStartupDelay:" INTX_FORMAT "\n", (value - remainder));
+      BiasedLockingStartupDelay = value - remainder;
+      JVMFlag::printError(true, "BiasedLockingStartupDelay:" INTX_FORMAT "\n", BiasedLockingStartupDelay);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -127,9 +123,9 @@ JVMFlag::Error BiasedLockingStartupDelayFunc(intx value, bool verbose) {
 
 JVMFlag::Error BiasedLockingBulkRevokeThresholdFunc(intx value, bool verbose) {
   if (value < BiasedLockingBulkRebiasThreshold) {
-    if (VerifyFlagConstraints)
-    {
-      JVMFlag::printError(true, "BiasedLockingBulkRevokeThreshold:" INTX_FORMAT "\n", BiasedLockingBulkRebiasThreshold);
+    if (VerifyFlagConstraints) {
+      BiasedLockingBulkRevokeThreshold = BiasedLockingBulkRebiasThreshold;
+      JVMFlag::printError(true, "BiasedLockingBulkRevokeThreshold:" INTX_FORMAT "\n", BiasedLockingBulkRevokeThreshold);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -138,9 +134,9 @@ JVMFlag::Error BiasedLockingBulkRevokeThresholdFunc(intx value, bool verbose) {
                         value, BiasedLockingBulkRebiasThreshold);
     return JVMFlag::VIOLATES_CONSTRAINT;
   } else if ((double)value/(double)BiasedLockingDecayTime > 0.1) {
-    if (VerifyFlagConstraints)
-    {
-      JVMFlag::printError(true, "BiasedLockingBulkRevokeThreshold:" INTX_FORMAT "\n", (BiasedLockingDecayTime * 0.1));
+    if (VerifyFlagConstraints) {
+      BiasedLockingBulkRevokeThreshold = (intx)(BiasedLockingDecayTime * 0.1);
+      JVMFlag::printError(true, "BiasedLockingBulkRevokeThreshold:" INTX_FORMAT "\n", BiasedLockingBulkRevokeThreshold);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -156,9 +152,9 @@ JVMFlag::Error BiasedLockingBulkRevokeThresholdFunc(intx value, bool verbose) {
 
 JVMFlag::Error BiasedLockingDecayTimeFunc(intx value, bool verbose) {
   if (BiasedLockingBulkRebiasThreshold/(double)value > 0.1) {
-    if (VerifyFlagConstraints)
-    {
-      JVMFlag::printError(true, "BiasedLockingDecayTime:" INTX_FORMAT "\n", (BiasedLockingBulkRebiasThreshold * 10));
+    if (VerifyFlagConstraints) {
+      BiasedLockingDecayTime = BiasedLockingBulkRebiasThreshold * 10;
+      JVMFlag::printError(true, "BiasedLockingDecayTime:"INTX_FORMAT"\n", BiasedLockingDecayTime);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -174,10 +170,10 @@ JVMFlag::Error BiasedLockingDecayTimeFunc(intx value, bool verbose) {
 
 JVMFlag::Error PerfDataSamplingIntervalFunc(intx value, bool verbose) {
   if ((value % PeriodicTask::interval_gran != 0)) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
       int remainder = value % PeriodicTask::interval_gran;
-      JVMFlag::printError(true, "PerfDataSamplingInterval:" INTX_FORMAT "\n", (value - remainder));
+      PerfDataSamplingInterval = value - remainder;
+      JVMFlag::printError(true, "PerfDataSamplingInterval:"INTX_FORMAT"\n", PerfDataSamplingInterval);
       return JVMFlag::SUCCESS;
     }
     JVMFlag::printError(verbose,
@@ -193,10 +189,9 @@ JVMFlag::Error PerfDataSamplingIntervalFunc(intx value, bool verbose) {
 JVMFlag::Error ThreadLocalHandshakesConstraintFunc(bool value, bool verbose) {
   if (value) {
     if (!SafepointMechanism::supports_thread_local_poll()) {
-      if (VerifyFlagConstraints)
-      {
-        int remainder = value % PeriodicTask::interval_gran;
-        JVMFlag::printError(true, "ThreadLocalHandshakes:unsupported\n");
+      if (VerifyFlagConstraints) {
+        VerifyFlagConstraints = false;
+        JVMFlag::printError(true, "ThreadLocalHandshakes:false\n");
         return JVMFlag::SUCCESS;
       }
       JVMFlag::printError(verbose, "ThreadLocalHandshakes not yet supported on this platform\n");

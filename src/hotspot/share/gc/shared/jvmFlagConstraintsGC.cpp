@@ -87,7 +87,8 @@ JVMFlag::Error ConcGCThreadsConstraintFunc(uint value, bool verbose) {
   if ((GCConfig::is_gc_selected(CollectedHeap::CMS) ||
        GCConfig::is_gc_selected(CollectedHeap::G1)) && (value > ParallelGCThreads)) {
         if (VerifyFlagConstraints) {
-          JVMFlag::printError(true, "ConcGCThreads"UINT32_FORMAT"\n", ParallelGCThreads);
+          ConcGCThreads = ParallelGCThreads;
+          JVMFlag::printError(true, "ConcGCThreads"UINT32_FORMAT"\n", ConcGCThreads);
           return JVMFlag::SUCCESS;
         }
     JVMFlag::printError(verbose,
@@ -596,6 +597,18 @@ JVMFlag::Error MaxMetaspaceSizeConstraintFunc(size_t value, bool verbose) {
 JVMFlag::Error SurvivorAlignmentInBytesConstraintFunc(intx value, bool verbose) {
   if (value != 0) {
     bool verifyFailed = false;
+    if (value < ObjectAlignmentInBytes) {
+      if (VerifyFlagConstraints) {
+        verifyFailed = true;
+        value = ObjectAlignmentInBytes;
+      } else {
+        JVMFlag::printError(verbose,
+                          "SurvivorAlignmentInBytes (" INTX_FORMAT ") must be "
+                          "greater than or equal to ObjectAlignmentInBytes (" INTX_FORMAT ")\n",
+                          value, ObjectAlignmentInBytes);
+        return JVMFlag::VIOLATES_CONSTRAINT;
+      }
+    }
     if (!is_power_of_2(value)) {
       if (VerifyFlagConstraints) {
         verifyFailed = true;
@@ -609,19 +622,8 @@ JVMFlag::Error SurvivorAlignmentInBytesConstraintFunc(intx value, bool verbose) 
         return JVMFlag::VIOLATES_CONSTRAINT;
       }
     }
-    if (value < ObjectAlignmentInBytes) {
-      if (VerifyFlagConstraints) {
-        verifyFailed = true;
-        value = ObjectAlignmentInBytes;
-      } else {
-        JVMFlag::printError(verbose,
-                          "SurvivorAlignmentInBytes (" INTX_FORMAT ") must be "
-                          "greater than or equal to ObjectAlignmentInBytes (" INTX_FORMAT ")\n",
-                          value, ObjectAlignmentInBytes);
-        return JVMFlag::VIOLATES_CONSTRAINT;
-      }
-    }
     if (verifyFailed) {
+      SurvivorAlignmentInBytes = value;
       JVMFlag::printError(true, "SurvivorAlignmentInBytes:"INTX_FORMAT"\n", value);
     }
   }

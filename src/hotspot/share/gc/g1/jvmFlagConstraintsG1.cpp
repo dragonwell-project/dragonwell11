@@ -93,8 +93,7 @@ JVMFlag::Error G1HeapRegionSizeConstraintFunc(size_t value, bool verbose) {
 JVMFlag::Error G1NewSizePercentConstraintFunc(uintx value, bool verbose) {
   if (!UseG1GC) return JVMFlag::SUCCESS;
   if (value > G1MaxNewSizePercent) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
       G1NewSizePercent = G1MaxNewSizePercent;
       JVMFlag::printError(true, "G1NewSizePercent:"UINTX_FORMAT"\n", G1MaxNewSizePercent);
       return JVMFlag::SUCCESS;
@@ -112,8 +111,7 @@ JVMFlag::Error G1NewSizePercentConstraintFunc(uintx value, bool verbose) {
 JVMFlag::Error G1MaxNewSizePercentConstraintFunc(uintx value, bool verbose) {
   if (!UseG1GC) return JVMFlag::SUCCESS;
   if (value < G1NewSizePercent) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
       G1MaxNewSizePercent = G1NewSizePercent;
       JVMFlag::printError(true, "G1MaxNewSizePercent:"UINTX_FORMAT"\n", G1NewSizePercent);
       return JVMFlag::SUCCESS;
@@ -130,8 +128,7 @@ JVMFlag::Error G1MaxNewSizePercentConstraintFunc(uintx value, bool verbose) {
 
 JVMFlag::Error MaxGCPauseMillisConstraintFuncG1(uintx value, bool verbose) {
   if (UseG1GC && FLAG_IS_CMDLINE(MaxGCPauseMillis) && (value >= GCPauseIntervalMillis)) {
-    if (VerifyFlagConstraints)
-    {
+    if (VerifyFlagConstraints) {
       if (GCPauseIntervalMillis <= 1) {
         GCPauseIntervalMillis = 2;
         JVMFlag::printError(true, "GCPauseIntervalMillis:"UINTX_FORMAT"\n", GCPauseIntervalMillis);
