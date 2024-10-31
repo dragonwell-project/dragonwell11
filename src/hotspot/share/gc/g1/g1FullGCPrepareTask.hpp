@@ -56,9 +56,7 @@ protected:
     G1FullGCCompactionPoint* _cp;
     G1FullGCCompactionPoint* _root_cp;
     uint _humongous_regions_removed;
-
-    // check cp based on alloc context, this is to support TenantHeapIsolation
-    bool is_cp_initialized_for(AllocationContext_t ac);
+    uint _worker_id;
 
     virtual void prepare_for_compaction(HeapRegion* hr);
     void prepare_for_compaction_work(G1FullGCCompactionPoint* cp, HeapRegion* hr);
@@ -67,7 +65,8 @@ protected:
 
   public:
     G1CalculatePointersClosure(G1CMBitMap* bitmap,
-                               G1FullGCCompactionPoint* cp);
+                               G1FullGCCompactionPoint* cp,
+                               uint worker_id);
 
     void update_sets();
     bool do_heap_region(HeapRegion* hr);
@@ -82,6 +81,7 @@ protected:
     size_t apply(oop object);
   };
 
+public:
   class G1RePrepareClosure : public StackObj {
     G1FullGCCompactionPoint* _cp;
     HeapRegion* _current;

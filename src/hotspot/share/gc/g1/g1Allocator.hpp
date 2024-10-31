@@ -38,7 +38,7 @@ class EvacuationInfo;
 class G1Allocator : public CHeapObj<mtGC> {
   friend class VMStructs;
 
-protected:
+private:
   G1CollectedHeap* _g1h;
 
   bool _survivor_is_full;

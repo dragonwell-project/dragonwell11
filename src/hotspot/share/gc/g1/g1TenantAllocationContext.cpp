@@ -26,9 +26,11 @@
 #include "runtime/safepoint.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "memory/iterator.hpp"
-#include "gc/g1/g1TenantAllocationContext.hpp"
 #include "gc/g1/g1CollectedHeap.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1FullGCCompactTask.hpp"
+#include "gc/g1/g1TenantAllocationContext.hpp"
+#include "gc/g1/heapRegion.inline.hpp"
 
 //----------------------- G1TenantAllocationContext ---------------------------
 
@@ -38,6 +40,8 @@ G1TenantAllocationContext::G1TenantAllocationContext(G1CollectedHeap* g1h)
           _heap_size_limit(TENANT_HEAP_NO_LIMIT),
           _heap_region_limit(0),
           _tenant_container(NULL),
+          _cps(NULL),
+          _serial_cp(NULL), 
           _retained_old_gc_alloc_region(NULL),
           _survivor_gc_alloc_region(g1h->alloc_buffer_stats(InCSetState::Young)),
           _old_gc_alloc_region(g1h->alloc_buffer_stats(InCSetState::Old))  {
@@ -52,10 +56,6 @@ G1TenantAllocationContext::G1TenantAllocationContext(G1CollectedHeap* g1h)
   }
 #endif
 
-  _fcp = NEW_C_HEAP_ARRAY(G1FullGCCompactionPoint*, G1TenantAllocationContexts::num_workers(), mtGC);
-  for (uint i = 0; i < G1TenantAllocationContexts::num_workers(); i++) {
-    _fcp[i] = new G1FullGCCompactionPoint();
-  }
   // init mutator allocator eagerly, because it may be used
   // to allocate memory immediately after creation of tenant alloc context
   _mutator_alloc_region.init();
@@ -97,7 +97,7 @@ public:
     assert(TenantHeapIsolation, "pre-condition");
     assert(_context_to_destroy != G1TenantAllocationContexts::system_context(),
            "Should never destroy system context");
-    assert(!oopDesc::is_oop_or_null(_context_to_destroy->tenant_container()), "sanity");
+    assert(_context_to_destroy->tenant_container() != NULL, "sanity");
   }
   virtual void doit();
   virtual VMOp_Type type() const { return VMOp_DestroyG1TenantAllocationContext; }
@@ -238,11 +238,24 @@ long G1TenantAllocationContexts::active_context_count() {
   return _contexts->length();
 }
 
-void G1TenantAllocationContexts::iterate(G1TenantAllocationContextClosure* closure) {
+void G1TenantAllocationContexts::iterate_locked(G1TenantAllocationContextClosure* closure) {
   assert(TenantHeapIsolation, "pre-condition");
   assert(NULL != closure, "NULL closure pointer");
-
   MutexLockerEx ml(_list_lock, Monitor::_no_safepoint_check_flag);
+  iterate_impl(closure);
+}
+
+void G1TenantAllocationContexts::iterate_unlocked(G1TenantAllocationContextClosure* closure) {
+  assert_at_safepoint();
+  assert(TenantHeapIsolation, "pre-condition");
+  assert(NULL != closure, "NULL closure pointer");
+  MutexLockerEx ml(_list_lock, Monitor::_no_safepoint_check_flag);
+  iterate_impl(closure);
+}
+
+void G1TenantAllocationContexts::iterate_impl(G1TenantAllocationContextClosure* closure) {
+  assert(TenantHeapIsolation, "pre-condition");
+  assert(NULL != closure, "NULL closure pointer");
   for (GrowableArrayIterator<G1TenantAllocationContext*> itr = _contexts->begin();
        itr != _contexts->end(); ++itr) {
     closure->do_tenant_allocation_context(*itr);
@@ -252,21 +265,7 @@ void G1TenantAllocationContexts::iterate(G1TenantAllocationContextClosure* closu
 void G1TenantAllocationContexts::initialize() {
   assert(TenantHeapIsolation, "pre-condition");
   _contexts = new (ResourceObj::C_HEAP, mtTenant) G1TenantACList(128, true, mtTenant);
-  _list_lock = new Mutex(Mutex::leaf, "G1TenantAllocationContext list lock", true /* allow vm lock */);
-}
-
-void G1TenantAllocationContexts::prepare_for_compaction() {
-  assert(TenantHeapIsolation, "pre-condition");
-  assert_at_safepoint_on_vm_thread();
-
-  // no locking needed
-  for (G1TenantACListIterator itr = _contexts->begin();
-       itr != _contexts->end(); ++itr) {
-    assert(NULL != (*itr), "pre-condition");
-    for (uint i = 0; i < G1TenantAllocationContexts::num_workers(); ++i) {
-      (*itr)->_fcp[i]->reset();
-    }
-  }
+  _list_lock = new Mutex(Mutex::leaf, "G1TenantAllocationContext list lock", true /* allow vm lock */, Monitor::_safepoint_check_never);
 }
 
 void G1TenantAllocationContexts::oops_do(OopClosure* f) {
@@ -313,13 +312,29 @@ size_t G1TenantAllocationContexts::total_used() {
   for (G1TenantACListIterator itr = _contexts->begin();
        itr != _contexts->end(); ++itr) {
     assert(NULL != (*itr), "pre-condition");
-    HeapRegion* hr = (*itr)->_mutator_alloc_region.get();
-    if (NULL != hr) {
-      res += hr->used();
-    }
+    // HeapRegion* hr = (*itr)->_mutator_alloc_region.get();
+    // if (NULL != hr) {
+    //   res += hr->used();
+    // }
+    res += (*itr)->_mutator_alloc_region.used_in_alloc_regions();
   }
 
   return res;
+}
+
+void G1TenantAllocationContexts::set_num_workers(uint num_workers) {
+  _num_workers = num_workers;
+}
+
+void G1TenantAllocationContexts::init_cps() {
+  G1TACFullCompactionPointCreateClosure cl(_num_workers);
+  iterate_unlocked(&cl);
+}
+
+void G1TenantAllocationContexts::release_cps()
+{
+  G1TACFullCompactionPointReleaseClosure cl(_num_workers);
+  iterate_unlocked(&cl);
 }
 
 void G1TenantAllocationContexts::init_gc_alloc_regions(G1Allocator* allocator, EvacuationInfo& ei) {
@@ -381,4 +396,106 @@ void G1TenantAllocationContexts::abandon_gc_alloc_regions() {
 G1TenantAllocationContext* G1TenantAllocationContexts::system_context() {
   assert(TenantHeapIsolation, "pre-condition");
   return AllocationContext::system().tenant_allocation_context();
+}
+
+void G1TACCompactionClosure::do_tenant_allocation_context(G1TenantAllocationContext* tac) {
+  assert(tac != NULL, "Pre-condition");
+  GrowableArray<HeapRegion*>* compaction_queue = tac->get_compact_point_by_worker_id(_worker_id)->regions();
+  for (GrowableArrayIterator<HeapRegion*> it = compaction_queue->begin();
+       it != compaction_queue->end();
+       ++it) {
+    // Compact regions
+    assert(!(*it)->is_humongous(), "Should be no humongous regions in compaction queue");
+    G1FullGCCompactTask::G1CompactRegionClosure compact(mark_bitmap());
+    (*it)->apply_to_marked_objects(mark_bitmap(), &compact);
+    // Once all objects have been moved the liveness information
+    // needs be cleared.
+    mark_bitmap()->clear_region((*it));
+    (*it)->complete_compaction();
+  }
+  // TODO(Multitenant): We do not actually compact humongous regions, so is it necessary to reset humongous for each tenant?
+  // BTW, Dragonwell-8 doesn't seperate tenants when reseting hunmongous.
+  // G1ResetHumongousClosure hc(mark_bitmap());
+  // G1CollectedHeap::heap()->heap_region_par_iterate_from_worker_offset(&hc, &_claimer, _worker_id);
+}
+
+void G1TACSerialCompactionClosure::do_tenant_allocation_context(G1TenantAllocationContext* tac) {
+  assert(tac != NULL, "Pre-condition");
+  if (tac->serial_compaction_point()->has_regions()) {
+    GrowableArray<HeapRegion*>* compaction_queue = tac->serial_compaction_point()->regions();
+    for (GrowableArrayIterator<HeapRegion*> it = compaction_queue->begin();
+        it != compaction_queue->end();
+        ++it) {
+      // Compact regions
+      assert(!(*it)->is_humongous(), "Should be no humongous regions in compaction queue");
+      G1FullGCCompactTask::G1CompactRegionClosure compact(mark_bitmap());
+      (*it)->apply_to_marked_objects(mark_bitmap(), &compact);
+      // Once all objects have been moved the liveness information
+      // needs be cleared.
+      mark_bitmap()->clear_region((*it));
+      (*it)->complete_compaction();
+    }
+  }
+}
+
+void G1TACSerialPrepareCompactionClosure::do_tenant_allocation_context(G1TenantAllocationContext* tac) {
+  assert(tac != NULL, "Pre-condition");
+  G1FullGCCompactionPoint* cp = tac->get_compact_point_by_worker_id(_worker_id);
+  G1FullGCCompactionPoint* serial_cp = tac->serial_compaction_point();
+  assert(cp != NULL, "Pre-condition");
+  assert(serial_cp != NULL, "Pre-condition");
+  if (cp->has_regions()) {
+    serial_cp->add(cp->remove_last());
+  }
+}
+
+void G1TACSerialApplyMarkClosure::do_tenant_allocation_context(G1TenantAllocationContext* tac) {
+  assert(tac != NULL, "Pre-condition");
+  G1FullGCCompactionPoint* serial_cp = tac->serial_compaction_point();
+  assert(serial_cp != NULL, "Pre-condition");
+  for (GrowableArrayIterator<HeapRegion*> it = serial_cp->regions()->begin(); it != serial_cp->regions()->end(); ++it) {
+    HeapRegion* current = *it;
+    if (!serial_cp->is_initialized()) {
+      // Initialize the compaction point. Nothing more is needed for the first heap region
+      // since it is already prepared for compaction.
+      serial_cp->initialize(current, false);
+    } else {
+      assert(!current->is_humongous(), "Should be no humongous regions in compaction queue");
+      G1FullGCPrepareTask::G1RePrepareClosure re_prepare(serial_cp, current);
+      current->set_compaction_top(current->bottom());
+      current->apply_to_marked_objects(mark_bitmap(), &re_prepare);
+    }
+  }
+  serial_cp->update();
+}
+
+void G1TACFullCompactionPointCreateClosure::do_tenant_allocation_context(G1TenantAllocationContext* tac) {
+  assert(NULL != tac, "pre-condition");
+  assert(NULL == tac->full_gc_compact_points(), "pre-condition");
+  G1FullGCCompactionPoint** cps =  NEW_C_HEAP_ARRAY(G1FullGCCompactionPoint*, _num_workers, mtGC);
+  tac->set_full_gc_compact_points(cps);
+  for (uint i = 0; i < _num_workers; i++) {
+    tac->set_compact_point_by_worker_id(i, new G1FullGCCompactionPoint());
+  }
+  // For serial compaction
+  tac->set_serial_compaction_point(new G1FullGCCompactionPoint());
+}
+
+void G1TACFullCompactionPointReleaseClosure::do_tenant_allocation_context(G1TenantAllocationContext* tac) {
+  assert(NULL != tac, "pre-condition");
+  for (uint i = 0; i < _num_workers; ++i) {
+    assert(NULL != tac->get_compact_point_by_worker_id(i), "pre-condition");
+    delete tac->get_compact_point_by_worker_id(i);
+  }
+  FREE_C_HEAP_ARRAY(G1FullGCCompactionPoint*, tac->full_gc_compact_points());
+  delete tac->serial_compaction_point();
+  tac->set_full_gc_compact_points(NULL);
+  tac->set_serial_compaction_point(NULL);
+}
+
+void G1TACFullCompactionPointUpdateClosure::do_tenant_allocation_context(G1TenantAllocationContext* tac) {
+  assert(NULL != tac, "pre-condition");
+  G1FullGCCompactionPoint* cp = tac->get_compact_point_by_worker_id(_worker_id);
+  assert(NULL != cp, "pre-condition");
+  cp->update();
 }

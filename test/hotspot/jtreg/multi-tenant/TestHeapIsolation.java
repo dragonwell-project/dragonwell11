@@ -177,17 +177,19 @@ public class TestHeapIsolation {
                                     assert(null != TenantContainer.containerOf(objHolder[idx]));
                                     assert(tenants[idx] == TenantContainer.containerOf(objHolder[idx]));
 
-                                    IntStream.range(0, objHolder.length).forEach(x -> verbose_cr("objHolder[" + idx + "]@0x"
-                                            + Long.toHexString(wb.getObjectAddress(objHolder[x]))));
-                                    IntStream.range(0, objHolder2.length).forEach(x -> verbose_cr("objHolder2[" + idx + "]@0x"
-                                            + Long.toHexString(wb.getObjectAddress(objHolder2[x]))));
+                                    // JDK11 requires obj to be not Null in wb.getObjectAddress(obj). 
+                                    // This will cause NPEs because we try to resolve objHolder[idx] before allocating an obj.
+                                    // IntStream.range(0, objHolder.length).forEach(x -> verbose_cr("objHolder[" + idx + "]@0x"
+                                    //         + Long.toHexString(wb.getObjectAddress(objHolder[x]))));
+                                    // IntStream.range(0, objHolder2.length).forEach(x -> verbose_cr("objHolder2[" + idx + "]@0x"
+                                    //         + Long.toHexString(wb.getObjectAddress(objHolder2[x]))));
 
                                     triggerGC(gcType);
 
-                                    IntStream.range(0, objHolder.length).forEach(x -> verbose_cr("objHolder[" + idx + "]@0x"
-                                            + Long.toHexString(wb.getObjectAddress(objHolder[x]))));
-                                    IntStream.range(0, objHolder2.length).forEach(x -> verbose_cr("objHolder2[" + idx + "]@0x"
-                                            + Long.toHexString(wb.getObjectAddress(objHolder2[x]))));
+                                    // IntStream.range(0, objHolder.length).forEach(x -> verbose_cr("objHolder[" + idx + "]@0x"
+                                    //         + Long.toHexString(wb.getObjectAddress(objHolder[x]))));
+                                    // IntStream.range(0, objHolder2.length).forEach(x -> verbose_cr("objHolder2[" + idx + "]@0x"
+                                    //         + Long.toHexString(wb.getObjectAddress(objHolder2[x]))));
 
                                     objHolder2[idx] = allocateObject(allocType);
                                     assert(null != TenantContainer.containerOf(objHolder2[idx]));
@@ -216,17 +218,17 @@ public class TestHeapIsolation {
                 tenants[i].run(() -> {
                     objHolder[idx] = allocateObject(allocType);
 
-                    IntStream.range(0, objHolder.length).forEach(x -> verbose_cr("objHolder[" + idx + "]@0x"
-                            + Long.toHexString(wb.getObjectAddress(objHolder[x]))));
-                    IntStream.range(0, objHolder2.length).forEach(x -> verbose_cr("objHolder2[" + idx + "]@0x"
-                            + Long.toHexString(wb.getObjectAddress(objHolder2[x]))));
+                    // IntStream.range(0, objHolder.length).forEach(x -> verbose_cr("objHolder[" + idx + "]@0x"
+                    //         + Long.toHexString(wb.getObjectAddress(objHolder[x]))));
+                    // IntStream.range(0, objHolder2.length).forEach(x -> verbose_cr("objHolder2[" + idx + "]@0x"
+                    //         + Long.toHexString(wb.getObjectAddress(objHolder2[x]))));
 
                     triggerGC(gcType);
 
-                    IntStream.range(0, objHolder.length).forEach(x -> verbose_cr("objHolder[" + idx + "]@0x"
-                            + Long.toHexString(wb.getObjectAddress(objHolder[x]))));
-                    IntStream.range(0, objHolder2.length).forEach(x -> verbose_cr("objHolder2[" + idx + "]@0x"
-                            + Long.toHexString(wb.getObjectAddress(objHolder2[x]))));
+                    // IntStream.range(0, objHolder.length).forEach(x -> verbose_cr("objHolder[" + idx + "]@0x"
+                    //         + Long.toHexString(wb.getObjectAddress(objHolder[x]))));
+                    // IntStream.range(0, objHolder2.length).forEach(x -> verbose_cr("objHolder2[" + idx + "]@0x"
+                    //         + Long.toHexString(wb.getObjectAddress(objHolder2[x]))));
 
                     objHolder2[idx] = allocateObject(allocType);
                     assert(null != TenantContainer.containerOf(objHolder2[idx]));

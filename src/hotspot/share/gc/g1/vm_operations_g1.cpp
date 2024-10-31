@@ -36,6 +36,7 @@
 void VM_G1CollectFull::doit() {
   G1CollectedHeap* g1h = G1CollectedHeap::heap();
   GCCauseSetter x(g1h, _gc_cause);
+  G1ContextCauseSetter set_ctxt(g1h, this->allocation_context());
   g1h->do_full_collection(false /* clear_all_soft_refs */);
 }
 
@@ -93,6 +94,7 @@ void VM_G1CollectForAllocation::doit() {
   }
 
   GCCauseSetter x(g1h, _gc_cause);
+  G1ContextCauseSetter set_ctxt(g1h, this->allocation_context());
   if (_should_initiate_conc_mark) {
     // It's safer to read old_marking_cycles_completed() here, given
     // that noone else will be updating it concurrently. Since we'll

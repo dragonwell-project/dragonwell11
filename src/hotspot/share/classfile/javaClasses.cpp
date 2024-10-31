@@ -4669,13 +4669,23 @@ void java_nio_Buffer::serialize_offsets(SerializeClosure* f) {
 
 // Support for com.alibaba.tenant.TenantContainer
 
+#define TENANTCONTAINER_FIELDS_DO(macro) \
+  macro(_tenant_id_offset, k, vmSymbols::tenant_id_address(), long_signature, false); \
+  macro(_allocation_context_offset, k, vmSymbols::allocation_context_address(), long_signature, false); \
+  macro(_tenant_state_offset, k, vmSymbols::state_name(), com_alibaba_tenant_TenantState_signature, false);
+
 void com_alibaba_tenant_TenantContainer::compute_offsets() {
-  Klass* k = SystemDictionary::com_alibaba_tenant_TenantContainer_klass();
+  InstanceKlass* k = SystemDictionary::com_alibaba_tenant_TenantContainer_klass();
   assert(k != NULL, "Cannot find TenantContainer in current JDK");
-  InstanceKlass* ik = InstanceKlass::cast(k);
-  compute_offset(_tenant_id_offset, ik, vmSymbols::tenant_id_address(), vmSymbols::long_signature());
-  compute_offset(_allocation_context_offset, ik, vmSymbols::allocation_context_address(), vmSymbols::long_signature());
-  compute_offset(_tenant_state_offset, ik, vmSymbols::state_name(), vmSymbols::com_alibaba_tenant_TenantState_signature());
+  if (MultiTenant) {
+    ResourceMark rm;
+    fprintf(stderr,"fuckdebug tenantContainer signature name is %s and ext is %s\n",k->signature_name(), k->external_name());
+  }
+  TENANTCONTAINER_FIELDS_DO(FIELD_COMPUTE_OFFSET);
+}
+
+void com_alibaba_tenant_TenantContainer::serialize_offsets(SerializeClosure* f) {
+  TENANTCONTAINER_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
 }
 
 jlong com_alibaba_tenant_TenantContainer::get_tenant_id(oop obj) {
@@ -4715,13 +4725,6 @@ int com_alibaba_tenant_TenantState::state_of(oop tenant_obj) {
 
   for (int i = TS_STARTING; i < TS_SIZE; ++i) {
     assert(_static_state_offsets[i] == i * heapOopSize, "Must have been initialized");
-    // address addr = ik->static_field_addr(_static_state_offsets[i]);
-    // oop o = NULL;
-    // if (UseCompressedOops) {
-    //   o = oopDesc::load_decode_heap_oop((narrowOop*)addr);
-    // } else {
-    //   o = oopDesc::load_decode_heap_oop((oop*)addr);
-    // }
     oop base = ik->static_field_base_raw();
     oop o = base->obj_field(_static_state_offsets[i]);
     assert(!oopDesc::is_oop_or_null(o), "sanity");
@@ -4799,6 +4802,11 @@ void JavaClasses::compute_offsets() {
   AbstractAssembler::update_delayed_values();
 
   BASIC_JAVA_CLASSES_DO_PART_COROUTINE(DO_COMPUTE_OFFSETS);
+#if INCLUDE_G1GC
+  if (MultiTenant) {
+    BASIC_JAVA_CLASSES_DO_PART_TENANT(DO_COMPUTE_OFFSETS);
+  }
+#endif //INCLUDE_G1GC
 }
 
 #if INCLUDE_CDS
@@ -4807,8 +4815,13 @@ void JavaClasses::compute_offsets() {
 void JavaClasses::serialize_offsets(SerializeClosure* soc) {
   BASIC_JAVA_CLASSES_DO(DO_SERIALIZE_OFFSETS);
   BASIC_JAVA_CLASSES_DO_PART_COROUTINE(DO_SERIALIZE_OFFSETS);
+#if INCLUDE_G1GC
+  if (MultiTenant) {
+    BASIC_JAVA_CLASSES_DO_PART_TENANT(DO_SERIALIZE_OFFSETS);
+  }
+#endif // INCLUDE_G1GC
 }
-#endif
+#endif //INCLUDE_CDS
 
 
 #ifndef PRODUCT

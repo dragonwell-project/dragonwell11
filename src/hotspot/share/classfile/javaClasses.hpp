@@ -91,8 +91,13 @@
   f(com_alibaba_wisp_engine_WispControlGroup) \
   f(com_alibaba_wisp_engine_WispControlGroup_CpuLimit) \
   f(com_alibaba_rcm_AbstractResourceContainer) \
- // f(com_alibaba_tenant_TenantContainer) \
   //end
+
+#if INCLUDE_G1GC
+#define BASIC_JAVA_CLASSES_DO_PART_TENANT(f) \
+  f(com_alibaba_tenant_TenantContainer) \
+  //end
+#endif
 
 #define BASIC_JAVA_CLASSES_DO(f) \
         BASIC_JAVA_CLASSES_DO_PART1(f) \
@@ -1570,6 +1575,7 @@ public:
   static oop get_tenant_state(oop obj);
   static bool is_dead(oop obj);
   static void compute_offsets();
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
 };
 
 class com_alibaba_tenant_TenantState : AllStatic {

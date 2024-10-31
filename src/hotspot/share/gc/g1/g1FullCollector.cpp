@@ -116,7 +116,6 @@ G1FullCollector::G1FullCollector(G1CollectedHeap* heap, GCMemoryManager* memory_
     _always_subject_to_discovery(),
     _is_subject_mutator(heap->ref_processor_stw(), &_always_subject_to_discovery) {
   assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
-
   _preserved_marks_set.init(_num_workers);
   _markers = NEW_C_HEAP_ARRAY(G1FullGCMarker*, _num_workers, mtGC);
   _compaction_points = NEW_C_HEAP_ARRAY(G1FullGCCompactionPoint*, _num_workers, mtGC);
@@ -125,6 +124,10 @@ G1FullCollector::G1FullCollector(G1CollectedHeap* heap, GCMemoryManager* memory_
     _compaction_points[i] = new G1FullGCCompactionPoint();
     _oop_queue_set.register_queue(i, marker(i)->oop_stack());
     _array_queue_set.register_queue(i, marker(i)->objarray_stack());
+  }
+  if (TenantHeapIsolation) {
+    G1TenantAllocationContexts::set_num_workers(_num_workers);
+    G1TenantAllocationContexts::init_cps();
   }
 }
 
@@ -135,6 +138,9 @@ G1FullCollector::~G1FullCollector() {
   }
   FREE_C_HEAP_ARRAY(G1FullGCMarker*, _markers);
   FREE_C_HEAP_ARRAY(G1FullGCCompactionPoint*, _compaction_points);
+  if (TenantHeapIsolation) {
+    G1TenantAllocationContexts::release_cps();
+  }
 }
 
 void G1FullCollector::prepare_collection() {
@@ -235,10 +241,6 @@ void G1FullCollector::phase1_mark_live_objects() {
 
 void G1FullCollector::phase2_prepare_compaction() {
   GCTraceTime(Info, gc, phases) info("Phase 2: Prepare for compaction", scope()->timer());
-  if (TenantHeapIsolation) {
-    // clear compaction dest info for all tenants
-    G1TenantAllocationContexts::prepare_for_compaction();
-  }
   G1FullGCPrepareTask task(this);
   run_task(&task);
 
@@ -263,9 +265,7 @@ void G1FullCollector::phase4_do_compaction() {
   run_task(&task);
 
   // Serial compact to avoid OOM when very few free regions.
-  if (serial_compaction_point()->has_regions()) {
-    task.serial_compaction();
-  }
+  task.serial_compaction();
 }
 
 void G1FullCollector::restore_marks() {

@@ -392,7 +392,8 @@ private:
   // humongous region.
   HeapWord* humongous_obj_allocate_initialize_regions(uint first,
                                                       uint num_regions,
-                                                      size_t word_size);
+                                                      size_t word_size,
+                                                      AllocationContext_t context);
 
   // Attempt to allocate a humongous object of the given size. Return
   // NULL if unsuccessful.
@@ -1425,6 +1426,31 @@ public:
 
 private:
   size_t _max_heap_capacity;
+
+private:
+  // Context for on-going GC cause
+  AllocationContext_t _gc_cause_context;
+public:
+  void set_gc_cause_context(AllocationContext_t context)  { _gc_cause_context = context;    }
+  AllocationContext_t gc_cause_context()                  { return _gc_cause_context;       }
+};
+
+//
+class G1ContextCauseSetter : public StackObj {
+private:
+  G1CollectedHeap* _g1h;
+public:
+  G1ContextCauseSetter(G1CollectedHeap* g1h, AllocationContext_t context)
+    : _g1h(g1h) {
+    if (TenantHeapIsolation) {
+      G1CollectedHeap::heap()->set_gc_cause_context(context);
+    }
+  }
+  ~G1ContextCauseSetter() {
+    if (TenantHeapIsolation) {
+      G1CollectedHeap::heap()->set_gc_cause_context(AllocationContext::system());
+    }
+  }
 };
 
 class G1ParEvacuateFollowersClosure : public VoidClosure {

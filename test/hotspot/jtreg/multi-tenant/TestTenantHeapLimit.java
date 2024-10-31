@@ -125,9 +125,9 @@ public class TestTenantHeapLimit {
             // expect normal exit, no OOM error
             Asserts.assertEquals(output.getExitValue(), 0);
             // should not have full GC
-            Asserts.assertFalse(output.getStdout().contains("[Full GC (Allocation Failure)"));
+            Asserts.assertFalse(output.getStdout().contains("Pause Full (Allocation Failure)"));
             // must have triggerred YGC
-            Asserts.assertTrue(output.getStdout().contains("[GC pause (G1 Evacuation Pause) (young)"));
+            Asserts.assertTrue(output.getStdout().contains("Pause Young (Normal) (G1 Evacuation Pause)"));
         } catch (Exception e) {
             e.printStackTrace();
             fail();

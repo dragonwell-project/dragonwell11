@@ -2120,7 +2120,6 @@ JVM_ENTRY(void, jmm_GetThreadAllocatedMemory(JNIEnv *env, jlongArray ids,
                 "the given array of thread IDs");
     }
 
-    MutexLockerEx ml(Threads_lock);
     ThreadsListHandle tlh;
     for (int i = 0; i < num_threads; i++) {
       JavaThread* java_thread = tlh.list()->find_JavaThread_from_java_tid(ids_ah->long_at(i));

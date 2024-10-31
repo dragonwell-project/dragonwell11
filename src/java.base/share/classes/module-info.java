@@ -340,8 +340,6 @@ module java.base {
         java.prefs;
     exports sun.util.resources to
         jdk.localedata;
-    // exports com.alibaba.rcm to
-    //     jdk.management;
 
     // the service types defined by the APIs in this module
 

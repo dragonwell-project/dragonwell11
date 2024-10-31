@@ -193,7 +193,8 @@ HeapRegion* G1CollectedHeap::new_region(size_t word_size, bool is_old, bool do_e
 HeapWord*
 G1CollectedHeap::humongous_obj_allocate_initialize_regions(uint first,
                                                            uint num_regions,
-                                                           size_t word_size) {
+                                                           size_t word_size,
+                                                           AllocationContext_t context) {
   assert(first != G1_NO_HRM_INDEX, "pre-condition");
   assert(is_humongous(word_size), "word_size should be humongous");
   assert(num_regions * HeapRegion::GrainWords >= word_size, "pre-condition");
@@ -257,6 +258,7 @@ G1CollectedHeap::humongous_obj_allocate_initialize_regions(uint first,
   // that there is a single object that starts at the bottom of the
   // first region.
   first_hr->set_starts_humongous(obj_top, word_fill_size);
+  first_hr->set_allocation_context(context);
   _g1_policy->remset_tracker()->update_at_allocate(first_hr);
   // Then, if there are any, we will set up the "continues
   // humongous" regions.
@@ -264,6 +266,7 @@ G1CollectedHeap::humongous_obj_allocate_initialize_regions(uint first,
   for (uint i = first + 1; i <= last; ++i) {
     hr = region_at(i);
     hr->set_continues_humongous(first_hr);
+    hr->set_allocation_context(context);
     _g1_policy->remset_tracker()->update_at_allocate(hr);
   }
 
@@ -378,7 +381,7 @@ HeapWord* G1CollectedHeap::humongous_obj_allocate(size_t word_size, AllocationCo
 
   HeapWord* result = NULL;
   if (first != G1_NO_HRM_INDEX) {
-    result = humongous_obj_allocate_initialize_regions(first, obj_regions, word_size);
+    result = humongous_obj_allocate_initialize_regions(first, obj_regions, word_size, context);
     assert(result != NULL, "it should always return a valid result");
 
     // A successful humongous object allocation changes the used space
@@ -1155,12 +1158,14 @@ bool G1CollectedHeap::do_full_collection(bool explicit_gc,
 
   const bool do_clear_all_soft_refs = clear_all_soft_refs ||
       soft_ref_policy()->should_clear_all_soft_refs();
-
   G1FullCollector collector(this, &_full_gc_memory_manager, explicit_gc, do_clear_all_soft_refs);
-  if (TenantHeapIsolation) {
-    G1TenantAllocationContexts::set_num_workers(collector.workers());
+  
+  FormatBuffer<> gc_string("Full GC" );
+  if (TenantHeapIsolation && !gc_cause_context().is_system()) {
+    gc_string.append(" (tenant-%ld)",
+                      com_alibaba_tenant_TenantContainer::get_tenant_id(gc_cause_context()->tenant_container()));
   }
-  GCTraceTime(Info, gc) tm("Pause Full", NULL, gc_cause(), true);
+  GCTraceTime(Info, gc) tm(gc_string, NULL, gc_cause(), true);
 
   collector.prepare_collection();
   collector.collect();
@@ -2070,6 +2075,7 @@ void G1CollectedHeap::collect(GCCause::Cause cause) {
                                    cause,
                                    true,  /* should_initiate_conc_mark */
                                    g1_policy()->max_pause_time_ms());
+      op.set_allocation_context(AllocationContext::current());
       VMThread::execute(&op);
       if (!op.pause_succeeded()) {
         if (old_marking_count_before == _old_marking_cycles_started) {
@@ -2107,6 +2113,7 @@ void G1CollectedHeap::collect(GCCause::Cause cause) {
       } else {
         // Schedule a Full GC.
         VM_G1CollectFull op(gc_count_before, full_gc_count_before, cause);
+        op.set_allocation_context(AllocationContext::current());
         VMThread::execute(&op);
       }
     }
@@ -2548,6 +2555,7 @@ HeapWord* G1CollectedHeap::do_collection_pause(size_t word_size,
                                gc_cause,
                                false, /* should_initiate_conc_mark */
                                g1_policy()->max_pause_time_ms());
+  op.set_allocation_context(AllocationContext::current());
   VMThread::execute(&op);
 
   HeapWord* result = op.result();
@@ -2908,6 +2916,10 @@ G1CollectedHeap::do_collection_pause_at_safepoint(double target_pause_time_ms) {
     } else {
       gc_string.append("(Mixed)");
       verify_type = G1HeapVerifier::G1VerifyMixed;
+    }
+    if (TenantHeapIsolation && !gc_cause_context().is_system()) {
+      gc_string.append(" (tenant-%ld)",
+                        com_alibaba_tenant_TenantContainer::get_tenant_id(gc_cause_context()->tenant_container()));
     }
     GCTraceTime(Info, gc) tm(gc_string, NULL, gc_cause(), true);
 
@@ -4805,6 +4817,7 @@ public:
     if (r->is_empty()) {
       // Add free regions to the free list
       r->set_free();
+      r->set_allocation_context(AllocationContext::system());
       _hrm->insert_into_free_list(r);
     } else if (!_free_list_only) {
 

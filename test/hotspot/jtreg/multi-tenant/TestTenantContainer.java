@@ -38,7 +38,7 @@ import java.util.stream.IntStream;
  * @library /test/lib
  * @compile TestTenantContainer.java
  * @run junit/othervm/timeout=300  -XX:+MultiTenant -XX:+UseG1GC -Xmx600m  -Xms200m
- *    -Dcom.alibaba.tenant.test.prop=root test.com.alibaba.tenant.TestTenantContainer
+ *    -Dcom.alibaba.tenant.test.prop=root TestTenantContainer
  */
 public class TestTenantContainer {
     static private final int MAP_SIZE = 128;

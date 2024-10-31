@@ -28,6 +28,7 @@
 #include "gc/g1/heapRegionSet.hpp"
 #include "gc/g1/g1Allocator.hpp"
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
+#include "gc/g1/g1FullGCPrepareTask.hpp"
 #include "gc/g1/vm_operations_g1.hpp"
 #include "memory/allocation.hpp"
 #include "memory/iterator.hpp"
@@ -43,6 +44,73 @@ class G1TenantAllocationContexts;
 class G1TenantAllocationContextClosure : public Closure {
 public:
   virtual void do_tenant_allocation_context(G1TenantAllocationContext*) = 0;
+};
+
+class G1TACCompactionClosure: public G1TenantAllocationContextClosure {
+private:
+  G1CMBitMap* _bitmap;
+  uint _worker_id;
+public:
+  G1TACCompactionClosure(G1CMBitMap* bitmap, uint worker_id) :
+                                                              _bitmap(bitmap),
+                                                              _worker_id(worker_id) { }
+  G1CMBitMap* mark_bitmap() { return _bitmap; }
+  virtual void do_tenant_allocation_context(G1TenantAllocationContext* tac);
+};
+
+class G1TACSerialCompactionClosure: public G1TenantAllocationContextClosure {
+private:
+  G1CMBitMap* _bitmap;
+public:
+  G1TACSerialCompactionClosure(G1CMBitMap* bitmap) : _bitmap(bitmap) { }
+  G1CMBitMap* mark_bitmap() { return _bitmap; }
+  virtual void do_tenant_allocation_context(G1TenantAllocationContext* tac);
+};
+
+class G1TACSerialPrepareCompactionClosure : public G1TenantAllocationContextClosure {
+private:
+  G1CMBitMap* _bitmap;
+  uint _worker_id;
+public:
+  G1TACSerialPrepareCompactionClosure(G1CMBitMap* bitmap, uint worker_id) :
+                                                            _bitmap(bitmap),
+                                                            _worker_id(worker_id) { }
+  G1CMBitMap* mark_bitmap() { return _bitmap; }
+
+  virtual void do_tenant_allocation_context(G1TenantAllocationContext* tac);
+};
+
+class G1TACSerialApplyMarkClosure: public G1TenantAllocationContextClosure {
+private:
+  G1CMBitMap* _bitmap;
+public:
+  G1TACSerialApplyMarkClosure(G1CMBitMap* bitmap) : _bitmap(bitmap) { }
+  G1CMBitMap* mark_bitmap() { return _bitmap; }
+  virtual void do_tenant_allocation_context(G1TenantAllocationContext* tac);
+};
+
+class G1TACFullCompactionPointCreateClosure: public G1TenantAllocationContextClosure {
+private:
+  uint _num_workers;
+public:
+  G1TACFullCompactionPointCreateClosure(uint num_workers) : _num_workers(num_workers) { }
+  virtual void do_tenant_allocation_context(G1TenantAllocationContext* tac);
+};
+
+class G1TACFullCompactionPointReleaseClosure: public G1TenantAllocationContextClosure {
+private:
+  uint _num_workers;
+public:
+  G1TACFullCompactionPointReleaseClosure(uint num_workers) : _num_workers(num_workers) { }
+  virtual void do_tenant_allocation_context(G1TenantAllocationContext* tac);
+};
+
+class G1TACFullCompactionPointUpdateClosure: public G1TenantAllocationContextClosure {
+private:
+  uint _worker_id;
+public:
+  G1TACFullCompactionPointUpdateClosure(uint worker_id) : _worker_id(worker_id) { }
+  virtual void do_tenant_allocation_context(G1TenantAllocationContext* tac);
 };
 
 // By default, no limit on newly created G1TenantAllocationContext
@@ -76,7 +144,8 @@ private:
   // keeps a strong reference to TenantContainer object for containerOf() API
   oop                               _tenant_container;              // handle to tenant container object
 
-  G1FullGCCompactionPoint**         _fcp;                           // G1FullGCCompactionPoints during full GC compaction
+  G1FullGCCompactionPoint**         _cps;                           // G1FullGCCompactionPoints during full GC compaction
+  G1FullGCCompactionPoint*          _serial_cp;                     // G1FullGCCompactionPoint during full GC serial compaction
 
 public:
   // Newly allocated G1TenantAllocationContext will be put at the head of tenant alloc context list
@@ -125,8 +194,14 @@ public:
   bool can_allocate(size_t attempt_word_size);
 
   // record the compact dest
-  G1FullGCCompactionPoint* full_gc_compact_point(size_t id) const  { return _fcp[id];                 }
-  void set_full_gc_compact_point(G1FullGCCompactionPoint* cp, size_t id) { _fcp[id] = cp;                    }
+  G1FullGCCompactionPoint** full_gc_compact_points() const  { return _cps; }
+  void set_full_gc_compact_points(G1FullGCCompactionPoint** cps) {
+    _cps = cps;
+  }
+  G1FullGCCompactionPoint* get_compact_point_by_worker_id(uint id) const  { return _cps[id]; }
+  void set_compact_point_by_worker_id(uint id, G1FullGCCompactionPoint* cp) { _cps[id] = cp; }
+  G1FullGCCompactionPoint* serial_compaction_point() { return _serial_cp; }
+  void set_serial_compaction_point(G1FullGCCompactionPoint* serial_cp) { _serial_cp = serial_cp; }
   // Retrieve pointer to current tenant context, NULL if in root container
   static G1TenantAllocationContext* current();
 
@@ -164,10 +239,9 @@ public:
   static long active_context_count();
 
   // Perform operation upon all tenant alloc contexts
-  static void iterate(G1TenantAllocationContextClosure* closure);
-
-  // Prepare for full GC compaction
-  static void prepare_for_compaction();
+  static void iterate_locked(G1TenantAllocationContextClosure* closure);
+  static void iterate_unlocked(G1TenantAllocationContextClosure* closure);
+  static void iterate_impl(G1TenantAllocationContextClosure* closure);
 
   // GC support, we keep a reference to the TenantContainer oop
   static void oops_do(OopClosure* f);
@@ -177,12 +251,14 @@ public:
 
   static size_t total_used();
 
-  static void set_num_workers(uint num_workers) { _num_workers = num_workers; }
-
   static uint num_workers() { return _num_workers; }
 
   static void init_gc_alloc_regions(G1Allocator* allocator, EvacuationInfo& ei);
   static void release_gc_alloc_regions(EvacuationInfo& ei);
+
+  static void set_num_workers(uint num_workers);
+  static void init_cps();
+  static void release_cps();
 
   static void abandon_gc_alloc_regions();
 

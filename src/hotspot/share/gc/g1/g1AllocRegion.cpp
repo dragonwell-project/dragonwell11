@@ -274,12 +274,6 @@ void MutatorAllocRegion::retire_region(HeapRegion* alloc_region,
     assert(alloc_region->allocation_context() == allocation_context(),
            "Inconsistent allocation contexts");
   });
-
-  DEBUG_ONLY(if (TenantHeapIsolation) {
-    assert(alloc_region->allocation_context() == allocation_context(),
-           "Inconsistent allocation contexts");
-  });
-
   _g1h->retire_mutator_alloc_region(alloc_region, allocated_bytes);
 }
 

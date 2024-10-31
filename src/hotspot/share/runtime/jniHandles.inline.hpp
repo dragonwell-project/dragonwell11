@@ -52,7 +52,9 @@ inline oop* JNIHandles::jweak_ptr(jobject handle) {
 template <DecoratorSet decorators, bool external_guard>
 inline oop JNIHandles::resolve_impl(jobject handle) {
   assert(handle != NULL, "precondition");
-  assert(!current_thread_in_native(), "must not be in native");
+  if (!TenantHeapIsolation) {
+    assert(!current_thread_in_native(), "must not be in native");
+  }
   oop result;
   if (is_jweak(handle)) {       // Unlikely
     result = NativeAccess<ON_PHANTOM_OOP_REF|decorators>::oop_load(jweak_ptr(handle));

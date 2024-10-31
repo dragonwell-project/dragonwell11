@@ -26,10 +26,10 @@ import com.alibaba.tenant.TenantGlobals;
 import static org.junit.Assert.*;
 
 /* @test
- * @summary unit tests for com.alibaba.tenant.TenantGlobals
+ * @summary unit tests for TenantGlobals
  * @library /test/lib
  * @compile TestTenantGlobals.java
- * @run junit/othervm  test.com.alibaba.tenant.TestTenantGlobals
+ * @run junit/othervm  TestTenantGlobals
  */
 public class TestTenantGlobals {
 

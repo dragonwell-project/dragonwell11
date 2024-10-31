@@ -132,14 +132,6 @@ public:
   static AllocationContext_t system();
 };
 
-class AllocationContextStats: public StackObj {
-public:
-  inline void clear() { }
-  inline void update(bool full_gc) { }
-  inline void update_after_mark() { }
-  inline bool available() { return false; }
-};
-
 // To switch current to target AllocationContext_t during the lifespan of this object
 class AllocationContextMark : public StackObj {
 private:

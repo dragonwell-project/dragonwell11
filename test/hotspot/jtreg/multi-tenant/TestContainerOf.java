@@ -25,9 +25,9 @@
  * @summary Test TenantContainer.containOf() to retrieve tenant container of a Java object
  * @library /test/lib
  * @build TestContainerOf
- * @run main/othervm -XX:+MultiTenant -XX:+TenantHeapThrottling -XX:+UseG1GC -Xmx1024M -Xms512M
+ * @run main/othervm -XX:+MultiTenant -XX:+TenantHeapThrottling -XX:+UseG1GC -Xmx4096M -Xms4096M
  *                   -XX:G1HeapRegionSize=1M TestContainerOf
- * @run main/othervm -XX:+MultiTenant -XX:+TenantHeapIsolation -XX:+UseG1GC -Xmx1024M -Xms512M
+ * @run main/othervm -XX:+MultiTenant -XX:+TenantHeapIsolation -XX:+UseG1GC -Xmx4096M -Xms4096M
  *                   -XX:G1HeapRegionSize=1M TestContainerOf
  */
 
@@ -58,6 +58,7 @@ public class TestContainerOf {
         Object[] objects = new Object[count];
         TenantContainer[] tenants = new TenantContainer[count];
         Object objInRoot = new Object();
+        
         TenantConfiguration config = new TenantConfiguration().limitHeap(32 * 1024 * 1024 /* 32 MB heap */);
 
         Asserts.assertNull(TenantContainer.containerOf(objInRoot));
@@ -83,7 +84,7 @@ public class TestContainerOf {
             long idGet = containerGet.getTenantId();
             long idCur = tenants[i].getTenantId();
             Asserts.assertEquals(idGet, idCur);
-            // assertTrue(containerGet.getTenantId() == tenants[i].getTenantId());
+            Asserts.assertTrue(containerGet.getTenantId() == tenants[i].getTenantId());
             Asserts.assertTrue(tenants[i] == containerGet);
         }
 
