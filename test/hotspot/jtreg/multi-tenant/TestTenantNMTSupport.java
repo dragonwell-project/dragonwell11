@@ -24,12 +24,12 @@
 /*
  * @test
  * @summary Verify PrintNMTStatistics with TenantHeapThrottling enabled
- * @library /testlibrary
+ * @library /test/lib
  */
 
 import com.alibaba.tenant.TenantConfiguration;
 import com.alibaba.tenant.TenantContainer;
-import com.oracle.java.testlibrary.*;
+import jdk.test.lib.process.*;
 
 public class TestTenantNMTSupport {
 

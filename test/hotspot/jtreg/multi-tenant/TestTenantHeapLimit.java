@@ -24,19 +24,20 @@
 /*
  * @test
  * @summary Test heap limit on tenant
- * @library /testlibrary /testlibrary/whitebox
+ * @library /test/lib
  * @build TestTenantHeapLimit
  * @run main ClassFileInstaller sun.hotspot.WhiteBox
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+MultiTenant -XX:+TenantHeapThrottling -XX:+WhiteBoxAPI -XX:+UseG1GC -Xmx1024M -Xms512M -XX:G1HeapRegionSize=1M TestTenantHeapLimit
  */
 
-import static com.oracle.java.testlibrary.Asserts.*;
 import com.alibaba.tenant.TenantConfiguration;
 import com.alibaba.tenant.TenantContainer;
 import com.alibaba.tenant.TenantException;
-import com.oracle.java.testlibrary.OutputAnalyzer;
-import com.oracle.java.testlibrary.Platform;
-import com.oracle.java.testlibrary.ProcessTools;
+
+import jdk.test.lib.Asserts;
+import jdk.test.lib.Platform;
+import jdk.test.lib.process.OutputAnalyzer;
+import jdk.test.lib.process.ProcessTools;
 import sun.hotspot.WhiteBox;
 import java.util.ArrayList;
 import java.util.List;
@@ -122,11 +123,11 @@ public class TestTenantHeapLimit {
             output = ProcessTools.executeProcess(pb);
 
             // expect normal exit, no OOM error
-            assertEquals(output.getExitValue(), 0);
+            Asserts.assertEquals(output.getExitValue(), 0);
             // should not have full GC
-            assertFalse(output.getStdout().contains("[Full GC (Allocation Failure)"));
+            Asserts.assertFalse(output.getStdout().contains("[Full GC (Allocation Failure)"));
             // must have triggerred YGC
-            assertTrue(output.getStdout().contains("[GC pause (G1 Evacuation Pause) (young)"));
+            Asserts.assertTrue(output.getStdout().contains("[GC pause (G1 Evacuation Pause) (young)"));
         } catch (Exception e) {
             e.printStackTrace();
             fail();
@@ -255,6 +256,6 @@ public class TestTenantHeapLimit {
     }
 
     private static void fail() {
-        assertTrue(false, "Failed!");
+        Asserts.assertTrue(false, "Failed!");
     }
 }

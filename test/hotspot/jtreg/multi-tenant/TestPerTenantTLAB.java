@@ -23,14 +23,14 @@
 /*
  * @test
  * @summary Test retain and reuse of TLAB
- * @library /testlibrary /testlibrary/whitebox
+ * @library /test/lib
  * @build TestPerTenantTLAB
  * @run main ClassFileInstaller sun.hotspot.WhiteBox
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+WhiteBoxAPI -XX:+UsePerTenantTLAB -XX:+TenantHeapIsolation -XX:+UseG1GC -XX:+UseTLAB -XX:TLABSize=65535 -Xmx1024M -Xms512M -XX:G1HeapRegionSize=1M TestPerTenantTLAB
  *
  */
 
-import static com.oracle.java.testlibrary.Asserts.*;
+import jdk.test.lib.Asserts;
 
 import com.alibaba.tenant.TenantConfiguration;
 import com.alibaba.tenant.TenantContainer;
@@ -183,8 +183,8 @@ public class TestPerTenantTLAB {
             try {
                 tenant.run(()->{
                     refs[0] = new Object();
-                    assertTrue(TenantContainer.containerOf(refs[0]) == tenant);
-                    assertTrue(WB.isInCurrentTLAB(refs[0]));
+                    Asserts.assertTrue(TenantContainer.containerOf(refs[0]) == tenant);
+                    Asserts.assertTrue(WB.isInCurrentTLAB(refs[0]));
 
                     started.countDown();
 
@@ -206,13 +206,13 @@ public class TestPerTenantTLAB {
         try {
             started.await();
 
-            assertTrue(TenantContainer.containerOf(refs[0]) == tenant);
+            Asserts.assertTrue(TenantContainer.containerOf(refs[0]) == tenant);
 
             tenant.destroy();
-            assertTrue(tenant.getState() == TenantState.DEAD);
+            Asserts.assertTrue(tenant.getState() == TenantState.DEAD);
 
             // should have been moved to root
-            assertNull(TenantContainer.containerOf(refs[0]));
+            Asserts.assertNull(TenantContainer.containerOf(refs[0]));
 
             // trigger destroy
             cdl.countDown();
@@ -233,29 +233,29 @@ public class TestPerTenantTLAB {
 
     private static void assertInCurrentTLAB(Object...objs) {
         for (Object o : objs) {
-            assertTrue(WB.isInCurrentTLAB(o));
+            Asserts.assertTrue(WB.isInCurrentTLAB(o));
         }
     }
 
     private static void assertNotInSameTLAB(Object o1, Object o2) {
-        assertGreaterThanOrEqual((int)Math.abs(WB.getObjectAddress(o1) - WB.getObjectAddress(o2)), TLAB_SIZE);
+        Asserts.assertGreaterThanOrEqual((int)Math.abs(WB.getObjectAddress(o1) - WB.getObjectAddress(o2)), TLAB_SIZE);
     }
 
     private static void assertNotInCurrentTLAB(Object... objs) {
         for (Object o : objs) {
-            assertFalse(WB.isInCurrentTLAB(o));
+            Asserts.assertFalse(WB.isInCurrentTLAB(o));
         }
     }
 
     private static void assertNotInSameRegion(Object o1, Object o2) {
         int addr1 = (int)WB.getObjectAddress(o1) & G1_HEAP_REGION_MASK;
         int addr2 = (int)WB.getObjectAddress(o2) & G1_HEAP_REGION_MASK;
-        assertNotEquals(addr1, addr2);
+        Asserts.assertNotEquals(addr1, addr2);
     }
 
     private static void assertInSameRegion(Object o1, Object o2) {
         int addr1 = (int)WB.getObjectAddress(o1) & G1_HEAP_REGION_MASK;
         int addr2 = (int)WB.getObjectAddress(o2) & G1_HEAP_REGION_MASK;
-        assertEquals(addr1, addr2);
+        Asserts.assertEquals(addr1, addr2);
     }
 }

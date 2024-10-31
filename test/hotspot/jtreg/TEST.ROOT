@@ -29,7 +29,7 @@
 # The list of keywords supported in this test suite
 # randomness:           test uses randomness, test cases differ from run to run
 # cgroups:              test uses cgroups
-keys=cte_test jcmd nmt regression gc stress metaspace headful intermittent randomness cgroups
+keys=cte_test jcmd nmt regression gc stress metaspace headful intermittent randomness cgroups multitenant
 
 groups=TEST.groups TEST.quick-groups
 

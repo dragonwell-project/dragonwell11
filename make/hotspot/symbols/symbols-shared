@@ -34,3 +34,7 @@ JVM_FindClassFromBootLoader
 JVM_GetVersionInfo
 JVM_InitAgentProperties
 JVM_AttachToTenant
+JVM_CreateTenantAllocationContext
+JVM_DestroyTenantAllocationContext
+JVM_GetTenantOccupiedMemory
+JVM_TenantContainerOf

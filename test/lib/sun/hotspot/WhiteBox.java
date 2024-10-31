@@ -551,4 +551,7 @@ public class WhiteBox {
 
   // libc name
   public native String getLibcName();
+
+  // OBJ is in Current TLAB
+  public native boolean isInCurrentTLAB(Object o);
 }

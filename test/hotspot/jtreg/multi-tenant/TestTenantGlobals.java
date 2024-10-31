@@ -19,8 +19,6 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-package test.com.alibaba.tenant;
-
 import org.junit.Test;
 import com.alibaba.tenant.TenantConfiguration;
 import com.alibaba.tenant.TenantContainer;
@@ -29,7 +27,7 @@ import static org.junit.Assert.*;
 
 /* @test
  * @summary unit tests for com.alibaba.tenant.TenantGlobals
- * @library /lib/testlibrary
+ * @library /test/lib
  * @compile TestTenantGlobals.java
  * @run junit/othervm  test.com.alibaba.tenant.TestTenantGlobals
  */

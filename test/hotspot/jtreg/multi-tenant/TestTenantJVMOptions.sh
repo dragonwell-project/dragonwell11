@@ -69,7 +69,7 @@ function assert_invalid_jvm_options() {
   CMD="${JAVA} ${JVM_ARGS} -version"
   OUT=$(${CMD} 2>&1)
   if [ 0 -eq $? ]; then
-    echo "Expected invalid JVM arguments: ${JVM_ARGS}"
+    echo "Expected invalid JVM arguments set: ${JVM_ARGS}"
     exit 1
   fi
 }

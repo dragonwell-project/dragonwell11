@@ -18,8 +18,11 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-package com.alibaba.tenant;
-
+import jdk.test.lib.Asserts;
+import com.alibaba.tenant.TenantContainer;
+import com.alibaba.tenant.TenantContainerFactory;
+import com.alibaba.tenant.TenantGlobals;
+import com.alibaba.tenant.TenantResourceContainer;
 import com.alibaba.rcm.Constraint;
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceContainerFactory;
@@ -27,32 +30,45 @@ import com.alibaba.rcm.AbstractResourceContainer;
 import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import static com.alibaba.rcm.ResourceType.*;
-import static jdk.testlibrary.Asserts.*;
 
+import static com.alibaba.rcm.ResourceType.*;
 /*
  * @test
- * @library /lib/testlibrary
+ * @library /test/lib
  * @summary test RCM API based TenantContainerFactory
- * @run main/othervm/bootclasspath -XX:+MultiTenant com.alibaba.tenant.TestTenantContainerFactory
+ * @run main/othervm/bootclasspath -XX:+MultiTenant TestTenantContainerFactory
  */
 public class TestTenantContainerFactory {
+    
+    private static void fail() {
+        try { throw new Exception(); } catch (Throwable e) {
+            StackTraceElement frame = e.getStackTrace()[1];
+            System.out.printf("Failed at %s:%d\n", frame.getFileName(), frame.getLineNumber());
+        }
+    }
+
+    private static void fail(String msg) {
+        try { throw new Exception(msg); } catch (Throwable e) {
+            StackTraceElement frame = e.getStackTrace()[1];
+            System.out.printf("Failed at %s:%d\n", frame.getFileName(), frame.getLineNumber());
+        }
+    }
 
     private void testSingleton() {
         ResourceContainerFactory factory = TenantContainerFactory.instance();
-        assertTrue(factory == TenantContainerFactory.instance());
+        Asserts.assertTrue(factory == TenantContainerFactory.instance());
         ResourceContainerFactory factory2 = TenantContainerFactory.instance();
-        assertSame(factory, factory2);
+        Asserts.assertSame(factory, factory2);
     }
 
     private void testCreation() {
         try {
             ResourceContainer container = TenantContainerFactory.instance()
                     .createContainer(Collections.emptySet());
-            assertNotNull(container);
-            assertTrue(container instanceof TenantResourceContainer);
-            assertNull(TenantContainer.current());
-            assertNotNull(TenantResourceContainer.root());
+            Asserts.assertNotNull(container);
+            Asserts.assertTrue(container instanceof TenantResourceContainer);
+            Asserts.assertNull(TenantContainer.current());
+            Asserts.assertNotNull(TenantResourceContainer.root());
         } catch (Throwable t) {
             fail();
         }
@@ -64,10 +80,10 @@ public class TestTenantContainerFactory {
                     .collect(Collectors.toSet());
             ResourceContainer container = TenantContainerFactory.instance()
                     .createContainer(constraints);
-            assertNotNull(container);
-            assertTrue(container instanceof TenantResourceContainer);
-            assertNull(TenantContainer.current());
-            assertNotNull(TenantResourceContainer.root());
+            Asserts.assertNotNull(container);
+            Asserts.assertTrue(container instanceof TenantResourceContainer);
+            Asserts.assertNull(TenantContainer.current());
+            Asserts.assertNotNull(TenantResourceContainer.root());
         } catch (Throwable t) {
             fail();
         }
@@ -96,13 +112,13 @@ public class TestTenantContainerFactory {
                     .collect(Collectors.toList());
             ResourceContainer rc = TenantContainerFactory.instance().createContainer(constraints);
             TenantContainer tenant = TenantContainerFactory.tenantContainerOf(rc);
-            assertNotNull(tenant);
-            assertNull(TenantContainer.current());
-            assertSame(AbstractResourceContainer.root(), AbstractResourceContainer.current());
+            Asserts.assertNotNull(tenant);
+            Asserts.assertNull(TenantContainer.current());
+            Asserts.assertSame(AbstractResourceContainer.root(), AbstractResourceContainer.current());
             tenant.run(()->{
                 System.out.println("Hello");
-                assertSame(TenantContainer.current(), tenant);
-                assertSame(AbstractResourceContainer.current(), rc);
+                Asserts.assertSame(TenantContainer.current(), tenant);
+                Asserts.assertSame(AbstractResourceContainer.current(), rc);
             });
             tenant.destroy();
         } catch (Throwable e) {

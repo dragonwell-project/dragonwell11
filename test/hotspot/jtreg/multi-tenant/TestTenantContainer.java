@@ -18,9 +18,6 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-
-package test.com.alibaba.tenant;
-
 import com.alibaba.tenant.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -38,7 +35,7 @@ import java.util.stream.IntStream;
 
 /* @test
  * @summary unit tests for com.alibaba.tenant.TenantContainer
- * @library /lib/testlibrary
+ * @library /test/lib
  * @compile TestTenantContainer.java
  * @run junit/othervm/timeout=300  -XX:+MultiTenant -XX:+UseG1GC -Xmx600m  -Xms200m
  *    -Dcom.alibaba.tenant.test.prop=root test.com.alibaba.tenant.TestTenantContainer

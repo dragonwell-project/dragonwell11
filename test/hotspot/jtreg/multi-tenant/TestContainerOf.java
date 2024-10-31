@@ -23,7 +23,7 @@
 /*
  * @test
  * @summary Test TenantContainer.containOf() to retrieve tenant container of a Java object
- * @library /testlibrary
+ * @library /test/lib
  * @build TestContainerOf
  * @run main/othervm -XX:+MultiTenant -XX:+TenantHeapThrottling -XX:+UseG1GC -Xmx1024M -Xms512M
  *                   -XX:G1HeapRegionSize=1M TestContainerOf
@@ -31,7 +31,8 @@
  *                   -XX:G1HeapRegionSize=1M TestContainerOf
  */
 
-import static com.oracle.java.testlibrary.Asserts.*;
+
+import jdk.test.lib.Asserts;
 import com.alibaba.tenant.TenantConfiguration;
 import com.alibaba.tenant.TenantContainer;
 import com.alibaba.tenant.TenantException;
@@ -59,7 +60,7 @@ public class TestContainerOf {
         Object objInRoot = new Object();
         TenantConfiguration config = new TenantConfiguration().limitHeap(32 * 1024 * 1024 /* 32 MB heap */);
 
-        assertNull(TenantContainer.containerOf(objInRoot));
+        Asserts.assertNull(TenantContainer.containerOf(objInRoot));
 
         for (int i = 0; i < count; ++i) {
             tenants[i]= TenantContainer.create(config);
@@ -70,26 +71,26 @@ public class TestContainerOf {
 
                 TenantContainer current = TenantContainer.current();
 
-                assertNotNull(current);
-                assertTrue(current == thisContainer);
-                assertNotNull(TenantContainer.containerOf(objects[idx]));
+                Asserts.assertNotNull(current);
+                Asserts.assertTrue(current == thisContainer);
+                Asserts.assertNotNull(TenantContainer.containerOf(objects[idx]));
             });
         }
 
         for (int i = 0; i < count; ++i) {
             TenantContainer containerGet = TenantContainer.containerOf(objects[i]);
-            assertNotNull(containerGet);
+            Asserts.assertNotNull(containerGet);
             long idGet = containerGet.getTenantId();
             long idCur = tenants[i].getTenantId();
-            assertEquals(idGet, idCur);
+            Asserts.assertEquals(idGet, idCur);
             // assertTrue(containerGet.getTenantId() == tenants[i].getTenantId());
-            assertTrue(tenants[i] == containerGet);
+            Asserts.assertTrue(tenants[i] == containerGet);
         }
 
         Arrays.stream(tenants).forEach(t -> t.destroy());
 
         Arrays.stream(objects).forEach(
-                obj -> assertNull(TenantContainer.containerOf(obj), "Should be owned by ROOT tenant"));
+                obj ->  Asserts.assertNull(TenantContainer.containerOf(obj), "Should be owned by ROOT tenant"));
 
         System.out.println("<<End TEST testTenantContainerOf\n");
     }
@@ -98,14 +99,14 @@ public class TestContainerOf {
         TenantConfiguration tconfig = new TenantConfiguration().limitHeap(100 * 1024 * 1024);
         final TenantContainer tenant = TenantContainer.create(tconfig);
         tenant.run(() -> {
-            assertTrue(TenantContainer.current() == tenant);
+            Asserts.assertTrue(TenantContainer.current() == tenant);
             Object obj = TenantContainer.primitiveRunInRoot(()->{
                 //should be in root tenant.
-                assertTrue(TenantContainer.current() == null);
+                Asserts.assertTrue(TenantContainer.current() == null);
                 return new Object();
             });
             //obj should be allocated in root tenant.
-            assertTrue(TenantContainer.containerOf(obj) == null);
+            Asserts.assertTrue(TenantContainer.containerOf(obj) == null);
         });
     }
 }

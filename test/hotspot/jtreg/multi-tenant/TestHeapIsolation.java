@@ -22,16 +22,18 @@
  */
 
 /*
- * @test
+ * @test TestHeapIsolation
  * @summary Test isolation of per-tenant Java heap space
- * @library /testlibrary /testlibrary/whitebox
+ * @library /test/lib
  * @build TestHeapIsolation
  * @run main ClassFileInstaller sun.hotspot.WhiteBox
- * @run main/othervm/timeout=600 -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+MultiTenant -XX:+TenantHeapIsolation -XX:+WhiteBoxAPI -XX:+UseG1GC -Xmx2048M -Xms1024M -XX:G1HeapRegionSize=1M TestHeapIsolation
+ * @run main/othervm/timeout=600 -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+MultiTenant -XX:+TenantHeapIsolation
+ *      -XX:+WhiteBoxAPI -XX:+UseG1GC -Xmx2048M -Xms1024M -XX:G1HeapRegionSize=1M --add-opens java.base/com.alibaba.tenant=ALL-UNNAMED
+ *      TestHeapIsolation
  *
  */
 
-import static com.oracle.java.testlibrary.Asserts.*;
+import jdk.test.lib.Asserts;
 
 import com.alibaba.tenant.TenantConfiguration;
 import com.alibaba.tenant.TenantContainer;
@@ -87,7 +89,7 @@ public class TestHeapIsolation {
     }
 
     void runAllTests() throws Exception {
-        assertTrue(HEAP_REGION_SIZE > 0);
+        Asserts.assertTrue(HEAP_REGION_SIZE > 0);
 
         testEmptyTenantOperation();
         testTenantOccupiedMemory();
@@ -131,7 +133,7 @@ public class TestHeapIsolation {
         System.out.println(">> Begin TEST testTenantAllocation ("
                 + count + " containers, gcType = " + gcType.name() + ", allocType=" + allocType.name());
 
-        assertTrue(count > 0, "Cannot test with " + count + " tenants");
+        Asserts.assertTrue(count > 0, "Cannot test with " + count + " tenants");
 
         // local array holds objects to prevent them from being potentially reclaimed by GC,
         // NOTE: there are cross-tenant references in this array
@@ -140,7 +142,7 @@ public class TestHeapIsolation {
 
         final Object objRootBefore = allocateObject(allocType);
         TenantContainer curTenant = TenantContainer.containerOf(objRootBefore);
-        assertNull(curTenant, "Object was allocated in wrong container " + allocationContextStringOf(curTenant));
+        Asserts.assertNull(curTenant, "Object was allocated in wrong container " + allocationContextStringOf(curTenant));
 
         // the configuration here is
         TenantConfiguration config = new TenantConfiguration().limitHeap(32 * 1024 * 1024 /* 32MB heap */);
@@ -254,26 +256,26 @@ public class TestHeapIsolation {
         Object objRootAfter = allocateObject(allocType);
 
         curTenant = TenantContainer.containerOf(objRootBefore);
-        assertNull(curTenant, "Object was copied to wrong container " + allocationContextStringOf(curTenant));
+        Asserts.assertNull(curTenant, "Object was copied to wrong container " + allocationContextStringOf(curTenant));
         curTenant = TenantContainer.containerOf(objRootAfter);
-        assertNull(curTenant, "Object was copied to wrong container " + allocationContextStringOf(curTenant));
+        Asserts.assertNull(curTenant, "Object was copied to wrong container " + allocationContextStringOf(curTenant));
 
         for (int i = 0; i < count; ++i) {
-            assertNotNull(objHolder[i]);
-            assertNotNull(objHolder2[i]);
+            Asserts.assertNotNull(objHolder[i]);
+            Asserts.assertNotNull(objHolder2[i]);
             assertInSameContainer(objHolder[i], objHolder2[i]);
             curTenant = TenantContainer.containerOf(objHolder[i]);
-            assertNotNull(curTenant, "Object["+i+"] @0x" + Long.toHexString(wb.getObjectAddress(objHolder[i]))+
+            Asserts.assertNotNull(curTenant, "Object["+i+"] @0x" + Long.toHexString(wb.getObjectAddress(objHolder[i]))+
                     " was copied to wrong container " + allocationContextStringOf(curTenant));
             curTenant = TenantContainer.containerOf(objHolder2[i]);
-            assertNotNull(curTenant, "Object was copied to wrong container " + allocationContextStringOf(curTenant));
+            Asserts.assertNotNull(curTenant, "Object was copied to wrong container " + allocationContextStringOf(curTenant));
 
             for (int j = 0; j < count; ++j) {
                 if (i != j) {
-                    assertNotEquals(TenantContainer.containerOf(objHolder[i]), TenantContainer.containerOf(objHolder[j]));
-                    assertNotEquals(TenantContainer.containerOf(objHolder2[i]), TenantContainer.containerOf(objHolder2[j]));
-                    assertNotEquals(TenantContainer.containerOf(objHolder[i]), TenantContainer.containerOf(objHolder2[j]));
-                    assertNotEquals(TenantContainer.containerOf(objHolder2[i]), TenantContainer.containerOf(objHolder[j]));
+                    Asserts.assertNotEquals(TenantContainer.containerOf(objHolder[i]), TenantContainer.containerOf(objHolder[j]));
+                    Asserts.assertNotEquals(TenantContainer.containerOf(objHolder2[i]), TenantContainer.containerOf(objHolder2[j]));
+                    Asserts.assertNotEquals(TenantContainer.containerOf(objHolder[i]), TenantContainer.containerOf(objHolder2[j]));
+                    Asserts.assertNotEquals(TenantContainer.containerOf(objHolder2[i]), TenantContainer.containerOf(objHolder[j]));
                 }
             }
         }
@@ -283,9 +285,9 @@ public class TestHeapIsolation {
 
         // after tenant destruction, all objects should belong to ROOT tenant
         Arrays.stream(objHolder).forEach(
-                obj -> assertNull(TenantContainer.containerOf(obj), "Should be owned by root tenant"));
+                obj -> Asserts.assertNull(TenantContainer.containerOf(obj), "Should be owned by root tenant"));
         Arrays.stream(objHolder2).forEach(
-                obj -> assertNull(TenantContainer.containerOf(obj), "Should be owned by root tenant"));
+                obj -> Asserts.assertNull(TenantContainer.containerOf(obj), "Should be owned by root tenant"));
 
         System.out.println("<< End TEST testTenantAllocation");
     }
@@ -315,7 +317,7 @@ public class TestHeapIsolation {
 
         TenantConfiguration config = new TenantConfiguration().limitHeap(64 * 1024 * 1024);
         TenantContainer tenant = TenantContainer.create(config);
-        assertTrue(0L == tenant.getOccupiedMemory());
+        Asserts.assertTrue(0L == tenant.getOccupiedMemory());
         try {
             // something will be allocated anyway
             tenant.run(()->{

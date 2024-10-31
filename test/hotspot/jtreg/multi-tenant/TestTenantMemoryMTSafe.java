@@ -24,21 +24,23 @@
 /*
  * @test
  * @summary TestTenantMemoryMTSafe
- * @library /testlibrary /testlibrary/whitebox
+ * @library /test/lib
  * @build TestTenantMemoryMTSafe sun.hotspot.WhiteBox
  * @run main ClassFileInstaller sun.hotspot.WhiteBox
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
  * -XX:+MultiTenant -XX:+TenantHeapThrottling -XX:+WhiteBoxAPI -XX:+UseG1GC -Xmx1g -Xms1g
- * -XX:G1HeapRegionSize=1M -XX:+PrintGCDetails -XX:+PrintGCDateStamps TestTenantMemoryMTSafe
+ * -XX:G1HeapRegionSize=1M -Xlog:gc=info::time TestTenantMemoryMTSafe
  */
 
-import static com.oracle.java.testlibrary.Asserts.*;
+
 import com.alibaba.tenant.TenantConfiguration;
 import com.alibaba.tenant.TenantContainer;
 import com.alibaba.tenant.TenantException;
-import com.oracle.java.testlibrary.OutputAnalyzer;
-import com.oracle.java.testlibrary.Platform;
-import com.oracle.java.testlibrary.ProcessTools;
+
+import jdk.test.lib.Asserts;
+import jdk.test.lib.Platform;
+import jdk.test.lib.process.OutputAnalyzer;
+import jdk.test.lib.process.ProcessTools;
 import sun.hotspot.WhiteBox;
 import java.util.ArrayList;
 import java.util.List;
@@ -76,7 +78,7 @@ public class TestTenantMemoryMTSafe {
                     WB.youngGC();
                     WB.youngGC();
                     WB.youngGC();
-                    assertTrue(tenant.getOccupiedMemory() < 1024*1024*5,"Must be less than 5m");
+                    Asserts.assertTrue(tenant.getOccupiedMemory() < 1024*1024*5,"Must be less than 5m");
                 } catch (Exception e) {
                     System.out.println("Error: " + e.getMessage());
                     fail();
@@ -88,6 +90,6 @@ public class TestTenantMemoryMTSafe {
     }
 
     private static void fail() {
-        assertTrue(false, "Failed!");
+        Asserts.assertTrue(false, "Failed!");
     }
 }
