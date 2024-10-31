@@ -152,7 +152,8 @@ static void setup_sighandler() {
     sigact.sa_flags = SA_SIGINFO;
     sigact.sa_sigaction = sighandler;
 
-    for (int sig = 1; sig < __SIGRTMIN; ++sig) {
+    const int MaxSignalValue = 31;
+    for (int sig = 1; sig <= MaxSignalValue; ++sig) {
         if (sig == SIGKILL || sig == SIGSTOP) {
             continue;
         }
