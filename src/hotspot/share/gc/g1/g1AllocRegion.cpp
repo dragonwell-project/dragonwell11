@@ -190,6 +190,7 @@ void G1AllocRegion::update_alloc_region(HeapRegion* alloc_region) {
   assert_alloc_region(alloc_region != NULL && !alloc_region->is_empty(), "pre-condition");
 
   _alloc_region = alloc_region;
+  _alloc_region->set_allocation_context(allocation_context());
   _count += 1;
   trace("updated");
 }
@@ -263,6 +264,16 @@ HeapRegion* MutatorAllocRegion::allocate_new_region(size_t word_size,
 
 void MutatorAllocRegion::retire_region(HeapRegion* alloc_region,
                                        size_t allocated_bytes) {
+  DEBUG_ONLY(if (TenantHeapIsolation) {
+    assert(alloc_region->allocation_context() == allocation_context(),
+           "Inconsistent allocation contexts");
+  });
+
+  DEBUG_ONLY(if (TenantHeapIsolation) {
+    assert(alloc_region->allocation_context() == allocation_context(),
+           "Inconsistent allocation contexts");
+  });
+
   _g1h->retire_mutator_alloc_region(alloc_region, allocated_bytes);
 }
 
@@ -350,6 +361,10 @@ HeapRegion* G1GCAllocRegion::allocate_new_region(size_t word_size,
 
 void G1GCAllocRegion::retire_region(HeapRegion* alloc_region,
                                     size_t allocated_bytes) {
+  DEBUG_ONLY(if (TenantHeapIsolation) {
+    assert(alloc_region->allocation_context() == allocation_context(),
+           "Inconsistent allocation contexts");
+  });
   _g1h->retire_gc_alloc_region(alloc_region, allocated_bytes, _purpose);
 }
 

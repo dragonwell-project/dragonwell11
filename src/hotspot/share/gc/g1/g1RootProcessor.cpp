@@ -294,6 +294,14 @@ void G1RootProcessor::process_vm_roots(G1RootClosures* closures,
       SystemDictionary::oops_do(strong_roots);
     }
   }
+
+  if (TenantHeapIsolation) {
+    // process references from G1TenantAllocationContext
+    G1GCParPhaseTimesTracker x(phase_times, G1GCPhaseTimes::TenantAllocationContextRoots, worker_i);
+    if (!_process_strong_tasks.is_task_claimed(G1RP_PS_TenantAllocationContext_oops_do)) {
+      G1TenantAllocationContexts::oops_do(strong_roots);
+    }
+  }
 }
 
 void G1RootProcessor::process_string_table_roots(G1RootClosures* closures,

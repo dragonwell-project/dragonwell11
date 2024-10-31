@@ -302,6 +302,12 @@
           "Verify the code root lists attached to each heap region.")       \
                                                                             \
   develop(bool, G1VerifyBitmaps, false,                                     \
-          "Verifies the consistency of the marking bitmaps")
+          "Verifies the consistency of the marking bitmaps")                \
+                                                                            \
+  develop(bool, TraceG1TenantAllocationContext, false,                      \
+          "Trace tenant allocation context changes")                        \
+                                                                            \
+  develop(bool, TraceNonRootTenantAllocation, false,                        \
+          "Trace memory allocated for non-root tenants")                    \
 
 #endif // SHARE_VM_GC_G1_G1_GLOBALS_HPP

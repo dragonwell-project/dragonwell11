@@ -440,6 +440,15 @@ void HeapRegion::print_on(outputStream* st) const {
   st->print("|" PTR_FORMAT ", " PTR_FORMAT ", " PTR_FORMAT,
             p2i(bottom()), p2i(top()), p2i(end()));
   st->print("|%3d%%", (int) ((double) used() * 100 / capacity()));
+  if (TenantHeapIsolation) {
+    if (NULL == tenant_allocation_context()) {
+      st->print("  TENANT-ROOT");
+    } else {
+      assert(!allocation_context().is_system(), "Inconsistent allocation contexts");
+      st->print("  TENANT-" PTR_FORMAT, allocation_context().tenant_allocation_context());
+    }
+  }
+  st->print(" AC%4u", allocation_context().allocation_context());
   st->print("|%2s", get_short_type_str());
   if (in_collection_set()) {
     st->print("|CS");
@@ -770,6 +779,29 @@ void HeapRegion::verify(VerifyOption vo,
   }
 
   verify_strong_code_roots(vo, failures);
+}
+
+
+
+void HeapRegion::set_allocation_context(AllocationContext_t context) {
+  assert(Heap_lock->owned_by_self() || SafepointSynchronize::is_at_safepoint(), "not locked");
+  if (TenantHeapIsolation && context != allocation_context() /* do not count self-set */) {
+    if (context.is_system()) {
+      assert(!allocation_context().is_system(), "pre-condition");
+      G1TenantAllocationContext* tac = allocation_context().tenant_allocation_context();
+      assert(NULL != tac, "pre-condition");
+      tac->dec_occupied_heap_region_count();
+    } else {
+      assert(allocation_context().is_system(), "pre-condition");
+      G1TenantAllocationContext* tac = context.tenant_allocation_context();
+      assert(NULL != tac, "pre-condition");
+      tac->inc_occupied_heap_region_count();
+    }
+  } else {
+    DEBUG_ONLY(assert(!TenantHeapIsolation
+                      || (context.is_system() && allocation_context().is_system()), "just checking"));
+  }
+  _allocation_context = context;
 }
 
 void HeapRegion::verify() const {

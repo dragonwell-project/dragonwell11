@@ -363,13 +363,19 @@ JVM_FindClassFromBootLoader(JNIEnv *env, const char *name);
  * com.alibaba.tenant.TenantContainer
  */
 JNIEXPORT void JNICALL
-JVM_AttachToTenant(JNIEnv *env, jobject tenant);
+JVM_AttachToTenant(JNIEnv *env, jobject ignored, jobject tenant);
 
-/*
- * com.alibaba.tenant.TenantContainer
- */
 JNIEXPORT void JNICALL
-JVM_AttachToTenant(JNIEnv *env, jobject tenant);
+JVM_CreateTenantAllocationContext(JNIEnv *env, jobject ignored, jobject tenant, jlong heapLimit);
+
+JNIEXPORT void JNICALL
+JVM_DestroyTenantAllocationContext(JNIEnv *env, jobject ignored, jlong context);
+
+JNIEXPORT jobject JNICALL
+JVM_TenantContainerOf(JNIEnv *env, jclass tenantContainerClass, jobject obj);
+
+JNIEXPORT long JNICALL
+JVM_GetTenantOccupiedMemory(JNIEnv *env, jobject ignored, jlong context);
 
 /*
  * Find a class from a given class loader.  Throws ClassNotFoundException.

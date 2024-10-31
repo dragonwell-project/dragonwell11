@@ -30,14 +30,28 @@
 #include "gc/shared/plab.inline.hpp"
 
 inline MutatorAllocRegion* G1Allocator::mutator_alloc_region() {
+  if (TenantHeapIsolation && !context.is_system()) {
+    G1TenantAllocationContext* tac = context.tenant_allocation_context();
+    assert(NULL != tac, "Tenant alloc context cannot be NULL");
+    return tac->mutator_alloc_region();
+  }
   return &_mutator_alloc_region;
 }
 
 inline SurvivorGCAllocRegion* G1Allocator::survivor_gc_alloc_region() {
+  G1TenantAllocationContext* tac = context.tenant_allocation_context();
+    assert(NULL != tac, "Tenant alloc context cannot be NULL");
+    return tac->survivor_gc_alloc_region();
+  }
   return &_survivor_gc_alloc_region;
 }
 
 inline OldGCAllocRegion* G1Allocator::old_gc_alloc_region() {
+  if (TenantHeapIsolation && !context.is_system()) {
+    G1TenantAllocationContext* tac = context.tenant_allocation_context();
+    assert(NULL != tac, "Tenant alloc context cannot be NULL");
+    return tac->old_gc_alloc_region();
+  }
   return &_old_gc_alloc_region;
 }
 
@@ -65,6 +79,23 @@ inline HeapWord* G1Allocator::attempt_allocation_force(size_t word_size) {
 inline PLAB* G1PLABAllocator::alloc_buffer(InCSetState dest) {
   assert(dest.is_valid(),
          "Allocation buffer index out of bounds: " CSETSTATE_FORMAT, dest.value());
+
+  if (TenantHeapIsolation && !context.is_system()) {
+    assert(NULL != _tenant_par_alloc_buffers, "just checking");
+    G1TenantPLAB* tbuf = tenant_par_alloc_buffer_of(context);
+    if (NULL == tbuf) {
+      tbuf = new G1TenantParGCAllocBuffer(_g1h, context);
+      _tenant_par_alloc_buffers->put(context, tbuf);
+    }
+
+    assert(NULL != tbuf
+           && NULL != _tenant_par_alloc_buffers->get(context)
+           && tbuf == _tenant_par_alloc_buffers->get(context)->value(), "post-condition");
+    PLAB* buf = tbuf->alloc_buffer(dest);
+    assert(NULL != buf, "post-condition");
+    return buf;
+  }
+
   assert(_alloc_buffers[dest.value()] != NULL,
          "Allocation buffer is NULL: " CSETSTATE_FORMAT, dest.value());
   return _alloc_buffers[dest.value()];

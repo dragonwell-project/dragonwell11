@@ -134,6 +134,7 @@
   template(PrintMetadata)                         \
   template(GTestExecuteAtSafepoint)               \
   template(JFROldObject)                          \
+  template(DestroyG1TenantAllocationContext)      \
 
 class VM_Operation: public CHeapObj<mtInternal> {
  public:

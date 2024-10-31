@@ -69,6 +69,17 @@ inline void Thread::clear_trace_flag() {
 inline jlong Thread::cooked_allocated_bytes() {
   jlong allocated_bytes = OrderAccess::load_acquire(&_allocated_bytes);
   if (UseTLAB) {
+    if (MultiTenant && UsePerTenantTLAB) {
+      // accumulate used_bytes from all TLABs
+      size_t used_bytes = 0;
+      for (ThreadLocalAllocBuffer* tlab = &_tlab;
+           tlab != NULL;
+           tlab = tlab->next()) {
+        used_bytes += tlab->used_bytes();
+      }
+      return allocated_bytes + used_bytes;
+    }
+
     size_t used_bytes = tlab().used_bytes();
     if (used_bytes <= ThreadLocalAllocBuffer::max_size_in_bytes()) {
       // Comparing used_bytes with the maximum allowed size will ensure

@@ -736,6 +736,13 @@ inline HeapWord* G1CollectedHeap::attempt_allocation(size_t min_word_size,
 
   HeapWord* result = _allocator->attempt_allocation(min_word_size, desired_word_size, actual_word_size);
 
+#ifndef PRODUCT
+    if (TenantHeapIsolation && TraceNonRootTenantAllocation && !AllocationContext::current().is_system()) {
+      tty->print_cr("Non-root allocation: " SIZE_FORMAT " bytes @0x" PTR_FORMAT " in tenant 0x" PTR_FORMAT,
+                    word_size * HeapWordSize, result, AllocationContext::current().tenant_allocation_context());
+    }
+#endif
+
   if (result == NULL) {
     *actual_word_size = desired_word_size;
     result = attempt_allocation_slow(desired_word_size);
@@ -881,6 +888,14 @@ HeapWord* G1CollectedHeap::attempt_allocation_humongous(size_t word_size) {
       // regions, we'll first try to do the allocation without doing a
       // collection hoping that there's enough space in the heap.
       result = humongous_obj_allocate(word_size);
+
+#ifndef PRODUCT
+    if (TenantHeapIsolation && TraceNonRootTenantAllocation && !AllocationContext::current().is_system()) {
+      tty->print_cr("Non-root allocation: " SIZE_FORMAT " bytes @0x" PTR_FORMAT " in tenant 0x" PTR_FORMAT,
+                    word_size * HeapWordSize, result, AllocationContext::current().tenant_allocation_context());
+    }
+#endif
+
       if (result != NULL) {
         size_t size_in_regions = humongous_obj_size_in_regions(word_size);
         g1_policy()->old_gen_alloc_tracker()->
@@ -1536,6 +1551,11 @@ jint G1CollectedHeap::initialize() {
   // Necessary to satisfy locking discipline assertions.
 
   MutexLocker x(Heap_lock);
+
+  // have to do this early before mutator_alloc_region initialization
+  if (TenantHeapIsolation) {
+    G1TenantAllocationContexts::initialize();
+  }
 
   // While there are no constraints in the GC code that HeapWordSize
   // be any particular value, there are multiple other areas in the
@@ -5036,4 +5056,42 @@ GrowableArray<MemoryPool*> G1CollectedHeap::memory_pools() {
   memory_pools.append(_survivor_pool);
   memory_pools.append(_old_pool);
   return memory_pools;
+}
+
+void G1CollectedHeap::create_tenant_allocation_context(oop tenant_obj) {
+  assert(TenantHeapIsolation, "pre-condition");
+  assert(tenant_obj != NULL, "Tenant container object is null");
+
+  G1TenantAllocationContext* context = new (mtTenant) G1TenantAllocationContext(this);
+  assert(NULL != context, "Failed to create tenant context");
+
+  com_alibaba_tenant_TenantContainer::set_tenant_allocation_context(tenant_obj, context);
+  context->set_tenant_container(tenant_obj);
+}
+
+void G1CollectedHeap::destroy_tenant_allocation_context(jlong context_val) {
+  assert(TenantHeapIsolation, "pre-condition");
+  G1TenantAllocationContext* context = (G1TenantAllocationContext*)context_val;
+  assert(NULL != context, "Delete an uninitialized tenant container");
+  oop tenant_obj = context->tenant_container();
+  assert(tenant_obj != NULL, "TenantContainer object cannot be NULL");
+  delete context;
+  com_alibaba_tenant_TenantContainer::set_tenant_allocation_context(tenant_obj, NULL);
+}
+
+oop G1CollectedHeap::tenant_container_of(oop obj) {
+  assert(TenantHeapIsolation, "pre-condition");
+
+  if (obj != NULL) {
+    // Get: oop-> object address-> heap region -> tenant allocation context -> tenant obj
+    // assert obj
+    HeapRegion* hr = _hrm.addr_to_region((HeapWord*)obj);
+    if (NULL != hr) {
+      const G1TenantAllocationContext* context = hr->tenant_allocation_context();
+      if (NULL != context) {
+        return context->tenant_container();
+      }
+    }
+  }
+  return NULL;
 }

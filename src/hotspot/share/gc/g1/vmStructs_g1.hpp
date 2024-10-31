@@ -26,6 +26,7 @@
 #define SHARE_VM_GC_G1_VMSTRUCTS_G1_HPP
 
 #include "gc/g1/g1CollectedHeap.hpp"
+#include "gc/g1/g1TenantAllocationContext.hpp"
 #include "gc/g1/heapRegion.hpp"
 #include "gc/g1/heapRegionManager.hpp"
 #include "utilities/macros.hpp"
@@ -69,7 +70,11 @@
                                                                               \
   nonstatic_field(PtrQueue,            _active,         bool)                 \
   nonstatic_field(PtrQueue,            _buf,            void**)               \
-  nonstatic_field(PtrQueue,            _index,          size_t)
+  nonstatic_field(PtrQueue,            _index,          size_t)               \
+  nonstatic_field(G1TenantAllocationContext, _heap_size_limit,     size_t)                                               \
+  nonstatic_field(G1TenantAllocationContext, _heap_region_limit,   size_t)                                               \
+  nonstatic_field(G1TenantAllocationContext, _occupied_heap_region_count, size_t)                                        \
+  nonstatic_field(G1TenantAllocationContext, _tenant_container,   oop)   
 
 #define VM_INT_CONSTANTS_G1GC(declare_constant, declare_constant_with_value)  \
   declare_constant(HeapRegionType::FreeTag)                                   \
@@ -107,6 +112,8 @@
   declare_toplevel_type(HeapRegion*)                                          \
   declare_toplevel_type(G1MonitoringSupport*)                                 \
                                                                               \
-  declare_integer_type(HeapRegionType::Tag volatile)
+  declare_integer_type(HeapRegionType::Tag volatile)                          \
+  declare_toplevel_type(G1TenantAllocationContext)                            \
+  declare_toplevel_type(G1TenantAllocationContext*)
 
 #endif // SHARE_VM_GC_G1_VMSTRUCTS_G1_HPP

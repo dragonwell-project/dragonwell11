@@ -121,6 +121,28 @@ public:
                                    size_t* actual_word_size);
 };
 
+// To encapsulate per-tenant PLAB for G1DefaultParGCAllocator to use
+// during GC pause.
+// NOTE: thread local object
+class G1TenantPLAB : public CHeapObj<mtTenant> {
+  friend class G1DefaultPLAB;
+private:
+  PLAB  _surviving_alloc_buffer;
+  PLAB  _tenured_alloc_buffer;
+  PLAB* _alloc_buffers[InCSetState::Num];
+
+  AllocationContext_t _allocation_context;        // NOTE: used during GC, be careful with dereferencing
+  G1CollectedHeap*    _g1h;
+
+private:
+  G1TenantPLAB(G1CollectedHeap* g1h, AllocationContext_t ac);
+
+  PLAB* alloc_buffer(InCSetState dest);
+
+  AllocationContext_t allocation_context() { return _allocation_context; }
+  void set_allocation_context(AllocationContext_t ac) { _allocation_context = ac; }
+};
+
 // Manages the PLABs used during garbage collection. Interface for allocation from PLABs.
 // Needs to handle multiple contexts, extra alignment in any "survivor" area and some
 // statistics.
@@ -130,6 +152,7 @@ private:
   G1CollectedHeap* _g1h;
   G1Allocator* _allocator;
 
+  // only for ROOT tenant if TenantHeapIsolation enabled
   PLAB  _surviving_alloc_buffer;
   PLAB  _tenured_alloc_buffer;
   PLAB* _alloc_buffers[InCSetState::Num];
@@ -152,8 +175,21 @@ private:
   static uint calc_survivor_alignment_bytes();
 
   bool may_throw_away_buffer(size_t const allocation_word_sz, size_t const buffer_size) const;
+
+  // Per-tenant par gc allocation buffers
+  typedef HashMap<AllocationContext_t, G1TenantPLAB*, mtTenant> TenantBufferMap;
+  TenantBufferMap*    _tenant_plabs;
+
+protected:
+  // returns tenant alloc buffer of target allocation context, NULL if not exist
+  G1TenantPLAB* tenant_plab_of(AllocationContext_t ac);
+
 public:
   G1PLABAllocator(G1Allocator* allocator);
+
+  virtual ~G1PLABAllocator() { }
+
+  virtual PLAB* alloc_buffer(InCSetState dest, AllocationContext_t context);
 
   void waste(size_t& wasted, size_t& undo_wasted);
 

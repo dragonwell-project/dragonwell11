@@ -48,6 +48,27 @@
 #include "gc/serial/defNewGeneration.hpp"
 #endif
 
+#if INCLUDE_G1GC
+CompactPoint& CompactPoint::operator = (const CompactPoint& cp) {
+  space     = cp.space;
+  threshold = cp.threshold;
+  gen       = cp.gen;
+  return *this;
+}
+
+CompactPoint& CompactPoint::operator = (const CachedCompactPoint& ccp) {
+  space     = ccp.space;
+  threshold = ccp.threshold;
+  return *this;
+}
+
+CachedCompactPoint& CachedCompactPoint::operator = (const CompactPoint& cp) {
+  space     = cp.space;
+  threshold = cp.threshold;
+  return *this;
+}
+#endif
+
 HeapWord* DirtyCardToOopClosure::get_actual_top(HeapWord* top,
                                                 HeapWord* top_obj) {
   if (top_obj != NULL) {

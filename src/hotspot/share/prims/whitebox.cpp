@@ -2077,6 +2077,16 @@ WB_ENTRY(jstring, WB_GetLibcName(JNIEnv* env, jobject o))
   return info_string;
 WB_END
 
+WB_ENTRY(jboolean, WB_IsInCurrentTLAB(JNIEnv* env, jobject wb, jobject o))
+  ThreadToNativeFromVM ttn(thread);
+  if (o != NULL) {
+    HeapWord* addr = (HeapWord*)JNIHandles::resolve_non_null(o);
+    ThreadLocalAllocBuffer& tlab = Thread::current()->tlab();
+    return (addr >= tlab.start() && addr < tlab.end()) ? JNI_TRUE : JNI_FALSE;
+  }
+  return JNI_FALSE;
+WB_END
+
 #define CC (char*)
 
 static JNINativeMethod methods[] = {
@@ -2309,6 +2319,7 @@ static JNINativeMethod methods[] = {
   {CC"disableElfSectionCache",    CC"()V",            (void*)&WB_DisableElfSectionCache },
   {CC"aotLibrariesCount", CC"()I",                    (void*)&WB_AotLibrariesCount },
   {CC"getLibcName",     CC"()Ljava/lang/String;",     (void*)&WB_GetLibcName},
+  {CC"isInCurrentTLAB",    CC"(Ljava/lang/Object;)Z", (void*)&WB_IsInCurrentTLAB },
 };
 
 

@@ -4083,6 +4083,8 @@ jint Arguments::apply_ergo() {
   // Set heap size based on available physical memory
   set_heap_size();
 
+  ArgumentsExt::set_tenant_flags();
+
   GCConfig::arguments()->initialize();
 
   set_shared_spaces_flags();

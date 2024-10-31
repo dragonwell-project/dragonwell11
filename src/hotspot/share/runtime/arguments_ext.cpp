@@ -24,7 +24,37 @@
 
 #include "precompiled.hpp"
 #include "runtime/arguments.hpp"
+#include "runtime/arguments_ext.hpp"
+#include "runtime/java.hpp"
 
 bool lookup_special_flag_ext(const char *flag_name, SpecialFlag& flag) {
   return false;
+}
+
+void ArgumentsExt::set_tenant_flags() {
+  // TenantHeapIsolation directly depends on MultiTenant, UseG1GC
+  if (TenantHeapIsolation) {
+    if (FLAG_IS_DEFAULT(MultiTenant)) {
+      FLAG_SET_ERGO(bool, MultiTenant, true);
+    }
+    if (UseTLAB && FLAG_IS_DEFAULT(UsePerTenantTLAB)) {
+      // enable per-tenant TLABs if unspecified and heap isolation is enabled
+      FLAG_SET_ERGO(bool, UsePerTenantTLAB, true);
+    }
+
+    // check GC policy compatibility
+    if (!UseG1GC) {
+      vm_exit_during_initialization("-XX:+TenantHeapIsolation only works with -XX:+UseG1GC");
+    }
+    if (!MultiTenant) {
+      vm_exit_during_initialization("Cannot use multi-tenant features if -XX:-MultiTenant specified");
+    }
+  }
+
+  // UsePerTenantTLAB depends on TenantHeapIsolation and UseTLAB
+  if (UsePerTenantTLAB) {
+    if (!TenantHeapIsolation || !UseTLAB) {
+      vm_exit_during_initialization("-XX:+UsePerTenantTLAB only works with -XX:+TenantHeapIsolation and -XX:+UseTLAB");
+    }
+  }
 }

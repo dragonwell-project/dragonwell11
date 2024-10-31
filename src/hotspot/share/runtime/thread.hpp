@@ -59,6 +59,10 @@
 #include "jfr/support/jfrThreadExtension.hpp"
 #endif
 
+#if INCLUDE_G1GC
+#include "gc/g1/g1AllocationContext.hpp"
+#endif
+
 
 class SafeThreadsListPtr;
 class ThreadSafepointState;
@@ -86,6 +90,10 @@ class jvmtiDeferredLocalVariableSet;
 class GCTaskQueue;
 class ThreadClosure;
 class IdealGraphPrinter;
+
+#if INCLUDE_G1GC
+class G1TenantAllocationContext;
+#endif
 
 class Metadata;
 template <class T, MEMFLAGS F> class ChunkedList;
@@ -535,6 +543,11 @@ class Thread: public ThreadShadow {
       tlab().initialize();
     }
   }
+#if INCLUDE_G1GC
+  void make_all_tlabs_parsable(bool retire, bool delete_saved);
+  // called during tenantContainer destruction
+  void clean_tlab_for(const G1TenantAllocationContext* context);
+#endif // if INCLUDE_G1GC
 
   jlong allocated_bytes()               { return _allocated_bytes; }
   void set_allocated_bytes(jlong value) { _allocated_bytes = value; }
@@ -774,6 +787,13 @@ protected:
   void init_wx();
   WXMode enable_wx(WXMode new_state);
 #endif // __APPLE__ && AARCH64
+
+private:
+  AllocationContext_t _alloc_context;         // context for Java allocation requests
+                                              // put it here because allocation may happen in VM thread
+public:
+  const AllocationContext_t& allocation_context() const;
+  void set_allocation_context(AllocationContext_t context);
 };
 
 // Inline implementation of Thread::current()
@@ -1247,7 +1267,13 @@ class JavaThread: public Thread {
 
   // Get/set the tenant which the thread is attached to
   oop tenantObj() const                          { return _tenantObj; }
-  void set_tenantObj(oop tenantObj)              { _tenantObj = tenantObj; }
+  void set_tenantObj(oop tenantObj);
+
+#if INCLUDE_G1GC
+  G1TenantAllocationContext* tenant_allocation_context();
+
+  void set_tenant_allocation_context(G1TenantAllocationContext* context);
+#endif
 
   ThreadPriority java_priority() const;          // Read from threadObj()
 

@@ -78,6 +78,8 @@ void VM_G1CollectForAllocation::doit() {
       "only a GC locker, a System.gc(), stats update, whitebox, or a hum allocation induced GC should start a cycle");
 
   if (_word_size > 0) {
+    AllocationContextMark acm(this->allocation_context());
+
     // An allocation has been requested. So, try to do that first.
     _result = g1h->attempt_allocation_at_safepoint(_word_size,
                                                    false /* expect_null_cur_alloc_region */);
@@ -133,6 +135,8 @@ void VM_G1CollectForAllocation::doit() {
 
   if (_pause_succeeded) {
     if (_word_size > 0) {
+      // TODO: Red. FullGC前是否加ACM？或者后移到allocation。
+      AllocationContextMark acm(this->allocation_context());
       // An allocation had been requested. Do it, eventually trying a stronger
       // kind of GC.
       _result = g1h->satisfy_failed_allocation(_word_size, &_pause_succeeded);
