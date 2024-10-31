@@ -366,6 +366,12 @@ JNIEXPORT void JNICALL
 JVM_AttachToTenant(JNIEnv *env, jobject tenant);
 
 /*
+ * com.alibaba.tenant.TenantContainer
+ */
+JNIEXPORT void JNICALL
+JVM_AttachToTenant(JNIEnv *env, jobject tenant);
+
+/*
  * Find a class from a given class loader.  Throws ClassNotFoundException.
  *  name:   name of class
  *  init:   whether initialization is done

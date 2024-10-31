@@ -40,7 +40,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.rcm.AbstractResourceContainer;
 import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.module.ServicesCatalog;
 import jdk.internal.reflect.ConstantPool;

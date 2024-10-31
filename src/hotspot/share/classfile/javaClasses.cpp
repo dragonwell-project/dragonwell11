@@ -4482,21 +4482,21 @@ jboolean com_alibaba_wisp_engine_WispCarrier::in_critical(oop obj) {
 #define RCM_FIELDS_DO(macro) \
   macro(_id_offset,      k,   "id",     long_signature,  false);
 
-int com_alibaba_rcm_internal_AbstractResourceContainer::_id_offset = 0;
+int com_alibaba_rcm_AbstractResourceContainer::_id_offset = 0;
 
-long com_alibaba_rcm_internal_AbstractResourceContainer::get_id(oop obj) {
+long com_alibaba_rcm_AbstractResourceContainer::get_id(oop obj) {
   return obj->long_field(_id_offset);
 }
 
 
-void com_alibaba_rcm_internal_AbstractResourceContainer::compute_offsets() {
-  InstanceKlass *k = SystemDictionary::com_alibaba_rcm_internal_AbstractResourceContainer_klass();
+void com_alibaba_rcm_AbstractResourceContainer::compute_offsets() {
+  InstanceKlass *k = SystemDictionary::com_alibaba_rcm_AbstractResourceContainer_klass();
   assert(k != NULL, "AbstractResourceContainer is null");
   RCM_FIELDS_DO(FIELD_COMPUTE_OFFSET);
 }
 
 #if INCLUDE_CDS
-void com_alibaba_rcm_internal_AbstractResourceContainer::serialize_offsets(SerializeClosure* f) {
+void com_alibaba_rcm_AbstractResourceContainer::serialize_offsets(SerializeClosure* f) {
   RCM_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
 }
 #endif

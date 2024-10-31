@@ -3,14 +3,14 @@
  * @library /lib/testlibrary
  * @build TestExceptionPreidicate RcmUtils
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @summary test RCM thread inheritance callback throw exception .
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=4 TestExceptionPreidicate
  */
 
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceType;
-import com.alibaba.rcm.internal.RCMUnsafe;
+import com.alibaba.rcm.RCMUnsafe;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;

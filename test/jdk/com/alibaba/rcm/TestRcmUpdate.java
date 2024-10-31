@@ -4,7 +4,7 @@
  * @build TestRcmUpdate RcmUtils
  * @summary test RCM updating API.
  * @modules java.base/jdk.internal.misc
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=4 TestRcmUpdate
  */

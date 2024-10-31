@@ -3,7 +3,7 @@
  * @library /lib/testlibrary
  * @summary Test jstack control group id
  * @modules java.base/jdk.internal.misc
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @requires os.family == "linux"
  * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=5 JStackWispContainerIdTest
@@ -58,7 +58,7 @@ public class JStackWispContainerIdTest {
         }
         try {
             WispControlGroupClazz = Class.forName("com.alibaba.wisp.engine.WispControlGroup");
-            AbstractResourceContainerClazz = Class.forName("com.alibaba.rcm.internal.AbstractResourceContainer");
+            AbstractResourceContainerClazz = Class.forName("com.alibaba.rcm.AbstractResourceContainer");
             ThreadClazz = Class.forName("java.lang.Thread");
             abstractResourceContainer = ThreadClazz.getDeclaredField("resourceContainer");
             abstractResourceContainer.setAccessible(true);

@@ -5,13 +5,13 @@
  * @summary test RCM root API.
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @modules java.base/jdk.internal.misc
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.carrierEngines=4 TestRcmRoot
  */
 
 import jdk.internal.misc.SharedSecrets;
 import com.alibaba.rcm.ResourceContainer;
-import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.rcm.AbstractResourceContainer;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;

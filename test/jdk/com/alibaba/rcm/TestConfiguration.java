@@ -2,7 +2,7 @@
  * @test
  * @summary Test builder and update constraint
  * @library /lib/testlibrary
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @run main TestConfiguration
  */
 

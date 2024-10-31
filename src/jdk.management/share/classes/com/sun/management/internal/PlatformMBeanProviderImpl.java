@@ -25,8 +25,10 @@
 package com.sun.management.internal;
 
 import com.alibaba.management.ResourceContainerMXBean;
+import com.alibaba.management.TenantContainerMXBean;
 import com.alibaba.management.WispCounterMXBean;
 import com.alibaba.management.internal.ResourceContainerMXBeanImpl;
+import com.alibaba.management.internal.TenantContainerMXBeanImpl;
 import com.alibaba.management.internal.WispCounterMXBeanImpl;
 import com.sun.management.DiagnosticCommandMBean;
 import com.sun.management.HotSpotDiagnosticMXBean;
@@ -55,6 +57,7 @@ public final class PlatformMBeanProviderImpl extends PlatformMBeanProvider {
     private final List<PlatformComponent<?>> mxbeanList;
     private static HotSpotDiagnostic hsDiagMBean = null;
     private static OperatingSystemMXBean osMBean = null;
+    private static TenantContainerMXBeanImpl tenantContainerMBean = null;
     private static WispCounterMXBean wispCounterMBean = null;
     private static ResourceContainerMXBean resourceContainerMXBean = null;
 
@@ -361,5 +364,12 @@ public final class PlatformMBeanProviderImpl extends PlatformMBeanProvider {
             wispCounterMBean = new WispCounterMXBeanImpl();
         }
         return wispCounterMBean;
+    }
+
+    public static synchronized TenantContainerMXBean getTenantContainerMXBean() {
+        if (tenantContainerMBean == null) {
+            tenantContainerMBean = new TenantContainerMXBeanImpl();
+        }
+        return tenantContainerMBean;
     }
 }

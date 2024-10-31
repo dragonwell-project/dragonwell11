@@ -518,7 +518,7 @@ oop Coroutine::print_stack_header_on(outputStream* st) {
       }
       oop container = java_lang_Thread::resourceContainer(thread_obj);
       if (container != NULL) {
-        cgId = com_alibaba_rcm_internal_AbstractResourceContainer::get_id(container);
+        cgId = com_alibaba_rcm_AbstractResourceContainer::get_id(container);
       }
     }
     // calculate wisp container's cfs_period and cfs_quota

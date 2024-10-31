@@ -1,6 +1,6 @@
-package com.alibaba.rcm.internal;
+package com.alibaba.rcm;
 
-
+import com.alibaba.rcm.AbstractResourceContainer;
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceContainerMonitor;
 

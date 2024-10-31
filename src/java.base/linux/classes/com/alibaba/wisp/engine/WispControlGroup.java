@@ -26,7 +26,7 @@ package com.alibaba.wisp.engine;
 import com.alibaba.rcm.Constraint;
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceType;
-import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.rcm.AbstractResourceContainer;
 
 import java.util.ArrayList;
 import java.util.List;

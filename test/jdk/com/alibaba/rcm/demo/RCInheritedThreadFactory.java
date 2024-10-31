@@ -1,6 +1,6 @@
 package demo;
 
-import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.rcm.AbstractResourceContainer;
 import jdk.internal.misc.SharedSecrets;
 import jdk.internal.misc.JavaLangAccess;
 

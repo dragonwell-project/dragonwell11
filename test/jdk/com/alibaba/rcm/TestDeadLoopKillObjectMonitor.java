@@ -4,14 +4,14 @@
  * @build TestDeadLoopKillObjectMonitor RcmUtils
  * @summary test RCM TestKillThreads
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:+Wisp2ThreadStop -XX:ActiveProcessorCount=1 TestDeadLoopKillObjectMonitor
  */
 
 import com.alibaba.rcm.Constraint;
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceType;
-import com.alibaba.rcm.internal.RCMUnsafe;
+import com.alibaba.rcm.RCMUnsafe;
 import com.alibaba.wisp.engine.WispResourceContainerFactory;
 
 import java.lang.reflect.Field;

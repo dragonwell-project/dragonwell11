@@ -3,7 +3,7 @@ package com.alibaba.management.internal;
 import com.alibaba.management.ResourceContainerMXBean;
 import com.alibaba.rcm.ResourceType;
 import com.alibaba.rcm.ResourceContainerMonitor;
-import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.rcm.AbstractResourceContainer;
 import sun.management.Util;
 
 import javax.management.ObjectName;

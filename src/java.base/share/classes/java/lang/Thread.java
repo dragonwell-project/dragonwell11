@@ -40,8 +40,8 @@ import java.util.concurrent.locks.LockSupport;
 
 import jdk.internal.misc.TerminatingThreadLocal;
 import com.alibaba.rcm.ResourceContainer;
-import com.alibaba.rcm.internal.AbstractResourceContainer;
-import com.alibaba.rcm.internal.RCMUnsafe;
+import com.alibaba.rcm.AbstractResourceContainer;
+import com.alibaba.rcm.RCMUnsafe;
 import com.alibaba.wisp.engine.WispEngine;
 import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.misc.SharedSecrets;
@@ -53,6 +53,8 @@ import jdk.internal.reflect.CallerSensitive;
 import jdk.internal.reflect.Reflection;
 import sun.security.util.SecurityConstants;
 import jdk.internal.HotSpotIntrinsicCandidate;
+import com.alibaba.tenant.TenantContainer;
+import com.alibaba.tenant.TenantGlobals;
 
 /**
  * A <i>thread</i> is a thread of execution in a program. The Java
@@ -223,6 +225,11 @@ class Thread implements Runnable {
      * Java thread status for tools, default indicates thread 'not yet started'
      */
     private volatile int threadStatus;
+
+    /**
+     * The tenant container which creates this thread object
+     */
+    TenantContainer inheritedTenantContainer;
 
     /**
     /**
@@ -570,6 +577,11 @@ class Thread implements Runnable {
             this.inheritedResourceContainer = parent.resourceContainer;
         } else {
             this.inheritedResourceContainer = AbstractResourceContainer.root();
+        }
+
+        /* Set the tenant container */
+        if (VM.isBooted() && TenantGlobals.isTenantEnabled()) {
+            inheritedTenantContainer = TenantContainer.current();
         }
     }
 
@@ -976,6 +988,7 @@ class Thread implements Runnable {
         inheritedAccessControlContext = null;
         blocker = null;
         uncaughtExceptionHandler = null;
+        inheritedTenantContainer = null;
     }
 
     /**

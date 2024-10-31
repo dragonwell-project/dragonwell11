@@ -1,4 +1,4 @@
-package com.alibaba.rcm.internal;
+package com.alibaba.rcm;
 
 import com.alibaba.rcm.Constraint;
 import com.alibaba.rcm.ResourceContainer;

@@ -90,7 +90,7 @@
   f(com_alibaba_wisp_engine_WispTask) \
   f(com_alibaba_wisp_engine_WispControlGroup) \
   f(com_alibaba_wisp_engine_WispControlGroup_CpuLimit) \
-  f(com_alibaba_rcm_internal_AbstractResourceContainer) \
+  f(com_alibaba_rcm_AbstractResourceContainer) \
   //end
 
 #define BASIC_JAVA_CLASSES_DO(f) \
@@ -1680,7 +1680,7 @@ public:
   static void compute_offsets();
 };
 
-class com_alibaba_rcm_internal_AbstractResourceContainer: AllStatic {
+class com_alibaba_rcm_AbstractResourceContainer: AllStatic {
 private:
   static int _id_offset;
 public:
