@@ -70,6 +70,9 @@
                                                                             \
   product(bool, UsePerTenantTLAB, false,                                    \
           "Mutator may maintain multiple TLABs for each of the tenants")    \
+                                                                            \
+  product(bool, TenantHeapThrottling, false,                                \
+             "Enable heap throttling per tenant")                           \
 
 
   //add new AJDK specific flags here

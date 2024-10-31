@@ -322,6 +322,12 @@ HeapWord* G1CollectedHeap::humongous_obj_allocate(size_t word_size) {
 
   _verifier->verify_region_sets_optional();
 
+  // early return if exceeds tenant limit
+  if (TenantHeapThrottling && !context.is_system()
+      && !context->can_allocate(word_size)) {
+    return NULL;
+  }
+
   uint first = G1_NO_HRM_INDEX;
   uint obj_regions = (uint) humongous_obj_size_in_regions(word_size);
 
