@@ -1133,6 +1133,13 @@ static void call_startWispDaemons(TRAPS) {
                                          vmSymbols::void_method_signature(), CHECK);
 }
 
+static void call_initializeTenantContainerClass(TRAPS) {
+  Klass* klass =  SystemDictionary::resolve_or_fail(vmSymbols::com_alibaba_tenant_TenantContainer(), true, CHECK);  
+  JavaValue result(T_VOID);
+  JavaCalls::call_static(&result, klass, vmSymbols::initializeTenantContainerClass_name(),
+                                         vmSymbols::void_method_signature(), CHECK);
+}
+
 char java_runtime_name[128] = "";
 char java_runtime_version[128] = "";
 char java_runtime_vendor_version[128] = "";
@@ -1620,6 +1627,7 @@ void JavaThread::initialize() {
   _anchor.clear();
   set_entry_point(NULL);
   set_jni_functions(jni_functions());
+  set_tenant_functions(tenant_functions());
   set_callee_target(NULL);
   set_vm_result(NULL);
   set_vm_result_2(NULL);
@@ -1684,6 +1692,7 @@ void JavaThread::initialize() {
   _do_not_unlock_if_synchronized = false;
   _cached_monitor_info = NULL;
   _parker = Parker::Allocate(this);
+  _tenantObj = NULL;
 
 #ifndef PRODUCT
   _jmp_ring_index = 0;
@@ -3028,6 +3037,7 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
   // Traverse instance variables at the end since the GC may be moving things
   // around using this function
   f->do_oop((oop*) &_threadObj);
+  f->do_oop((oop*) &_tenantObj);
   f->do_oop((oop*) &_vm_result);
   if (EnableCoroutine) {
     f->do_oop((oop*) &_vm_result_for_wisp);
@@ -4033,6 +4043,12 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   JvmtiExport::post_early_vm_start();
 
   initialize_java_lang_classes(main_thread, CHECK_JNI_ERR);
+
+  // Multi-tenant support
+  if (MultiTenant) {
+    //Initialize TennatContainer class after the system is booted.
+    call_initializeTenantContainerClass(CHECK_0);
+  }
 
   quicken_jni_functions();
 

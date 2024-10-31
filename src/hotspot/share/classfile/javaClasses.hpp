@@ -369,6 +369,7 @@ class java_lang_Thread : AllStatic {
   static int _tid_offset;
   static int _thread_status_offset;
   static int _park_blocker_offset;
+  static int _inheritedTenantContainer_offset;
   static int _resourceContainer_offset;
 
   static void compute_offsets();
@@ -404,6 +405,8 @@ class java_lang_Thread : AllStatic {
   static oop context_class_loader(oop java_thread);
   // Control context
   static oop inherited_access_control_context(oop java_thread);
+  // Tenant container
+  static oop inherited_tenant_container(oop java_thread);
   // Stack size hint
   static jlong stackSize(oop java_thread);
   // Thread ID

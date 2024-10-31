@@ -410,6 +410,18 @@ JVM_ENTRY(jobject, JVM_InitProperties(JNIEnv *env, jobject properties))
     }
   }
 
+  //Convert the -XX:+MultiTenant command line flag
+  //to the com.alibaba.tenant.enableMultiTenant property in case that
+  //the java code can determine if the tenant feature is enabled but
+  //without loading tenant-related classes.
+  {
+    if(MultiTenant) {
+      PUTPROP(props, "com.alibaba.tenant.enableMultiTenant", "true");
+    } else {
+      PUTPROP(props, "com.alibaba.tenant.enableMultiTenant", "false");
+    }
+  }
+
   // JVM monitoring and management support
   // Add the sun.management.compiler property for the compiler's name
   {
@@ -2889,12 +2901,36 @@ static void thread_entry(JavaThread* thread, TRAPS) {
   Handle obj(THREAD, thread->threadObj());
   JavaValue result(T_VOID);
 
-  JavaCalls::call_virtual(&result,
-                          obj,
-                          SystemDictionary::Thread_klass(),
-                          vmSymbols::run_method_name(),
-                          vmSymbols::void_method_signature(),
-                          THREAD);
+  if(MultiTenant) {
+    oop tenantContainer =
+             java_lang_Thread::inherited_tenant_container(thread->threadObj());
+    if(tenantContainer == NULL) {
+      JavaCalls::call_virtual(&result,
+                              obj,
+                              SystemDictionary::Thread_klass(),
+                              vmSymbols::run_method_name(),
+                              vmSymbols::void_method_signature(),
+                              THREAD);
+    } else {
+      /*Call into TenantContainer.runThread instead  of Thread.run. */
+      Handle tenant_obj(THREAD, tenantContainer);
+      JavaCalls::call_virtual(&result,
+                              tenant_obj,
+                              SystemDictionary::com_alibaba_tenant_TenantContainer_klass(),
+                              vmSymbols::runThread_method_name(),
+                              vmSymbols::thread_void_signature(),
+                              obj,
+                              THREAD);
+
+    }
+  } else {
+    JavaCalls::call_virtual(&result,
+                            obj,
+                            SystemDictionary::Thread_klass(),
+                            vmSymbols::run_method_name(),
+                            vmSymbols::void_method_signature(),
+                            THREAD);
+  }
 }
 
 
@@ -3424,6 +3460,14 @@ JVM_ENTRY(jobject, JVM_LatestUserDefinedLoader(JNIEnv *env))
   return NULL;
 JVM_END
 
+/***************** Tenant support ************************************/
+
+JVM_ENTRY(void, JVM_AttachToTenant(JNIEnv *env, jobject tenant))
+  JVMWrapper("JVM_AttachToTenant");
+  assert(MultiTenant, "pre-condition");
+  assert (NULL != thread, "no current thread!");
+  thread->set_tenantObj(tenant == NULL ? (oop)NULL : JNIHandles::resolve_non_null(tenant));
+JVM_END
 
 // Array ///////////////////////////////////////////////////////////////////////////////////////////
 

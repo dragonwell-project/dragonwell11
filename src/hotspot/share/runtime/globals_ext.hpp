@@ -61,6 +61,10 @@
                                                                             \
   diagnostic(bool, VerboseWisp, false,                                      \
           "Print verbose Wisp information")                                 \
+                                                                            \
+  product(bool, MultiTenant, false,                                         \
+            "Enable the multi-tenant feature.")                             \
+
 
   //add new AJDK specific flags here
 

@@ -1606,6 +1606,7 @@ int java_lang_Thread::_stackSize_offset = 0;
 int java_lang_Thread::_tid_offset = 0;
 int java_lang_Thread::_thread_status_offset = 0;
 int java_lang_Thread::_park_blocker_offset = 0;
+int java_lang_Thread::_inheritedTenantContainer_offset = 0 ;
 int java_lang_Thread::_resourceContainer_offset = 0 ;
 
 #define THREAD_FIELDS_DO(macro) \
@@ -1621,6 +1622,7 @@ int java_lang_Thread::_resourceContainer_offset = 0 ;
   macro(_tid_offset,           k, "tid", long_signature, false); \
   macro(_thread_status_offset, k, "threadStatus", int_signature, false); \
   macro(_park_blocker_offset,  k, "parkBlocker", object_signature, false); \
+  macro(_inheritedTenantContainer_offset,    k, "inheritedTenantContainer", tenantcontainer_signature, false); \
   macro(_resourceContainer_offset,    k, "resourceContainer", resourcecontainer_signature, false); \
 
 void java_lang_Thread::compute_offsets() {
@@ -1709,6 +1711,9 @@ oop java_lang_Thread::inherited_access_control_context(oop java_thread) {
   return java_thread->obj_field(_inheritedAccessControlContext_offset);
 }
 
+oop java_lang_Thread::inherited_tenant_container(oop java_thread) {
+  return java_thread->obj_field(_inheritedTenantContainer_offset);
+}
 
 jlong java_lang_Thread::stackSize(oop java_thread) {
   if (_stackSize_offset > 0) {

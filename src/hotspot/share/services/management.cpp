@@ -2094,33 +2094,39 @@ JVM_END
 JVM_ENTRY(void, jmm_GetThreadAllocatedMemory(JNIEnv *env, jlongArray ids,
                                              jlongArray sizeArray))
   // Check if threads is null
-  if (ids == NULL || sizeArray == NULL) {
+  if (sizeArray == NULL) {
     THROW(vmSymbols::java_lang_NullPointerException());
   }
 
   ResourceMark rm(THREAD);
-  typeArrayOop ta = typeArrayOop(JNIHandles::resolve_non_null(ids));
-  typeArrayHandle ids_ah(THREAD, ta);
 
   typeArrayOop sa = typeArrayOop(JNIHandles::resolve_non_null(sizeArray));
   typeArrayHandle sizeArray_h(THREAD, sa);
 
-  // validate the thread id array
-  validate_thread_id_array(ids_ah, CHECK);
+  if (ids == NULL){
+    assert(sizeArray_h->length() > 0, "pre-condition");
+    // fast path to retrieve current thread's data without locking
+    sizeArray_h->long_at_put(0, THREAD->cooked_allocated_bytes());
+  } else {
+    typeArrayOop ta = typeArrayOop(JNIHandles::resolve_non_null(ids));
+    typeArrayHandle ids_ah(THREAD, ta);
+    // validate the thread id array
+    validate_thread_id_array(ids_ah, CHECK);
+    // sizeArray must be of the same length as the given array of thread IDs
+    int num_threads = ids_ah->length();
+    if (num_threads != sizeArray_h->length()) {
+      THROW_MSG(vmSymbols::java_lang_IllegalArgumentException(),
+                "The length of the given long array does not match the length of "
+                "the given array of thread IDs");
+    }
 
-  // sizeArray must be of the same length as the given array of thread IDs
-  int num_threads = ids_ah->length();
-  if (num_threads != sizeArray_h->length()) {
-    THROW_MSG(vmSymbols::java_lang_IllegalArgumentException(),
-              "The length of the given long array does not match the length of "
-              "the given array of thread IDs");
-  }
-
-  ThreadsListHandle tlh;
-  for (int i = 0; i < num_threads; i++) {
-    JavaThread* java_thread = tlh.list()->find_JavaThread_from_java_tid(ids_ah->long_at(i));
-    if (java_thread != NULL) {
-      sizeArray_h->long_at_put(i, java_thread->cooked_allocated_bytes());
+    MutexLockerEx ml(Threads_lock);
+    ThreadsListHandle tlh;
+    for (int i = 0; i < num_threads; i++) {
+      JavaThread* java_thread = tlh.list()->find_JavaThread_from_java_tid(ids_ah->long_at(i));
+      if (java_thread != NULL) {
+        sizeArray_h->long_at_put(i, java_thread->cooked_allocated_bytes());
+      }
     }
   }
 JVM_END
