@@ -32,7 +32,12 @@ Java_com_alibaba_tenant_NativeDispatcher_getThreadsAllocatedMemory(JNIEnv *env,
                                                                 jlongArray sizeArray)
 {
     if (NULL == jmm_interface) {
-        jmm_interface = (JmmInterface*) JVM_GetManagement(JMM_VERSION_1_0);
+        jmm_interface = (JmmInterface*) JVM_GetManagement(JMM_VERSION);
+    }
+
+    if (NULL == jmm_interface) {
+        JNU_ThrowInternalError(env, "Unsupported Management version");
+        return;
     }
 
     jmm_interface->GetThreadAllocatedMemory(env, ids, sizeArray);

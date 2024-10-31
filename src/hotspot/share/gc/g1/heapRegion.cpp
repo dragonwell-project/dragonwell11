@@ -445,7 +445,7 @@ void HeapRegion::print_on(outputStream* st) const {
       st->print("  TENANT-ROOT");
     } else {
       assert(!allocation_context().is_system(), "Inconsistent allocation contexts");
-      st->print("  TENANT-" PTR_FORMAT, allocation_context().tenant_allocation_context());
+      st->print("  TENANT-" PTR_FORMAT, reinterpret_cast<uintptr_t>(allocation_context().tenant_allocation_context()));
     }
   }
   st->print(" AC%4u", allocation_context().allocation_context());

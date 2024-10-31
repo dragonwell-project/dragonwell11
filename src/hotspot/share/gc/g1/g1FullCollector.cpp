@@ -235,6 +235,10 @@ void G1FullCollector::phase1_mark_live_objects() {
 
 void G1FullCollector::phase2_prepare_compaction() {
   GCTraceTime(Info, gc, phases) info("Phase 2: Prepare for compaction", scope()->timer());
+  if (TenantHeapIsolation) {
+    // clear compaction dest info for all tenants
+    G1TenantAllocationContexts::prepare_for_compaction();
+  }
   G1FullGCPrepareTask task(this);
   run_task(&task);
 

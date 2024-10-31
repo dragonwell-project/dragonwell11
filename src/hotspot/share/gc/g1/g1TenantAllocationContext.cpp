@@ -28,6 +28,7 @@
 #include "memory/iterator.hpp"
 #include "gc/g1/g1TenantAllocationContext.hpp"
 #include "gc/g1/g1CollectedHeap.hpp"
+#include "gc/g1/g1CollectedHeap.inline.hpp"
 
 //----------------------- G1TenantAllocationContext ---------------------------
 
@@ -37,7 +38,9 @@ G1TenantAllocationContext::G1TenantAllocationContext(G1CollectedHeap* g1h)
           _heap_size_limit(TENANT_HEAP_NO_LIMIT),
           _heap_region_limit(0),
           _tenant_container(NULL),
-          _retained_old_gc_alloc_region(NULL) {
+          _retained_old_gc_alloc_region(NULL),
+          _survivor_gc_alloc_region(g1h->alloc_buffer_stats(InCSetState::Young)),
+          _old_gc_alloc_region(g1h->alloc_buffer_stats(InCSetState::Old))  {
 
   assert(TenantHeapIsolation, "pre-condition");
   // in current design we do not create G1TenantAllocationContext at safepoint
@@ -49,6 +52,10 @@ G1TenantAllocationContext::G1TenantAllocationContext(G1CollectedHeap* g1h)
   }
 #endif
 
+  _fcp = NEW_C_HEAP_ARRAY(G1FullGCCompactionPoint*, G1TenantAllocationContexts::num_workers(), mtGC);
+  for (uint i = 0; i < G1TenantAllocationContexts::num_workers(); i++) {
+    _fcp[i] = new G1FullGCCompactionPoint();
+  }
   // init mutator allocator eagerly, because it may be used
   // to allocate memory immediately after creation of tenant alloc context
   _mutator_alloc_region.init();
@@ -69,7 +76,7 @@ public:
     assert(!_target.is_system(), "Cannot clear root tenant context");
   }
 
-  virtual bool doHeapRegion(HeapRegion* region) {
+  virtual bool do_heap_region(HeapRegion* region) {
     assert(TenantHeapIsolation, "pre-condition");
     assert(NULL != region, "Region cannot be NULL");
     if (region->allocation_context() == _target) {
@@ -90,14 +97,14 @@ public:
     assert(TenantHeapIsolation, "pre-condition");
     assert(_context_to_destroy != G1TenantAllocationContexts::system_context(),
            "Should never destroy system context");
-    assert(!oopDesc::is_null(_context_to_destroy->tenant_container()), "sanity");
+    assert(!oopDesc::is_oop_or_null(_context_to_destroy->tenant_container()), "sanity");
   }
   virtual void doit();
   virtual VMOp_Type type() const { return VMOp_DestroyG1TenantAllocationContext; }
 };
 
 void DestroyG1TenantAllocationContextOperation::doit() {
-  assert_at_safepoint(true /* vm thread */);
+  assert_at_safepoint_on_vm_thread();
 
   if (UsePerTenantTLAB) {
     assert(UseTLAB, "Sanity");
@@ -151,7 +158,7 @@ bool G1TenantAllocationContext::can_allocate(size_t attempt_word_size) {
   }
 
   size_t occupied_regions = occupied_heap_region_count();
-  if (_g1h->isHumongous(attempt_word_size)) {
+  if (_g1h->is_humongous(attempt_word_size)) {
     // reach here only from G1CollectedHeap::humongous_obj_allocate
     occupied_regions += heap_words_to_region_num(attempt_word_size);
   } else {
@@ -162,17 +169,17 @@ bool G1TenantAllocationContext::can_allocate(size_t attempt_word_size) {
 }
 
 void G1TenantAllocationContext::inc_occupied_heap_region_count() {
-  assert(TenantHeapIsolation && occupied_heap_region_count() >= 0, "pre-condition");
+  //assert(TenantHeapIsolation && occupied_heap_region_count() >= 0, "pre-condition");
   assert(Heap_lock->owned_by_self() || SafepointSynchronize::is_at_safepoint(), "not locked");
-  Atomic::inc_ptr(&_occupied_heap_region_count);
+  Atomic::inc(&_occupied_heap_region_count);
   assert(occupied_heap_region_count() >= 1, "post-condition");
 }
 
 void G1TenantAllocationContext::dec_occupied_heap_region_count() {
   assert(TenantHeapIsolation && occupied_heap_region_count() >= 1, "pre-condition");
   assert(Heap_lock->owned_by_self() || SafepointSynchronize::is_at_safepoint(), "not locked");
-  Atomic::dec_ptr(&_occupied_heap_region_count);
-  assert(occupied_heap_region_count() >= 0, "post-condition");
+  Atomic::dec(&_occupied_heap_region_count);
+  //assert(occupied_heap_region_count() >= 0, "post-condition");
 }
 
 G1TenantAllocationContext* G1TenantAllocationContext::current() {
@@ -197,13 +204,15 @@ size_t G1TenantAllocationContext::heap_bytes_to_region_num(size_t size_in_bytes)
 
 size_t G1TenantAllocationContext::heap_words_to_region_num(size_t size_in_words) {
   assert(TenantHeapIsolation, "pre-condition");
-  return align_size_up_(size_in_words, HeapRegion::GrainWords) / HeapRegion::GrainWords;
+  return align_up_(size_in_words, HeapRegion::GrainWords) / HeapRegion::GrainWords;
 }
 
 //--------------------- G1TenantAllocationContexts ---------------------
 G1TenantAllocationContexts::G1TenantACList* G1TenantAllocationContexts::_contexts = NULL;
 
 Mutex* G1TenantAllocationContexts::_list_lock = NULL;
+
+uint G1TenantAllocationContexts::_num_workers = 0;
 
 void G1TenantAllocationContexts::add(G1TenantAllocationContext* tac) {
   assert(TenantHeapIsolation, "pre-condition");
@@ -248,13 +257,15 @@ void G1TenantAllocationContexts::initialize() {
 
 void G1TenantAllocationContexts::prepare_for_compaction() {
   assert(TenantHeapIsolation, "pre-condition");
-  assert_at_safepoint(true /* in vm thread */);
+  assert_at_safepoint_on_vm_thread();
 
   // no locking needed
   for (G1TenantACListIterator itr = _contexts->begin();
        itr != _contexts->end(); ++itr) {
     assert(NULL != (*itr), "pre-condition");
-    (*itr)->_ccp.reset();
+    for (uint i = 0; i < G1TenantAllocationContexts::num_workers(); ++i) {
+      (*itr)->_fcp[i]->reset();
+    }
   }
 }
 
@@ -283,7 +294,7 @@ void G1TenantAllocationContexts::init_mutator_alloc_regions() {
 
 void G1TenantAllocationContexts::release_mutator_alloc_regions() {
   assert(TenantHeapIsolation, "pre-condition");
-  assert_at_safepoint(true /* in vm thread */);
+  assert_at_safepoint_on_vm_thread();
 
   for (G1TenantACListIterator itr = _contexts->begin();
        itr != _contexts->end(); ++itr) {
@@ -313,7 +324,7 @@ size_t G1TenantAllocationContexts::total_used() {
 
 void G1TenantAllocationContexts::init_gc_alloc_regions(G1Allocator* allocator, EvacuationInfo& ei) {
   assert(TenantHeapIsolation, "pre-condition");
-  assert_at_safepoint(true /* in vm thread */);
+  assert_at_safepoint_on_vm_thread();
   assert(NULL != allocator, "Allocator cannot be NULL");
 
   for (G1TenantACListIterator itr = _contexts->begin();
@@ -334,7 +345,7 @@ void G1TenantAllocationContexts::init_gc_alloc_regions(G1Allocator* allocator, E
 
 void G1TenantAllocationContexts::release_gc_alloc_regions(EvacuationInfo& ei) {
   assert(TenantHeapIsolation, "pre-condition");
-  assert_at_safepoint(true /* in vm thread */);
+  assert_at_safepoint_on_vm_thread();
 
   for (G1TenantACListIterator itr = _contexts->begin();
        itr != _contexts->end(); ++itr) {
@@ -350,15 +361,12 @@ void G1TenantAllocationContexts::release_gc_alloc_regions(EvacuationInfo& ei) {
     HeapRegion* retained_old = old_region.release();
 
     tac->set_retained_old_gc_alloc_region(retained_old);
-    if (NULL != tac->retained_old_gc_alloc_region()) {
-      tac->retained_old_gc_alloc_region()->record_retained_region();
-    }
   }
 }
 
 void G1TenantAllocationContexts::abandon_gc_alloc_regions() {
   assert(TenantHeapIsolation, "pre-condition");
-  assert_at_safepoint(true /* in vm thread */);
+  assert_at_safepoint_on_vm_thread();
 
   for (G1TenantACListIterator itr = _contexts->begin();
        itr != _contexts->end(); ++itr) {

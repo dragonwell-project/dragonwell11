@@ -1104,6 +1104,10 @@ void Thread::make_all_tlabs_parsable(bool retire, bool delete_saved) {
   }
 }
 
+#ifndef SHARE_VM_GC_IMPLEMENTATION_G1_TENANT_CONTEXT_HPP
+#include "gc/g1/g1TenantAllocationContext.hpp"
+#endif
+
 void Thread::clean_tlab_for(const G1TenantAllocationContext* context) {
   assert(UseG1GC && TenantHeapIsolation
          && UseTLAB && UsePerTenantTLAB, "sanity");
@@ -1116,11 +1120,11 @@ void Thread::clean_tlab_for(const G1TenantAllocationContext* context) {
     JavaThread* java_thread = (JavaThread*)this;
     // make sure TLAB's tenant allocation context is same as Java thread's
     guarantee(java_thread->tenant_allocation_context() == this->tlab().tenant_allocation_context(),
-              err_msg("Inconsistent tenant allocation context thread=" PTR_FORMAT ",context=" PTR_FORMAT
+              "Inconsistent tenant allocation context thread=" PTR_FORMAT ",context=" PTR_FORMAT
                       ", but its TLAB's context=" PTR_FORMAT,
-                      java_thread,
-                      java_thread->tenant_allocation_context(),
-                      this->tlab().tenant_allocation_context()));
+                      reinterpret_cast<uintptr_t>(java_thread),
+                      reinterpret_cast<uintptr_t>(java_thread->tenant_allocation_context()),
+                      reinterpret_cast<uintptr_t>(this->tlab().tenant_allocation_context()));
   }
 
   // if the to-be-deleted context is current active context,

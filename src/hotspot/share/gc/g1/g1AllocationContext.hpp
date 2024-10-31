@@ -52,8 +52,8 @@ public:
   AllocationContext_t() { _value._tenant_alloc_context = NULL; }
   AllocationContext_t(const AllocationContext_t& peer) : _value(peer._value) { }
   AllocationContext_t(G1TenantAllocationContext* ctxt) {
-    //todo: 这里应该是将ptr val给到dest val，所以tenant context和 ctxt指向一个ctx，直接替换成atomic::store?
-    // 原本 atomic::store_ptr 是 *(void**)dest = val，这里应该就是给dest这个变量写上val，或者我们把ptr反转成unsigned long试试
+    // 原本是 atomic::store_ptr，11版本改为 atomic::store，store可以完全替代store_ptr
+    // 11版本使用模板实现store，涵盖了8中store_ptr的所有情况
     //Atomic::store_ptr(ctxt, &_value._tenant_alloc_context);
     Atomic::store(ctxt, &_value._tenant_alloc_context);
   }

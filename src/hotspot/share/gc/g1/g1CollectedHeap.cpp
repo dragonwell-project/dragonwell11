@@ -317,7 +317,7 @@ size_t G1CollectedHeap::humongous_obj_size_in_regions(size_t word_size) {
 // If could fit into free regions w/o expansion, try.
 // Otherwise, if can expand, do so.
 // Otherwise, if using ex regions might help, try with ex given back.
-HeapWord* G1CollectedHeap::humongous_obj_allocate(size_t word_size) {
+HeapWord* G1CollectedHeap::humongous_obj_allocate(size_t word_size, AllocationContext_t context) {
   assert_heap_locked_or_at_safepoint(true /* should_be_vm_thread */);
 
   _verifier->verify_region_sets_optional();
@@ -413,7 +413,7 @@ G1CollectedHeap::mem_allocate(size_t word_size,
   return attempt_allocation(word_size, word_size, &dummy);
 }
 
-HeapWord* G1CollectedHeap::attempt_allocation_slow(size_t word_size) {
+HeapWord* G1CollectedHeap::attempt_allocation_slow(size_t word_size, AllocationContext_t context) {
   ResourceMark rm; // For retrieving the thread names in log messages.
 
   // Make sure you read the note in attempt_allocation_humongous().
@@ -436,7 +436,7 @@ HeapWord* G1CollectedHeap::attempt_allocation_slow(size_t word_size) {
 
     {
       MutexLockerEx x(Heap_lock);
-      result = _allocator->attempt_allocation_locked(word_size);
+      result = _allocator->attempt_allocation_locked(word_size, context);
       if (result != NULL) {
         return result;
       }
@@ -447,7 +447,7 @@ HeapWord* G1CollectedHeap::attempt_allocation_slow(size_t word_size) {
       if (GCLocker::is_active_and_needs_gc() && g1_policy()->can_expand_young_list()) {
         // No need for an ergo message here, can_expand_young_list() does this when
         // it returns true.
-        result = _allocator->attempt_allocation_force(word_size);
+        result = _allocator->attempt_allocation_force(word_size, context);
         if (result != NULL) {
           return result;
         }
@@ -504,7 +504,7 @@ HeapWord* G1CollectedHeap::attempt_allocation_slow(size_t word_size) {
     // follow-on attempt will be at the start of the next loop
     // iteration (after taking the Heap_lock).
     size_t dummy = 0;
-    result = _allocator->attempt_allocation(word_size, word_size, &dummy);
+    result = _allocator->attempt_allocation(word_size, word_size, &dummy, context);
     if (result != NULL) {
       return result;
     }
@@ -739,19 +739,20 @@ inline HeapWord* G1CollectedHeap::attempt_allocation(size_t min_word_size,
   assert_heap_not_locked_and_not_at_safepoint();
   assert(!is_humongous(desired_word_size), "attempt_allocation() should not "
          "be called for humongous allocation requests");
-
-  HeapWord* result = _allocator->attempt_allocation(min_word_size, desired_word_size, actual_word_size);
+  
+  AllocationContext_t context = AllocationContext::current();
+  HeapWord* result = _allocator->attempt_allocation(min_word_size, desired_word_size, actual_word_size, context);
 
 #ifndef PRODUCT
     if (TenantHeapIsolation && TraceNonRootTenantAllocation && !AllocationContext::current().is_system()) {
       tty->print_cr("Non-root allocation: " SIZE_FORMAT " bytes @0x" PTR_FORMAT " in tenant 0x" PTR_FORMAT,
-                    word_size * HeapWordSize, result, AllocationContext::current().tenant_allocation_context());
+                    desired_word_size * HeapWordSize, reinterpret_cast<uintptr_t>(result), reinterpret_cast<uintptr_t>(AllocationContext::current().tenant_allocation_context()));
     }
 #endif
 
   if (result == NULL) {
     *actual_word_size = desired_word_size;
-    result = attempt_allocation_slow(desired_word_size);
+    result = attempt_allocation_slow(desired_word_size, context);
   }
 
   assert_heap_not_locked();
@@ -893,12 +894,12 @@ HeapWord* G1CollectedHeap::attempt_allocation_humongous(size_t word_size) {
       // Given that humongous objects are not allocated in young
       // regions, we'll first try to do the allocation without doing a
       // collection hoping that there's enough space in the heap.
-      result = humongous_obj_allocate(word_size);
+      result = humongous_obj_allocate(word_size, AllocationContext::current());
 
 #ifndef PRODUCT
     if (TenantHeapIsolation && TraceNonRootTenantAllocation && !AllocationContext::current().is_system()) {
       tty->print_cr("Non-root allocation: " SIZE_FORMAT " bytes @0x" PTR_FORMAT " in tenant 0x" PTR_FORMAT,
-                    word_size * HeapWordSize, result, AllocationContext::current().tenant_allocation_context());
+                    word_size * HeapWordSize, reinterpret_cast<uintptr_t>(result),reinterpret_cast<uintptr_t>(AllocationContext::current().tenant_allocation_context()));
     }
 #endif
 
@@ -977,15 +978,16 @@ HeapWord* G1CollectedHeap::attempt_allocation_humongous(size_t word_size) {
 }
 
 HeapWord* G1CollectedHeap::attempt_allocation_at_safepoint(size_t word_size,
+                                                           AllocationContext_t context,
                                                            bool expect_null_mutator_alloc_region) {
   assert_at_safepoint_on_vm_thread();
-  assert(!_allocator->has_mutator_alloc_region() || !expect_null_mutator_alloc_region,
+  assert(!_allocator->has_mutator_alloc_region(context) || !expect_null_mutator_alloc_region,
          "the current alloc region was unexpectedly found to be non-NULL");
 
   if (!is_humongous(word_size)) {
-    return _allocator->attempt_allocation_locked(word_size);
+    return _allocator->attempt_allocation_locked(word_size, context);
   } else {
-    HeapWord* result = humongous_obj_allocate(word_size);
+    HeapWord* result = humongous_obj_allocate(word_size, context);
     if (result != NULL && g1_policy()->need_to_start_conc_mark("STW humongous allocation")) {
       collector_state()->set_initiate_conc_mark_if_possible(true);
     }
@@ -1155,6 +1157,9 @@ bool G1CollectedHeap::do_full_collection(bool explicit_gc,
       soft_ref_policy()->should_clear_all_soft_refs();
 
   G1FullCollector collector(this, &_full_gc_memory_manager, explicit_gc, do_clear_all_soft_refs);
+  if (TenantHeapIsolation) {
+    G1TenantAllocationContexts::set_num_workers(collector.workers());
+  }
   GCTraceTime(Info, gc) tm("Pause Full", NULL, gc_cause(), true);
 
   collector.prepare_collection();
@@ -1252,6 +1257,7 @@ void G1CollectedHeap::resize_if_necessary_after_full_collection() {
 }
 
 HeapWord* G1CollectedHeap::satisfy_failed_allocation_helper(size_t word_size,
+                                                            AllocationContext_t context,
                                                             bool do_gc,
                                                             bool clear_all_soft_refs,
                                                             bool expect_null_mutator_alloc_region,
@@ -1260,6 +1266,7 @@ HeapWord* G1CollectedHeap::satisfy_failed_allocation_helper(size_t word_size,
   // Let's attempt the allocation first.
   HeapWord* result =
     attempt_allocation_at_safepoint(word_size,
+                                    context,
                                     expect_null_mutator_alloc_region);
   if (result != NULL) {
     return result;
@@ -1269,7 +1276,7 @@ HeapWord* G1CollectedHeap::satisfy_failed_allocation_helper(size_t word_size,
   // incremental pauses.  Therefore, at least for now, we'll favor
   // expansion over collection.  (This might change in the future if we can
   // do something smarter than full collection to satisfy a failed alloc.)
-  result = expand_and_allocate(word_size);
+  result = expand_and_allocate(word_size, context);
   if (result != NULL) {
     return result;
   }
@@ -1284,12 +1291,14 @@ HeapWord* G1CollectedHeap::satisfy_failed_allocation_helper(size_t word_size,
 }
 
 HeapWord* G1CollectedHeap::satisfy_failed_allocation(size_t word_size,
+                                                     AllocationContext_t context,
                                                      bool* succeeded) {
   assert_at_safepoint_on_vm_thread();
 
   // Attempts to allocate followed by Full GC.
   HeapWord* result =
     satisfy_failed_allocation_helper(word_size,
+                                     context,
                                      true,  /* do_gc */
                                      false, /* clear_all_soft_refs */
                                      false, /* expect_null_mutator_alloc_region */
@@ -1301,6 +1310,7 @@ HeapWord* G1CollectedHeap::satisfy_failed_allocation(size_t word_size,
 
   // Attempts to allocate followed by Full GC that will collect all soft references.
   result = satisfy_failed_allocation_helper(word_size,
+                                            context,
                                             true, /* do_gc */
                                             true, /* clear_all_soft_refs */
                                             true, /* expect_null_mutator_alloc_region */
@@ -1312,6 +1322,7 @@ HeapWord* G1CollectedHeap::satisfy_failed_allocation(size_t word_size,
 
   // Attempts to allocate, no GC
   result = satisfy_failed_allocation_helper(word_size,
+                                            context,
                                             false, /* do_gc */
                                             false, /* clear_all_soft_refs */
                                             true,  /* expect_null_mutator_alloc_region */
@@ -1336,7 +1347,7 @@ HeapWord* G1CollectedHeap::satisfy_failed_allocation(size_t word_size,
 // successful, perform the allocation and return the address of the
 // allocated block, or else "NULL".
 
-HeapWord* G1CollectedHeap::expand_and_allocate(size_t word_size) {
+HeapWord* G1CollectedHeap::expand_and_allocate(size_t word_size, AllocationContext_t context) {
   assert_at_safepoint_on_vm_thread();
 
   _verifier->verify_region_sets_optional();
@@ -1350,6 +1361,7 @@ HeapWord* G1CollectedHeap::expand_and_allocate(size_t word_size) {
     _hrm.verify_optional();
     _verifier->verify_region_sets_optional();
     return attempt_allocation_at_safepoint(word_size,
+                                           context,
                                            false /* expect_null_mutator_alloc_region */);
   }
   return NULL;
@@ -1959,7 +1971,7 @@ void G1CollectedHeap::allocate_dummy_regions() {
 
   for (uintx i = 0; i < G1DummyRegionsPerGC; ++i) {
     // Let's use the existing mechanism for the allocation
-    HeapWord* dummy_obj = humongous_obj_allocate(word_size);
+    HeapWord* dummy_obj = humongous_obj_allocate(word_size, AllocationContext::system());
     if (dummy_obj != NULL) {
       MemRegion mr(dummy_obj, word_size);
       CollectedHeap::fill_with_object(mr);
@@ -2231,7 +2243,8 @@ size_t G1CollectedHeap::max_tlab_size() const {
 }
 
 size_t G1CollectedHeap::unsafe_max_tlab_alloc(Thread* ignored) const {
-  return _allocator->unsafe_max_tlab_alloc();
+  AllocationContext_t context = AllocationContext::current();
+  return _allocator->unsafe_max_tlab_alloc(context);
 }
 
 size_t G1CollectedHeap::max_capacity() const {

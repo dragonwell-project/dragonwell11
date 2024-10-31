@@ -86,6 +86,7 @@
 #include "utilities/histogram.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/utf8.hpp"
+#include "gc/g1/g1CollectedHeap.hpp"
 #if INCLUDE_CDS
 #include "classfile/systemDictionaryShared.hpp"
 #endif

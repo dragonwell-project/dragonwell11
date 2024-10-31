@@ -182,13 +182,14 @@ private:
   HeapWord* allocate_in_next_plab(InCSetState const state,
                                   InCSetState* dest,
                                   size_t word_sz,
+                                  AllocationContext_t const context,
                                   bool previous_plab_refill_failed);
 
   inline InCSetState next_state(InCSetState const state, markOop const m, uint& age);
 
   void report_promotion_event(InCSetState const dest_state,
                               oop const old, size_t word_sz, uint age,
-                              HeapWord * const obj_ptr) const;
+                              HeapWord * const obj_ptr, AllocationContext_t context) const;
 
   inline bool needs_partial_trimming() const;
   inline bool is_partially_trimmed() const;

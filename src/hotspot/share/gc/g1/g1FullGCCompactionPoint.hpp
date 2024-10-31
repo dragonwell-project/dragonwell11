@@ -43,6 +43,8 @@ class G1FullGCCompactionPoint : public CHeapObj<mtGC> {
   void switch_region();
   HeapRegion* next_region();
 
+  size_t _worker_id;
+
 public:
   G1FullGCCompactionPoint();
   ~G1FullGCCompactionPoint();
@@ -54,11 +56,14 @@ public:
   void forward(oop object, size_t size);
   void add(HeapRegion* hr);
   void merge(G1FullGCCompactionPoint* other);
+  void reset();
 
   HeapRegion* remove_last();
   HeapRegion* current_region();
 
   GrowableArray<HeapRegion*>* regions();
+  void set_worker_id(size_t id) {_worker_id = id;};
+  int get_worker_id() {return _worker_id;}
 };
 
 #endif // SHARE_GC_G1_G1FULLGCCOMPACTIONPOINT_HPP

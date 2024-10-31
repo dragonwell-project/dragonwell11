@@ -154,6 +154,7 @@ void G1ParScanThreadState::trim_queue() {
 HeapWord* G1ParScanThreadState::allocate_in_next_plab(InCSetState const state,
                                                       InCSetState* dest,
                                                       size_t word_sz,
+                                                      AllocationContext_t const context,
                                                       bool previous_plab_refill_failed) {
   assert(state.is_in_cset_or_humongous(), "Unexpected state: " CSETSTATE_FORMAT, state.value());
   assert(dest->is_in_cset_or_humongous(), "Unexpected dest: " CSETSTATE_FORMAT, dest->value());
@@ -164,6 +165,7 @@ HeapWord* G1ParScanThreadState::allocate_in_next_plab(InCSetState const state,
     bool plab_refill_in_old_failed = false;
     HeapWord* const obj_ptr = _plab_allocator->allocate(InCSetState::Old,
                                                         word_sz,
+                                                        context,
                                                         &plab_refill_in_old_failed);
     // Make sure that we won't attempt to copy any other objects out
     // of a survivor region (given that apparently we cannot allocate
@@ -203,8 +205,8 @@ InCSetState G1ParScanThreadState::next_state(InCSetState const state, markOop co
 
 void G1ParScanThreadState::report_promotion_event(InCSetState const dest_state,
                                                   oop const old, size_t word_sz, uint age,
-                                                  HeapWord * const obj_ptr) const {
-  PLAB* alloc_buf = _plab_allocator->alloc_buffer(dest_state);
+                                                  HeapWord * const obj_ptr, AllocationContext_t context) const {
+  PLAB* alloc_buf = _plab_allocator->alloc_buffer(dest_state, context);
   if (alloc_buf->contains(obj_ptr)) {
     _g1h->_gc_tracer_stw->report_promotion_in_new_plab_event(old->klass(), word_sz, age,
                                                              dest_state.value() == InCSetState::Old,
@@ -225,6 +227,7 @@ oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
   assert( (from_region->is_young() && young_index >  0) ||
          (!from_region->is_young() && young_index == 0), "invariant" );
 
+  const AllocationContext_t context = from_region->allocation_context();
   uint age = 0;
   InCSetState dest_state = next_state(state, old_mark, age);
   // The second clause is to prevent premature evacuation failure in case there
@@ -232,15 +235,15 @@ oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
   if (_old_gen_is_full && dest_state.is_old()) {
     return handle_evacuation_failure_par(old, old_mark);
   }
-  HeapWord* obj_ptr = _plab_allocator->plab_allocate(dest_state, word_sz);
+  HeapWord* obj_ptr = _plab_allocator->plab_allocate(dest_state, word_sz, context);
 
   // PLAB allocations should succeed most of the time, so we'll
   // normally check against NULL once and that's it.
   if (obj_ptr == NULL) {
     bool plab_refill_failed = false;
-    obj_ptr = _plab_allocator->allocate_direct_or_new_plab(dest_state, word_sz, &plab_refill_failed);
+    obj_ptr = _plab_allocator->allocate_direct_or_new_plab(dest_state, word_sz, context, &plab_refill_failed);
     if (obj_ptr == NULL) {
-      obj_ptr = allocate_in_next_plab(state, &dest_state, word_sz, plab_refill_failed);
+      obj_ptr = allocate_in_next_plab(state, &dest_state, word_sz, context, plab_refill_failed);
       if (obj_ptr == NULL) {
         // This will either forward-to-self, or detect that someone else has
         // installed a forwarding pointer.
@@ -249,7 +252,7 @@ oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
     }
     if (_g1h->_gc_tracer_stw->should_report_promotion_events()) {
       // The events are checked individually as part of the actual commit
-      report_promotion_event(dest_state, old, word_sz, age, obj_ptr);
+      report_promotion_event(dest_state, old, word_sz, age, obj_ptr, context);
     }
   }
 
@@ -261,7 +264,7 @@ oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
   if (_g1h->evacuation_should_fail()) {
     // Doing this after all the allocation attempts also tests the
     // undo_allocation() method too.
-    _plab_allocator->undo_allocation(dest_state, obj_ptr, word_sz);
+    _plab_allocator->undo_allocation(dest_state, obj_ptr, word_sz, context);
     return handle_evacuation_failure_par(old, old_mark);
   }
 #endif // !PRODUCT
@@ -322,7 +325,7 @@ oop G1ParScanThreadState::copy_to_survivor_space(InCSetState const state,
     }
     return obj;
   } else {
-    _plab_allocator->undo_allocation(dest_state, obj_ptr, word_sz);
+    _plab_allocator->undo_allocation(dest_state, obj_ptr, word_sz, context);
     return forward_ptr;
   }
 }

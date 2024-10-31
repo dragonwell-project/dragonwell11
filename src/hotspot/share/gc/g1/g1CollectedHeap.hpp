@@ -396,7 +396,7 @@ private:
 
   // Attempt to allocate a humongous object of the given size. Return
   // NULL if unsuccessful.
-  HeapWord* humongous_obj_allocate(size_t word_size);
+  HeapWord* humongous_obj_allocate(size_t word_size, AllocationContext_t context);
 
   // The following two methods, allocate_new_tlab() and
   // mem_allocate(), are the two main entry points from the runtime
@@ -444,7 +444,7 @@ private:
   // Second-level mutator allocation attempt: take the Heap_lock and
   // retry the allocation attempt, potentially scheduling a GC
   // pause. This should only be used for non-humongous allocations.
-  HeapWord* attempt_allocation_slow(size_t word_size);
+  HeapWord* attempt_allocation_slow(size_t word_size, AllocationContext_t context);
 
   // Takes the Heap_lock and attempts a humongous allocation. It can
   // potentially schedule a GC pause.
@@ -455,6 +455,7 @@ private:
   // specifies whether the mutator alloc region is expected to be NULL
   // or not.
   HeapWord* attempt_allocation_at_safepoint(size_t word_size,
+                                            AllocationContext_t context,
                                             bool expect_null_mutator_alloc_region);
 
   // These methods are the "callbacks" from the G1AllocRegion class.
@@ -489,6 +490,7 @@ private:
   // This function does everything necessary/possible to satisfy a
   // failed allocation request (including collection, expansion, etc.)
   HeapWord* satisfy_failed_allocation(size_t word_size,
+                                      AllocationContext_t context,
                                       bool* succeeded);
   // Internal helpers used during full GC to split it up to
   // increase readability.
@@ -502,6 +504,7 @@ private:
 
   // Helper method for satisfy_failed_allocation()
   HeapWord* satisfy_failed_allocation_helper(size_t word_size,
+                                             AllocationContext_t context,
                                              bool do_gc,
                                              bool clear_all_soft_refs,
                                              bool expect_null_mutator_alloc_region,
@@ -511,7 +514,7 @@ private:
   // to support an allocation of the given "word_size".  If
   // successful, perform the allocation and return the address of the
   // allocated block, or else "NULL".
-  HeapWord* expand_and_allocate(size_t word_size);
+  HeapWord* expand_and_allocate(size_t word_size, AllocationContext_t context);
 
   // Process any reference objects discovered.
   void process_discovered_references(G1ParScanThreadStateSet* per_thread_states);

@@ -82,6 +82,7 @@ void VM_G1CollectForAllocation::doit() {
 
     // An allocation has been requested. So, try to do that first.
     _result = g1h->attempt_allocation_at_safepoint(_word_size,
+                                                   _allocation_context,
                                                    false /* expect_null_cur_alloc_region */);
     if (_result != NULL) {
       // If we can successfully allocate before we actually do the
@@ -139,7 +140,7 @@ void VM_G1CollectForAllocation::doit() {
       AllocationContextMark acm(this->allocation_context());
       // An allocation had been requested. Do it, eventually trying a stronger
       // kind of GC.
-      _result = g1h->satisfy_failed_allocation(_word_size, &_pause_succeeded);
+      _result = g1h->satisfy_failed_allocation(_word_size, _allocation_context, &_pause_succeeded);
     } else {
       bool should_upgrade_to_full = !g1h->should_do_concurrent_full_gc(_gc_cause) &&
                                     !g1h->has_regions_left_for_allocation();

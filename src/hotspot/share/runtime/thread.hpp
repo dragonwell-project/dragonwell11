@@ -2269,6 +2269,7 @@ class Threads: AllStatic {
   // Thread management
   // force_daemon is a concession to JNI, where we may need to add a
   // thread to the thread list before allocating its thread object
+  static JavaThread* first()                     { return _thread_list; }
   static void add(JavaThread* p, bool force_daemon = false);
   static void remove(JavaThread* p, bool is_daemon);
   static void non_java_threads_do(ThreadClosure* tc);

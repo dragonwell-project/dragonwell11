@@ -34,6 +34,7 @@ G1FullGCCompactionPoint::G1FullGCCompactionPoint() :
     _compaction_top(NULL) {
   _compaction_regions = new (ResourceObj::C_HEAP, mtGC) GrowableArray<HeapRegion*>(32, true, mtGC);
   _compaction_region_iterator = _compaction_regions->begin();
+  _worker_id = -1;
 }
 
 G1FullGCCompactionPoint::~G1FullGCCompactionPoint() {
@@ -142,4 +143,12 @@ void G1FullGCCompactionPoint::merge(G1FullGCCompactionPoint* other) {
 
 HeapRegion* G1FullGCCompactionPoint::remove_last() {
   return _compaction_regions->pop();
+}
+
+void G1FullGCCompactionPoint::reset() {
+  _current_region = NULL;
+  _threshold = NULL;
+  _compaction_top = NULL;
+  // _compaction_regions->clear();
+  // _compaction_region_iterator = _compaction_regions->begin();
 }

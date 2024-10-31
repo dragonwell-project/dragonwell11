@@ -78,6 +78,7 @@ bool G1FullGCPrepareTask::has_freed_regions() {
 void G1FullGCPrepareTask::work(uint worker_id) {
   Ticks start = Ticks::now();
   G1FullGCCompactionPoint* compaction_point = collector()->compaction_point(worker_id);
+  compaction_point -> set_worker_id(worker_id);
   G1CalculatePointersClosure closure(collector()->mark_bitmap(), compaction_point);
   G1CollectedHeap::heap()->heap_region_par_iterate_from_start(&closure, &_hrclaimer);
 
@@ -143,6 +144,23 @@ size_t G1FullGCPrepareTask::G1RePrepareClosure::apply(oop obj) {
   return size;
 }
 
+bool G1FullGCPrepareTask::G1CalculatePointersClosure::is_cp_initialized_for(AllocationContext_t ac) {
+  assert_at_safepoint_on_vm_thread();
+  assert(TenantHeapIsolation, "pre-condition");
+
+  if (ac.is_system()) {
+    return _root_cp -> current_region() != NULL;
+  }
+  G1TenantAllocationContext* tac = ac.tenant_allocation_context();
+  assert(NULL != tac, "Tenant alloc context cannot be NULL");
+  for (uint i = 0; i < G1TenantAllocationContexts::num_workers(); i++) {
+    if (tac->full_gc_compact_point(i)->current_region() != NULL) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction_work(G1FullGCCompactionPoint* cp,
                                                                                   HeapRegion* hr) {
   G1PrepareCompactLiveClosure prepare_compact(cp);
@@ -151,13 +169,61 @@ void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction_wor
 }
 
 void G1FullGCPrepareTask::G1CalculatePointersClosure::prepare_for_compaction(HeapRegion* hr) {
-  if (!_cp->is_initialized()) {
-    hr->set_compaction_top(hr->bottom());
-    _cp->initialize(hr, true);
+  // If this is the first live region that we came across which we can compact,
+  // initialize the CompactPoint.
+  // Otherwise if TenantHeapIsolation enabled, just load saved CompactPoint from
+  // corresponding tenant context
+  if (TenantHeapIsolation) {
+    assert_at_safepoint_on_vm_thread();
+    // clear compaction dest info for all tenants
+    AllocationContext_t ac = hr->allocation_context();
+    if (!is_cp_initialized_for(ac)) {
+      // first live region of this tenant
+      hr->set_compaction_top(hr->bottom());
+      _cp->initialize(hr, true);
+    } else {
+      // if not the first time, should do switching
+      HeapRegion* cur_space = _cp->current_region();
+      if (ac != cur_space->allocation_context()) {
+        // pick the corresponding saved compact compact points base on tenant alloc contexts
+        if (ac.is_system()) {
+          _cp = _root_cp;
+        } else {
+          G1TenantAllocationContext* tac = ac.tenant_allocation_context();
+          assert(NULL != tac, "just checking");
+          int id = _cp -> get_worker_id();
+          assert(-1 != id, "just checking");
+          assert(id < static_cast<int>(G1TenantAllocationContexts::num_workers()), "just checking");
+          _cp = tac->full_gc_compact_point(id);
+        }
+        assert(NULL != _cp->current_region(), "post-condition");
+      }
+    }
+  } else /* if (!TenantHeapIsolation) */ {
+    if (!_cp->is_initialized()) {
+      // will be called only once during the whole iteration
+      hr->set_compaction_top(hr->bottom());
+      _cp->initialize(hr, true);
+    }
   }
+
   // Add region to the compaction queue and prepare it.
   _cp->add(hr);
   prepare_for_compaction_work(_cp, hr);
+
+
+  // save current CompactPoint to corresponding tenant context
+  if (TenantHeapIsolation) {
+    assert(NULL != _cp->current_region(), "pre-condition");
+    HeapRegion* cur_space = _cp->current_region();
+    if (cur_space->allocation_context().is_system()) {
+      _root_cp = _cp;
+    } else {
+      G1TenantAllocationContext* tac = cur_space->allocation_context().tenant_allocation_context();
+      assert(NULL != tac, "just checking");
+      tac->set_full_gc_compact_point(_cp, _cp -> get_worker_id());
+    }
+  }
 }
 
 void G1FullGCPrepareTask::prepare_serial_compaction() {

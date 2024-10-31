@@ -29,7 +29,7 @@
 #include "gc/g1/g1AllocRegion.inline.hpp"
 #include "gc/shared/plab.inline.hpp"
 
-inline MutatorAllocRegion* G1Allocator::mutator_alloc_region() {
+inline MutatorAllocRegion* G1Allocator::mutator_alloc_region(AllocationContext_t context) {
   if (TenantHeapIsolation && !context.is_system()) {
     G1TenantAllocationContext* tac = context.tenant_allocation_context();
     assert(NULL != tac, "Tenant alloc context cannot be NULL");
@@ -38,15 +38,16 @@ inline MutatorAllocRegion* G1Allocator::mutator_alloc_region() {
   return &_mutator_alloc_region;
 }
 
-inline SurvivorGCAllocRegion* G1Allocator::survivor_gc_alloc_region() {
-  G1TenantAllocationContext* tac = context.tenant_allocation_context();
+inline SurvivorGCAllocRegion* G1Allocator::survivor_gc_alloc_region(AllocationContext_t context) {
+  if (TenantHeapIsolation && !context.is_system()) {
+    G1TenantAllocationContext* tac = context.tenant_allocation_context();
     assert(NULL != tac, "Tenant alloc context cannot be NULL");
     return tac->survivor_gc_alloc_region();
   }
   return &_survivor_gc_alloc_region;
 }
 
-inline OldGCAllocRegion* G1Allocator::old_gc_alloc_region() {
+inline OldGCAllocRegion* G1Allocator::old_gc_alloc_region(AllocationContext_t context) {
   if (TenantHeapIsolation && !context.is_system()) {
     G1TenantAllocationContext* tac = context.tenant_allocation_context();
     assert(NULL != tac, "Tenant alloc context cannot be NULL");
@@ -57,40 +58,41 @@ inline OldGCAllocRegion* G1Allocator::old_gc_alloc_region() {
 
 inline HeapWord* G1Allocator::attempt_allocation(size_t min_word_size,
                                                  size_t desired_word_size,
-                                                 size_t* actual_word_size) {
-  HeapWord* result = mutator_alloc_region()->attempt_retained_allocation(min_word_size, desired_word_size, actual_word_size);
+                                                 size_t* actual_word_size,
+                                                 AllocationContext_t context) {
+  HeapWord* result = mutator_alloc_region(context)->attempt_retained_allocation(min_word_size, desired_word_size, actual_word_size);
   if (result != NULL) {
     return result;
   }
-  return mutator_alloc_region()->attempt_allocation(min_word_size, desired_word_size, actual_word_size);
+  return mutator_alloc_region(context)->attempt_allocation(min_word_size, desired_word_size, actual_word_size);
 }
 
-inline HeapWord* G1Allocator::attempt_allocation_locked(size_t word_size) {
-  HeapWord* result = mutator_alloc_region()->attempt_allocation_locked(word_size);
-  assert(result != NULL || mutator_alloc_region()->get() == NULL,
-         "Must not have a mutator alloc region if there is no memory, but is " PTR_FORMAT, p2i(mutator_alloc_region()->get()));
+inline HeapWord* G1Allocator::attempt_allocation_locked(size_t word_size, AllocationContext_t context) {
+  HeapWord* result = mutator_alloc_region(context)->attempt_allocation_locked(word_size);
+  assert(result != NULL || mutator_alloc_region(context)->get() == NULL,
+         "Must not have a mutator alloc region if there is no memory, but is " PTR_FORMAT, p2i(mutator_alloc_region(context)->get()));
   return result;
 }
 
-inline HeapWord* G1Allocator::attempt_allocation_force(size_t word_size) {
-  return mutator_alloc_region()->attempt_allocation_force(word_size);
+inline HeapWord* G1Allocator::attempt_allocation_force(size_t word_size, AllocationContext_t context) {
+  return mutator_alloc_region(context)->attempt_allocation_force(word_size);
 }
 
-inline PLAB* G1PLABAllocator::alloc_buffer(InCSetState dest) {
+inline PLAB* G1PLABAllocator::alloc_buffer(InCSetState dest, AllocationContext_t context) {
   assert(dest.is_valid(),
          "Allocation buffer index out of bounds: " CSETSTATE_FORMAT, dest.value());
 
   if (TenantHeapIsolation && !context.is_system()) {
-    assert(NULL != _tenant_par_alloc_buffers, "just checking");
-    G1TenantPLAB* tbuf = tenant_par_alloc_buffer_of(context);
+    assert(NULL != _tenant_plabs, "just checking");
+    G1TenantPLAB* tbuf = tenant_plab_of(context);
     if (NULL == tbuf) {
-      tbuf = new G1TenantParGCAllocBuffer(_g1h, context);
-      _tenant_par_alloc_buffers->put(context, tbuf);
+      tbuf = new G1TenantPLAB(_g1h, context);
+      _tenant_plabs->put(context, tbuf);
     }
 
     assert(NULL != tbuf
-           && NULL != _tenant_par_alloc_buffers->get(context)
-           && tbuf == _tenant_par_alloc_buffers->get(context)->value(), "post-condition");
+           && NULL != _tenant_plabs->get(context)
+           && tbuf == _tenant_plabs->get(context)->value(), "post-condition");
     PLAB* buf = tbuf->alloc_buffer(dest);
     assert(NULL != buf, "post-condition");
     return buf;
@@ -102,8 +104,9 @@ inline PLAB* G1PLABAllocator::alloc_buffer(InCSetState dest) {
 }
 
 inline HeapWord* G1PLABAllocator::plab_allocate(InCSetState dest,
-                                                size_t word_sz) {
-  PLAB* buffer = alloc_buffer(dest);
+                                                size_t word_sz,
+                                                AllocationContext_t context) {
+  PLAB* buffer = alloc_buffer(dest, context);
   if (_survivor_alignment_bytes == 0 || !dest.is_young()) {
     return buffer->allocate(word_sz);
   } else {
@@ -113,12 +116,13 @@ inline HeapWord* G1PLABAllocator::plab_allocate(InCSetState dest,
 
 inline HeapWord* G1PLABAllocator::allocate(InCSetState dest,
                                            size_t word_sz,
+                                           AllocationContext_t context,
                                            bool* refill_failed) {
-  HeapWord* const obj = plab_allocate(dest, word_sz);
+  HeapWord* const obj = plab_allocate(dest, word_sz, context);
   if (obj != NULL) {
     return obj;
   }
-  return allocate_direct_or_new_plab(dest, word_sz, refill_failed);
+  return allocate_direct_or_new_plab(dest, word_sz, context, refill_failed);
 }
 
 // Create the maps which is used to identify archive objects.

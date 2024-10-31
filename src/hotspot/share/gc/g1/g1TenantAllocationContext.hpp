@@ -27,6 +27,7 @@
 #include "gc/g1/g1AllocRegion.hpp"
 #include "gc/g1/heapRegionSet.hpp"
 #include "gc/g1/g1Allocator.hpp"
+#include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/vm_operations_g1.hpp"
 #include "memory/allocation.hpp"
 #include "memory/iterator.hpp"
@@ -75,7 +76,7 @@ private:
   // keeps a strong reference to TenantContainer object for containerOf() API
   oop                               _tenant_container;              // handle to tenant container object
 
-  CachedCompactPoint                _ccp;                           // cached CompactPoint during full GC compaction
+  G1FullGCCompactionPoint**         _fcp;                           // G1FullGCCompactionPoints during full GC compaction
 
 public:
   // Newly allocated G1TenantAllocationContext will be put at the head of tenant alloc context list
@@ -124,9 +125,8 @@ public:
   bool can_allocate(size_t attempt_word_size);
 
   // record the compact dest
-  const CachedCompactPoint& cached_compact_point() const { return _ccp;                       }
-  void set_cached_compact_point(CompactPoint cp)      { _ccp = cp;                            }
-
+  G1FullGCCompactionPoint* full_gc_compact_point(size_t id) const  { return _fcp[id];                 }
+  void set_full_gc_compact_point(G1FullGCCompactionPoint* cp, size_t id) { _fcp[id] = cp;                    }
   // Retrieve pointer to current tenant context, NULL if in root container
   static G1TenantAllocationContext* current();
 
@@ -151,6 +151,7 @@ private:
   //       dies.
   static G1TenantACList           *_contexts;     // Tenant contexts are organized into doubly-linked list
   static Mutex                    *_list_lock;
+  static uint                     _num_workers;
 
 public:
   static void add(G1TenantAllocationContext*);
@@ -175,6 +176,10 @@ public:
   static void release_mutator_alloc_regions();
 
   static size_t total_used();
+
+  static void set_num_workers(uint num_workers) { _num_workers = num_workers; }
+
+  static uint num_workers() { return _num_workers; }
 
   static void init_gc_alloc_regions(G1Allocator* allocator, EvacuationInfo& ei);
   static void release_gc_alloc_regions(EvacuationInfo& ei);

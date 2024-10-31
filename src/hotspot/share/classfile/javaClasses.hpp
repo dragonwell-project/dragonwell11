@@ -91,7 +91,7 @@
   f(com_alibaba_wisp_engine_WispControlGroup) \
   f(com_alibaba_wisp_engine_WispControlGroup_CpuLimit) \
   f(com_alibaba_rcm_AbstractResourceContainer) \
-  f(com_alibaba_tenant_TenantContainer) \
+ // f(com_alibaba_tenant_TenantContainer) \
   //end
 
 #define BASIC_JAVA_CLASSES_DO(f) \

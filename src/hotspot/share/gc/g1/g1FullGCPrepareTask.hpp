@@ -54,7 +54,11 @@ protected:
     G1CollectedHeap* _g1h;
     G1CMBitMap* _bitmap;
     G1FullGCCompactionPoint* _cp;
+    G1FullGCCompactionPoint* _root_cp;
     uint _humongous_regions_removed;
+
+    // check cp based on alloc context, this is to support TenantHeapIsolation
+    bool is_cp_initialized_for(AllocationContext_t ac);
 
     virtual void prepare_for_compaction(HeapRegion* hr);
     void prepare_for_compaction_work(G1FullGCCompactionPoint* cp, HeapRegion* hr);

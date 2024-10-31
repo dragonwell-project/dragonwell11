@@ -50,6 +50,7 @@ public:
 class VM_G1CollectForAllocation: public VM_CollectForAllocation {
 private:
   bool      _pause_succeeded;
+  AllocationContext_t _allocation_context;
 
   bool         _should_initiate_conc_mark;
   bool         _should_retry_gc;
@@ -70,6 +71,8 @@ public:
   }
   bool should_retry_gc() const { return _should_retry_gc; }
   bool pause_succeeded() { return _pause_succeeded; }
+  void set_allocation_context(AllocationContext_t context) { _allocation_context = context; }
+  AllocationContext_t  allocation_context() { return _allocation_context; }
 };
 
 // Concurrent GC stop-the-world operations such as remark and cleanup;
