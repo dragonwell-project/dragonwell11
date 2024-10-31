@@ -124,6 +124,9 @@ JVMFlag::Error AllocatePrefetchStepSizeConstraintFunc(intx value, bool verbose) 
       if (VerifyFlagConstraints) {
         int remainder = value % wordSize;
         AllocatePrefetchStepSize = value - remainder;
+        if (AllocatePrefetchStepSize == 0) {
+          AllocatePrefetchStepSize = wordSize;
+        }
         JVMFlag::printError(true, "AllocatePrefetchStepSize:" INTX_FORMAT "\n", AllocatePrefetchStepSize);
         return JVMFlag::SUCCESS;
       }

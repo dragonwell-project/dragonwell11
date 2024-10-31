@@ -44,7 +44,7 @@ public class VerifyFlagConstraintsTests {
                         "-XX:AllocatePrefetchStyle=3")
                /* .testEq("MaxGCPauseMillis", "1")
                 .testEq("GCPauseIntervalMillis", "2")
-                .testEq("AllocatePrefetchDistance", "1")
+                .testEq("AllocatePrefetchDistance", "8")
                 .testEq("AllocatePrefetchStepSize", "24")*/
                 .testWithSuggested();
 
@@ -86,6 +86,18 @@ public class VerifyFlagConstraintsTests {
 
         FlagConstraintTester.create().run("-XX:YoungPLABSize=9999999")
                 //.testEq("YoungPLABSize", "65536")
+                .testWithSuggested();
+
+        FlagConstraintTester.create().run("-XX:ThreadStackSize=128")
+                //.testEq("ThreadStackSize", "136")
+                .testWithSuggested();
+
+        FlagConstraintTester.create().run("-XX:ReservedCodeCacheSize=4096")
+                //.testEq("ReservedCodeCacheSize", "2555904")
+                .testWithSuggested();
+
+        FlagConstraintTester.create().run("-XX:MarkStackSize=0")
+                //.testEq("ReservedCodeCacheSize", "2555904")
                 .testWithSuggested();
     }
 
