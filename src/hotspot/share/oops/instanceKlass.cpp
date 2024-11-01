@@ -1841,25 +1841,14 @@ Method* InstanceKlass::lookup_method_in_all_interfaces(Symbol* name,
   return NULL;
 }
 
-/* jni_id_for_impl for jfieldIds only */
-JNIid* InstanceKlass::jni_id_for_impl(int offset) {
-  MutexLocker ml(JfieldIdCreation_lock);
-  // Retry lookup after we got the lock
-  JNIid* probe = jni_ids() == NULL ? NULL : jni_ids()->find(offset);
-  if (probe == NULL) {
-    // Slow case, allocate new static field identifier
-    probe = new JNIid(this, offset, jni_ids());
-    set_jni_ids(probe);
-  }
-  return probe;
-}
-
-
 /* jni_id_for for jfieldIds only */
 JNIid* InstanceKlass::jni_id_for(int offset) {
+  MutexLocker ml(JfieldIdCreation_lock);
   JNIid* probe = jni_ids() == NULL ? NULL : jni_ids()->find(offset);
   if (probe == NULL) {
-    probe = jni_id_for_impl(offset);
+    // Allocate new static field identifier
+    probe = new JNIid(this, offset, jni_ids());
+    set_jni_ids(probe);
   }
   return probe;
 }
@@ -2334,6 +2323,7 @@ void InstanceKlass::remove_unshareable_info() {
 #if INCLUDE_JVMTI
   guarantee(_breakpoints == NULL, "must be");
   guarantee(_previous_versions == NULL, "must be");
+  _cached_class_file = NULL;
 #endif
 
   _init_thread = NULL;
@@ -2382,6 +2372,9 @@ void InstanceKlass::restore_unshareable_info(ClassLoaderData* loader_data, Handl
   constants()->restore_unshareable_info(CHECK);
 
   if (array_klasses() != NULL) {
+    // To get a consistent list of classes we need MultiArray_lock to ensure
+    // array classes aren't observed while they are being restored.
+    MutexLocker ml(MultiArray_lock);
     // Array classes have null protection domain.
     // --> see ArrayKlass::complete_create_array_klass()
     array_klasses()->restore_unshareable_info(ClassLoaderData::the_null_class_loader_data(), Handle(), CHECK);
@@ -2482,7 +2475,7 @@ void InstanceKlass::release_C_heap_structures() {
   }
 
   // deallocate the cached class file
-  if (_cached_class_file != NULL && !MetaspaceShared::is_in_shared_metaspace(_cached_class_file)) {
+  if (_cached_class_file != NULL) {
     os::free(_cached_class_file);
     _cached_class_file = NULL;
   }
@@ -3129,8 +3122,6 @@ nmethod* InstanceKlass::lookup_osr_nmethod(const Method* m, int bci, int comp_le
 // -----------------------------------------------------------------------------------------------------
 // Printing
 
-#ifndef PRODUCT
-
 #define BULLET  " - "
 
 static const char* state_names[] = {
@@ -3272,15 +3263,11 @@ void InstanceKlass::print_on(outputStream* st) const {
   st->cr();
 }
 
-#endif //PRODUCT
-
 void InstanceKlass::print_value_on(outputStream* st) const {
   assert(is_klass(), "must be klass");
   if (Verbose || WizardMode)  access_flags().print_on(st);
   name()->print_value_on(st);
 }
-
-#ifndef PRODUCT
 
 void FieldPrinter::do_field(fieldDescriptor* fd) {
   _st->print(BULLET);
@@ -3338,8 +3325,6 @@ void InstanceKlass::oop_print_on(oop obj, outputStream* st) {
     st->cr();
   }
 }
-
-#endif //PRODUCT
 
 void InstanceKlass::oop_print_value_on(oop obj, outputStream* st) {
   st->print("a ");
@@ -4014,12 +3999,7 @@ Method* InstanceKlass::method_with_orig_idnum(int idnum, int version) {
 
 #if INCLUDE_JVMTI
 JvmtiCachedClassFileData* InstanceKlass::get_cached_class_file() {
-  if (MetaspaceShared::is_in_shared_metaspace(_cached_class_file)) {
-    // Ignore the archived class stream data
-    return NULL;
-  } else {
-    return _cached_class_file;
-  }
+  return _cached_class_file;
 }
 
 jint InstanceKlass::get_cached_class_file_len() {
@@ -4029,6 +4009,7 @@ jint InstanceKlass::get_cached_class_file_len() {
 unsigned char * InstanceKlass::get_cached_class_file_bytes() {
   return VM_RedefineClasses::get_cached_class_file_bytes(_cached_class_file);
 }
+#endif
 
 bool InstanceKlass::is_reentrant_initialization(Thread *thread)  {
   if (UseWispMonitor) {
@@ -4046,19 +4027,3 @@ void InstanceKlass::set_init_thread(Thread *thread)  {
   }
   _init_thread = thread;
 }
-
-#if INCLUDE_CDS
-JvmtiCachedClassFileData* InstanceKlass::get_archived_class_data() {
-  if (DumpSharedSpaces) {
-    return _cached_class_file;
-  } else {
-    assert(this->is_shared(), "class should be shared");
-    if (MetaspaceShared::is_in_shared_metaspace(_cached_class_file)) {
-      return _cached_class_file;
-    } else {
-      return NULL;
-    }
-  }
-}
-#endif
-#endif

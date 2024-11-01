@@ -30,13 +30,13 @@ jobs:
       - uses: actions/checkout@v2
       - uses: dragonwell-releng/check_commit_action@master
 
-  build_release_jdk:
+  build_release_amd64_jdk:
     runs-on: ubuntu-latest
     container:
-      image: docker.io/dragonwelljdk/build_jdk:11u
+      image: docker.io/alibabadragonwelljdk/build_jdk:11-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Compile release mode
+      - name: Compile release mode on amd64
         run: |
           chmod 755 configure
           bash make.sh release
@@ -46,13 +46,29 @@ jobs:
           TEST_JDK_HOME=build/linux-x86_64-normal-server-release/images/jdk
           ${TEST_JDK_HOME}/bin/java -version
 
-  build_fastdebug_jdk:
-    runs-on: ubuntu-latest
+  build_release_arm64_jdk:
+    runs-on: [self-hosted , ARM64]
     container:
-      image: docker.io/dragonwelljdk/build_jdk:11u
+      image: docker.io/alibabadragonwelljdk/build_jdk:11-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Compile fastdebug mode
+      - name: Compile release mode on arm64
+        run: |
+          chmod 755 configure
+          bash make.sh release
+
+      - name: Sanity test
+        run: |
+          TEST_JDK_HOME=build/linux-aarch64-normal-server-release/images/jdk
+          ${TEST_JDK_HOME}/bin/java -version
+
+  build_fastdebug_amd64_jdk:
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/alibabadragonwelljdk/build_jdk:11-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Compile slowdebug mode
         run: |
           chmod 755 configure
           bash make.sh fastdebug
@@ -62,10 +78,10 @@ jobs:
           TEST_JDK_HOME=build/linux-x86_64-normal-server-fastdebug/images/jdk
           ${TEST_JDK_HOME}/bin/java -version
 
-  build_slowdebug_jdk:
+  build_slowdebug_amd64_jdk:
     runs-on: ubuntu-latest
     container:
-      image: docker.io/dragonwelljdk/build_jdk:11u
+      image: docker.io/alibabadragonwelljdk/build_jdk:11-latest
     steps:
       - uses: actions/checkout@v2
       - name: Compile slowdebug mode

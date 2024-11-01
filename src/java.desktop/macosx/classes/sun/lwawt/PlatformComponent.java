@@ -53,6 +53,24 @@ public interface PlatformComponent {
     void setBounds(int x, int y, int w, int h);
 
     /**
+     * Tenant Container.
+     */
+    TENANT_CONTAINER(
+        "com.alibaba.management.TenantContainerMXBean",
+        "com.alibaba.management", "TenantContainer", defaultKeyProperties(),
+        true,
+        new MXBeanFetcher<TenantContainerMXBean>() {
+            public List<TenantContainerMXBean> getMXBeans() {
+                TenantContainerMXBean m = ManagementFactoryHelper.getTenantContainerMXBean();
+                if (null == m) {
+                    return Collections.emptyList();
+                } else {
+                    return Collections.singletonList(m);
+                }
+            }
+        }),
+
+    /**
      * Releases all of the native resources used by this {@code
      * PlatformComponent}.
      */

@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "classfile/systemDictionary.hpp"
+#include "libadt/vectset.hpp"
 #include "memory/allocation.inline.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/objArrayKlass.hpp"
@@ -312,7 +313,7 @@ static bool check_compare_clipping( bool less_than, IfNode *iff, ConNode *limit,
 }
 
 //------------------------------is_unreachable_region--------------------------
-// Find if the Region node is reachable from the root.
+// Check if the RegionNode is part of an unsafe loop and unreachable from root.
 bool RegionNode::is_unreachable_region(PhaseGVN *phase) const {
   assert(req() == 2, "");
 
@@ -349,7 +350,7 @@ bool RegionNode::is_unreachable_region(PhaseGVN *phase) const {
   VectorSet visited(a);
 
   // Mark all control nodes reachable from root outputs
-  Node *n = (Node*)phase->C->root();
+  Node* n = (Node*)phase->C->root();
   nstack.push(n);
   visited.set(n->_idx);
   while (nstack.size() != 0) {
@@ -452,7 +453,7 @@ Node *RegionNode::Ideal(PhaseGVN *phase, bool can_reshape) {
 
   // Remove TOP or NULL input paths. If only 1 input path remains, this Region
   // degrades to a copy.
-  bool add_to_worklist = false;
+  bool add_to_worklist = true;
   bool modified = false;
   int cnt = 0;                  // Count of values merging
   DEBUG_ONLY( int cnt_orig = req(); ) // Save original inputs count
@@ -478,7 +479,7 @@ Node *RegionNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         }
       }
       if( phase->type(n) == Type::TOP ) {
-        set_req(i, NULL);       // Ignore TOP inputs
+        set_req_X(i, NULL, phase); // Ignore TOP inputs
         modified = true;
         i--;
         continue;
@@ -509,7 +510,8 @@ Node *RegionNode::Ideal(PhaseGVN *phase, bool can_reshape) {
           }
         }
       }
-      add_to_worklist = true;
+      add_to_worklist = false;
+      phase->is_IterGVN()->add_users_to_worklist(this);
       i--;
     }
   }
@@ -524,44 +526,50 @@ Node *RegionNode::Ideal(PhaseGVN *phase, bool can_reshape) {
     if ((this->is_Loop() && (del_it == LoopNode::EntryControl ||
                              (del_it == 0 && is_unreachable_region(phase)))) ||
         (!this->is_Loop() && has_phis && is_unreachable_region(phase))) {
-      // Yes,  the region will be removed during the next step below.
-      // Cut the backedge input and remove phis since no data paths left.
-      // We don't cut outputs to other nodes here since we need to put them
-      // on the worklist.
-      PhaseIterGVN *igvn = phase->is_IterGVN();
-      if (in(1)->outcnt() == 1) {
-        igvn->_worklist.push(in(1));
-      }
-      del_req(1);
-      cnt = 0;
-      assert( req() == 1, "no more inputs expected" );
-      uint max = outcnt();
-      bool progress = true;
-      Node *top = phase->C->top();
-      DUIterator j;
-      while(progress) {
-        progress = false;
-        for (j = outs(); has_out(j); j++) {
-          Node *n = out(j);
-          if( n->is_Phi() ) {
-            assert( igvn->eqv(n->in(0), this), "" );
-            assert( n->req() == 2 &&  n->in(1) != NULL, "Only one data input expected" );
-            // Break dead loop data path.
-            // Eagerly replace phis with top to avoid phis copies generation.
-            igvn->replace_node(n, top);
-            if( max != outcnt() ) {
-              progress = true;
-              j = refresh_out_pos(j);
-              max = outcnt();
+      // This region and therefore all nodes on the input control path(s) are unreachable
+      // from root. To avoid incomplete removal of unreachable subgraphs, walk up the CFG
+      // and aggressively replace all nodes by top.
+      PhaseIterGVN* igvn = phase->is_IterGVN();
+      Node* top = phase->C->top();
+      ResourceMark rm;
+      Node_List nstack;
+      VectorSet visited(Thread::current()->resource_area());
+      nstack.push(this);
+      visited.set(_idx);
+      while (nstack.size() != 0) {
+        Node* n = nstack.pop();
+        for (uint i = 0; i < n->req(); ++i) {
+          Node* m = n->in(i);
+          assert(m != (Node*)phase->C->root(), "Should be unreachable from root");
+          if (m != NULL && m->is_CFG() && !visited.test_set(m->_idx)) {
+            nstack.push(m);
+          }
+        }
+        if (n->is_Region()) {
+          // Eagerly replace phis with top to avoid regionless phis.
+          n->set_req(0, NULL);
+          bool progress = true;
+          uint max = n->outcnt();
+          DUIterator j;
+          while (progress) {
+            progress = false;
+            for (j = n->outs(); n->has_out(j); j++) {
+              Node* u = n->out(j);
+              if (u->is_Phi()) {
+                igvn->replace_node(u, top);
+                if (max != n->outcnt()) {
+                  progress = true;
+                  j = n->refresh_out_pos(j);
+                  max = n->outcnt();
+                }
+              }
             }
           }
         }
+        igvn->replace_node(n, top);
       }
-      add_to_worklist = true;
+      return NULL;
     }
-  }
-  if (add_to_worklist) {
-    phase->is_IterGVN()->add_users_to_worklist(this); // Revisit collapsed Phis
   }
 
   if( cnt <= 1 ) {              // Only 1 path in?
@@ -597,8 +605,9 @@ Node *RegionNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         assert(parent_ctrl != NULL, "Region is a copy of some non-null control");
         assert(!igvn->eqv(parent_ctrl, this), "Close dead loop");
       }
-      if (!add_to_worklist)
+      if (add_to_worklist) {
         igvn->add_users_to_worklist(this); // Check for further allowed opts
+      }
       for (DUIterator_Last imin, i = last_outs(imin); i >= imin; --i) {
         Node* n = last_out(i);
         igvn->hash_delete(n); // Remove from worklist before modifying edges
@@ -1657,6 +1666,43 @@ bool PhiNode::is_unsafe_data_reference(Node *in) const {
   return false; // The phi is not reachable from its inputs
 }
 
+// Is this Phi's region or some inputs to the region enqueued for IGVN
+// and so could cause the region to be optimized out?
+bool PhiNode::wait_for_region_igvn(PhaseGVN* phase) {
+  PhaseIterGVN* igvn = phase->is_IterGVN();
+  Unique_Node_List& worklist = igvn->_worklist;
+  bool delay = false;
+  Node* r = in(0);
+  for (uint j = 1; j < req(); j++) {
+    Node* rc = r->in(j);
+    Node* n = in(j);
+    if (rc != NULL &&
+        rc->is_Proj()) {
+      if (worklist.member(rc)) {
+        delay = true;
+      } else if (rc->in(0) != NULL &&
+                 rc->in(0)->is_If()) {
+        if (worklist.member(rc->in(0))) {
+          delay = true;
+        } else if (rc->in(0)->in(1) != NULL &&
+                   rc->in(0)->in(1)->is_Bool()) {
+          if (worklist.member(rc->in(0)->in(1))) {
+            delay = true;
+          } else if (rc->in(0)->in(1)->in(1) != NULL &&
+                     rc->in(0)->in(1)->in(1)->is_Cmp()) {
+            if (worklist.member(rc->in(0)->in(1)->in(1))) {
+              delay = true;
+            }
+          }
+        }
+      }
+    }
+  }
+  if (delay) {
+    worklist.push(this);
+  }
+  return delay;
+}
 
 //------------------------------Ideal------------------------------------------
 // Return a node which is more "ideal" than the current node.  Must preserve
@@ -1710,7 +1756,10 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
 
   bool uncasted = false;
   Node* uin = unique_input(phase, false);
-  if (uin == NULL && can_reshape) {
+  if (uin == NULL && can_reshape &&
+      // If there is a chance that the region can be optimized out do
+      // not add a cast node that we can't remove yet.
+      !wait_for_region_igvn(phase)) {
     uncasted = true;
     uin = unique_input(phase, true);
   }
@@ -2006,13 +2055,13 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         // Phi(...MergeMem(m0, m1:AT1, m2:AT2)...) into
         //     MergeMem(Phi(...m0...), Phi:AT1(...m1...), Phi:AT2(...m2...))
         PhaseIterGVN* igvn = phase->is_IterGVN();
+        assert(igvn != NULL, "sanity check");
         Node* hook = new Node(1);
         PhiNode* new_base = (PhiNode*) clone();
         // Must eagerly register phis, since they participate in loops.
-        if (igvn) {
-          igvn->register_new_node_with_optimizer(new_base);
-          hook->add_req(new_base);
-        }
+        igvn->register_new_node_with_optimizer(new_base);
+        hook->add_req(new_base);
+
         MergeMemNode* result = MergeMemNode::make(new_base);
         for (uint i = 1; i < req(); ++i) {
           Node *ii = in(i);
@@ -2024,10 +2073,8 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
               if (mms.is_empty()) {
                 Node* new_phi = new_base->slice_memory(mms.adr_type(phase->C));
                 made_new_phi = true;
-                if (igvn) {
-                  igvn->register_new_node_with_optimizer(new_phi);
-                  hook->add_req(new_phi);
-                }
+                igvn->register_new_node_with_optimizer(new_phi);
+                hook->add_req(new_phi);
                 mms.set_memory(new_phi);
               }
               Node* phi = mms.memory();
@@ -2045,6 +2092,13 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
             }
           }
         }
+        // Already replace this phi node to cut it off from the graph to not interfere in dead loop checks during the
+        // transformations of the new phi nodes below. Otherwise, we could wrongly conclude that there is no dead loop
+        // because we are finding this phi node again. Also set the type of the new MergeMem node in case we are also
+        // visiting it in the transformations below.
+        igvn->replace_node(this, result);
+        igvn->set_type(result, result->bottom_type());
+
         // now transform the new nodes, and return the mergemem
         for (MergeMemStream mms(result); mms.next_non_empty(); ) {
           Node* phi = mms.memory();

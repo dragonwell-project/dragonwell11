@@ -108,6 +108,11 @@ public final class SSLSocketImpl
     private static final boolean trustNameService =
             Utilities.getBooleanProperty("jdk.tls.trustNameService", false);
 
+    /*
+     * Default timeout to skip bytes from the open socket
+     */
+    private static final int DEFAULT_SKIP_TIMEOUT = 1;
+
     /**
      * Package-private constructor used to instantiate an unconnected
      * socket.
@@ -834,9 +839,10 @@ public final class SSLSocketImpl
         // No need to throw exception if the initial handshake is not started.
         try {
             if (checkCloseNotify && !conContext.isInputCloseNotified &&
-                (conContext.isNegotiated || conContext.handshakeContext != null)) {
-            throw new SSLException(
-                    "closing inbound before receiving peer's close_notify");
+                    (conContext.isNegotiated ||
+                            conContext.handshakeContext != null)) {
+                throw new SSLException(
+                        "closing inbound before receiving peer's close_notify");
             }
         } finally {
             conContext.closeInbound();
@@ -1756,9 +1762,23 @@ public final class SSLSocketImpl
             if (conContext.inputRecord instanceof
                     SSLSocketInputRecord && isConnected) {
                 if (appInput.readLock.tryLock()) {
+                    int soTimeout = getSoTimeout();
                     try {
+                        // deplete could hang on the skip operation
+                        // in case of infinite socket read timeout.
+                        // Change read timeout to avoid deadlock.
+                        // This workaround could be replaced later
+                        // with the right synchronization
+                        if (soTimeout == 0) {
+                            setSoTimeout(DEFAULT_SKIP_TIMEOUT);
+                        }
                         ((SSLSocketInputRecord) (conContext.inputRecord)).deplete(false);
+                    } catch (java.net.SocketTimeoutException stEx) {
+                        // skip timeout exception during deplete
                     } finally {
+                        if (soTimeout == 0) {
+                            setSoTimeout(soTimeout);
+                        }
                         appInput.readLock.unlock();
                     }
                 }

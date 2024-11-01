@@ -569,15 +569,15 @@ final class ClientHello {
                             "No new session is allowed and " +
                             "no existing session can be resumed");
                 }
-
-                if (chc.maximumActiveProtocol.useTLS13PlusSpec() &&
-                        SSLConfiguration.useCompatibilityMode) {
-                    // In compatibility mode, the TLS 1.3 legacy_session_id
-                    // field MUST be non-empty, so a client not offering a
-                    // pre-TLS 1.3 session MUST generate a new 32-byte value.
-                    sessionId =
+            }
+            if (sessionId.length() == 0 &&
+                    chc.maximumActiveProtocol.useTLS13PlusSpec() &&
+                    SSLConfiguration.useCompatibilityMode) {
+                // In compatibility mode, the TLS 1.3 legacy_session_id
+                // field MUST be non-empty, so a client not offering a
+                // pre-TLS 1.3 session MUST generate a new 32-byte value.
+                sessionId =
                         new SessionId(true, chc.sslContext.getSecureRandom());
-                }
             }
 
             ProtocolVersion minimumVersion = ProtocolVersion.NONE;
@@ -1342,25 +1342,30 @@ final class ClientHello {
                 shc.resumingSession = resumingSession ? previous : null;
             }
 
-            HelloCookieManager hcm =
-                shc.sslContext.getHelloCookieManager(ProtocolVersion.DTLS10);
-            if (!shc.isResumption &&
-                !hcm.isCookieValid(shc, clientHello, clientHello.cookie)) {
-                //
-                // Perform cookie exchange for DTLS handshaking if no cookie
-                // or the cookie is invalid in the ClientHello message.
-                //
-                // update the responders
-                shc.handshakeProducers.put(
-                        SSLHandshake.HELLO_VERIFY_REQUEST.id,
-                        SSLHandshake.HELLO_VERIFY_REQUEST);
 
-                //
-                // produce response handshake message
-                //
-                SSLHandshake.HELLO_VERIFY_REQUEST.produce(context, clientHello);
+            // We will by default exchange DTLS cookies for all handshakes
+            // (new and resumed) unless jdk.tls.enableDtlsResumeCookie=false.
+            // The property only affects the cookie exchange for resumption.
+            if (!shc.isResumption || SSLConfiguration.enableDtlsResumeCookie) {
+                HelloCookieManager hcm =
+                        shc.sslContext.getHelloCookieManager(ProtocolVersion.DTLS10);
+                if (!hcm.isCookieValid(shc, clientHello, clientHello.cookie)) {
+                    //
+                    // Perform cookie exchange for DTLS handshaking if no cookie
+                    // or the cookie is invalid in the ClientHello message.
+                    //
+                    // update the responders
+                    shc.handshakeProducers.put(
+                            SSLHandshake.HELLO_VERIFY_REQUEST.id,
+                            SSLHandshake.HELLO_VERIFY_REQUEST);
 
-                return;
+                    //
+                    // produce response handshake message
+                    //
+                    SSLHandshake.HELLO_VERIFY_REQUEST.produce(context, clientHello);
+
+                    return;
+                }
             }
 
             // cache the client random number for further using

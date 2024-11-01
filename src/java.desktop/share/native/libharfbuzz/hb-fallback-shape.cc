@@ -26,6 +26,7 @@
 
 #include "hb-shaper-impl.hh"
 
+#ifndef HB_NO_FALLBACK_SHAPE
 
 /*
  * shaper face data
@@ -116,7 +117,9 @@ _hb_fallback_shape (hb_shape_plan_t    *shape_plan HB_UNUSED,
   if (HB_DIRECTION_IS_BACKWARD (direction))
     hb_buffer_reverse (buffer);
 
-  buffer->safe_to_break_all ();
+  buffer->clear_glyph_flags ();
 
   return true;
 }
+
+#endif

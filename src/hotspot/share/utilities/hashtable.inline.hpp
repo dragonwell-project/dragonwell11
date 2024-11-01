@@ -64,6 +64,7 @@ template <MEMFLAGS F> inline void BasicHashtable<F>::initialize(int table_size, 
   _first_free_entry = NULL;
   _end_block = NULL;
   _number_of_entries = number_of_entries;
+  _memory_blocks = NULL;
 }
 
 

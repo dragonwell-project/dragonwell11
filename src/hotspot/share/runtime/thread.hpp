@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,6 +31,7 @@
 #include "gc/shared/threadLocalAllocBuffer.hpp"
 #include "memory/allocation.hpp"
 #include "oops/oop.hpp"
+#include "prims/tenantenv.h"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/frame.hpp"
 #include "runtime/globals.hpp"
@@ -55,6 +57,10 @@
 #endif
 #if INCLUDE_JFR
 #include "jfr/support/jfrThreadExtension.hpp"
+#endif
+
+#if INCLUDE_G1GC
+#include "gc/g1/g1AllocationContext.hpp"
 #endif
 
 
@@ -84,6 +90,10 @@ class jvmtiDeferredLocalVariableSet;
 class GCTaskQueue;
 class ThreadClosure;
 class IdealGraphPrinter;
+
+#if INCLUDE_G1GC
+class G1TenantAllocationContext;
+#endif
 
 class Metadata;
 template <class T, MEMFLAGS F> class ChunkedList;
@@ -533,6 +543,11 @@ class Thread: public ThreadShadow {
       tlab().initialize();
     }
   }
+#if INCLUDE_G1GC
+  void make_all_tlabs_parsable(bool retire, bool delete_saved);
+  // called during tenantContainer destruction
+  void clean_tlab_for(const G1TenantAllocationContext* context);
+#endif // if INCLUDE_G1GC
 
   jlong allocated_bytes()               { return _allocated_bytes; }
   void set_allocated_bytes(jlong value) { _allocated_bytes = value; }
@@ -763,6 +778,22 @@ protected:
   static void muxAcquire(volatile intptr_t * Lock, const char * Name);
   static void muxAcquireW(volatile intptr_t * Lock, ParkEvent * ev);
   static void muxRelease(volatile intptr_t * Lock);
+
+#if defined(__APPLE__) && defined(AARCH64)
+ private:
+  DEBUG_ONLY(bool _wx_init);
+  WXMode _wx_state;
+ public:
+  void init_wx();
+  WXMode enable_wx(WXMode new_state);
+#endif // __APPLE__ && AARCH64
+
+private:
+  AllocationContext_t _alloc_context;         // context for Java allocation requests
+                                              // put it here because allocation may happen in VM thread
+public:
+  const AllocationContext_t& allocation_context() const;
+  void set_allocation_context(AllocationContext_t context);
 };
 
 // Inline implementation of Thread::current()
@@ -927,10 +958,13 @@ class JavaThread: public Thread {
   friend class VMStructs;
   friend class JVMCIVMStructs;
   friend class WhiteBox;
+  friend class WispThread;
  private:
   JavaThread*    _next;                          // The next thread in the Threads list
+  bool           _in_asgct;                      // Is set when this JavaThread is handling ASGCT call
   bool           _on_thread_list;                // Is set when this JavaThread is added to the Threads list
   oop            _threadObj;                     // The Java level thread object
+  oop            _tenantObj;                     // The tenant object which this java thread attaches to
 
  private:
   int _java_call_counter;
@@ -957,6 +991,8 @@ class JavaThread: public Thread {
   ThreadFunction _entry_point;
 
   JNIEnv        _jni_environment;
+
+  TenantEnv     _tenant_environment;             //  tenant environment
 
   // Deopt support
   DeoptResourceMark*  _deopt_mark;               // Holds special ResourceMark for deoptimization
@@ -1196,6 +1232,10 @@ class JavaThread: public Thread {
     return (struct JNINativeInterface_ *)_jni_environment.functions;
   }
 
+  void set_tenant_functions(struct TenantNativeInterface_* functionTable) {
+    _tenant_environment.functions = functionTable;
+  }
+
   // This function is called at thread creation to allow
   // platform specific thread variables to be initialized.
   void cache_global_variables();
@@ -1224,6 +1264,16 @@ class JavaThread: public Thread {
   // (or for threads attached via JNI)
   oop threadObj() const                          { return _threadObj; }
   void set_threadObj(oop p)                      { _threadObj = p; }
+
+  // Get/set the tenant which the thread is attached to
+  oop tenantObj() const                          { return _tenantObj; }
+  void set_tenantObj(oop tenantObj);
+
+#if INCLUDE_G1GC
+  G1TenantAllocationContext* tenant_allocation_context();
+
+  void set_tenant_allocation_context(G1TenantAllocationContext* context);
+#endif
 
   ThreadPriority java_priority() const;          // Read from threadObj()
 
@@ -1254,7 +1304,7 @@ class JavaThread: public Thread {
   address last_Java_pc(void)                     { return _anchor.last_Java_pc(); }
 
   // Safepoint support
-#if !(defined(PPC64) || defined(AARCH64))
+#if !(defined(PPC64) || defined(AARCH64) || defined(RISCV64))
   JavaThreadState thread_state() const           { return _thread_state; }
   void set_thread_state(JavaThreadState s)       {
     assert((UseWispMonitor && is_Wisp_thread()) || current_or_null() == NULL || current_or_null() == this,
@@ -1779,6 +1829,9 @@ class JavaThread: public Thread {
   // Returns the jni environment for this thread
   JNIEnv* jni_environment()                      { return &_jni_environment; }
 
+  // Returns the tenant environment for this thread
+  TenantEnv* tenant_environment()                { return &_tenant_environment; }
+
   static JavaThread* thread_from_jni_environment(JNIEnv* env) {
     JavaThread *thread_from_jni_env = (JavaThread*)((intptr_t)env - in_bytes(jni_environment_offset()));
     // Only return NULL if thread is off the thread list; starting to
@@ -1856,6 +1909,7 @@ class JavaThread: public Thread {
 
   // Misc. operations
   char* name() const { return (char*)get_thread_name(); }
+  static const char* name_for(oop thread_obj);
   void print_on(outputStream* st, bool print_extended_info) const;
   void print_on(outputStream* st) const { print_on(st, false); }
   void print_value();
@@ -2083,6 +2137,10 @@ class JavaThread: public Thread {
 
   bool has_aync_thread_death_exception();
   void clear_aync_thread_death_exception();
+
+  // AsyncGetCallTrace support
+  inline bool in_asgct(void) {return _in_asgct;}
+  inline void set_in_asgct(bool value) {_in_asgct = value;}
 };
 
 // Inline implementation of JavaThread::current
@@ -2211,6 +2269,7 @@ class Threads: AllStatic {
   // Thread management
   // force_daemon is a concession to JNI, where we may need to add a
   // thread to the thread list before allocating its thread object
+  static JavaThread* first()                     { return _thread_list; }
   static void add(JavaThread* p, bool force_daemon = false);
   static void remove(JavaThread* p, bool is_daemon);
   static void non_java_threads_do(ThreadClosure* tc);

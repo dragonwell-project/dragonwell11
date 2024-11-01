@@ -95,16 +95,11 @@
 
 address os::current_stack_pointer() {
 #ifdef SPARC_WORKS
-  register void *esp;
+  void *esp;
   __asm__("mov %%" SPELL_REG_SP ", %0":"=r"(esp));
   return (address) ((char*)esp + sizeof(long)*2);
-#elif defined(__clang__)
-  intptr_t* esp;
-  __asm__ __volatile__ ("mov %%" SPELL_REG_SP ", %0":"=r"(esp):);
-  return (address) esp;
 #else
-  register void *esp __asm__ (SPELL_REG_SP);
-  return (address) esp;
+  return (address)__builtin_frame_address(0);
 #endif
 }
 
@@ -229,7 +224,7 @@ frame os::get_sender_for_C_frame(frame* fr) {
 
 intptr_t* _get_previous_fp() {
 #ifdef SPARC_WORKS
-  register intptr_t **ebp;
+  intptr_t **ebp;
   __asm__("mov %%" SPELL_REG_FP ", %0":"=r"(ebp));
 #elif defined(__clang__)
   intptr_t **ebp;
@@ -323,7 +318,7 @@ JVM_handle_linux_signal(int sig,
   }
 
   // Handle SafeFetch faults:
-  if (uc != NULL) {
+  if ((sig == SIGSEGV || sig == SIGBUS) && uc != NULL) {
     address const pc = (address) os::Linux::ucontext_get_pc(uc);
     if (pc && StubRoutines::is_safefetch_fault(pc)) {
       os::Linux::ucontext_set_pc(uc, StubRoutines::continuation_for_safefetch_fault(pc));
@@ -667,11 +662,26 @@ bool os::supports_sse() {
 }
 
 juint os::cpu_microcode_revision() {
+  // Note: this code runs on startup, and therefore should not be slow,
+  // see JDK-8283200.
+
   juint result = 0;
-  char data[2048] = {0}; // lines should fit in 2K buf
-  size_t len = sizeof(data);
-  FILE *fp = fopen("/proc/cpuinfo", "r");
+
+  // Attempt 1 (faster): Read the microcode version off the sysfs.
+  FILE *fp = fopen("/sys/devices/system/cpu/cpu0/microcode/version", "r");
   if (fp) {
+    int read = fscanf(fp, "%x", &result);
+    fclose(fp);
+    if (read > 0) {
+      return result;
+    }
+  }
+
+  // Attempt 2 (slower): Read the microcode version off the procfs.
+  fp = fopen("/proc/cpuinfo", "r");
+  if (fp) {
+    char data[2048] = {0}; // lines should fit in 2K buf
+    size_t len = sizeof(data);
     while (!feof(fp)) {
       if (fgets(data, len, fp)) {
         if (strstr(data, "microcode") != NULL) {
@@ -683,6 +693,7 @@ juint os::cpu_microcode_revision() {
     }
     fclose(fp);
   }
+
   return result;
 }
 

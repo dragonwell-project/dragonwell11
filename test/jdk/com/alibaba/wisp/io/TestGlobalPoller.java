@@ -6,6 +6,7 @@
  * @modules java.base/sun.nio.ch
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.transparentAsync=true TestGlobalPoller
 */
 

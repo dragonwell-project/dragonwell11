@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -194,9 +194,9 @@ AC_DEFUN([PLATFORM_EXTRACT_VARS_FROM_OS],
       VAR_OS=windows
       VAR_OS_ENV=windows.cygwin
       ;;
-    *mingw*)
+    *msys* | *mingw*)
       VAR_OS=windows
-      VAR_OS_ENV=windows.msys
+      VAR_OS_ENV=windows.msys2
       ;;
     *aix*)
       VAR_OS=aix
@@ -291,8 +291,8 @@ AC_DEFUN([PLATFORM_EXTRACT_TARGET_AND_BUILD],
   OPENJDK_BUILD_CPU_ARCH="$VAR_CPU_ARCH"
   OPENJDK_BUILD_CPU_BITS="$VAR_CPU_BITS"
   OPENJDK_BUILD_CPU_ENDIAN="$VAR_CPU_ENDIAN"
-  OPENJDK_BUILD_LIBC="$VAR_LIBC"
   OPENJDK_BUILD_CPU_AUTOCONF="$build_cpu"
+  OPENJDK_BUILD_LIBC="$VAR_LIBC"
   OPENJDK_BUILD_ABI="$VAR_ABI"
   AC_SUBST(OPENJDK_BUILD_OS)
   AC_SUBST(OPENJDK_BUILD_OS_TYPE)
@@ -301,8 +301,8 @@ AC_DEFUN([PLATFORM_EXTRACT_TARGET_AND_BUILD],
   AC_SUBST(OPENJDK_BUILD_CPU_ARCH)
   AC_SUBST(OPENJDK_BUILD_CPU_BITS)
   AC_SUBST(OPENJDK_BUILD_CPU_ENDIAN)
-  AC_SUBST(OPENJDK_BUILD_LIBC)
   AC_SUBST(OPENJDK_BUILD_CPU_AUTOCONF)
+  AC_SUBST(OPENJDK_BUILD_LIBC)
   AC_SUBST(OPENJDK_BUILD_ABI)
 
   AC_MSG_CHECKING([openjdk-build os-cpu])
@@ -312,6 +312,7 @@ AC_DEFUN([PLATFORM_EXTRACT_TARGET_AND_BUILD],
     AC_MSG_CHECKING([openjdk-build C library])
     AC_MSG_RESULT([$OPENJDK_BUILD_LIBC])
   fi
+
   # Convert the autoconf OS/CPU value to our own data, into the VAR_OS/CPU/LIBC variables.
   PLATFORM_EXTRACT_VARS_FROM_OS($host_os)
   PLATFORM_EXTRACT_VARS_FROM_CPU($host_cpu)
@@ -348,6 +349,7 @@ AC_DEFUN([PLATFORM_EXTRACT_TARGET_AND_BUILD],
   AC_SUBST(OPENJDK_TARGET_CPU_ENDIAN)
   AC_SUBST(OPENJDK_TARGET_LIBC)
   AC_SUBST(OPENJDK_TARGET_CPU_AUTOCONF)
+  AC_SUBST(OPENJDK_TARGET_LIBC)
   AC_SUBST(OPENJDK_TARGET_ABI)
 
   AC_MSG_CHECKING([openjdk-target os-cpu])
@@ -480,9 +482,11 @@ AC_DEFUN([PLATFORM_SETUP_LEGACY_VARS_HELPER],
   fi
 
   # The new version string in JDK 9 also defined new naming of OS and ARCH for bundles
-  # Macosx is osx and x86_64 is x64
+  # The macOS bundle name was revised in JDK 17
+  #
+  # macosx is macos and x86_64 is x64
   if test "x$OPENJDK_$1_OS" = xmacosx; then
-    OPENJDK_$1_OS_BUNDLE="osx"
+    OPENJDK_$1_OS_BUNDLE="macos"
   else
     OPENJDK_$1_OS_BUNDLE="$OPENJDK_TARGET_OS"
   fi
@@ -491,10 +495,12 @@ AC_DEFUN([PLATFORM_SETUP_LEGACY_VARS_HELPER],
   else
     OPENJDK_$1_CPU_BUNDLE="$OPENJDK_$1_CPU"
   fi
+
   OPENJDK_$1_LIBC_BUNDLE=""
   if test "x$OPENJDK_$1_LIBC" = "xmusl"; then
     OPENJDK_$1_LIBC_BUNDLE="-$OPENJDK_$1_LIBC"
   fi
+
   OPENJDK_$1_BUNDLE_PLATFORM="${OPENJDK_$1_OS_BUNDLE}-${OPENJDK_$1_CPU_BUNDLE}${OPENJDK_$1_LIBC_BUNDLE}"
   AC_SUBST(OPENJDK_$1_BUNDLE_PLATFORM)
 
@@ -549,6 +555,8 @@ AC_DEFUN([PLATFORM_SETUP_LEGACY_VARS_HELPER],
     HOTSPOT_$1_CPU_DEFINE=PPC64
   elif test "x$OPENJDK_$1_CPU" = xppc64le; then
     HOTSPOT_$1_CPU_DEFINE=PPC64
+  elif test "x$OPENJDK_$1_CPU" = xriscv64; then
+    HOTSPOT_$1_CPU_DEFINE=RISCV64
 
   # The cpu defines below are for zero, we don't support them directly.
   elif test "x$OPENJDK_$1_CPU" = xsparc; then

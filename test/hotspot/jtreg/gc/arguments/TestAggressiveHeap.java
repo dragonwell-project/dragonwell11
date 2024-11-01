@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 
+package gc.arguments;
+
 /*
  * @test TestAggressiveHeap
  * @key gc
@@ -28,8 +30,9 @@
  * @requires vm.gc.Parallel
  * @summary Test argument processing for -XX:+AggressiveHeap.
  * @library /test/lib
+ * @library /
  * @modules java.base java.management
- * @run driver TestAggressiveHeap
+ * @run driver gc.arguments.TestAggressiveHeap
  */
 
 import java.lang.management.ManagementFactory;
@@ -64,7 +67,7 @@ public class TestAggressiveHeap {
         " *bool +UseParallelGC *= *true +\\{product\\} *\\{command line\\}";
 
     private static void testFlag() throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
+        ProcessBuilder pb = GCArguments.createJavaProcessBuilder(
             option, heapSizeOption, "-XX:+PrintFlagsFinal", "-version");
 
         OutputAnalyzer output = new OutputAnalyzer(pb.start());

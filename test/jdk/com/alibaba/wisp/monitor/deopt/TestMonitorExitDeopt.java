@@ -5,6 +5,7 @@
  * @library /test/lib
  * @build sun.hotspot.WhiteBox
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox sun.hotspot.WhiteBox$WhiteBoxPermission
  * @run main/othervm -XX:TieredStopAtLevel=1 -XX:CompileCommand=compileonly,TestMonitorExitDeopt::wrapper -XX:+PrintDeoptimizationDetails -XX:+IgnoreUnrecognizedVMOptions -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestMonitorExitDeopt
  * @run main/othervm -XX:-TieredCompilation -XX:CompileCommand=compileonly,TestMonitorExitDeopt::wrapper -XX:+PrintDeoptimizationDetails -XX:+IgnoreUnrecognizedVMOptions -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestMonitorExitDeopt

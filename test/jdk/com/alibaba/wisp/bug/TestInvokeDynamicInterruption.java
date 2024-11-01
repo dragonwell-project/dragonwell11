@@ -4,6 +4,7 @@
  * @modules java.base/jdk.internal.misc
  * @library /lib/testlibrary
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine  -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:+UseWispMonitor -Dcom.alibaba.wisp.enableHandOff=false -XX:+AllowParallelDefineClass TestInvokeDynamicInterruption
 */
 import com.alibaba.wisp.engine.WispEngine;

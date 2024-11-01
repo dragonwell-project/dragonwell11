@@ -3,6 +3,7 @@
  * @library /testlibrary
  * @summary test emit_guard_for_new in C2 will add control for load
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -Xcomp -XX:-TieredCompilation -Xbatch -XX:CompileOnly=TestWispEmitNewGuard.testMethod -XX:+PrintCompilation -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestWispEmitNewGuard
  */
 

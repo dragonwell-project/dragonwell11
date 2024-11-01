@@ -3054,6 +3054,7 @@ public class JavacParser implements Parser {
      */
     JCVariableDecl variableDeclaratorRest(int pos, JCModifiers mods, JCExpression type, Name name,
                                   boolean reqInit, Comment dc, boolean localDecl, boolean compound) {
+        boolean declaredUsingVar = false;
         type = bracketsOpt(type);
         JCExpression init = null;
         if (token.kind == EQ) {
@@ -3073,6 +3074,7 @@ public class JavacParser implements Parser {
                     //error - 'var' and arrays
                     reportSyntaxError(pos, Errors.VarNotAllowedArray);
                 } else {
+                    declaredUsingVar = true;
                     startPos = TreeInfo.getStartPos(mods);
                     if (startPos == Position.NOPOS)
                         startPos = TreeInfo.getStartPos(type);
@@ -3082,7 +3084,7 @@ public class JavacParser implements Parser {
             }
         }
         JCVariableDecl result =
-            toP(F.at(pos).VarDef(mods, name, type, init));
+            toP(F.at(pos).VarDef(mods, name, type, init, declaredUsingVar));
         attach(result, dc);
         result.startPos = startPos;
         return result;
@@ -3162,7 +3164,8 @@ public class JavacParser implements Parser {
             log.error(token.pos, Errors.VarargsAndOldArraySyntax);
         }
         type = bracketsOpt(type);
-        return toP(F.at(pos).VarDef(mods, name, type, null));
+        return toP(F.at(pos).VarDef(mods, name, type, null,
+                type != null && type.hasTag(IDENT) && ((JCIdent)type).name == names.var));
     }
 
     /** Resources = Resource { ";" Resources }
@@ -4261,8 +4264,7 @@ public class JavacParser implements Parser {
         }
 
         public void storeEnd(JCTree tree, int endpos) {
-            endPosMap.putAtIndex(tree, errorEndPos > endpos ? errorEndPos : endpos,
-                                 endPosMap.lookup(tree));
+            endPosMap.put(tree, errorEndPos > endpos ? errorEndPos : endpos);
         }
 
         protected <T extends JCTree> T to(T t) {
@@ -4276,7 +4278,7 @@ public class JavacParser implements Parser {
         }
 
         public int getEndPos(JCTree tree) {
-            int value = endPosMap.getFromIndex(endPosMap.lookup(tree));
+            int value = endPosMap.get(tree);
             // As long as Position.NOPOS==-1, this just returns value.
             return (value == -1) ? Position.NOPOS : value;
         }

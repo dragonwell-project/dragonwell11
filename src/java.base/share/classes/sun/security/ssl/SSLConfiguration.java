@@ -96,7 +96,7 @@ final class SSLConfiguration implements Cloneable {
     static final boolean allowLegacyMasterSecret =
         Utilities.getBooleanProperty("jdk.tls.allowLegacyMasterSecret", true);
 
-    // Allow full handshake without Extended Master Secret extension.
+    // Use TLS1.3 middlebox compatibility mode.
     static final boolean useCompatibilityMode = Utilities.getBooleanProperty(
             "jdk.tls.client.useCompatibilityMode", true);
 
@@ -111,6 +111,9 @@ final class SSLConfiguration implements Cloneable {
     // Set the max certificate chain length to 10
     static final int maxCertificateChainLength = GetIntegerAction.privilegedGetProperty(
             "jdk.tls.maxCertificateChainLength", 10);
+
+    static final boolean enableDtlsResumeCookie = Utilities.getBooleanProperty(
+            "jdk.tls.enableDtlsResumeCookie", true);
 
     // Is the extended_master_secret extension supported?
     static {

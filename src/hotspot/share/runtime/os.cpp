@@ -705,6 +705,11 @@ void* os::malloc(size_t size, MEMFLAGS memflags, const NativeCallStack& stack) {
   NMT_TrackingLevel level = MemTracker::tracking_level();
   size_t            nmt_header_size = MemTracker::malloc_header_size(level);
 
+  // Check for overflow.
+  if (size + nmt_header_size < size) {
+    return NULL;
+  }
+
 #ifndef ASSERT
   const size_t alloc_size = size + nmt_header_size;
 #else
@@ -863,7 +868,7 @@ int os::random() {
   while (true) {
     unsigned int seed = _rand_seed;
     unsigned int rand = random_helper(seed);
-    if (Atomic::cmpxchg(rand, &_rand_seed, seed) == seed) {
+    if (Atomic::cmpxchg(rand, &_rand_seed, seed, memory_order_relaxed) == seed) {
       return static_cast<int>(rand);
     }
   }
@@ -1017,8 +1022,14 @@ void os::print_date_and_time(outputStream *st, char* buf, size_t buflen) {
 
   struct tm tz;
   if (localtime_pd(&tloc, &tz) != NULL) {
-    ::strftime(buf, buflen, "%Z", &tz);
-    st->print("Time: %s %s", timestring, buf);
+    wchar_t w_buf[80];
+    size_t n = ::wcsftime(w_buf, 80, L"%Z", &tz);
+    if (n > 0) {
+      ::wcstombs(buf, w_buf, buflen);
+      st->print("Time: %s %s", timestring, buf);
+    } else {
+      st->print("Time: %s", timestring);
+    }
   } else {
     st->print("Time: %s", timestring);
   }
@@ -1212,30 +1223,36 @@ void os::print_location(outputStream* st, intptr_t x, bool verbose) {
   st->print_cr(INTPTR_FORMAT " is an unknown value", p2i(addr));
 }
 
+bool is_pointer_bad(intptr_t* ptr) {
+  return !is_aligned(ptr, sizeof(uintptr_t)) || !os::is_readable_pointer(ptr);
+}
+
+// Native stack isn't walkable for RISCV this way.
+// Native C frame and Java frame have different structure on RISCV.
+// A seperate implementation is provided under linux_riscv for RISCV.
+
+#if !defined(RISCV) || defined(ZERO)
 // Looks like all platforms can use the same function to check if C
 // stack is walkable beyond current frame. The check for fp() is not
 // necessary on Sparc, but it's harmless.
+// Returns true if this is not the case, i.e. the frame is possibly
+// the first C frame on the stack.
 bool os::is_first_C_frame(frame* fr) {
   // Load up sp, fp, sender sp and sender fp, check for reasonable values.
   // Check usp first, because if that's bad the other accessors may fault
   // on some architectures.  Ditto ufp second, etc.
-  uintptr_t fp_align_mask = (uintptr_t)(sizeof(address)-1);
-  // sp on amd can be 32 bit aligned.
-  uintptr_t sp_align_mask = (uintptr_t)(sizeof(int)-1);
 
-  uintptr_t usp    = (uintptr_t)fr->sp();
-  if ((usp & sp_align_mask) != 0) return true;
+  if (is_pointer_bad(fr->sp())) return true;
 
   uintptr_t ufp    = (uintptr_t)fr->fp();
-  if ((ufp & fp_align_mask) != 0) return true;
+  if (is_pointer_bad(fr->fp())) return true;
 
   uintptr_t old_sp = (uintptr_t)fr->sender_sp();
-  if ((old_sp & sp_align_mask) != 0) return true;
-  if (old_sp == 0 || old_sp == (uintptr_t)-1) return true;
+  if ((uintptr_t)fr->sender_sp() == (uintptr_t)-1 || is_pointer_bad(fr->sender_sp())) return true;
 
-  uintptr_t old_fp = (uintptr_t)fr->link();
-  if ((old_fp & fp_align_mask) != 0) return true;
-  if (old_fp == 0 || old_fp == (uintptr_t)-1 || old_fp == ufp) return true;
+  uintptr_t old_fp = (uintptr_t)fr->link_or_null();
+  if (old_fp == 0 || old_fp == (uintptr_t)-1 || old_fp == ufp ||
+    is_pointer_bad(fr->link_or_null())) return true;
 
   // stack grows downwards; if old_fp is below current fp or if the stack
   // frame is too large, either the stack is corrupted or fp is not saved
@@ -1246,7 +1263,7 @@ bool os::is_first_C_frame(frame* fr) {
 
   return false;
 }
-
+#endif
 
 // Set up the boot classpath.
 
@@ -1741,7 +1758,8 @@ bool os::create_stack_guard_pages(char* addr, size_t bytes) {
   return os::pd_create_stack_guard_pages(addr, bytes);
 }
 
-char* os::reserve_memory(size_t bytes, char* addr, size_t alignment_hint, int file_desc) {
+MACOS_ONLY(char* os::reserve_memory(size_t bytes, char* addr, size_t alignment_hint, int file_desc, bool executable))
+NOT_MACOS(char* os::reserve_memory(size_t bytes, char* addr, size_t alignment_hint, int file_desc)) {
   char* result = NULL;
 
   if (file_desc != -1) {
@@ -1752,7 +1770,8 @@ char* os::reserve_memory(size_t bytes, char* addr, size_t alignment_hint, int fi
       MemTracker::record_virtual_memory_reserve_and_commit((address)result, bytes, CALLER_PC);
     }
   } else {
-    result = pd_reserve_memory(bytes, addr, alignment_hint);
+    result = MACOS_ONLY(pd_reserve_memory(bytes, addr, alignment_hint, executable))
+             NOT_MACOS(pd_reserve_memory(bytes, addr, alignment_hint));
     if (result != NULL) {
       MemTracker::record_virtual_memory_reserve((address)result, bytes, CALLER_PC);
     }
@@ -1822,16 +1841,19 @@ void os::commit_memory_or_exit(char* addr, size_t size, size_t alignment_hint,
   MemTracker::record_virtual_memory_commit((address)addr, size, CALLER_PC);
 }
 
-bool os::uncommit_memory(char* addr, size_t bytes) {
+MACOS_ONLY(bool os::uncommit_memory(char* addr, size_t bytes, bool executable))
+NOT_MACOS(bool os::uncommit_memory(char* addr, size_t bytes)) {
   bool res;
   if (MemTracker::tracking_level() > NMT_minimal) {
     Tracker tkr(Tracker::uncommit);
-    res = pd_uncommit_memory(addr, bytes);
+    res = MACOS_ONLY(pd_uncommit_memory(addr, bytes, executable))
+          NOT_MACOS(pd_uncommit_memory(addr, bytes));
     if (res) {
       tkr.record((address)addr, bytes);
     }
   } else {
-    res = pd_uncommit_memory(addr, bytes);
+    res = MACOS_ONLY(pd_uncommit_memory(addr, bytes, executable))
+          NOT_MACOS(pd_uncommit_memory(addr, bytes));
   }
   return res;
 }

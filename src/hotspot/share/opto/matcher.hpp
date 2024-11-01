@@ -337,6 +337,10 @@ public:
   static const uint vector_ideal_reg(int len);
   static const uint vector_shift_count_ideal_reg(int len);
 
+  // Vector element basic type
+  static BasicType vector_element_basic_type(const Node* n);
+  static BasicType vector_element_basic_type(const MachNode* use, const MachOper* opnd);
+
   // CPU supports misaligned vectors store/load.
   static const bool misaligned_vectors_ok();
 

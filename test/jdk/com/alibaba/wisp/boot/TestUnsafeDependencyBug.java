@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary test bug fix of SharedSecrets and Unsafe class initializer circular dependency
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main TestUnsafeDependencyBug 10
  */
 

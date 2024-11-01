@@ -90,8 +90,14 @@
   f(com_alibaba_wisp_engine_WispTask) \
   f(com_alibaba_wisp_engine_WispControlGroup) \
   f(com_alibaba_wisp_engine_WispControlGroup_CpuLimit) \
-  f(com_alibaba_rcm_internal_AbstractResourceContainer) \
+  f(com_alibaba_rcm_AbstractResourceContainer) \
   //end
+
+#if INCLUDE_G1GC
+#define BASIC_JAVA_CLASSES_DO_PART_TENANT(f) \
+  f(com_alibaba_tenant_TenantContainer) \
+  //end
+#endif
 
 #define BASIC_JAVA_CLASSES_DO(f) \
         BASIC_JAVA_CLASSES_DO_PART1(f) \
@@ -369,6 +375,7 @@ class java_lang_Thread : AllStatic {
   static int _tid_offset;
   static int _thread_status_offset;
   static int _park_blocker_offset;
+  static int _inheritedTenantContainer_offset;
   static int _resourceContainer_offset;
 
   static void compute_offsets();
@@ -404,6 +411,8 @@ class java_lang_Thread : AllStatic {
   static oop context_class_loader(oop java_thread);
   // Control context
   static oop inherited_access_control_context(oop java_thread);
+  // Tenant container
+  static oop inherited_tenant_container(oop java_thread);
   // Stack size hint
   static jlong stackSize(oop java_thread);
   // Thread ID
@@ -1550,6 +1559,46 @@ class java_util_concurrent_locks_AbstractOwnableSynchronizer : AllStatic {
   static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
 };
 
+#if INCLUDE_G1GC
+
+class G1TenantAllocationContext;
+
+class com_alibaba_tenant_TenantContainer : AllStatic {
+private:
+  static int _tenant_id_offset;
+  static int _allocation_context_offset;
+  static int _tenant_state_offset;
+public:
+  static jlong get_tenant_id(oop obj);
+  static G1TenantAllocationContext* get_tenant_allocation_context(oop obj);
+  static void set_tenant_allocation_context(oop obj, G1TenantAllocationContext* context);
+  static oop get_tenant_state(oop obj);
+  static bool is_dead(oop obj);
+  static void compute_offsets();
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+};
+
+class com_alibaba_tenant_TenantState : AllStatic {
+  friend class JavaClasses;
+public:
+  // C++ level definition of tenant status
+  enum {
+    TS_STARTING = 0,
+    TS_RUNNING = 1,
+    TS_STOPPING = 2,
+    TS_DEAD = 3,
+    TS_SIZE,
+  };
+
+private:
+  // offsets
+  static int _static_state_offsets[TS_SIZE];
+public:
+  static int state_of(oop tenant_obj);
+};
+
+#endif // INCLUDE_G1GC
+
 // Use to declare fields that need to be injected into Java classes
 // for the JVM to use.  The name_index and signature_index are
 // declared in vmSymbols.  The may_be_java flag is used to declare
@@ -1677,7 +1726,7 @@ public:
   static void compute_offsets();
 };
 
-class com_alibaba_rcm_internal_AbstractResourceContainer: AllStatic {
+class com_alibaba_rcm_AbstractResourceContainer: AllStatic {
 private:
   static int _id_offset;
 public:

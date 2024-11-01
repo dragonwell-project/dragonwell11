@@ -3,7 +3,7 @@
  * @summary Test ONLY inheritedResourceContainer is inherited from parent
  * @library /lib/testlibrary
  * @modules java.base/jdk.internal.misc
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @run main TestInheritedContainer
  */
 

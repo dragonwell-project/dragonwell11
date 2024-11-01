@@ -152,7 +152,9 @@ bool os::Aix::get_frame_at_stack_banging_point(JavaThread* thread, ucontext_t* u
     // method returns the Java sender of the current frame.
     *fr = os::fetch_frame_from_context(uc);
     if (!fr->is_first_java_frame()) {
-      assert(fr->safe_for_sender(thread), "Safety check");
+      // get_frame_at_stack_banging_point() is only called when we
+      // have well defined stacks so java_sender() calls do not need
+      // to assert safe_for_sender() first.
       *fr = fr->java_sender();
     }
   } else {
@@ -169,7 +171,7 @@ bool os::Aix::get_frame_at_stack_banging_point(JavaThread* thread, ucontext_t* u
       address lr = ucontext_get_lr(uc);
       *fr = frame(sp, lr);
       if (!fr->is_java_frame()) {
-        assert(fr->safe_for_sender(thread), "Safety check");
+        // See java_sender() comment above.
         assert(!fr->is_first_frame(), "Safety check");
         *fr = fr->java_sender();
       }
@@ -250,7 +252,7 @@ JVM_handle_aix_signal(int sig, siginfo_t* info, void* ucVoid, int abort_if_unrec
   // SafeFetch 32 handling:
   // - make it work if _thread is null
   // - make it use the standard os::...::ucontext_get/set_pc APIs
-  if (uc) {
+  if ((sig == SIGSEGV || sig == SIGBUS) && uc) {
     address const pc = os::Aix::ucontext_get_pc(uc);
     if (pc && StubRoutines::is_safefetch_fault(pc)) {
       os::Aix::ucontext_set_pc(uc, StubRoutines::continuation_for_safefetch_fault(pc));

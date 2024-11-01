@@ -41,6 +41,7 @@
 #include "gc/g1/g1InCSetState.hpp"
 #include "gc/g1/g1MonitoringSupport.hpp"
 #include "gc/g1/g1SurvivorRegions.hpp"
+#include "gc/g1/g1TenantAllocationContext.hpp"
 #include "gc/g1/g1YCTypes.hpp"
 #include "gc/g1/heapRegionManager.hpp"
 #include "gc/g1/heapRegionSet.hpp"
@@ -391,11 +392,12 @@ private:
   // humongous region.
   HeapWord* humongous_obj_allocate_initialize_regions(uint first,
                                                       uint num_regions,
-                                                      size_t word_size);
+                                                      size_t word_size,
+                                                      AllocationContext_t context);
 
   // Attempt to allocate a humongous object of the given size. Return
   // NULL if unsuccessful.
-  HeapWord* humongous_obj_allocate(size_t word_size);
+  HeapWord* humongous_obj_allocate(size_t word_size, AllocationContext_t context);
 
   // The following two methods, allocate_new_tlab() and
   // mem_allocate(), are the two main entry points from the runtime
@@ -443,7 +445,7 @@ private:
   // Second-level mutator allocation attempt: take the Heap_lock and
   // retry the allocation attempt, potentially scheduling a GC
   // pause. This should only be used for non-humongous allocations.
-  HeapWord* attempt_allocation_slow(size_t word_size);
+  HeapWord* attempt_allocation_slow(size_t word_size, AllocationContext_t context);
 
   // Takes the Heap_lock and attempts a humongous allocation. It can
   // potentially schedule a GC pause.
@@ -454,6 +456,7 @@ private:
   // specifies whether the mutator alloc region is expected to be NULL
   // or not.
   HeapWord* attempt_allocation_at_safepoint(size_t word_size,
+                                            AllocationContext_t context,
                                             bool expect_null_mutator_alloc_region);
 
   // These methods are the "callbacks" from the G1AllocRegion class.
@@ -488,6 +491,7 @@ private:
   // This function does everything necessary/possible to satisfy a
   // failed allocation request (including collection, expansion, etc.)
   HeapWord* satisfy_failed_allocation(size_t word_size,
+                                      AllocationContext_t context,
                                       bool* succeeded);
   // Internal helpers used during full GC to split it up to
   // increase readability.
@@ -501,6 +505,7 @@ private:
 
   // Helper method for satisfy_failed_allocation()
   HeapWord* satisfy_failed_allocation_helper(size_t word_size,
+                                             AllocationContext_t context,
                                              bool do_gc,
                                              bool clear_all_soft_refs,
                                              bool expect_null_mutator_alloc_region,
@@ -510,7 +515,7 @@ private:
   // to support an allocation of the given "word_size".  If
   // successful, perform the allocation and return the address of the
   // allocated block, or else "NULL".
-  HeapWord* expand_and_allocate(size_t word_size);
+  HeapWord* expand_and_allocate(size_t word_size, AllocationContext_t context);
 
   // Process any reference objects discovered.
   void process_discovered_references(G1ParScanThreadStateSet* per_thread_states);
@@ -1411,11 +1416,41 @@ public:
   void print_cset_rsets() PRODUCT_RETURN;
   void print_all_rsets() PRODUCT_RETURN;
 
+  // Tenant allocation context manipulation
+  void create_tenant_allocation_context(oop tenant_obj);
+  void destroy_tenant_allocation_context(jlong context);
+  oop tenant_container_of(oop obj);
+
 public:
   size_t pending_card_num();
 
 private:
   size_t _max_heap_capacity;
+
+private:
+  // Context for on-going GC cause
+  AllocationContext_t _gc_cause_context;
+public:
+  void set_gc_cause_context(AllocationContext_t context)  { _gc_cause_context = context;    }
+  AllocationContext_t gc_cause_context()                  { return _gc_cause_context;       }
+};
+
+//
+class G1ContextCauseSetter : public StackObj {
+private:
+  G1CollectedHeap* _g1h;
+public:
+  G1ContextCauseSetter(G1CollectedHeap* g1h, AllocationContext_t context)
+    : _g1h(g1h) {
+    if (TenantHeapIsolation) {
+      G1CollectedHeap::heap()->set_gc_cause_context(context);
+    }
+  }
+  ~G1ContextCauseSetter() {
+    if (TenantHeapIsolation) {
+      G1CollectedHeap::heap()->set_gc_cause_context(AllocationContext::system());
+    }
+  }
 };
 
 class G1ParEvacuateFollowersClosure : public VoidClosure {

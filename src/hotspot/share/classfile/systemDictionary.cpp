@@ -1171,7 +1171,7 @@ InstanceKlass* SystemDictionary::load_shared_class(
   if (ik != NULL &&
       ik->is_shared_boot_class() && class_loader.is_null()) {
     Handle protection_domain;
-    return load_shared_class(ik, class_loader, protection_domain, THREAD);
+    return load_shared_class(ik, class_loader, protection_domain, NULL, THREAD);
   }
   return NULL;
 }
@@ -1271,7 +1271,9 @@ bool SystemDictionary::is_shared_class_visible(Symbol* class_name,
 
 InstanceKlass* SystemDictionary::load_shared_class(InstanceKlass* ik,
                                                    Handle class_loader,
-                                                   Handle protection_domain, TRAPS) {
+                                                   Handle protection_domain,
+                                                   const ClassFileStream *cfs,
+                                                   TRAPS) {
 
   if (ik != NULL) {
     Symbol* class_name = ik->name();
@@ -1318,7 +1320,7 @@ InstanceKlass* SystemDictionary::load_shared_class(InstanceKlass* ik,
     }
 
     InstanceKlass* new_ik = KlassFactory::check_shared_class_file_load_hook(
-        ik, class_name, class_loader, protection_domain, CHECK_NULL);
+        ik, class_name, class_loader, protection_domain, cfs, CHECK_NULL);
     if (new_ik != NULL) {
       // The class is changed by CFLH. Return the new class. The shared class is
       // not used.
@@ -2032,6 +2034,17 @@ void SystemDictionary::resolve_well_known_classes(TRAPS) {
   InstanceKlass::cast(WK_KLASS(WeakReference_klass))->set_reference_type(REF_WEAK);
   InstanceKlass::cast(WK_KLASS(FinalReference_klass))->set_reference_type(REF_FINAL);
   InstanceKlass::cast(WK_KLASS(PhantomReference_klass))->set_reference_type(REF_PHANTOM);
+
+  // Tenant support
+  WKID tenant_group_start = WK_KLASS_ENUM_NAME(com_alibaba_tenant_TenantGlobals_klass);
+  WKID tenant_group_end   = WK_KLASS_ENUM_NAME(com_alibaba_tenant_TenantContainer_klass);
+  resolve_wk_klasses_until(tenant_group_start, scan, CHECK);
+  if (MultiTenant) {
+    resolve_wk_klasses_through(tenant_group_end, scan, CHECK);
+  } else {
+    // Skip the tenant related classes, if not enabled.
+    scan = WKID(tenant_group_end + 1);
+  }
 
   // JSR 292 classes
   WKID jsr292_group_start = WK_KLASS_ENUM_NAME(MethodHandle_klass);

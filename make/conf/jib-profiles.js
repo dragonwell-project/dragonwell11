@@ -232,7 +232,7 @@ var getJibProfilesCommon = function (input, data) {
     // List of the main profile names used for iteration
     common.main_profile_names = [
         "linux-x64", "linux-x86", "macosx-x64", "solaris-x64",
-        "solaris-sparcv9", "windows-x64", "windows-x86",
+        "solaris-sparcv9", "windows-x64", "windows-x86", "windows-aarch64",
         "linux-aarch64", "linux-arm32", "linux-arm64", "linux-arm-vfp-hflt",
         "linux-arm-vfp-hflt-dyn"
     ];
@@ -415,7 +415,7 @@ var getJibProfilesProfiles = function (input, common, data) {
             target_cpu: "x64",
             dependencies: ["devkit", "graalunit_lib"],
             configure_args: concat(common.configure_args_64bit, "--with-zlib=system",
-                "--with-macosx-version-max=10.9.0"),
+                "--with-macosx-version-max=10.12.00"),
         },
 
         "solaris-x64": {
@@ -447,6 +447,15 @@ var getJibProfilesProfiles = function (input, common, data) {
             build_cpu: "x64",
             dependencies: ["devkit"],
             configure_args: concat(common.configure_args_32bit),
+        },
+
+        "windows-aarch64": {
+            target_os: "windows",
+            target_cpu: "aarch64",
+            dependencies: ["devkit", "build_devkit"],
+            configure_args: [
+                "--openjdk-target=aarch64-unknown-cygwin",
+            ],
         },
 
         "linux-aarch64": {
@@ -598,11 +607,7 @@ var getJibProfilesProfiles = function (input, common, data) {
             profiles[bootcyclePrebuiltName].default_make_targets = [ "product-images" ];
         });
 
-    //
     // Define artifacts for profiles
-    //
-    // Macosx bundles are named osx
-    // tar.gz.
     var artifactData = {
         "linux-x64": {
             platform: "linux-x64",
@@ -611,7 +616,7 @@ var getJibProfilesProfiles = function (input, common, data) {
             platform: "linux-x86",
         },
         "macosx-x64": {
-            platform: "osx-x64",
+            platform: "macos-x64",
             jdk_subdir: "jdk-" + data.version +  ".jdk/Contents/Home",
         },
         "solaris-x64": {
@@ -626,6 +631,10 @@ var getJibProfilesProfiles = function (input, common, data) {
         },
         "windows-x86": {
             platform: "windows-x86",
+            jdk_suffix: "zip",
+        },
+        "windows-aarch64": {
+            platform: "windows-aarch64",
             jdk_suffix: "zip",
         },
        "linux-aarch64": {
@@ -857,7 +866,7 @@ var getJibProfilesDependencies = function (input, common) {
         macosx_x64: "Xcode11.3.1-MacOSX10.15+1.0",
         solaris_x64: "SS12u4-Solaris11u1+1.0",
         solaris_sparcv9: "SS12u4-Solaris11u1+1.1",
-        windows_x64: "VS2017-15.9.16+1.0",
+        windows_x64: "VS2017-15.9.16+1.1",
         linux_aarch64: (input.profile != null && input.profile.indexOf("arm64") >= 0
                     ? "gcc-linaro-aarch64-linux-gnu-4.8-2013.11_linux+1.0"
                     : "gcc7.3.0-Fedora27+1.1"),
@@ -873,6 +882,16 @@ var getJibProfilesDependencies = function (input, common) {
     var devkit_platform = (input.target_cpu == "x86"
         ? input.target_os + "_x64"
         : input.target_platform);
+    if (input.target_platform == "windows_aarch64") {
+        devkit_platform = "windows_x64";
+    }
+    var devkit_cross_prefix = "";
+    if (!(input.target_os == "windows")) {
+        if (input.build_platform != input.target_platform
+           && input.build_platform != devkit_platform) {
+            devkit_cross_prefix = input.build_platform + "-to-";
+        }
+    }
 
     var boot_jdk_platform = (input.build_os == "macosx" ? "osx" : input.build_os)
         + "-" + input.build_cpu;
@@ -920,10 +939,9 @@ var getJibProfilesDependencies = function (input, common) {
         jtreg: {
             server: "jpg",
             product: "jtreg",
-            version: "5.1",
-            build_number: "b01",
-            checksum_file: "MD5_VALUES",
-            file: "bundles/jtreg_bin-5.1.zip",
+            version: "6",
+            build_number: "1",
+            file: "bundles/jtreg-6+1.zip",
             environment_name: "JT_HOME",
             environment_path: input.get("jtreg", "install_path") + "/jtreg/bin"
         },
@@ -1187,13 +1205,17 @@ var versionArgs = function(input, common) {
                       "--with-version-pre=" + version_numbers.get("DEFAULT_PROMOTED_VERSION_PRE"),
                       "--without-version-opt");
     } else if (input.build_type == "ci") {
-        var optString = input.build_id_data.ciBuildNumber;
+        var ciBuildNumber = input.build_id_data.ciBuildNumber;
         var preString = input.build_id_data.projectName;
         if (preString == "jdk") {
             preString = version_numbers.get("DEFAULT_PROMOTED_VERSION_PRE");
         }
         args = concat(args, "--with-version-pre=" + preString,
-                     "--with-version-opt=" + optString);
+                      "--with-version-opt=" + ciBuildNumber);
+        if (input.target_os == "macosx") {
+            args = concat(args, "--with-macosx-bundle-build-version="
+                          + common.build_number + "." + ciBuildNumber);
+        }
     } else {
         args = concat(args, "--with-version-opt=" + common.build_id);
     }

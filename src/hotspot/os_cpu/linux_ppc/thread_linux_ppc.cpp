@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012, 2019 SAP SE. All rights reserved.
+ * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2022 SAP SE. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,6 +30,8 @@
 frame JavaThread::pd_last_frame() {
   assert(has_last_Java_frame(), "must have last_Java_sp() when suspended");
 
+  // Only called by current thread or when the thread is suspended.
+  // No memory barrier needed, here. Only writer must write sp last (for use by profiler).
   intptr_t* sp = last_Java_sp();
   address pc = _anchor.last_Java_pc();
 
@@ -49,7 +51,12 @@ bool JavaThread::pd_get_top_frame_for_profiling(frame* fr_addr, void* ucontext, 
   // If we have a last_Java_frame, then we should use it even if
   // isInJava == true.  It should be more reliable than ucontext info.
   if (has_last_Java_frame() && frame_anchor()->walkable()) {
-    *fr_addr = pd_last_frame();
+    intptr_t* sp = last_Java_sp();
+    address pc = _anchor.last_Java_pc();
+    // pc can be seen as null because not all writers use store pc + release store sp.
+    // Simply discard the sample in this very rare case.
+    if (pc == NULL) return false;
+    *fr_addr = frame(sp, pc);
     return true;
   }
 
@@ -58,13 +65,14 @@ bool JavaThread::pd_get_top_frame_for_profiling(frame* fr_addr, void* ucontext, 
   // if we were running Java code when SIGPROF came in.
   if (isInJava) {
     ucontext_t* uc = (ucontext_t*) ucontext;
-    frame ret_frame((intptr_t*)uc->uc_mcontext.regs->gpr[1/*REG_SP*/],
-                     (address)uc->uc_mcontext.regs->nip);
+    address pc = (address)uc->uc_mcontext.regs->nip;
 
-    if (ret_frame.pc() == NULL) {
+    if (pc == NULL) {
       // ucontext wasn't useful
       return false;
     }
+
+    frame ret_frame((intptr_t*)uc->uc_mcontext.regs->gpr[1/*REG_SP*/], pc);
 
     if (ret_frame.fp() == NULL) {
       // The found frame does not have a valid frame pointer.

@@ -54,7 +54,9 @@ protected:
     G1CollectedHeap* _g1h;
     G1CMBitMap* _bitmap;
     G1FullGCCompactionPoint* _cp;
+    G1FullGCCompactionPoint* _root_cp;
     uint _humongous_regions_removed;
+    uint _worker_id;
 
     virtual void prepare_for_compaction(HeapRegion* hr);
     void prepare_for_compaction_work(G1FullGCCompactionPoint* cp, HeapRegion* hr);
@@ -63,7 +65,8 @@ protected:
 
   public:
     G1CalculatePointersClosure(G1CMBitMap* bitmap,
-                               G1FullGCCompactionPoint* cp);
+                               G1FullGCCompactionPoint* cp,
+                               uint worker_id);
 
     void update_sets();
     bool do_heap_region(HeapRegion* hr);
@@ -78,6 +81,7 @@ protected:
     size_t apply(oop object);
   };
 
+public:
   class G1RePrepareClosure : public StackObj {
     G1FullGCCompactionPoint* _cp;
     HeapRegion* _current;

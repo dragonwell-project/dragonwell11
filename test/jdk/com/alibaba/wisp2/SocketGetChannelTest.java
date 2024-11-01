@@ -6,6 +6,7 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main SocketGetChannelTest
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 SocketGetChannelTest
  */

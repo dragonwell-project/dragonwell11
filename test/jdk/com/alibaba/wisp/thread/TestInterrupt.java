@@ -2,6 +2,7 @@
  * @test
  * @summary test thread.interrupt() of wispTask
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestInterrupt
  */
 

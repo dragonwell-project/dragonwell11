@@ -481,7 +481,6 @@ BytecodeInterpreter::run(interpreterState istate) {
 #ifdef ASSERT
   if (istate->_msg != initialize) {
     assert(labs(istate->_stack_base - istate->_stack_limit) == (istate->_method->max_stack() + 1), "bad stack limit");
-    IA32_ONLY(assert(istate->_stack_limit == istate->_thread->last_Java_sp() + 1, "wrong"));
   }
   // Verify linkages.
   interpreterState l = istate;
@@ -494,13 +493,13 @@ BytecodeInterpreter::run(interpreterState istate) {
   interpreterState orig = istate;
 #endif
 
-  register intptr_t*        topOfStack = (intptr_t *)istate->stack(); /* access with STACK macros */
-  register address          pc = istate->bcp();
-  register jubyte opcode;
-  register intptr_t*        locals = istate->locals();
-  register ConstantPoolCache*    cp = istate->constants(); // method()->constants()->cache()
+  intptr_t*        topOfStack = (intptr_t *)istate->stack(); /* access with STACK macros */
+  address          pc = istate->bcp();
+  jubyte opcode;
+  intptr_t*        locals = istate->locals();
+  ConstantPoolCache*    cp = istate->constants(); // method()->constants()->cache()
 #ifdef LOTS_OF_REGS
-  register JavaThread*      THREAD = istate->thread();
+  JavaThread*      THREAD = istate->thread();
 #else
 #undef THREAD
 #define THREAD istate->thread()
@@ -589,7 +588,7 @@ BytecodeInterpreter::run(interpreterState istate) {
 /* 0xF8 */ &&opc_default,     &&opc_default,        &&opc_default,      &&opc_default,
 /* 0xFC */ &&opc_default,     &&opc_default,        &&opc_default,      &&opc_default
   };
-  register uintptr_t *dispatch_table = (uintptr_t*)&opclabels_data[0];
+  uintptr_t *dispatch_table = (uintptr_t*)&opclabels_data[0];
 #endif /* USELABELS */
 
 #ifdef ASSERT

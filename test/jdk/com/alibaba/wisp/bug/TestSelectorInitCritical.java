@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary Test the fix to NPE issue caused by unexpected co-routine yielding on synchronized(lock) in SelectorProvider.provider() during initialization of WispEngine
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true -XX:+UseWispMonitor TestSelectorInitCritical
 */
 

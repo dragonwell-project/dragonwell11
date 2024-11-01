@@ -157,9 +157,13 @@ class JfrConfigureFlightRecorderDCmd : public DCmdWithParser {
   DCmdArgument<bool>  _sample_threads;
   DCmdArgument<bool>  _sample_object_allocations;
   DCmdArgument<jlong> _object_allocations_sampling_interval;
+  bool _verbose;
 
  public:
   JfrConfigureFlightRecorderDCmd(outputStream* output, bool heap);
+  void set_verbose(bool verbose) {
+    _verbose = verbose;
+  }
   static const char* name() {
     return "JFR.configure";
   }

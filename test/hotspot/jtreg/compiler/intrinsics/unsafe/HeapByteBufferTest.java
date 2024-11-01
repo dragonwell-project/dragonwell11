@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2016, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -29,9 +29,24 @@
  * @modules java.base/jdk.internal.misc
  * @library /test/lib
  *
- * @run main/othervm -XX:+UnlockDiagnosticVMOptions -XX:-UseUnalignedAccesses -Djdk.test.lib.random.seed=0
+ * @run main/othervm -XX:+UnlockDiagnosticVMOptions -XX:-UseUnalignedAccesses -Djdk.test.lib.random.seed=42
  *      HeapByteBufferTest
- * @run main/othervm -Djdk.test.lib.random.seed=0
+ * @run main/othervm -Djdk.test.lib.random.seed=42
+ *      HeapByteBufferTest
+ */
+
+/**
+ * @test
+ * @bug 8282555
+ * @summary intermittent, check that spilling MoveF2I etc produce memory edge
+ * @modules java.base/jdk.internal.misc
+ * @library /test/lib
+ *
+ * @run main/othervm -Djdk.test.lib.random.seed=42
+ *      -XX:+UnlockDiagnosticVMOptions -XX:+StressGCM -XX:+OptoScheduling
+ *      HeapByteBufferTest
+ * @run main/othervm
+ *      -XX:+UnlockDiagnosticVMOptions -XX:+StressGCM -XX:+OptoScheduling
  *      HeapByteBufferTest
  */
 

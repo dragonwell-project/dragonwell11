@@ -3,6 +3,7 @@
  * @library /test/lib
  * @summary Test jstack coroutine output
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.transparentAsync=true -XX:+UseWispMonitor TestMultiCoroutineStack
  */
 

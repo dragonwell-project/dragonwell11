@@ -145,7 +145,7 @@ public class WispEngine {
             }
 
             @Override
-            public boolean tryStartThreadAsWisp(Thread thread, Runnable target) {
+            public boolean tryStartThreadAsWisp(Thread thread, Runnable target, long stackSize) {
                 return false;
             }
 
@@ -166,6 +166,21 @@ public class WispEngine {
 
             @Override
             public StackTraceElement[] getStackTrace(WispTask task) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public WispTask getWispTaskById(long id) {
+                return null;
+            }
+
+            @Override
+            public Thread.State getState(Thread thread) {
+                return null;
+            }
+
+            @Override
+            public int poll(SelectableChannel channel, int interestOps, long timeout) throws IOException {
                 throw new UnsupportedOperationException();
             }
         });

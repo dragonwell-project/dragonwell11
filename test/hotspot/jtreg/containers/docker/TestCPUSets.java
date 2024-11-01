@@ -24,6 +24,7 @@
 
 /*
  * @test
+ * @key cgroups
  * @summary Test JVM's awareness of cpu sets (cpus and mems)
  * @requires docker.support
  * @requires (os.arch != "s390x")
@@ -56,7 +57,7 @@ public class TestCPUSets {
 
 
         Common.prepareWhiteBox();
-        DockerTestUtils.buildJdkDockerImage(imageName, "Dockerfile-BasicTest", "jdk-docker");
+        DockerTestUtils.buildJdkContainerImage(imageName);
 
         try {
             // Sanity test the cpu sets reader and parser

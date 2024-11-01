@@ -6,6 +6,7 @@
 # @compile TestSimpleWisp.java
 #
 # @requires os.family == "linux"
+# @requires os.arch != "riscv64"
 # @summary test coroutine and -XX:+LogCompilation could work together
 # @run shell testLogCompilation.sh
 #

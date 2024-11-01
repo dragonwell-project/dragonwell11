@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -98,6 +99,7 @@
 #include "runtime/threadCritical.hpp"
 #include "runtime/threadSMR.inline.hpp"
 #include "runtime/threadStatisticalInfo.hpp"
+#include "runtime/threadWXSetters.inline.hpp"
 #include "runtime/timer.hpp"
 #include "runtime/timerTrace.hpp"
 #include "runtime/vframe.inline.hpp"
@@ -318,6 +320,12 @@ Thread::Thread() {
   if (barrier_set != NULL) {
     barrier_set->on_thread_create(this);
   }
+
+  MACOS_AARCH64_ONLY(DEBUG_ONLY(_wx_init = false));
+
+  if (UseG1GC) {
+    _alloc_context = AllocationContext::system();
+  }
 }
 
 void Thread::initialize_thread_current() {
@@ -368,6 +376,8 @@ void Thread::register_thread_stack_with_NMT() {
 void Thread::call_run() {
   // At this point, Thread object should be fully initialized and
   // Thread::current() should be set.
+
+  MACOS_AARCH64_ONLY(this->init_wx());
 
   register_thread_stack_with_NMT();
 
@@ -1065,6 +1075,151 @@ static void initialize_class(Symbol* class_name, TRAPS) {
   InstanceKlass::cast(klass)->initialize(CHECK);
 }
 
+// NOTE: active TLABs will only be retired & deleted at safepoint or thread ending.
+//       it is OK to destroy a G1TenantAllocationContext while its previously
+//       used TLABs are still linked in any mutator threads, because no further alloc requests
+//       can happen on this stale TLAB, its remaining free space cannot be
+//       used by any other threads or tenants either.
+
+#if INCLUDE_G1GC
+void Thread::make_all_tlabs_parsable(bool retire, bool delete_saved) {
+  assert(UseG1GC && TenantHeapIsolation
+         && UseTLAB && UsePerTenantTLAB, "pre-condition");
+
+  for (ThreadLocalAllocBuffer* tlab = &(this->tlab()); tlab != NULL;
+       tlab = tlab->next()) {
+    tlab->make_parsable(retire);
+  }
+
+  if (delete_saved) {
+    assert(retire, "should only delete after retire!");
+    ThreadLocalAllocBuffer* tlab = this->tlab().next();
+    while (tlab != NULL) {
+      ThreadLocalAllocBuffer* next = tlab->next();
+      delete tlab;
+      tlab = next;
+    }
+
+    this->tlab().set_next(NULL);
+  }
+}
+
+#ifndef SHARE_VM_GC_IMPLEMENTATION_G1_TENANT_CONTEXT_HPP
+#include "gc/g1/g1TenantAllocationContext.hpp"
+#endif
+
+void Thread::clean_tlab_for(const G1TenantAllocationContext* context) {
+  assert(UseG1GC && TenantHeapIsolation
+         && UseTLAB && UsePerTenantTLAB, "sanity");
+  assert(SafepointSynchronize::is_at_safepoint()
+         && Thread::current()->is_VM_thread(), "pre-condition");
+  guarantee(context != G1TenantAllocationContexts::system_context(),
+            "never clean root tenant context");
+
+  if (this->is_Java_thread()) {
+    JavaThread* java_thread = (JavaThread*)this;
+    // make sure TLAB's tenant allocation context is same as Java thread's
+    guarantee(java_thread->tenant_allocation_context() == this->tlab().tenant_allocation_context(),
+              "Inconsistent tenant allocation context thread=" PTR_FORMAT ",context=" PTR_FORMAT
+                      ", but its TLAB's context=" PTR_FORMAT,
+                      reinterpret_cast<uintptr_t>(java_thread),
+                      reinterpret_cast<uintptr_t>(java_thread->tenant_allocation_context()),
+                      reinterpret_cast<uintptr_t>(this->tlab().tenant_allocation_context()));
+  }
+
+  // if the to-be-deleted context is current active context,
+  // we just completely switch to ROOT tenant's TLAB
+  const G1TenantAllocationContext* context_to_search =
+          this->tlab().tenant_allocation_context() == context ? G1TenantAllocationContexts::system_context() : context;
+
+  for (ThreadLocalAllocBuffer* tlab = &(this->tlab()), *prev = NULL;
+       tlab != NULL;
+       prev = tlab, tlab = tlab->next())
+  {
+    if (tlab->tenant_allocation_context() == context_to_search) {
+      guarantee(prev != NULL, "Cannot be an in-use TLAB");
+      if (context_to_search == G1TenantAllocationContexts::system_context()) {
+        guarantee(this->tlab().tenant_allocation_context() == context,
+                  "must be in-use TLAB");
+        guarantee(tlab != &(this->tlab()),
+                  "Cannot be root context");
+        this->tlab().make_parsable(true);
+        if (this->is_Java_thread()) {
+          // set_tenantObj will do search and swap, without changing the list structure
+          ((JavaThread*)this)->set_tenantObj(NULL);
+        } else {
+          this->tlab().swap_content(tlab);
+        }
+      } else {
+        guarantee(this->tlab().tenant_allocation_context() != context,
+                  "cannot be in-use TLAB");
+        tlab->make_parsable(true);
+      }
+      // remove the 'dead' TLAB from list
+      ThreadLocalAllocBuffer* next_tlab = tlab->next();
+      prev->set_next(next_tlab);
+      delete tlab;
+      return;
+    }
+  }
+}
+
+const AllocationContext_t& Thread::allocation_context() const {
+  assert(UseG1GC, "Only G1 policy supported");
+  return _alloc_context;
+}
+void Thread::set_allocation_context(AllocationContext_t context) {
+  assert(UseG1GC, "Only G1 policy supported");
+  assert(Thread::current() == this
+         || (SafepointSynchronize::is_at_safepoint() && Thread::current()->is_VM_thread()
+             && VMThread::vm_operation() != NULL
+             && VMThread::vm_operation()->type() == VM_Operation::VMOp_DestroyG1TenantAllocationContext),
+         "Only allowed to be set by self thread or tenant destruction vm_op");
+
+  _alloc_context = context;
+
+  if (UseG1GC && TenantHeapIsolation
+      && UseTLAB
+      && this->is_Java_thread()) { // only for Java thread, though _tlab is in Thread
+
+    if (UsePerTenantTLAB) {
+      G1TenantAllocationContext* tac = context.tenant_allocation_context();
+      ThreadLocalAllocBuffer* tlab = &(this->tlab());
+      assert(tlab != NULL, "Attach to same tenant twice!");
+
+      if (tlab->tenant_allocation_context() == tac) {
+        // no need to switch TLAB
+        assert(tac == G1TenantAllocationContexts::system_context(),
+               "Must be ROOT allocation context");
+        return;
+      }
+
+      // traverse saved TLAB list to search used TALBs for 'tac'
+      do {
+        tlab = tlab->next();
+        if (tlab != NULL && tlab->tenant_allocation_context() == tac) {
+          this->tlab().swap_content(tlab);
+          break;
+        }
+      } while (tlab != NULL);
+
+      // cannot find a saved TLAB, this is the first time current thread running into 'tac'
+      if (tlab == NULL) {
+        ThreadLocalAllocBuffer* new_tlab = new ThreadLocalAllocBuffer();
+        new_tlab->initialize();
+        // link to list
+       new_tlab->set_next(this->tlab().next());
+       new_tlab->set_tenant_allocation_context(tac);
+        this->tlab().set_next(new_tlab);
+        // make the new TLAB active
+        this->tlab().swap_content(new_tlab);
+      }
+    } else {
+      tlab().make_parsable(true /* retire */);
+    }
+  }
+}
+#endif // INCLUDE_G1GC
 
 // Creates the initial ThreadGroup
 static Handle create_initial_thread_group(TRAPS) {
@@ -1124,6 +1279,13 @@ static void call_startWispDaemons(TRAPS) {
   Klass* klass =  SystemDictionary::resolve_or_fail(vmSymbols::com_alibaba_wisp_engine_WispEngine(), true, CHECK);
   JavaValue result(T_VOID);
   JavaCalls::call_static(&result, klass, vmSymbols::startWispDaemons_name(),
+                                         vmSymbols::void_method_signature(), CHECK);
+}
+
+static void call_initializeTenantContainerClass(TRAPS) {
+  Klass* klass =  SystemDictionary::resolve_or_fail(vmSymbols::com_alibaba_tenant_TenantContainer(), true, CHECK);  
+  JavaValue result(T_VOID);
+  JavaCalls::call_static(&result, klass, vmSymbols::initializeTenantContainerClass_name(),
                                          vmSymbols::void_method_signature(), CHECK);
 }
 
@@ -1614,6 +1776,7 @@ void JavaThread::initialize() {
   _anchor.clear();
   set_entry_point(NULL);
   set_jni_functions(jni_functions());
+  set_tenant_functions(tenant_functions());
   set_callee_target(NULL);
   set_vm_result(NULL);
   set_vm_result_2(NULL);
@@ -1626,6 +1789,7 @@ void JavaThread::initialize() {
   clear_must_deopt_id();
   set_monitor_chunks(NULL);
   set_next(NULL);
+  _in_asgct = false;
   _on_thread_list = false;
   _thread_state = _thread_new;
   _terminated = _not_terminated;
@@ -1677,6 +1841,7 @@ void JavaThread::initialize() {
   _do_not_unlock_if_synchronized = false;
   _cached_monitor_info = NULL;
   _parker = Parker::Allocate(this);
+  _tenantObj = NULL;
 
 #ifndef PRODUCT
   _jmp_ring_index = 0;
@@ -2115,7 +2280,11 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
   remove_stack_guard_pages();
 
   if (UseTLAB) {
-    tlab().make_parsable(true);  // retire TLAB
+    if (UsePerTenantTLAB) {
+      make_all_tlabs_parsable(true, true);
+    } else {
+      tlab().make_parsable(true);  // retire TLAB
+    }
   }
 
   if (JvmtiEnv::environments_might_exist()) {
@@ -2154,6 +2323,64 @@ void JavaThread::exit(bool destroy_vm, ExitType exit_type) {
   }
 }
 
+G1TenantAllocationContext* JavaThread::tenant_allocation_context() {
+  assert(TenantHeapIsolation, "pre-condition");
+
+  oop tenant_obj = tenantObj();
+  return (tenant_obj == NULL ? NULL : com_alibaba_tenant_TenantContainer::get_tenant_allocation_context(tenant_obj));
+}
+
+void JavaThread::set_tenant_allocation_context(G1TenantAllocationContext* context) {
+  assert(TenantHeapIsolation, "pre-condition");
+  set_tenantObj(context == NULL ? (oop)NULL : context->tenant_container());
+}
+
+void JavaThread::set_tenantObj(oop tenantObj) {
+  assert(MultiTenant
+         // prevent duplicate assigning values of non-ROOT tenant;
+         // but allow duplicated values of ROOT tenant, to support
+         // TenantContainer.destroy() while alive threads attached
+         && (_tenantObj != tenantObj || tenantObj == NULL),
+         "pre-condition");
+
+  if (_tenantObj == tenantObj) {
+    return;
+  }
+
+  oop prev_tenant = _tenantObj;
+  _tenantObj = tenantObj;
+
+#if INCLUDE_G1GC
+  if (UseG1GC) {
+    set_allocation_context(AllocationContext_t(tenantObj == NULL ?
+                                               NULL : com_alibaba_tenant_TenantContainer::get_tenant_allocation_context(tenantObj)));
+
+#ifndef PRODUCT
+    if (TenantHeapIsolation && UseTLAB && UsePerTenantTLAB) {
+      G1TenantAllocationContext* prev_context = prev_tenant == NULL ? NULL /* root tenant */
+                                                                    : com_alibaba_tenant_TenantContainer::get_tenant_allocation_context(prev_tenant);
+      //
+      // thread was attached to tenant container whose allocation context is ROOT tenant's,
+      // which means the tenant container is DEAD.
+      //
+      // in current implementation, inconsistency between TenantContainer object
+      // and its G1TenantAllocationContext pointer is allowed.
+      // when a TenantContainer is destroyed before all attached threads get detached,
+      // JVM will just switch all the allocation contexts of attached threads to ROOT tenant,
+      // including the pointer recorded in TenantContainer object.
+      //
+      if (prev_tenant != NULL && prev_context == G1TenantAllocationContexts::system_context()) {
+        assert(com_alibaba_tenant_TenantContainer::is_dead(prev_tenant),
+               "Must be dead TenantContainer");
+      }
+    }
+#endif
+  }
+#endif // #if INCLUDE_G1GC
+}
+
+
+
 void JavaThread::cleanup_failed_attach_current_thread(bool is_daemon) {
   if (active_handles() != NULL) {
     JNIHandleBlock* block = active_handles();
@@ -2171,7 +2398,11 @@ void JavaThread::cleanup_failed_attach_current_thread(bool is_daemon) {
   remove_stack_guard_pages();
 
   if (UseTLAB) {
-    tlab().make_parsable(true);  // retire TLAB, if any
+    if (UsePerTenantTLAB) {
+      this->make_all_tlabs_parsable(true, false);
+    } else {
+      tlab().make_parsable(true);  // retire TLAB, if any
+    }
   }
 
   BarrierSet::barrier_set()->on_thread_detach(this);
@@ -2613,6 +2844,9 @@ void JavaThread::check_safepoint_and_suspend_for_native_trans(JavaThread *thread
 // Note only the native==>VM/Java barriers can call this function and when
 // thread state is _thread_in_native_trans.
 void JavaThread::check_special_condition_for_native_trans(JavaThread *thread) {
+  // Enable WXWrite: called directly from interpreter native wrapper.
+  MACOS_AARCH64_ONLY(ThreadWXEnable wx(WXWrite, thread));
+
   check_safepoint_and_suspend_for_native_trans(thread);
 
   if (thread->has_async_exception()) {
@@ -2697,10 +2931,7 @@ void JavaThread::create_stack_guard_pages() {
   } else {
     log_warning(os, thread)("Attempt to protect stack guard pages failed ("
       PTR_FORMAT "-" PTR_FORMAT ").", p2i(low_addr), p2i(low_addr + len));
-    if (os::uncommit_memory((char *) low_addr, len)) {
-      log_warning(os, thread)("Attempt to deallocate stack guard pages failed.");
-    }
-    return;
+    vm_exit_out_of_memory(len, OOM_MPROTECT_ERROR, "memory to guard stack pages");
   }
 
   log_debug(os, thread)("Thread " UINTX_FORMAT " stack guard pages activated: "
@@ -2996,6 +3227,9 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
     Coroutine* current = _coroutine_list;
     do {
       current->oops_do(f, cf);
+      if (UseWispMonitor) {
+        current->wisp_thread()->oops_do(f, cf);
+      }
       current = current->next();
     } while (current != _coroutine_list);
   }
@@ -3018,6 +3252,7 @@ void JavaThread::oops_do(OopClosure* f, CodeBlobClosure* cf) {
   // Traverse instance variables at the end since the GC may be moving things
   // around using this function
   f->do_oop((oop*) &_threadObj);
+  f->do_oop((oop*) &_tenantObj);
   f->do_oop((oop*) &_vm_result);
   if (EnableCoroutine) {
     f->do_oop((oop*) &_vm_result_for_wisp);
@@ -3210,7 +3445,7 @@ const char* JavaThread::get_thread_name() const {
 }
 
 // Returns a non-NULL representation of this thread's name, or a suitable
-// descriptive string if there is no set name
+// descriptive string if there is no set name.
 const char* JavaThread::get_thread_name_string(char* buf, int buflen) const {
   const char* name_str;
   oop thread_obj = threadObj();
@@ -3270,6 +3505,19 @@ ThreadPriority JavaThread::java_priority() const {
   ThreadPriority priority = java_lang_Thread::priority(thr_oop);
   assert(MinPriority <= priority && priority <= MaxPriority, "sanity check");
   return priority;
+}
+
+// Helper to extract the name from the thread oop for logging.
+const char* JavaThread::name_for(oop thread_obj) {
+  assert(thread_obj != NULL, "precondition");
+  oop name = java_lang_Thread::name(thread_obj);
+  const char* name_str;
+  if (name != NULL) {
+    name_str = java_lang_String::as_utf8_string(name);
+  } else {
+    name_str = "<un-named>";
+  }
+  return name_str;
 }
 
 void JavaThread::prepare(jobject jni_thread, ThreadPriority prio) {
@@ -3814,6 +4062,8 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   // Initialize the os module
   os::init();
 
+  MACOS_AARCH64_ONLY(os::current_thread_enable_wx(WXWrite));
+
   // Record VM creation timing statistics
   TraceVmCreationTime create_vm_timer;
   create_vm_timer.start();
@@ -3921,6 +4171,7 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   }
 
   main_thread->set_active_handles(JNIHandleBlock::allocate_block());
+  MACOS_AARCH64_ONLY(main_thread->init_wx());
 
   if (!main_thread->set_as_starting_thread()) {
     vm_shutdown_during_initialization(
@@ -4007,6 +4258,12 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   JvmtiExport::post_early_vm_start();
 
   initialize_java_lang_classes(main_thread, CHECK_JNI_ERR);
+
+  // Multi-tenant support
+  if (MultiTenant) {
+    //Initialize TennatContainer class after the system is booted.
+    call_initializeTenantContainerClass(CHECK_0);
+  }
 
   quicken_jni_functions();
 
@@ -4944,6 +5201,7 @@ void Threads::print_threads_compiling(outputStream* st, char* buf, int buflen, b
       CompileTask* task = ct->task();
       if (task != NULL) {
         thread->print_name_on_error(st, buf, buflen);
+        st->print("  ");
         task->print(st, NULL, short_form, true);
       }
     }
@@ -5225,7 +5483,6 @@ void Thread::muxRelease(volatile intptr_t * Lock)  {
     return;
   }
 }
-
 
 void Threads::verify() {
   ALL_JAVA_THREADS(p) {

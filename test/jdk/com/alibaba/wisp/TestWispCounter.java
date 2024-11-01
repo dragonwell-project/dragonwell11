@@ -18,6 +18,7 @@ import static jdk.testlibrary.Asserts.assertTrue;
  * @library /lib/testlibrary
  * @modules java.base/com.alibaba.wisp.engine:+open
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm/timeout=2000 -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -Dcom.alibaba.wisp.config=/tmp/wisp.config TestWispCounter
 */
 public class TestWispCounter {

@@ -1,6 +1,6 @@
 package com.alibaba.rcm;
 
-import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.rcm.AbstractResourceContainer;
 
 /**
  * A {@code ResourceContainer} defines a set of resource {@link Constraint}s

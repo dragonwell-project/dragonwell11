@@ -60,7 +60,7 @@ import java.util.function.Supplier;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import com.alibaba.rcm.internal.AbstractResourceContainer;
+import com.alibaba.rcm.AbstractResourceContainer;
 import com.alibaba.wisp.engine.WispEngine;
 import com.alibaba.wisp.engine.WispTask;
 import jdk.internal.util.StaticProperty;

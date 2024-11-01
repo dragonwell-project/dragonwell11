@@ -37,9 +37,9 @@ AC_CONFIG_AUX_DIR([$TOPDIR/make/autoconf/build-aux])
 m4_include([build-aux/pkg.m4])
 
 # Include these first...
-m4_include([basics.m4])
-m4_include([basics_windows.m4])
+m4_include([util.m4])
 # ... then the rest
+m4_include([basic.m4])
 m4_include([boot-jdk.m4])
 m4_include([build-performance.m4])
 m4_include([flags.m4])
@@ -51,7 +51,6 @@ m4_include([libraries.m4])
 m4_include([platform.m4])
 m4_include([source-dirs.m4])
 m4_include([toolchain.m4])
-m4_include([toolchain_windows.m4])
 
 AC_DEFUN_ONCE([CUSTOM_EARLY_HOOK])
 AC_DEFUN_ONCE([CUSTOM_LATE_HOOK])
@@ -107,6 +106,8 @@ BASIC_SETUP_DEVKIT
 # To properly create a configuration name, we need to have the OpenJDK target
 # and options (variants and debug level) parsed.
 BASIC_SETUP_OUTPUT_DIR
+# After we have the output dir we can finalize the fixpath wrapper
+BASIC_WINDOWS_FINALIZE_FIXPATH
 
 # Must be done before we can call HELP_MSG_MISSING_DEPENDENCY.
 HELP_SETUP_DEPENDENCY_HELP
@@ -216,9 +217,6 @@ HOTSPOT_ENABLE_DISABLE_GTEST
 #
 ###############################################################################
 
-# After we have toolchain, we can compile fixpath. It's needed by the lib checks.
-BASIC_COMPILE_FIXPATH
-
 LIB_DETERMINE_DEPENDENCIES
 LIB_SETUP_LIBRARIES
 
@@ -288,6 +286,7 @@ BASIC_CHECK_LEFTOVER_OVERRIDDEN
 CONFIG_STATUS="$CONFIGURESUPPORT_OUTPUTDIR/config.status"
 
 # Create the actual output files. Now the main work of configure is done.
+BASIC_WINDOWS_FINALIZE
 AC_OUTPUT
 
 # After AC_OUTPUT, we need to do final work

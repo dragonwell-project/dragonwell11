@@ -278,11 +278,11 @@
 
 address os::current_stack_pointer() {
 #if defined(__clang__) || defined(__llvm__)
-  register void *esp;
+  void *esp;
   __asm__("mov %%" SPELL_REG_SP ", %0":"=r"(esp));
   return (address) esp;
 #elif defined(SPARC_WORKS)
-  register void *esp;
+  void *esp;
   __asm__("mov %%" SPELL_REG_SP ", %0":"=r"(esp));
   return (address) ((char*)esp + sizeof(long)*2);
 #else
@@ -410,7 +410,7 @@ frame os::get_sender_for_C_frame(frame* fr) {
 
 intptr_t* _get_previous_fp() {
 #if defined(SPARC_WORKS) || defined(__clang__) || defined(__llvm__)
-  register intptr_t **ebp;
+  intptr_t **ebp;
   __asm__("mov %%" SPELL_REG_FP ", %0":"=r"(ebp));
 #else
   register intptr_t **ebp __asm__ (SPELL_REG_FP);
@@ -493,7 +493,7 @@ JVM_handle_bsd_signal(int sig,
   }
 
   // Handle SafeFetch faults:
-  if (uc != NULL) {
+  if ((sig == SIGSEGV || sig == SIGBUS) && uc != NULL) {
     address const pc = (address) os::Bsd::ucontext_get_pc(uc);
     if (pc && StubRoutines::is_safefetch_fault(pc)) {
       os::Bsd::ucontext_set_pc(uc, StubRoutines::continuation_for_safefetch_fault(pc));

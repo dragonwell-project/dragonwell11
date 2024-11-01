@@ -33,7 +33,7 @@
 #include "gc/shared/taskqueue.inline.hpp"
 #include "runtime/orderAccess.hpp"
 
-G1EvacStats* G1CollectedHeap::alloc_buffer_stats(InCSetState dest) {
+inline G1EvacStats* G1CollectedHeap::alloc_buffer_stats(InCSetState dest) {
   switch (dest.value()) {
     case InCSetState::Young:
       return &_survivor_evac_stats;
@@ -45,7 +45,7 @@ G1EvacStats* G1CollectedHeap::alloc_buffer_stats(InCSetState dest) {
   }
 }
 
-size_t G1CollectedHeap::desired_plab_sz(InCSetState dest) {
+inline size_t G1CollectedHeap::desired_plab_sz(InCSetState dest) {
   size_t gclab_word_size = alloc_buffer_stats(dest)->desired_plab_sz(workers()->active_workers());
   // Prevent humongous PLAB sizes for two reasons:
   // * PLABs are allocated using a similar paths as oops, but should

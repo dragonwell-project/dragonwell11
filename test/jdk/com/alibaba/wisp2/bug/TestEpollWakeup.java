@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary test selector.wakeup() dispatched
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2  TestEpollWakeup 3000
  */
 

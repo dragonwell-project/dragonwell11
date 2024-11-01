@@ -68,6 +68,10 @@
 #include "jvmci/jvmciJavaClasses.hpp"
 #endif
 
+#if INCLUDE_G1GC
+#include "gc/g1/g1TenantAllocationContext.hpp"
+#endif  // INCLUDE_G1GC
+
 #define INJECTED_FIELD_COMPUTE_OFFSET(klass, name, signature, may_be_java)    \
   klass::_##name##_offset = JavaClasses::compute_injected_offset(JavaClasses::klass##_##name##_enum);
 
@@ -1606,6 +1610,7 @@ int java_lang_Thread::_stackSize_offset = 0;
 int java_lang_Thread::_tid_offset = 0;
 int java_lang_Thread::_thread_status_offset = 0;
 int java_lang_Thread::_park_blocker_offset = 0;
+int java_lang_Thread::_inheritedTenantContainer_offset = 0 ;
 int java_lang_Thread::_resourceContainer_offset = 0 ;
 
 #define THREAD_FIELDS_DO(macro) \
@@ -1621,6 +1626,7 @@ int java_lang_Thread::_resourceContainer_offset = 0 ;
   macro(_tid_offset,           k, "tid", long_signature, false); \
   macro(_thread_status_offset, k, "threadStatus", int_signature, false); \
   macro(_park_blocker_offset,  k, "parkBlocker", object_signature, false); \
+  macro(_inheritedTenantContainer_offset,    k, "inheritedTenantContainer", tenantcontainer_signature, false); \
   macro(_resourceContainer_offset,    k, "resourceContainer", resourcecontainer_signature, false); \
 
 void java_lang_Thread::compute_offsets() {
@@ -1709,6 +1715,9 @@ oop java_lang_Thread::inherited_access_control_context(oop java_thread) {
   return java_thread->obj_field(_inheritedAccessControlContext_offset);
 }
 
+oop java_lang_Thread::inherited_tenant_container(oop java_thread) {
+  return java_thread->obj_field(_inheritedTenantContainer_offset);
+}
 
 jlong java_lang_Thread::stackSize(oop java_thread) {
   if (_stackSize_offset > 0) {
@@ -4286,6 +4295,13 @@ int java_lang_AssertionStatusDirectives::packages_offset;
 int java_lang_AssertionStatusDirectives::packageEnabled_offset;
 int java_lang_AssertionStatusDirectives::deflt_offset;
 int java_nio_Buffer::_limit_offset;
+#if INCLUDE_G1GC
+int com_alibaba_tenant_TenantContainer::_allocation_context_offset;
+int com_alibaba_tenant_TenantContainer::_tenant_id_offset;
+int com_alibaba_tenant_TenantContainer::_tenant_state_offset;
+
+int com_alibaba_tenant_TenantState::_static_state_offsets[com_alibaba_tenant_TenantState::TS_SIZE] = { 0 };
+#endif // INCLUDE_G1GC
 int java_util_concurrent_locks_AbstractOwnableSynchronizer::_owner_offset;
 int reflect_ConstantPool::_oop_offset;
 int reflect_UnsafeStaticFieldAccessorImpl::_base_offset;
@@ -4477,21 +4493,21 @@ jboolean com_alibaba_wisp_engine_WispCarrier::in_critical(oop obj) {
 #define RCM_FIELDS_DO(macro) \
   macro(_id_offset,      k,   "id",     long_signature,  false);
 
-int com_alibaba_rcm_internal_AbstractResourceContainer::_id_offset = 0;
+int com_alibaba_rcm_AbstractResourceContainer::_id_offset = 0;
 
-long com_alibaba_rcm_internal_AbstractResourceContainer::get_id(oop obj) {
+long com_alibaba_rcm_AbstractResourceContainer::get_id(oop obj) {
   return obj->long_field(_id_offset);
 }
 
 
-void com_alibaba_rcm_internal_AbstractResourceContainer::compute_offsets() {
-  InstanceKlass *k = SystemDictionary::com_alibaba_rcm_internal_AbstractResourceContainer_klass();
+void com_alibaba_rcm_AbstractResourceContainer::compute_offsets() {
+  InstanceKlass *k = SystemDictionary::com_alibaba_rcm_AbstractResourceContainer_klass();
   assert(k != NULL, "AbstractResourceContainer is null");
   RCM_FIELDS_DO(FIELD_COMPUTE_OFFSET);
 }
 
 #if INCLUDE_CDS
-void com_alibaba_rcm_internal_AbstractResourceContainer::serialize_offsets(SerializeClosure* f) {
+void com_alibaba_rcm_AbstractResourceContainer::serialize_offsets(SerializeClosure* f) {
   RCM_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
 }
 #endif
@@ -4649,6 +4665,80 @@ void java_nio_Buffer::serialize_offsets(SerializeClosure* f) {
 }
 #endif
 
+#if INCLUDE_G1GC
+
+// Support for com.alibaba.tenant.TenantContainer
+
+#define TENANTCONTAINER_FIELDS_DO(macro) \
+  macro(_tenant_id_offset, k, vmSymbols::tenant_id_address(), long_signature, false); \
+  macro(_allocation_context_offset, k, vmSymbols::allocation_context_address(), long_signature, false); \
+  macro(_tenant_state_offset, k, vmSymbols::state_name(), com_alibaba_tenant_TenantState_signature, false);
+
+void com_alibaba_tenant_TenantContainer::compute_offsets() {
+  InstanceKlass* k = SystemDictionary::com_alibaba_tenant_TenantContainer_klass();
+  assert(k != NULL, "Cannot find TenantContainer in current JDK");
+  if (MultiTenant) {
+    ResourceMark rm;
+    fprintf(stderr,"fuckdebug tenantContainer signature name is %s and ext is %s\n",k->signature_name(), k->external_name());
+  }
+  TENANTCONTAINER_FIELDS_DO(FIELD_COMPUTE_OFFSET);
+}
+
+void com_alibaba_tenant_TenantContainer::serialize_offsets(SerializeClosure* f) {
+  TENANTCONTAINER_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
+}
+
+jlong com_alibaba_tenant_TenantContainer::get_tenant_id(oop obj) {
+  assert(obj != NULL, "TenantContainer object cannot be NULL");
+  return obj->long_field(_tenant_id_offset);
+}
+
+G1TenantAllocationContext* com_alibaba_tenant_TenantContainer::get_tenant_allocation_context(oop obj) {
+  assert(obj != NULL, "TenantContainer object cannot be NULL");
+  return (G1TenantAllocationContext*)(obj->long_field(_allocation_context_offset));
+}
+
+void com_alibaba_tenant_TenantContainer::set_tenant_allocation_context(oop obj, G1TenantAllocationContext* context) {
+  assert(obj != NULL, "TenantContainer object cannot be NULL");
+  obj->long_field_put(_allocation_context_offset, (jlong)context);
+}
+
+bool com_alibaba_tenant_TenantContainer::is_dead(oop obj) {
+  assert(obj != NULL, "TenantContainer object cannot be NULL");
+  int state = com_alibaba_tenant_TenantState::state_of(obj);
+  return state == com_alibaba_tenant_TenantState::TS_STOPPING
+         || state == com_alibaba_tenant_TenantState::TS_DEAD;
+}
+
+oop com_alibaba_tenant_TenantContainer::get_tenant_state(oop obj) {
+  assert(obj != NULL, "TenantContainer object cannot be NULL");
+  return obj->obj_field(_tenant_state_offset);
+}
+
+// Support for com.alibaba.tenant.TenantState
+
+int com_alibaba_tenant_TenantState::state_of(oop tenant_obj) {
+  assert(tenant_obj != NULL, "TenantContainer ");
+
+  oop tenant_state = com_alibaba_tenant_TenantContainer::get_tenant_state(tenant_obj);
+  InstanceKlass* ik = InstanceKlass::cast(SystemDictionary::com_alibaba_tenant_TenantState_klass());
+
+  for (int i = TS_STARTING; i < TS_SIZE; ++i) {
+    assert(_static_state_offsets[i] == i * heapOopSize, "Must have been initialized");
+    oop base = ik->static_field_base_raw();
+    oop o = base->obj_field(_static_state_offsets[i]);
+    assert(!oopDesc::is_oop_or_null(o), "sanity");
+    if (tenant_state == o) {
+      return i;
+    }
+  }
+
+  ShouldNotReachHere();
+  return -1;
+}
+
+#endif // INCLUDE_G1GC
+
 #define AOS_FIELDS_DO(macro) \
   macro(_owner_offset, k, "exclusiveOwnerThread", thread_signature, false)
 
@@ -4712,6 +4802,11 @@ void JavaClasses::compute_offsets() {
   AbstractAssembler::update_delayed_values();
 
   BASIC_JAVA_CLASSES_DO_PART_COROUTINE(DO_COMPUTE_OFFSETS);
+#if INCLUDE_G1GC
+  if (MultiTenant) {
+    BASIC_JAVA_CLASSES_DO_PART_TENANT(DO_COMPUTE_OFFSETS);
+  }
+#endif //INCLUDE_G1GC
 }
 
 #if INCLUDE_CDS
@@ -4720,8 +4815,13 @@ void JavaClasses::compute_offsets() {
 void JavaClasses::serialize_offsets(SerializeClosure* soc) {
   BASIC_JAVA_CLASSES_DO(DO_SERIALIZE_OFFSETS);
   BASIC_JAVA_CLASSES_DO_PART_COROUTINE(DO_SERIALIZE_OFFSETS);
+#if INCLUDE_G1GC
+  if (MultiTenant) {
+    BASIC_JAVA_CLASSES_DO_PART_TENANT(DO_SERIALIZE_OFFSETS);
+  }
+#endif // INCLUDE_G1GC
 }
-#endif
+#endif //INCLUDE_CDS
 
 
 #ifndef PRODUCT

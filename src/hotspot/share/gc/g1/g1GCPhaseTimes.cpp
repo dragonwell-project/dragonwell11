@@ -113,6 +113,9 @@ G1GCPhaseTimes::G1GCPhaseTimes(STWGCTimer* gc_timer, uint max_gc_threads) :
   _gc_par_phases[YoungFreeCSet] = new WorkerDataArray<double>(max_gc_threads, "Young Free Collection Set (ms):");
   _gc_par_phases[NonYoungFreeCSet] = new WorkerDataArray<double>(max_gc_threads, "Non-Young Free Collection Set (ms):");
 
+  // Cannot guard below line with TenantHeapIsolation since we do not have conditional compilation for tenant mode
+  _gc_par_phases[TenantAllocationContextRoots] = new WorkerDataArray<double>(max_gc_threads, "G1TenantAllocationContext Roots (ms)");
+
   reset();
 }
 

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +36,7 @@ import sun.jvm.hotspot.debugger.MachineDescription;
 import sun.jvm.hotspot.debugger.MachineDescriptionAMD64;
 import sun.jvm.hotspot.debugger.MachineDescriptionPPC64;
 import sun.jvm.hotspot.debugger.MachineDescriptionAArch64;
+import sun.jvm.hotspot.debugger.MachineDescriptionRiscv64;
 import sun.jvm.hotspot.debugger.MachineDescriptionIntelX86;
 import sun.jvm.hotspot.debugger.MachineDescriptionSPARC32Bit;
 import sun.jvm.hotspot.debugger.MachineDescriptionSPARC64Bit;
@@ -591,6 +593,8 @@ public class HotSpotAgent {
             machDesc = new MachineDescriptionPPC64();
         } else if (cpu.equals("aarch64")) {
             machDesc = new MachineDescriptionAArch64();
+        } else if (cpu.equals("riscv64")) {
+            machDesc = new MachineDescriptionRiscv64();
         } else if (cpu.equals("sparc")) {
             if (LinuxDebuggerLocal.getAddressSize()==8) {
                     machDesc = new MachineDescriptionSPARC64Bit();
@@ -652,8 +656,10 @@ public class HotSpotAgent {
 
         if (cpu.equals("amd64") || cpu.equals("x86_64")) {
             machDesc = new MachineDescriptionAMD64();
+        } else if (cpu.equals("aarch64")) {
+            machDesc = new MachineDescriptionAArch64();
         } else {
-            throw new DebuggerException("Darwin only supported on x86_64. Current arch: " + cpu);
+            throw new DebuggerException("Darwin only supported on x86_64/aarch64. Current arch: " + cpu);
         }
 
         BsdDebuggerLocal dbg = new BsdDebuggerLocal(machDesc, !isServer);

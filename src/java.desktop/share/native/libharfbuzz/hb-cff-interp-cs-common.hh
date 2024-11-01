@@ -57,14 +57,14 @@ struct call_context_t
 
 /* call stack */
 const unsigned int kMaxCallLimit = 10;
-struct call_stack_t : stack_t<call_context_t, kMaxCallLimit> {};
+struct call_stack_t : cff_stack_t<call_context_t, kMaxCallLimit> {};
 
 template <typename SUBRS>
 struct biased_subrs_t
 {
-  void init (const SUBRS &subrs_)
+  void init (const SUBRS *subrs_)
   {
-    subrs = &subrs_;
+    subrs = subrs_;
     unsigned int  nSubrs = get_count ();
     if (nSubrs < 1240)
       bias = 107;
@@ -76,13 +76,13 @@ struct biased_subrs_t
 
   void fini () {}
 
-  unsigned int get_count () const { return (subrs == nullptr)? 0: subrs->count; }
-  unsigned int get_bias () const { return bias; }
+  unsigned int get_count () const { return subrs ? subrs->count : 0; }
+  unsigned int get_bias () const  { return bias; }
 
-  byte_str_t operator [] (unsigned int index) const
+  hb_ubytes_t operator [] (unsigned int index) const
   {
-    if (unlikely ((subrs == nullptr) || index >= subrs->count))
-      return Null(byte_str_t);
+    if (unlikely (!subrs || index >= subrs->count))
+      return hb_ubytes_t ();
     else
       return (*subrs)[index];
   }
@@ -94,12 +94,6 @@ struct biased_subrs_t
 
 struct point_t
 {
-  void init ()
-  {
-    x.init ();
-    y.init ();
-  }
-
   void set_int (int _x, int _y)
   {
     x.set_int (_x);
@@ -118,26 +112,21 @@ struct point_t
 template <typename ARG, typename SUBRS>
 struct cs_interp_env_t : interp_env_t<ARG>
 {
-  void init (const byte_str_t &str, const SUBRS &globalSubrs_, const SUBRS &localSubrs_)
+  cs_interp_env_t (const hb_ubytes_t &str, const SUBRS *globalSubrs_, const SUBRS *localSubrs_) :
+    interp_env_t<ARG> (str)
   {
-    interp_env_t<ARG>::init (str);
-
     context.init (str, CSType_CharString);
     seen_moveto = true;
     seen_hintmask = false;
     hstem_count = 0;
     vstem_count = 0;
     hintmask_size = 0;
-    pt.init ();
-    callStack.init ();
+    pt.set_int (0, 0);
     globalSubrs.init (globalSubrs_);
     localSubrs.init (localSubrs_);
   }
-  void fini ()
+  ~cs_interp_env_t ()
   {
-    interp_env_t<ARG>::fini ();
-
-    callStack.fini ();
     globalSubrs.fini ();
     localSubrs.fini ();
   }
@@ -147,8 +136,9 @@ struct cs_interp_env_t : interp_env_t<ARG>
     return callStack.in_error () || SUPER::in_error ();
   }
 
-  bool popSubrNum (const biased_subrs_t<SUBRS>& biasedSubrs, unsigned int &subr_num)
+  bool pop_subr_num (const biased_subrs_t<SUBRS>& biasedSubrs, unsigned int &subr_num)
   {
+    subr_num = 0;
     int n = SUPER::argStack.pop_int ();
     n += biasedSubrs.get_bias ();
     if (unlikely ((n < 0) || ((unsigned int)n >= biasedSubrs.get_count ())))
@@ -158,11 +148,11 @@ struct cs_interp_env_t : interp_env_t<ARG>
     return true;
   }
 
-  void callSubr (const biased_subrs_t<SUBRS>& biasedSubrs, cs_type_t type)
+  void call_subr (const biased_subrs_t<SUBRS>& biasedSubrs, cs_type_t type)
   {
-    unsigned int subr_num;
+    unsigned int subr_num = 0;
 
-    if (unlikely (!popSubrNum (biasedSubrs, subr_num)
+    if (unlikely (!pop_subr_num (biasedSubrs, subr_num)
                  || callStack.get_count () >= kMaxCallLimit))
     {
       SUPER::set_error ();
@@ -175,7 +165,7 @@ struct cs_interp_env_t : interp_env_t<ARG>
     SUPER::str_ref = context.str_ref;
   }
 
-  void returnFromSubr ()
+  void return_from_subr ()
   {
     if (unlikely (SUPER::str_ref.in_error ()))
       SUPER::set_error ();
@@ -246,7 +236,7 @@ struct path_procs_null_t
   static void flex1 (ENV &env, PARAM& param) {}
 };
 
-template <typename ARG, typename OPSET, typename ENV, typename PARAM, typename PATH=path_procs_null_t<ENV, PARAM> >
+template <typename ARG, typename OPSET, typename ENV, typename PARAM, typename PATH=path_procs_null_t<ENV, PARAM>>
 struct cs_opset_t : opset_t<ARG>
 {
   static void process_op (op_code_t op, ENV &env, PARAM& param)
@@ -254,7 +244,7 @@ struct cs_opset_t : opset_t<ARG>
     switch (op) {
 
       case OpCode_return:
-        env.returnFromSubr ();
+        env.return_from_subr ();
         break;
       case OpCode_endchar:
         OPSET::check_width (op, env, param);
@@ -267,11 +257,11 @@ struct cs_opset_t : opset_t<ARG>
         break;
 
       case OpCode_callsubr:
-        env.callSubr (env.localSubrs, CSType_LocalSubr);
+        env.call_subr (env.localSubrs, CSType_LocalSubr);
         break;
 
       case OpCode_callgsubr:
-        env.callSubr (env.globalSubrs, CSType_GlobalSubr);
+        env.call_subr (env.globalSubrs, CSType_GlobalSubr);
         break;
 
       case OpCode_hstem:
@@ -550,8 +540,13 @@ struct path_procs_t
 
   static void rcurveline (ENV &env, PARAM& param)
   {
+    unsigned int arg_count = env.argStack.get_count ();
+    if (unlikely (arg_count < 8))
+      return;
+
     unsigned int i = 0;
-    for (; i + 6 <= env.argStack.get_count (); i += 6)
+    unsigned int curve_limit = arg_count - 2;
+    for (; i + 6 <= curve_limit; i += 6)
     {
       point_t pt1 = env.get_pt ();
       pt1.move (env.eval_arg (i), env.eval_arg (i+1));
@@ -561,34 +556,34 @@ struct path_procs_t
       pt3.move (env.eval_arg (i+4), env.eval_arg (i+5));
       PATH::curve (env, param, pt1, pt2, pt3);
     }
-    for (; i + 2 <= env.argStack.get_count (); i += 2)
-    {
-      point_t pt1 = env.get_pt ();
-      pt1.move (env.eval_arg (i), env.eval_arg (i+1));
-      PATH::line (env, param, pt1);
-    }
+
+    point_t pt1 = env.get_pt ();
+    pt1.move (env.eval_arg (i), env.eval_arg (i+1));
+    PATH::line (env, param, pt1);
   }
 
   static void rlinecurve (ENV &env, PARAM& param)
   {
+    unsigned int arg_count = env.argStack.get_count ();
+    if (unlikely (arg_count < 8))
+      return;
+
     unsigned int i = 0;
-    unsigned int line_limit = (env.argStack.get_count () % 6);
+    unsigned int line_limit = arg_count - 6;
     for (; i + 2 <= line_limit; i += 2)
     {
       point_t pt1 = env.get_pt ();
       pt1.move (env.eval_arg (i), env.eval_arg (i+1));
       PATH::line (env, param, pt1);
     }
-    for (; i + 6 <= env.argStack.get_count (); i += 6)
-    {
-      point_t pt1 = env.get_pt ();
-      pt1.move (env.eval_arg (i), env.eval_arg (i+1));
-      point_t pt2 = pt1;
-      pt2.move (env.eval_arg (i+2), env.eval_arg (i+3));
-      point_t pt3 = pt2;
-      pt3.move (env.eval_arg (i+4), env.eval_arg (i+5));
-      PATH::curve (env, param, pt1, pt2, pt3);
-    }
+
+    point_t pt1 = env.get_pt ();
+    pt1.move (env.eval_arg (i), env.eval_arg (i+1));
+    point_t pt2 = pt1;
+    pt2.move (env.eval_arg (i+2), env.eval_arg (i+3));
+    point_t pt3 = pt2;
+    pt3.move (env.eval_arg (i+4), env.eval_arg (i+5));
+    PATH::curve (env, param, pt1, pt2, pt3);
   }
 
   static void vvcurveto (ENV &env, PARAM& param)
@@ -835,7 +830,6 @@ struct path_procs_t
     if (likely (env.argStack.get_count () == 11))
     {
       point_t d;
-      d.init ();
       for (unsigned int i = 0; i < 10; i += 2)
         d.move (env.eval_arg (i), env.eval_arg (i+1));
 
@@ -881,6 +875,8 @@ struct path_procs_t
 template <typename ENV, typename OPSET, typename PARAM>
 struct cs_interpreter_t : interpreter_t<ENV>
 {
+  cs_interpreter_t (ENV& env_) : interpreter_t<ENV> (env_) {}
+
   bool interpret (PARAM& param)
   {
     SUPER::env.set_endchar (false);

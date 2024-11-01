@@ -136,6 +136,7 @@ enum MemoryType {
   mtSynchronizer,      // memory for synchronization primitives
   mtSafepoint,         // memory for safepoint support
   mtWisp,              // memory used by Wisp cod
+  mtTenant,            // memory used by MultiTenant code
   mtNone,              // undefined
   mt_number_of_types   // number of memory types (mtDontTrack
                        // is not included as validate type)

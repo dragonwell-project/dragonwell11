@@ -4,7 +4,7 @@
  * @build TestRcmCpu RcmUtils
  * @summary test RCM cpu resource control.
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=4 TestRcmCpu
  */
 

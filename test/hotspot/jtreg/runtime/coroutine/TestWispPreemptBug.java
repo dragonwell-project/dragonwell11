@@ -2,6 +2,7 @@
  * @test
  * @summary verify vm not crash when we're preempted frequently
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:ActiveProcessorCount=1 -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestWispPreemptBug
  */
 

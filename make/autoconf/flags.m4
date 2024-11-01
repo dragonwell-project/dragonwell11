@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -111,19 +111,25 @@ AC_DEFUN([FLAGS_SETUP_MACOSX_VERSION],
 [
   # Additional macosx handling
   if test "x$OPENJDK_TARGET_OS" = xmacosx; then
+    # The expected format for <version> is either nn.n.n or nn.nn.nn. See
+    # /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/AvailabilityVersions.h
+
     # MACOSX_VERSION_MIN specifies the lowest version of Macosx that the built
     # binaries should be compatible with, even if compiled on a newer version
     # of the OS. It currently has a hard coded value. Setting this also limits
     # exposure to API changes in header files. Bumping this is likely to
     # require code changes to build.
-    MACOSX_VERSION_MIN=10.9.0
+    if test "x$OPENJDK_TARGET_CPU_ARCH" = xaarch64; then
+      MACOSX_VERSION_MIN=11.00.00
+    else
+      MACOSX_VERSION_MIN=10.12.0
+    fi
     MACOSX_VERSION_MIN_NODOTS=${MACOSX_VERSION_MIN//\./}
 
     AC_SUBST(MACOSX_VERSION_MIN)
 
     # Setting --with-macosx-version-max=<version> makes it an error to build or
-    # link to macosx APIs that are newer than the given OS version. The expected
-    # format for <version> is either nn.n.n or nn.nn.nn. See /usr/include/AvailabilityMacros.h.
+    # link to macosx APIs that are newer than the given OS version.
     AC_ARG_WITH([macosx-version-max], [AS_HELP_STRING([--with-macosx-version-max],
         [error on use of newer functionality. @<:@macosx@:>@])],
         [
@@ -232,6 +238,14 @@ AC_DEFUN([FLAGS_SETUP_SYSROOT_FLAGS],
     fi
   fi
 
+  # For the microsoft toolchain, we need to get the SYSROOT flags from the
+  # Visual Studio environment. Currently we cannot handle this as a separate
+  # build toolchain.
+  if test "x$1" = x && test "x$OPENJDK_BUILD_OS" = "xwindows" \
+      && test "x$TOOLCHAIN_TYPE" = "xmicrosoft"; then
+    TOOLCHAIN_SETUP_VISUAL_STUDIO_ENV
+  fi
+
   AC_SUBST($1SYSROOT_CFLAGS)
   AC_SUBST($1SYSROOT_LDFLAGS)
 ])
@@ -240,6 +254,7 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
 [
   # We should always include user supplied flags
   FLAGS_SETUP_USER_SUPPLIED_FLAGS
+
   # The sysroot flags are needed for configure to be able to run the compilers
   FLAGS_SETUP_SYSROOT_FLAGS
 
@@ -258,6 +273,14 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
     fi
   fi
 
+  if test "x$OPENJDK_TARGET_OS" = xmacosx; then
+    if test "x$OPENJDK_TARGET_CPU" = xaarch64; then
+      MACHINE_FLAG="$MACHINE_FLAG -arch arm64"
+    elif test "x$OPENJDK_TARGET_CPU" = xx86_64; then
+      MACHINE_FLAG="$MACHINE_FLAG -arch x86_64"
+    fi
+  fi
+
   # FIXME: global flags are not used yet...
   # The "global" flags will *always* be set. Without them, it is not possible to
   # get a working compilation.
@@ -266,10 +289,6 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
   GLOBAL_LDFLAGS="$MACHINE_FLAG $SYSROOT_LDFLAGS $USER_LDFLAGS"
   # FIXME: Don't really know how to do with this, but this was the old behavior
   GLOBAL_CPPFLAGS="$SYSROOT_CFLAGS"
-  AC_SUBST(GLOBAL_CFLAGS)
-  AC_SUBST(GLOBAL_CXXFLAGS)
-  AC_SUBST(GLOBAL_LDFLAGS)
-  AC_SUBST(GLOBAL_CPPFLAGS)
 
   # FIXME: For compatilibity, export this as EXTRA_CFLAGS for now.
   EXTRA_CFLAGS="$MACHINE_FLAG $USER_CFLAGS"
@@ -288,6 +307,14 @@ AC_DEFUN_ONCE([FLAGS_PRE_TOOLCHAIN],
   CXXFLAGS="$GLOBAL_CXXFLAGS"
   LDFLAGS="$GLOBAL_LDFLAGS"
   CPPFLAGS="$GLOBAL_CPPFLAGS"
+
+  if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
+    # When autoconf sends both compiler and linker flags to cl.exe at the same
+    # time, linker flags must be last at the command line. Achieve this by
+    # moving them to LIBS.
+    LIBS="$LIBS -link $LDFLAGS"
+    LDFLAGS=""
+  fi
 ])
 
 AC_DEFUN([FLAGS_SETUP_TOOLCHAIN_CONTROL],
@@ -385,9 +412,6 @@ AC_DEFUN_ONCE([FLAGS_POST_TOOLCHAIN],
       BUILD_SYSROOT_LDFLAGS="$SYSROOT_LDFLAGS"
     fi
   fi
-  AC_SUBST(BUILD_SYSROOT_CFLAGS)
-  AC_SUBST(BUILD_SYSROOT_LDFLAGS)
-
 ])
 
 AC_DEFUN([FLAGS_SETUP_FLAGS],
@@ -417,7 +441,7 @@ AC_DEFUN([FLAGS_SETUP_FLAGS],
 #                                  IF_FALSE: [RUN-IF-FALSE])
 # ------------------------------------------------------------
 # Check that the C compiler supports an argument
-BASIC_DEFUN_NAMED([FLAGS_C_COMPILER_CHECK_ARGUMENTS],
+UTIL_DEFUN_NAMED([FLAGS_C_COMPILER_CHECK_ARGUMENTS],
     [*ARGUMENT IF_TRUE IF_FALSE PREFIX], [$@],
 [
   AC_MSG_CHECKING([if ARG_PREFIX[CC] supports "ARG_ARGUMENT"])
@@ -448,7 +472,7 @@ BASIC_DEFUN_NAMED([FLAGS_C_COMPILER_CHECK_ARGUMENTS],
 #                                    IF_FALSE: [RUN-IF-FALSE])
 # ------------------------------------------------------------
 # Check that the C++ compiler supports an argument
-BASIC_DEFUN_NAMED([FLAGS_CXX_COMPILER_CHECK_ARGUMENTS],
+UTIL_DEFUN_NAMED([FLAGS_CXX_COMPILER_CHECK_ARGUMENTS],
     [*ARGUMENT IF_TRUE IF_FALSE PREFIX], [$@],
 [
   AC_MSG_CHECKING([if ARG_PREFIX[CXX] supports "ARG_ARGUMENT"])
@@ -479,7 +503,7 @@ BASIC_DEFUN_NAMED([FLAGS_CXX_COMPILER_CHECK_ARGUMENTS],
 #                                IF_FALSE: [RUN-IF-FALSE])
 # ------------------------------------------------------------
 # Check that the C and C++ compilers support an argument
-BASIC_DEFUN_NAMED([FLAGS_COMPILER_CHECK_ARGUMENTS],
+UTIL_DEFUN_NAMED([FLAGS_COMPILER_CHECK_ARGUMENTS],
     [*ARGUMENT IF_TRUE IF_FALSE PREFIX], [$@],
 [
   FLAGS_C_COMPILER_CHECK_ARGUMENTS(ARGUMENT: [ARG_ARGUMENT],
@@ -511,7 +535,7 @@ BASIC_DEFUN_NAMED([FLAGS_COMPILER_CHECK_ARGUMENTS],
 #                                   IF_FALSE: [RUN-IF-FALSE])
 # ------------------------------------------------------------
 # Check that the linker support an argument
-BASIC_DEFUN_NAMED([FLAGS_LINKER_CHECK_ARGUMENTS],
+UTIL_DEFUN_NAMED([FLAGS_LINKER_CHECK_ARGUMENTS],
     [*ARGUMENT IF_TRUE IF_FALSE], [$@],
 [
   AC_MSG_CHECKING([if linker supports "ARG_ARGUMENT"])

@@ -36,6 +36,7 @@
 void VM_G1CollectFull::doit() {
   G1CollectedHeap* g1h = G1CollectedHeap::heap();
   GCCauseSetter x(g1h, _gc_cause);
+  G1ContextCauseSetter set_ctxt(g1h, this->allocation_context());
   g1h->do_full_collection(false /* clear_all_soft_refs */);
 }
 
@@ -78,8 +79,11 @@ void VM_G1CollectForAllocation::doit() {
       "only a GC locker, a System.gc(), stats update, whitebox, or a hum allocation induced GC should start a cycle");
 
   if (_word_size > 0) {
+    AllocationContextMark acm(this->allocation_context());
+
     // An allocation has been requested. So, try to do that first.
     _result = g1h->attempt_allocation_at_safepoint(_word_size,
+                                                   _allocation_context,
                                                    false /* expect_null_cur_alloc_region */);
     if (_result != NULL) {
       // If we can successfully allocate before we actually do the
@@ -90,6 +94,7 @@ void VM_G1CollectForAllocation::doit() {
   }
 
   GCCauseSetter x(g1h, _gc_cause);
+  G1ContextCauseSetter set_ctxt(g1h, this->allocation_context());
   if (_should_initiate_conc_mark) {
     // It's safer to read old_marking_cycles_completed() here, given
     // that noone else will be updating it concurrently. Since we'll
@@ -133,9 +138,11 @@ void VM_G1CollectForAllocation::doit() {
 
   if (_pause_succeeded) {
     if (_word_size > 0) {
+      // TODO: Red. FullGC前是否加ACM？或者后移到allocation。
+      AllocationContextMark acm(this->allocation_context());
       // An allocation had been requested. Do it, eventually trying a stronger
       // kind of GC.
-      _result = g1h->satisfy_failed_allocation(_word_size, &_pause_succeeded);
+      _result = g1h->satisfy_failed_allocation(_word_size, _allocation_context, &_pause_succeeded);
     } else {
       bool should_upgrade_to_full = !g1h->should_do_concurrent_full_gc(_gc_cause) &&
                                     !g1h->has_regions_left_for_allocation();

@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary ensure thread.isAlive() is false after thread.join()
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestConcurrentThreadJoin
  */
 

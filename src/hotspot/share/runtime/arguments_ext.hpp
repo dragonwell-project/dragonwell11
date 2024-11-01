@@ -29,6 +29,9 @@
 #include "runtime/arguments.hpp"
 
 class ArgumentsExt: AllStatic {
+  friend class Arguments;
+protected:
+  static        void set_tenant_flags();
 public:
   // The argument processing extension. Returns true if there is
   // no additional parsing needed in Arguments::parse() for the option.

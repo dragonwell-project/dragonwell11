@@ -129,6 +129,7 @@ module java.base {
     exports javax.security.auth.x500;
     exports javax.security.cert;
     exports com.alibaba.rcm;
+    exports com.alibaba.tenant;
     exports com.alibaba.wisp.engine;
 
 
@@ -293,7 +294,8 @@ module java.base {
         jdk.crypto.cryptoki,
         jdk.security.auth;
     exports sun.security.provider.certpath to
-        java.naming;
+        java.naming,
+        jdk.jartool;
     exports sun.security.rsa to
         jdk.crypto.cryptoki;
     exports sun.security.ssl to
@@ -338,8 +340,6 @@ module java.base {
         java.prefs;
     exports sun.util.resources to
         jdk.localedata;
-    exports com.alibaba.rcm.internal to
-            jdk.management;
 
     // the service types defined by the APIs in this module
 

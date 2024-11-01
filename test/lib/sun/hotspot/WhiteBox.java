@@ -538,6 +538,9 @@ public class WhiteBox {
 
   // Container testing
   public native boolean isContainerized();
+  public native int validateCgroup(String procCgroups,
+                                   String procSelfCgroup,
+                                   String procSelfMountinfo);
   public native void printOsInfo();
 
   // Decoder
@@ -548,4 +551,7 @@ public class WhiteBox {
 
   // libc name
   public native String getLibcName();
+
+  // OBJ is in Current TLAB
+  public native boolean isInCurrentTLAB(Object o);
 }

@@ -4,6 +4,7 @@
  * @summary test Thread.isInNative() is correct
  * @modules java.base/jdk.internal.misc
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine TestIsInNative
  */
 

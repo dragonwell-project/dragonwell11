@@ -42,19 +42,19 @@ extern HB_INTERNAL const uint8_t _hb_modified_combining_class[256];
 
 #define HB_UNICODE_FUNCS_IMPLEMENT_CALLBACKS \
   HB_UNICODE_FUNC_IMPLEMENT (combining_class) \
-  HB_UNICODE_FUNC_IMPLEMENT (eastasian_width) \
+  HB_IF_NOT_DEPRECATED (HB_UNICODE_FUNC_IMPLEMENT (eastasian_width)) \
   HB_UNICODE_FUNC_IMPLEMENT (general_category) \
   HB_UNICODE_FUNC_IMPLEMENT (mirroring) \
   HB_UNICODE_FUNC_IMPLEMENT (script) \
   HB_UNICODE_FUNC_IMPLEMENT (compose) \
   HB_UNICODE_FUNC_IMPLEMENT (decompose) \
-  HB_UNICODE_FUNC_IMPLEMENT (decompose_compatibility) \
+  HB_IF_NOT_DEPRECATED (HB_UNICODE_FUNC_IMPLEMENT (decompose_compatibility)) \
   /* ^--- Add new callbacks here */
 
 /* Simple callbacks are those taking a hb_codepoint_t and returning a hb_codepoint_t */
 #define HB_UNICODE_FUNCS_IMPLEMENT_CALLBACKS_SIMPLE \
   HB_UNICODE_FUNC_IMPLEMENT (hb_unicode_combining_class_t, combining_class) \
-  HB_UNICODE_FUNC_IMPLEMENT (unsigned int, eastasian_width) \
+  HB_IF_NOT_DEPRECATED (HB_UNICODE_FUNC_IMPLEMENT (unsigned int, eastasian_width)) \
   HB_UNICODE_FUNC_IMPLEMENT (hb_unicode_general_category_t, general_category) \
   HB_UNICODE_FUNC_IMPLEMENT (hb_codepoint_t, mirroring) \
   HB_UNICODE_FUNC_IMPLEMENT (hb_script_t, script) \
@@ -89,7 +89,11 @@ HB_UNICODE_FUNCS_IMPLEMENT_CALLBACKS_SIMPLE
   unsigned int decompose_compatibility (hb_codepoint_t  u,
                                         hb_codepoint_t *decomposed)
   {
+#ifdef HB_DISABLE_DEPRECATED
+    unsigned int ret  = 0;
+#else
     unsigned int ret = func.decompose_compatibility (this, u, decomposed, user_data.decompose_compatibility);
+#endif
     if (ret == 1 && u == decomposed[0]) {
       decomposed[0] = 0;
       return 0;
@@ -101,15 +105,9 @@ HB_UNICODE_FUNCS_IMPLEMENT_CALLBACKS_SIMPLE
   unsigned int
   modified_combining_class (hb_codepoint_t u)
   {
-    /* XXX This hack belongs to the Myanmar shaper. */
-    if (unlikely (u == 0x1037u)) u = 0x103Au;
-
-    /* XXX This hack belongs to the USE shaper (for Tai Tham):
-     * Reorder SAKOT to ensure it comes after any tone marks. */
+    /* Reorder SAKOT to ensure it comes after any tone marks. */
     if (unlikely (u == 0x1A60u)) return 254;
-
-    /* XXX This hack belongs to the Tibetan shaper:
-     * Reorder PADMA to ensure it comes after any vowel marks. */
+    /* Reorder PADMA to ensure it comes after any vowel marks. */
     if (unlikely (u == 0x0FC6u)) return 254;
     /* Reorder TSA -PHRU to reorder before U+0F74 */
     if (unlikely (u == 0x0F39u)) return 127;
@@ -120,7 +118,7 @@ HB_UNICODE_FUNCS_IMPLEMENT_CALLBACKS_SIMPLE
   static hb_bool_t
   is_variation_selector (hb_codepoint_t unicode)
   {
-    /* U+180B..180D MONGOLIAN FREE VARIATION SELECTORs are handled in the
+    /* U+180B..180D, U+180F MONGOLIAN FREE VARIATION SELECTORs are handled in the
      * Arabic shaper.  No need to match them here. */
     return unlikely (hb_in_ranges<hb_codepoint_t> (unicode,
                                                    0xFE00u, 0xFE0Fu, /* VARIATION SELECTOR-1..16 */
@@ -135,7 +133,7 @@ HB_UNICODE_FUNCS_IMPLEMENT_CALLBACKS_SIMPLE
    * As such, we make exceptions for those four.
    * Also ignoring U+1BCA0..1BCA3. https://github.com/harfbuzz/harfbuzz/issues/503
    *
-   * Unicode 7.0:
+   * Unicode 14.0:
    * $ grep '; Default_Ignorable_Code_Point ' DerivedCoreProperties.txt | sed 's/;.*#/#/'
    * 00AD          # Cf       SOFT HYPHEN
    * 034F          # Mn       COMBINING GRAPHEME JOINER
@@ -144,6 +142,7 @@ HB_UNICODE_FUNCS_IMPLEMENT_CALLBACKS_SIMPLE
    * 17B4..17B5    # Mn   [2] KHMER VOWEL INHERENT AQ..KHMER VOWEL INHERENT AA
    * 180B..180D    # Mn   [3] MONGOLIAN FREE VARIATION SELECTOR ONE..MONGOLIAN FREE VARIATION SELECTOR THREE
    * 180E          # Cf       MONGOLIAN VOWEL SEPARATOR
+   * 180F          # Mn       MONGOLIAN FREE VARIATION SELECTOR FOUR
    * 200B..200F    # Cf   [5] ZERO WIDTH SPACE..RIGHT-TO-LEFT MARK
    * 202A..202E    # Cf   [5] LEFT-TO-RIGHT EMBEDDING..RIGHT-TO-LEFT OVERRIDE
    * 2060..2064    # Cf   [5] WORD JOINER..INVISIBLE PLUS
@@ -288,8 +287,8 @@ DECLARE_NULL_INSTANCE (hb_unicode_funcs_t);
 #define HB_MODIFIED_COMBINING_CLASS_CCC15 18 /* tsere */
 #define HB_MODIFIED_COMBINING_CLASS_CCC16 19 /* segol */
 #define HB_MODIFIED_COMBINING_CLASS_CCC17 20 /* patah */
-#define HB_MODIFIED_COMBINING_CLASS_CCC18 21 /* qamats */
-#define HB_MODIFIED_COMBINING_CLASS_CCC19 14 /* holam */
+#define HB_MODIFIED_COMBINING_CLASS_CCC18 21 /* qamats & qamats qatan */
+#define HB_MODIFIED_COMBINING_CLASS_CCC19 14 /* holam & holam haser for vav*/
 #define HB_MODIFIED_COMBINING_CLASS_CCC20 24 /* qubuts */
 #define HB_MODIFIED_COMBINING_CLASS_CCC21 12 /* dagesh */
 #define HB_MODIFIED_COMBINING_CLASS_CCC22 25 /* meteg */
@@ -322,11 +321,11 @@ DECLARE_NULL_INSTANCE (hb_unicode_funcs_t);
  *
  * Modify Telugu length marks (ccc=84, ccc=91).
  * These are the only matras in the main Indic scripts range that have
- * a non-zero ccc.  That makes them reorder with the Halant that is
- * ccc=9.  Just zero them, we don't need them in our Indic shaper.
+ * a non-zero ccc.  That makes them reorder with the Halant (ccc=9).
+ * Assign 4 and 5, which are otherwise unassigned.
  */
-#define HB_MODIFIED_COMBINING_CLASS_CCC84 0 /* length mark */
-#define HB_MODIFIED_COMBINING_CLASS_CCC91 0 /* ai length mark */
+#define HB_MODIFIED_COMBINING_CLASS_CCC84 4 /* length mark */
+#define HB_MODIFIED_COMBINING_CLASS_CCC91 5 /* ai length mark */
 
 /* Thai
  *
@@ -358,6 +357,13 @@ DECLARE_NULL_INSTANCE (hb_unicode_funcs_t);
           FLAG (HB_UNICODE_GENERAL_CATEGORY_ENCLOSING_MARK) | \
           FLAG (HB_UNICODE_GENERAL_CATEGORY_NON_SPACING_MARK)))
 
+#define HB_UNICODE_GENERAL_CATEGORY_IS_LETTER(gen_cat) \
+        (FLAG_UNSAFE (gen_cat) & \
+         (FLAG (HB_UNICODE_GENERAL_CATEGORY_LOWERCASE_LETTER) | \
+          FLAG (HB_UNICODE_GENERAL_CATEGORY_MODIFIER_LETTER) | \
+          FLAG (HB_UNICODE_GENERAL_CATEGORY_OTHER_LETTER) | \
+          FLAG (HB_UNICODE_GENERAL_CATEGORY_TITLECASE_LETTER) | \
+          FLAG (HB_UNICODE_GENERAL_CATEGORY_UPPERCASE_LETTER)))
 
 /*
  * Ranges, used for bsearch tables.
@@ -389,6 +395,9 @@ struct hb_unicode_range_t
 
 HB_INTERNAL bool
 _hb_unicode_is_emoji_Extended_Pictographic (hb_codepoint_t cp);
+
+
+extern "C" HB_INTERNAL hb_unicode_funcs_t *hb_ucd_get_unicode_funcs ();
 
 
 #endif /* HB_UNICODE_HH */

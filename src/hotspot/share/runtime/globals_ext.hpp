@@ -61,6 +61,19 @@
                                                                             \
   diagnostic(bool, VerboseWisp, false,                                      \
           "Print verbose Wisp information")                                 \
+                                                                            \
+  product(bool, MultiTenant, false,                                         \
+          "Enable the multi-tenant feature.")                               \
+                                                                            \
+  product(bool, TenantHeapIsolation, false,                                 \
+          "Isolates heap memory used by different TenantContainers")        \
+                                                                            \
+  product(bool, UsePerTenantTLAB, false,                                    \
+          "Mutator may maintain multiple TLABs for each of the tenants")    \
+                                                                            \
+  product(bool, TenantHeapThrottling, false,                                \
+             "Enable heap throttling per tenant")                           \
+
 
   //add new AJDK specific flags here
 

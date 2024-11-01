@@ -117,6 +117,10 @@ void os::check_dump_limit(char* buffer, size_t bufferSize) {
   VMError::record_coredump_status(buffer, success);
 }
 
+// Native stack isn't walkable for RISCV this way.
+// Native C frame and Java frame have different structure on RISCV.
+// A seperate implementation is provided under linux_riscv for RISCV.
+#if !defined(RISCV) || defined(ZERO)
 int os::get_native_stack(address* stack, int frames, int toSkip) {
   int frame_idx = 0;
   int num_of_frames;  // number of frames captured
@@ -143,7 +147,7 @@ int os::get_native_stack(address* stack, int frames, int toSkip) {
 
   return num_of_frames;
 }
-
+#endif
 
 bool os::unsetenv(const char* name) {
   assert(name != NULL, "Null pointer");

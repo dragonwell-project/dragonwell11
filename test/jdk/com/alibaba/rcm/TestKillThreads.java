@@ -4,7 +4,7 @@
  * @build TestKillThreads RcmUtils
  * @summary test RCM TestKillThreads
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:+Wisp2ThreadStop -XX:ActiveProcessorCount=4 TestKillThreads
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -Dcom.alibaba.wisp.threadAsWisp.black=name:Tester* -XX:+UseWisp2 -XX:+Wisp2ThreadStop -XX:ActiveProcessorCount=4 TestKillThreads
  * @run main/othervm -Xcomp -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:+Wisp2ThreadStop -XX:ActiveProcessorCount=4 TestKillThreads
@@ -14,7 +14,7 @@
 
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceType;
-import com.alibaba.rcm.internal.RCMUnsafe;
+import com.alibaba.rcm.RCMUnsafe;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;

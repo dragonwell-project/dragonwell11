@@ -43,17 +43,21 @@ G1Allocator::G1Allocator(G1CollectedHeap* heap) :
 }
 
 void G1Allocator::init_mutator_alloc_region() {
+  if (TenantHeapIsolation) {
+    G1TenantAllocationContexts::init_mutator_alloc_regions();
+  }
+
   assert(_mutator_alloc_region.get() == NULL, "pre-condition");
   _mutator_alloc_region.init();
 }
 
 void G1Allocator::release_mutator_alloc_region() {
+  if (TenantHeapIsolation) {
+    G1TenantAllocationContexts::release_mutator_alloc_regions();
+  }
+
   _mutator_alloc_region.release();
   assert(_mutator_alloc_region.get() == NULL, "post-condition");
-}
-
-bool G1Allocator::is_retained_old_region(HeapRegion* hr) {
-  return _retained_old_gc_alloc_region == hr;
 }
 
 void G1Allocator::reuse_retained_old_region(EvacuationInfo& evacuation_info,
@@ -61,8 +65,15 @@ void G1Allocator::reuse_retained_old_region(EvacuationInfo& evacuation_info,
                                             HeapRegion** retained_old) {
   HeapRegion* retained_region = *retained_old;
   *retained_old = NULL;
+
   assert(retained_region == NULL || !retained_region->is_archive(),
          "Archive region should not be alloc region (index %u)", retained_region->hrm_index());
+  AllocationContext_t context = old->allocation_context();
+
+  DEBUG_ONLY(if (TenantHeapIsolation && NULL != retained_region) {
+    assert(context == retained_region->allocation_context(),
+           "Inconsistent tenant alloc contexts");
+  });
 
   // We will discard the current GC alloc region if:
   // a) it's in the collection set (it can happen!),
@@ -87,7 +98,13 @@ void G1Allocator::reuse_retained_old_region(EvacuationInfo& evacuation_info,
     retained_region->note_start_of_copying(during_im);
     old->set(retained_region);
     _g1h->hr_printer()->reuse(retained_region);
-    evacuation_info.set_alloc_regions_used_before(retained_region->used());
+
+    // Do accumulation in tenant mode, otherwise just set it
+    if (TenantHeapIsolation) {
+      evacuation_info.increment_alloc_regions_used_before(retained_region->used());
+    } else {
+      evacuation_info.set_alloc_regions_used_before(retained_region->used());
+    }
   }
 }
 
@@ -102,24 +119,66 @@ void G1Allocator::init_gc_alloc_regions(EvacuationInfo& evacuation_info) {
   reuse_retained_old_region(evacuation_info,
                             &_old_gc_alloc_region,
                             &_retained_old_gc_alloc_region);
+
+  if (TenantHeapIsolation) {
+    // for non-root tenants
+    G1TenantAllocationContexts::init_gc_alloc_regions(this, evacuation_info);
+  }
 }
 
 void G1Allocator::release_gc_alloc_regions(EvacuationInfo& evacuation_info) {
-  evacuation_info.set_allocation_regions(survivor_gc_alloc_region()->count() +
-                                         old_gc_alloc_region()->count());
-  survivor_gc_alloc_region()->release();
+  AllocationContext_t context = AllocationContext::current();
+  if (TenantHeapIsolation) {
+    // in non-tenant mode, system() == current(), AllocationContext::current() just works.
+    // but in tenant mode, we are trying to release all gc alloc regions from all tenants,
+    // thus explicitly overwrite the first operand context to system() like below.
+    context = AllocationContext::system();
+  }
+
+  evacuation_info.set_allocation_regions(survivor_gc_alloc_region(context)->count() +
+                                         old_gc_alloc_region(context)->count());
+  survivor_gc_alloc_region(context)->release();
   // If we have an old GC alloc region to release, we'll save it in
   // _retained_old_gc_alloc_region. If we don't
   // _retained_old_gc_alloc_region will become NULL. This is what we
   // want either way so no reason to check explicitly for either
   // condition.
-  _retained_old_gc_alloc_region = old_gc_alloc_region()->release();
+  _retained_old_gc_alloc_region = old_gc_alloc_region(context)->release();
+
+  // Release GC alloc region for non-root tenants
+  if (TenantHeapIsolation) {
+    G1TenantAllocationContexts::release_gc_alloc_regions(evacuation_info);
+  }
+
 }
 
 void G1Allocator::abandon_gc_alloc_regions() {
-  assert(survivor_gc_alloc_region()->get() == NULL, "pre-condition");
-  assert(old_gc_alloc_region()->get() == NULL, "pre-condition");
-  _retained_old_gc_alloc_region = NULL;
+  DEBUG_ONLY(if (TenantHeapIsolation) {
+    // in non-tenant mode, system() == current(), AllocationContext::current() just works.
+    // but in tenant mode, we are trying to release all gc alloc regions from all tenants,
+    // thus explicitly overwrite the first operand context to system() like below.
+    assert(survivor_gc_alloc_region(AllocationContext::system())->get() == NULL, "pre-condition");
+    assert(old_gc_alloc_region(AllocationContext::system())->get() == NULL, "pre-condition");
+  } else {
+    // original logic, untouched
+    assert(survivor_gc_alloc_region(AllocationContext::current())->get() == NULL, "pre-condition");
+    assert(old_gc_alloc_region(AllocationContext::current())->get() == NULL, "pre-condition");
+  });
+
+   _retained_old_gc_alloc_region = NULL;
+
+  if (TenantHeapIsolation) {
+    G1TenantAllocationContexts::abandon_gc_alloc_regions();
+  }
+}
+
+bool G1Allocator::is_retained_old_region(HeapRegion* hr) {
+  if (TenantHeapIsolation && NULL != hr && !hr->allocation_context().is_system()) {
+    G1TenantAllocationContext* tac = hr->allocation_context().tenant_allocation_context();
+    assert(NULL != tac, "pre-condition");
+    return tac->retained_old_gc_alloc_region() == hr;
+  }
+  return _retained_old_gc_alloc_region == hr;
 }
 
 bool G1Allocator::survivor_is_full() const {
@@ -138,7 +197,7 @@ void G1Allocator::set_old_full() {
   _old_is_full = true;
 }
 
-size_t G1Allocator::unsafe_max_tlab_alloc() {
+size_t G1Allocator::unsafe_max_tlab_alloc(AllocationContext_t context) {
   // Return the remaining space in the cur alloc region, but not less than
   // the min TLAB size.
 
@@ -146,7 +205,7 @@ size_t G1Allocator::unsafe_max_tlab_alloc() {
   // since we can't allow tlabs to grow big enough to accommodate
   // humongous objects.
 
-  HeapRegion* hr = mutator_alloc_region()->get();
+  HeapRegion* hr = mutator_alloc_region(context)->get();
   size_t max_tlab = _g1h->max_tlab_size() * wordSize;
   if (hr == NULL) {
     return max_tlab;
@@ -157,14 +216,26 @@ size_t G1Allocator::unsafe_max_tlab_alloc() {
 
 size_t G1Allocator::used_in_alloc_regions() {
   assert(Heap_lock->owner() != NULL, "Should be owned on this thread's behalf.");
-  return mutator_alloc_region()->used_in_alloc_regions();
+  size_t result = 0; // _summary already added in collectedHeap
+  if (TenantHeapIsolation) {
+    // root tenant's
+    result += mutator_alloc_region(AllocationContext::system())->used_in_alloc_regions();
+
+    result += G1TenantAllocationContexts::total_used();
+  } else {
+    // TenantHeapIsolation disabled mode
+    // Read only once in case it is set to NULL concurrently
+    result += mutator_alloc_region(AllocationContext::current())->used_in_alloc_regions();
+  }
+  return result;
 }
 
 
 HeapWord* G1Allocator::par_allocate_during_gc(InCSetState dest,
-                                              size_t word_size) {
+                                              size_t word_size,
+                                              AllocationContext_t context) {
   size_t temp = 0;
-  HeapWord* result = par_allocate_during_gc(dest, word_size, word_size, &temp);
+  HeapWord* result = par_allocate_during_gc(dest, word_size, word_size, &temp, context);
   assert(result == NULL || temp == word_size,
          "Requested " SIZE_FORMAT " words, but got " SIZE_FORMAT " at " PTR_FORMAT,
          word_size, temp, p2i(result));
@@ -174,12 +245,13 @@ HeapWord* G1Allocator::par_allocate_during_gc(InCSetState dest,
 HeapWord* G1Allocator::par_allocate_during_gc(InCSetState dest,
                                               size_t min_word_size,
                                               size_t desired_word_size,
-                                              size_t* actual_word_size) {
+                                              size_t* actual_word_size,
+                                              AllocationContext_t context) {
   switch (dest.value()) {
     case InCSetState::Young:
-      return survivor_attempt_allocation(min_word_size, desired_word_size, actual_word_size);
+      return survivor_attempt_allocation(min_word_size, desired_word_size, actual_word_size, context);
     case InCSetState::Old:
-      return old_attempt_allocation(min_word_size, desired_word_size, actual_word_size);
+      return old_attempt_allocation(min_word_size, desired_word_size, actual_word_size, context);
     default:
       ShouldNotReachHere();
       return NULL; // Keep some compilers happy
@@ -188,16 +260,17 @@ HeapWord* G1Allocator::par_allocate_during_gc(InCSetState dest,
 
 HeapWord* G1Allocator::survivor_attempt_allocation(size_t min_word_size,
                                                    size_t desired_word_size,
-                                                   size_t* actual_word_size) {
+                                                   size_t* actual_word_size,
+                                                   AllocationContext_t context) {
   assert(!_g1h->is_humongous(desired_word_size),
          "we should not be seeing humongous-size allocations in this path");
 
-  HeapWord* result = survivor_gc_alloc_region()->attempt_allocation(min_word_size,
+  HeapWord* result = survivor_gc_alloc_region(context)->attempt_allocation(min_word_size,
                                                                     desired_word_size,
                                                                     actual_word_size);
   if (result == NULL && !survivor_is_full()) {
     MutexLockerEx x(FreeList_lock, Mutex::_no_safepoint_check_flag);
-    result = survivor_gc_alloc_region()->attempt_allocation_locked(min_word_size,
+    result = survivor_gc_alloc_region(context)->attempt_allocation_locked(min_word_size,
                                                                    desired_word_size,
                                                                    actual_word_size);
     if (result == NULL) {
@@ -212,16 +285,17 @@ HeapWord* G1Allocator::survivor_attempt_allocation(size_t min_word_size,
 
 HeapWord* G1Allocator::old_attempt_allocation(size_t min_word_size,
                                               size_t desired_word_size,
-                                              size_t* actual_word_size) {
+                                              size_t* actual_word_size,
+                                              AllocationContext_t context) {
   assert(!_g1h->is_humongous(desired_word_size),
          "we should not be seeing humongous-size allocations in this path");
 
-  HeapWord* result = old_gc_alloc_region()->attempt_allocation(min_word_size,
+  HeapWord* result = old_gc_alloc_region(context)->attempt_allocation(min_word_size,
                                                                desired_word_size,
                                                                actual_word_size);
   if (result == NULL && !old_is_full()) {
     MutexLockerEx x(FreeList_lock, Mutex::_no_safepoint_check_flag);
-    result = old_gc_alloc_region()->attempt_allocation_locked(min_word_size,
+    result = old_gc_alloc_region(context)->attempt_allocation_locked(min_word_size,
                                                               desired_word_size,
                                                               actual_word_size);
     if (result == NULL) {
@@ -229,6 +303,32 @@ HeapWord* G1Allocator::old_attempt_allocation(size_t min_word_size,
     }
   }
   return result;
+}
+
+#ifdef ASSERT
+bool G1Allocator::has_mutator_alloc_region(AllocationContext_t context) { 
+  return mutator_alloc_region(context)->get() != NULL; 
+}
+#endif
+
+G1TenantPLAB::G1TenantPLAB(G1CollectedHeap* g1h,
+                           AllocationContext_t ac)
+        : _allocation_context(ac)
+        , _g1h(g1h)
+        , _surviving_alloc_buffer(g1h->desired_plab_sz(InCSetState::Young))
+        , _tenured_alloc_buffer(g1h->desired_plab_sz(InCSetState::Old)) {
+  assert(TenantHeapIsolation, "pre-condition");
+  for (uint state = 0; state < InCSetState::Num; state++) {
+    _alloc_buffers[state] = NULL;
+  }
+  _alloc_buffers[InCSetState::Young] = &_surviving_alloc_buffer;
+  _alloc_buffers[InCSetState::Old]  = &_tenured_alloc_buffer;
+}
+
+PLAB* G1TenantPLAB::alloc_buffer(InCSetState dest) {
+  assert(TenantHeapIsolation, "pre-condition");
+  assert(dest.is_valid(), "just checking");
+  return _alloc_buffers[dest.value()];
 }
 
 uint G1PLABAllocator::calc_survivor_alignment_bytes() {
@@ -248,6 +348,7 @@ G1PLABAllocator::G1PLABAllocator(G1Allocator* allocator) :
   _allocator(allocator),
   _surviving_alloc_buffer(_g1h->desired_plab_sz(InCSetState::Young)),
   _tenured_alloc_buffer(_g1h->desired_plab_sz(InCSetState::Old)),
+  _tenant_plabs(NULL),
   _survivor_alignment_bytes(calc_survivor_alignment_bytes()) {
   for (uint state = 0; state < InCSetState::Num; state++) {
     _direct_allocated[state] = 0;
@@ -255,6 +356,37 @@ G1PLABAllocator::G1PLABAllocator(G1Allocator* allocator) :
   }
   _alloc_buffers[InCSetState::Young] = &_surviving_alloc_buffer;
   _alloc_buffers[InCSetState::Old]  = &_tenured_alloc_buffer;
+
+  if (TenantHeapIsolation) {
+    _tenant_plabs = new TenantBufferMap(G1TenantAllocationContexts::active_context_count());
+  }
+}
+
+G1TenantPLAB* G1PLABAllocator::tenant_plab_of(AllocationContext_t ac) {
+  assert(TenantHeapIsolation, "pre-condition");
+
+  // slow path to traverse over all tenant buffers
+  assert(NULL != _tenant_plabs, "just checking");
+  if (_tenant_plabs->contains(ac)) {
+    assert(NULL != _tenant_plabs->get(ac), "pre-condition");
+    return _tenant_plabs->get(ac)->value();
+  }
+
+  return NULL;
+}
+
+G1PLABAllocator::~G1PLABAllocator() {
+  if (TenantHeapIsolation) {
+    assert(NULL != _tenant_plabs, "just checking");
+    for (TenantBufferMap::Iterator itr = _tenant_plabs->begin();
+         itr != _tenant_plabs->end(); ++itr) {
+      assert(!itr->key().is_system(), "pre-condition");
+      G1TenantPLAB* tbuf = itr->value();
+      delete tbuf;
+    }
+    _tenant_plabs->clear();
+    delete _tenant_plabs;
+  }
 }
 
 bool G1PLABAllocator::may_throw_away_buffer(size_t const allocation_word_sz, size_t const buffer_size) const {
@@ -263,6 +395,7 @@ bool G1PLABAllocator::may_throw_away_buffer(size_t const allocation_word_sz, siz
 
 HeapWord* G1PLABAllocator::allocate_direct_or_new_plab(InCSetState dest,
                                                        size_t word_sz,
+                                                       AllocationContext_t context,
                                                        bool* plab_refill_failed) {
   size_t plab_word_size = _g1h->desired_plab_sz(dest);
   size_t required_in_plab = PLAB::size_required_for_allocation(word_sz);
@@ -272,14 +405,15 @@ HeapWord* G1PLABAllocator::allocate_direct_or_new_plab(InCSetState dest,
   if ((required_in_plab <= plab_word_size) &&
     may_throw_away_buffer(required_in_plab, plab_word_size)) {
 
-    PLAB* alloc_buf = alloc_buffer(dest);
+    PLAB* alloc_buf = alloc_buffer(dest, context);
     alloc_buf->retire();
 
     size_t actual_plab_size = 0;
     HeapWord* buf = _allocator->par_allocate_during_gc(dest,
                                                        required_in_plab,
                                                        plab_word_size,
-                                                       &actual_plab_size);
+                                                       &actual_plab_size,
+                                                       context);
 
     assert(buf == NULL || ((actual_plab_size >= required_in_plab) && (actual_plab_size <= plab_word_size)),
            "Requested at minimum " SIZE_FORMAT ", desired " SIZE_FORMAT " words, but got " SIZE_FORMAT " at " PTR_FORMAT,
@@ -298,15 +432,15 @@ HeapWord* G1PLABAllocator::allocate_direct_or_new_plab(InCSetState dest,
     *plab_refill_failed = true;
   }
   // Try direct allocation.
-  HeapWord* result = _allocator->par_allocate_during_gc(dest, word_sz);
+  HeapWord* result = _allocator->par_allocate_during_gc(dest, word_sz, context);
   if (result != NULL) {
     _direct_allocated[dest.value()] += word_sz;
   }
   return result;
 }
 
-void G1PLABAllocator::undo_allocation(InCSetState dest, HeapWord* obj, size_t word_sz) {
-  alloc_buffer(dest)->undo_allocation(obj, word_sz);
+void G1PLABAllocator::undo_allocation(InCSetState dest, HeapWord* obj, size_t word_sz, AllocationContext_t context) {
+  alloc_buffer(dest, context)->undo_allocation(obj, word_sz);
 }
 
 void G1PLABAllocator::flush_and_retire_stats() {
@@ -317,6 +451,26 @@ void G1PLABAllocator::flush_and_retire_stats() {
       buf->flush_and_retire_stats(stats);
       stats->add_direct_allocated(_direct_allocated[state]);
       _direct_allocated[state] = 0;
+    }
+
+    if (TenantHeapIsolation) {
+      assert(NULL != _tenant_plabs, "just checking");
+      // retire all non-root buffers
+      for (TenantBufferMap::Iterator itr = _tenant_plabs->begin();
+           itr != _tenant_plabs->end(); ++itr) {
+        assert(!itr->key().is_system(), "pre-condition");
+        G1TenantPLAB* tbuf = itr->value();
+        assert(NULL != tbuf, "pre-condition");
+        PLAB* buffer = tbuf->alloc_buffer(state);
+        if (buffer != NULL) {
+          G1EvacStats* stats = _g1h->alloc_buffer_stats(state);
+          buffer->flush_and_retire_stats(stats);
+          stats->add_direct_allocated(_direct_allocated[state]);
+          _direct_allocated[state] = 0;
+        }
+      }
+    } else {
+      assert(NULL == _tenant_plabs, "just checking");
     }
   }
 }

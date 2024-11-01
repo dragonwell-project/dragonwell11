@@ -63,30 +63,29 @@ private:
   void set_survivor_full();
   void set_old_full();
 
-  void reuse_retained_old_region(EvacuationInfo& evacuation_info,
-                                 OldGCAllocRegion* old,
-                                 HeapRegion** retained);
 
   // Accessors to the allocation regions.
-  inline MutatorAllocRegion* mutator_alloc_region();
-  inline SurvivorGCAllocRegion* survivor_gc_alloc_region();
-  inline OldGCAllocRegion* old_gc_alloc_region();
+  inline MutatorAllocRegion* mutator_alloc_region(AllocationContext_t context);
+  inline SurvivorGCAllocRegion* survivor_gc_alloc_region(AllocationContext_t context);
+  inline OldGCAllocRegion* old_gc_alloc_region(AllocationContext_t context);
 
   // Allocation attempt during GC for a survivor object / PLAB.
   HeapWord* survivor_attempt_allocation(size_t min_word_size,
                                                size_t desired_word_size,
-                                               size_t* actual_word_size);
+                                               size_t* actual_word_size,
+                                               AllocationContext_t context);
 
   // Allocation attempt during GC for an old object / PLAB.
   HeapWord* old_attempt_allocation(size_t min_word_size,
                                           size_t desired_word_size,
-                                          size_t* actual_word_size);
+                                          size_t* actual_word_size,
+                                          AllocationContext_t context);
 public:
   G1Allocator(G1CollectedHeap* heap);
 
 #ifdef ASSERT
   // Do we currently have an active mutator region to allocate into?
-  bool has_mutator_alloc_region() { return mutator_alloc_region()->get() != NULL; }
+  bool has_mutator_alloc_region(AllocationContext_t context);
 #endif
 
   void init_mutator_alloc_region();
@@ -97,15 +96,20 @@ public:
   void abandon_gc_alloc_regions();
   bool is_retained_old_region(HeapRegion* hr);
 
+  void reuse_retained_old_region(EvacuationInfo& evacuation_info,
+                                 OldGCAllocRegion* old,
+                                 HeapRegion** retained);
+
   // Allocate blocks of memory during mutator time.
 
   inline HeapWord* attempt_allocation(size_t min_word_size,
                                       size_t desired_word_size,
-                                      size_t* actual_word_size);
-  inline HeapWord* attempt_allocation_locked(size_t word_size);
-  inline HeapWord* attempt_allocation_force(size_t word_size);
+                                      size_t* actual_word_size,
+                                      AllocationContext_t context);
+  inline HeapWord* attempt_allocation_locked(size_t word_size, AllocationContext_t context);
+  inline HeapWord* attempt_allocation_force(size_t word_size, AllocationContext_t context);
 
-  size_t unsafe_max_tlab_alloc();
+  size_t unsafe_max_tlab_alloc(AllocationContext_t context);
   size_t used_in_alloc_regions();
 
   // Allocate blocks of memory during garbage collection. Will ensure an
@@ -113,12 +117,36 @@ public:
   // heap, and then allocate a block of the given size. The block
   // may not be a humongous - it must fit into a single heap region.
   HeapWord* par_allocate_during_gc(InCSetState dest,
-                                   size_t word_size);
+                                   size_t word_size,
+                                   AllocationContext_t context);
 
   HeapWord* par_allocate_during_gc(InCSetState dest,
                                    size_t min_word_size,
                                    size_t desired_word_size,
-                                   size_t* actual_word_size);
+                                   size_t* actual_word_size,
+                                   AllocationContext_t context);
+};
+
+// To encapsulate per-tenant PLAB for G1DefaultParGCAllocator to use
+// during GC pause.
+// NOTE: thread local object
+class G1TenantPLAB : public CHeapObj<mtTenant> {
+  friend class G1DefaultPLAB;
+private:
+  PLAB  _surviving_alloc_buffer;
+  PLAB  _tenured_alloc_buffer;
+  PLAB* _alloc_buffers[InCSetState::Num];
+
+  AllocationContext_t _allocation_context;        // NOTE: used during GC, be careful with dereferencing
+  G1CollectedHeap*    _g1h;
+
+public:
+  G1TenantPLAB(G1CollectedHeap* g1h, AllocationContext_t ac);
+
+  PLAB* alloc_buffer(InCSetState dest);
+
+  AllocationContext_t allocation_context() { return _allocation_context; }
+  void set_allocation_context(AllocationContext_t ac) { _allocation_context = ac; }
 };
 
 // Manages the PLABs used during garbage collection. Interface for allocation from PLABs.
@@ -130,6 +158,7 @@ private:
   G1CollectedHeap* _g1h;
   G1Allocator* _allocator;
 
+  // only for ROOT tenant if TenantHeapIsolation enabled
   PLAB  _surviving_alloc_buffer;
   PLAB  _tenured_alloc_buffer;
   PLAB* _alloc_buffers[InCSetState::Num];
@@ -145,15 +174,26 @@ private:
   size_t _direct_allocated[InCSetState::Num];
 
   void flush_and_retire_stats();
-  inline PLAB* alloc_buffer(InCSetState dest);
+  inline PLAB* alloc_buffer(InCSetState dest, AllocationContext_t context);
 
   // Calculate the survivor space object alignment in bytes. Returns that or 0 if
   // there are no restrictions on survivor alignment.
   static uint calc_survivor_alignment_bytes();
 
   bool may_throw_away_buffer(size_t const allocation_word_sz, size_t const buffer_size) const;
+
+  // Per-tenant par gc allocation buffers
+  typedef HashMap<AllocationContext_t, G1TenantPLAB*, mtTenant> TenantBufferMap;
+  TenantBufferMap*    _tenant_plabs;
+
+protected:
+  // returns tenant alloc buffer of target allocation context, NULL if not exist
+  G1TenantPLAB* tenant_plab_of(AllocationContext_t ac);
+
 public:
   G1PLABAllocator(G1Allocator* allocator);
+
+  virtual ~G1PLABAllocator();
 
   void waste(size_t& wasted, size_t& undo_wasted);
 
@@ -163,18 +203,21 @@ public:
   // PLAB failed or not.
   HeapWord* allocate_direct_or_new_plab(InCSetState dest,
                                         size_t word_sz,
+                                        AllocationContext_t context,
                                         bool* plab_refill_failed);
 
   // Allocate word_sz words in the PLAB of dest.  Returns the address of the
   // allocated memory, NULL if not successful.
   inline HeapWord* plab_allocate(InCSetState dest,
-                                 size_t word_sz);
+                                 size_t word_sz,
+                                 AllocationContext_t context);
 
   inline HeapWord* allocate(InCSetState dest,
                             size_t word_sz,
+                            AllocationContext_t context,
                             bool* refill_failed);
 
-  void undo_allocation(InCSetState dest, HeapWord* obj, size_t word_sz);
+  void undo_allocation(InCSetState dest, HeapWord* obj, size_t word_sz, AllocationContext_t context);
 };
 
 // G1ArchiveRegionMap is a boolean array used to mark G1 regions as

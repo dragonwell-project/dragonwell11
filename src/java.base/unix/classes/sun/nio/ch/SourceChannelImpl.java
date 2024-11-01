@@ -25,8 +25,13 @@
 
 package sun.nio.ch;
 
+import com.alibaba.wisp.engine.WispEngine;
+import jdk.internal.misc.SharedSecrets;
+import jdk.internal.misc.WispEngineAccess;
+
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.ClosedChannelException;
@@ -41,6 +46,8 @@ class SourceChannelImpl
     extends Pipe.SourceChannel
     implements SelChImpl
 {
+    private static final WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
+
     // Used to make native read and write calls
     private static final NativeDispatcher nd = new FileDispatcherImpl();
 
@@ -82,6 +89,11 @@ class SourceChannelImpl
         super(sp);
         this.fd = fd;
         this.fdVal = IOUtil.fdVal(fd);
+        try {
+            configureAsNonBlockingForWisp(fd);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Unexpected error at configureAsNonBlockingForWisp", e);
+        }
     }
 
     /**
@@ -254,7 +266,15 @@ class SourceChannelImpl
                 beginRead(blocking);
                 do {
                     n = IOUtil.read(fd, dst, -1, nd);
-                } while ((n == IOStatus.INTERRUPTED) && isOpen());
+                    if ((n == IOStatus.INTERRUPTED) && isOpen()) {
+                        continue;
+                    }
+                    if (WispEngine.transparentWispSwitch() && isBlocking() && IOStatus.okayToRetry(n)) {
+                        WEA.poll(this, Net.POLLIN, -1);
+                        continue;
+                    }
+                    break;
+                } while (true);
             } finally {
                 endRead(blocking, n > 0);
                 assert IOStatus.check(n);
@@ -277,7 +297,15 @@ class SourceChannelImpl
                 beginRead(blocking);
                 do {
                     n = IOUtil.read(fd, dsts, offset, length, nd);
-                } while ((n == IOStatus.INTERRUPTED) && isOpen());
+                    if ((n == IOStatus.INTERRUPTED) && isOpen()) {
+                        continue;
+                    }
+                    if (WispEngine.transparentWispSwitch() && isBlocking() && IOStatus.okayToRetry(n)) {
+                        WEA.poll(this, Net.POLLIN, -1);
+                        continue;
+                    }
+                    break;
+                } while (true);
             } finally {
                 endRead(blocking, n > 0);
                 assert IOStatus.check(n);

@@ -4,13 +4,13 @@
  * @build TestRCMInheritanceCallBack RcmUtils
  * @summary test RCM cpu resource control.
  * @modules java.base/com.alibaba.wisp.engine:+open
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 -XX:ActiveProcessorCount=4 TestRCMInheritanceCallBack
  */
 
 import com.alibaba.rcm.ResourceContainer;
 import com.alibaba.rcm.ResourceType;
-import com.alibaba.rcm.internal.RCMUnsafe;
+import com.alibaba.rcm.RCMUnsafe;
 
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,6 +30,7 @@
 #include "opto/parse.hpp"
 #include "runtime/threadCritical.hpp"
 #include "runtime/threadSMR.hpp"
+#include "utilities/stringUtils.hpp"
 
 #ifndef PRODUCT
 
@@ -75,10 +76,6 @@ const char *IdealGraphPrinter::ASSEMBLY_ELEMENT = "assembly";
 int IdealGraphPrinter::_file_count = 0;
 
 IdealGraphPrinter *IdealGraphPrinter::printer() {
-  if (!PrintIdealGraph) {
-    return NULL;
-  }
-
   JavaThread *thread = JavaThread::current();
   if (!thread->is_Compiler_thread()) return NULL;
 
@@ -409,7 +406,37 @@ void IdealGraphPrinter::visit_node(Node *n, bool edges, VectorSet* temp_set) {
         print_prop("block", C->cfg()->get_block(0)->_pre_order);
       } else {
         print_prop("block", block->_pre_order);
+        // Print estimated execution frequency, normalized within a [0,1] range.
+        buffer[0] = 0;
+        stringStream freq(buffer, sizeof(buffer) - 1);
+        // Higher precision has no practical effect in visualizations.
+        freq.print("%.8f", block->_freq / _max_freq);
+        assert(freq.size() < sizeof(buffer), "size in range");
+        // Enforce dots as decimal separators, as required by IGV.
+        StringUtils::replace_no_expand(buffer, ",", ".");
+        print_prop("frequency", buffer);
       }
+    }
+
+    switch (t->category()) {
+      case Type::CatData:
+        print_prop("category", "data");
+        break;
+      case Type::CatMemory:
+        print_prop("category", "memory");
+        break;
+      case Type::CatMixed:
+        print_prop("category", "mixed");
+        break;
+      case Type::CatControl:
+        print_prop("category", "control");
+        break;
+      case Type::CatOther:
+        print_prop("category", "other");
+        break;
+      case Type::CatUndef:
+        print_prop("category", "undef");
+        break;
     }
 
     const jushort flags = node->flags();
@@ -670,7 +697,7 @@ void IdealGraphPrinter::print_method(const char *name, int level, bool clear_nod
 // Print current ideal graph
 void IdealGraphPrinter::print(const char *name, Node *node, int level, bool clear_nodes) {
 
-  if (!_current_method || !_should_send_method || !should_print(level)) return;
+  if (!_current_method || !_should_send_method || !C->should_print(level)) return;
 
   // Warning, unsafe cast?
   _chaitin = (PhaseChaitin *)C->regalloc();
@@ -682,6 +709,16 @@ void IdealGraphPrinter::print(const char *name, Node *node, int level, bool clea
   VectorSet temp_set(Thread::current()->resource_area());
 
   head(NODES_ELEMENT);
+  if (C->cfg() != NULL) {
+    // Compute the maximum estimated frequency in the current graph.
+    _max_freq = 1.0e-6;
+    for (uint i = 0; i < C->cfg()->number_of_blocks(); i++) {
+      Block* block = C->cfg()->get_block(i);
+      if (block->_freq > _max_freq) {
+        _max_freq = block->_freq;
+      }
+    }
+  }
   walk_nodes(node, false, &temp_set);
   tail(NODES_ELEMENT);
 
@@ -718,11 +755,6 @@ void IdealGraphPrinter::print(const char *name, Node *node, int level, bool clea
   }
   tail(GRAPH_ELEMENT);
   _xml->flush();
-}
-
-// Should method be printed?
-bool IdealGraphPrinter::should_print(int level) {
-  return C->directive()->IGVPrintLevelOption >= level;
 }
 
 extern const char *NodeClassNames[];

@@ -22,15 +22,18 @@
  *
  */
 
+package gc.stress.gcbasher;
+
 import java.io.IOException;
 
 /*
  * @test TestGCBasherWithZ
  * @key gc stress
+ * @library /
  * @requires vm.gc.Z
  * @requires vm.flavor == "server" & !vm.emulatedClient & !vm.graal.enabled
  * @summary Stress ZGC
- * @run main/othervm/timeout=200 -Xlog:gc*=info -Xmx384m -server -XX:+UseZGC TestGCBasherWithZ 120000
+ * @run main/othervm/timeout=200 -Xlog:gc*=info -Xmx384m -server -XX:+UseZGC gc.stress.gcbasher.TestGCBasherWithZ 120000
  */
 public class TestGCBasherWithZ {
     public static void main(String[] args) throws IOException {

@@ -107,6 +107,7 @@ class ServerSocketChannelImpl
         super(sp);
         this.fd =  Net.serverSocket(true);
         this.fdVal = IOUtil.fdVal(fd);
+        configureAsNonBlockingForWisp(fd);
     }
 
     ServerSocketChannelImpl(SelectorProvider sp, FileDescriptor fd, boolean bound)
@@ -120,6 +121,7 @@ class ServerSocketChannelImpl
                 localAddress = Net.localAddress(fd);
             }
         }
+        configureAsNonBlockingForWisp(fd);
     }
 
     // @throws ClosedChannelException if channel is closed
@@ -285,29 +287,19 @@ class ServerSocketChannelImpl
 
             boolean blocking = isBlocking();
 
-            final boolean wispAndBlocking = WispEngine.transparentWispSwitch() && blocking &&
-                                            WEA.usingWispEpoll();
-
             try {
                 begin(blocking);
-                if (wispAndBlocking) {
-                    IOUtil.configureBlocking(fd, false);
-                }
                 for (;;) {
                     n = accept(this.fd, newfd, isaa);
                     if ((n == IOStatus.INTERRUPTED) && isOpen())
                         continue;
-                    if (wispAndBlocking && n < 0) {
-                        WEA.registerEvent(this, SelectionKey.OP_ACCEPT);
-                        WEA.park(-1);
+                    if (WispEngine.transparentWispSwitch() && isBlocking() && IOStatus.okayToRetry(n)) {
+                        WEA.poll(this, Net.POLLIN, -1);
                         continue;
                     }
                     break;
                 }
             } finally {
-                if (wispAndBlocking) {
-                    IOUtil.configureBlocking(fd, true);
-                }
                 end(blocking, n > 0);
                 assert IOStatus.check(n);
             }
@@ -316,7 +308,7 @@ class ServerSocketChannelImpl
                 return null;
 
             // newly accepted socket is initially in blocking mode
-            IOUtil.configureBlocking(newfd, true);
+            configureAsNonBlockingForWisp(newfd);
 
             InetSocketAddress isa = isaa[0];
             SocketChannel sc = new SocketChannelImpl(provider(), newfd, isa);
@@ -457,7 +449,12 @@ class ServerSocketChannelImpl
             boolean polled = false;
             try {
                 begin(true);
-                int events = Net.poll(fd, Net.POLLIN, timeout);
+                int events;
+                if (WispEngine.transparentWispSwitch()) {
+                    events = WEA.poll(this, Net.POLLIN, timeout);
+                } else {
+                    events = Net.poll(fd, Net.POLLIN, timeout);
+                }
                 polled = (events != 0);
             } finally {
                 end(true, polled);

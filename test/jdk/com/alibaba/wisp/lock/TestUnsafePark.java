@@ -3,6 +3,7 @@
  * @library /lib/testlibrary
  * @summary Test to verify we can do proper wisp scheduling while calling on Unsafe.park()
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true TestUnsafePark
 */
 

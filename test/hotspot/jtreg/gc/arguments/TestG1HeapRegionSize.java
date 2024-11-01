@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 
+package gc.arguments;
+
 /*
  * @test TestG1HeapRegionSize
  * @key gc
@@ -30,7 +32,8 @@
  * @modules java.base/jdk.internal.misc
  * @modules java.management/sun.management
  * @library /test/lib
- * @run main TestG1HeapRegionSize
+ * @library /
+ * @run main gc.arguments.TestG1HeapRegionSize
  */
 
 import java.util.regex.Matcher;
@@ -51,7 +54,7 @@ public class TestG1HeapRegionSize {
     flagList.add("-XX:+PrintFlagsFinal");
     flagList.add("-version");
 
-    ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(flagList.toArray(new String[0]));
+    ProcessBuilder pb = GCArguments.createJavaProcessBuilder(flagList);
     OutputAnalyzer output = new OutputAnalyzer(pb.start());
     output.shouldHaveExitValue(exitValue);
 

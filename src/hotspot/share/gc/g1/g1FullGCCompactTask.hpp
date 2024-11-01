@@ -25,6 +25,7 @@
 #ifndef SHARE_GC_G1_G1FULLGCCOMPACTTASK_HPP
 #define SHARE_GC_G1_G1FULLGCCOMPACTTASK_HPP
 
+#include "gc/g1/g1FullCollector.hpp"
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/g1FullGCScope.hpp"
 #include "gc/g1/g1FullGCTask.hpp"

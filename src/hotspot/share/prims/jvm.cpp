@@ -86,6 +86,7 @@
 #include "utilities/histogram.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/utf8.hpp"
+#include "gc/g1/g1CollectedHeap.hpp"
 #if INCLUDE_CDS
 #include "classfile/systemDictionaryShared.hpp"
 #endif
@@ -407,6 +408,18 @@ JVM_ENTRY(jobject, JVM_InitProperties(JNIEnv *env, jobject properties))
         PUTPROP(props, "com.alibaba.wisp.enableThreadAsWisp", "true");
         PUTPROP(props, "com.alibaba.wisp.allThreadAsWisp", "true");
       }
+    }
+  }
+
+  //Convert the -XX:+MultiTenant command line flag
+  //to the com.alibaba.tenant.enableMultiTenant property in case that
+  //the java code can determine if the tenant feature is enabled but
+  //without loading tenant-related classes.
+  {
+    if(MultiTenant) {
+      PUTPROP(props, "com.alibaba.tenant.enableMultiTenant", "true");
+    } else {
+      PUTPROP(props, "com.alibaba.tenant.enableMultiTenant", "false");
     }
   }
 
@@ -2889,12 +2902,36 @@ static void thread_entry(JavaThread* thread, TRAPS) {
   Handle obj(THREAD, thread->threadObj());
   JavaValue result(T_VOID);
 
-  JavaCalls::call_virtual(&result,
-                          obj,
-                          SystemDictionary::Thread_klass(),
-                          vmSymbols::run_method_name(),
-                          vmSymbols::void_method_signature(),
-                          THREAD);
+  if(MultiTenant) {
+    oop tenantContainer =
+             java_lang_Thread::inherited_tenant_container(thread->threadObj());
+    if(tenantContainer == NULL) {
+      JavaCalls::call_virtual(&result,
+                              obj,
+                              SystemDictionary::Thread_klass(),
+                              vmSymbols::run_method_name(),
+                              vmSymbols::void_method_signature(),
+                              THREAD);
+    } else {
+      /*Call into TenantContainer.runThread instead  of Thread.run. */
+      Handle tenant_obj(THREAD, tenantContainer);
+      JavaCalls::call_virtual(&result,
+                              tenant_obj,
+                              SystemDictionary::com_alibaba_tenant_TenantContainer_klass(),
+                              vmSymbols::runThread_method_name(),
+                              vmSymbols::thread_void_signature(),
+                              obj,
+                              THREAD);
+
+    }
+  } else {
+    JavaCalls::call_virtual(&result,
+                            obj,
+                            SystemDictionary::Thread_klass(),
+                            vmSymbols::run_method_name(),
+                            vmSymbols::void_method_signature(),
+                            THREAD);
+  }
 }
 
 
@@ -2957,6 +2994,9 @@ JVM_ENTRY(void, JVM_StartThread(JNIEnv* env, jobject jthread))
   assert(native_thread != NULL, "Starting null thread?");
 
   if (native_thread->osthread() == NULL) {
+    ResourceMark rm(thread);
+    log_warning(os, thread)("Failed to start the native thread for java.lang.Thread \"%s\"",
+                            JavaThread::name_for(JNIHandles::resolve_non_null(jthread)));
     // No one should hold a reference to the 'native_thread'.
     native_thread->smr_delete();
     if (JvmtiExport::should_post_resource_exhausted()) {
@@ -3421,6 +3461,60 @@ JVM_ENTRY(jobject, JVM_LatestUserDefinedLoader(JNIEnv *env))
   return NULL;
 JVM_END
 
+/***************** Tenant support ************************************/
+
+JVM_ENTRY(jobject, JVM_TenantContainerOf(JNIEnv* env, jclass tenantContainerClass, jobject obj))
+  JVMWrapper("JVM_TenantContainerOf");
+  assert(MultiTenant && TenantHeapIsolation, "pre-condition");
+  if (NULL != obj) {
+    oop container = G1CollectedHeap::heap()->tenant_container_of(JNIHandles::resolve_non_null(obj));
+    if (container != NULL) {
+      return JNIHandles::make_local(env, container);
+    }
+  }
+  return NULL;
+JVM_END
+
+JVM_ENTRY(void, JVM_AttachToTenant(JNIEnv *env, jobject ignored, jobject tenant))
+  JVMWrapper("JVM_AttachToTenant");
+  assert(MultiTenant, "pre-condition");
+  assert (NULL != thread, "no current thread!");
+  thread->set_tenantObj(tenant == NULL ? (oop)NULL : JNIHandles::resolve_non_null(tenant));
+JVM_END
+
+JVM_ENTRY(void, JVM_CreateTenantAllocationContext(JNIEnv *env, jobject ignored, jobject tenant, jlong heapLimit))
+  JVMWrapper("JVM_CreateTenantAllocationContext");
+  guarantee(UseG1GC && TenantHeapIsolation, "pre-condition");
+  oop tenant_obj = JNIHandles::resolve_non_null(tenant);
+  assert(tenant_obj != NULL, "Cannot create allocation context for a null tenant container");
+  G1CollectedHeap::heap()->create_tenant_allocation_context(tenant_obj);
+
+  // set up heap limit if TenantHeapThrottling enabled
+  if (TenantHeapThrottling) {
+    assert(heapLimit > 0, "Bad heap limit");
+    G1TenantAllocationContext* context = com_alibaba_tenant_TenantContainer::get_tenant_allocation_context(tenant_obj);
+    assert(context != NULL && context->heap_size_limit() == TENANT_HEAP_NO_LIMIT, "sanity");
+    context->set_heap_size_limit((size_t)heapLimit);
+  }
+JVM_END
+
+// This method should be called before reclaiming of Java TenantContainer object
+JVM_ENTRY(void, JVM_DestroyTenantAllocationContext(JNIEnv *env, jobject ignored, jlong context))
+  JVMWrapper("JVM_DestroyTenantAllocationContext");
+  assert(UseG1GC && TenantHeapIsolation, "pre-condition");
+  oop tenant_obj = ((G1TenantAllocationContext*)context)->tenant_container();
+  assert(tenant_obj != NULL, "Cannot destroy allocation context from a null tenant container");
+  G1CollectedHeap::heap()->destroy_tenant_allocation_context(context);
+JVM_END
+
+JVM_ENTRY(jlong, JVM_GetTenantOccupiedMemory(JNIEnv* env, jobject ignored, jlong context))
+  JVMWrapper("JVM_GetTenantOccupiedMemory");
+  assert(UseG1GC && TenantHeapIsolation, "pre-condition");
+  G1TenantAllocationContext* alloc_context = (G1TenantAllocationContext*)context;
+  assert(alloc_context != NULL, "Bad allocation context!");
+  assert(alloc_context->tenant_container() != NULL, "NULL tenant container");
+  return (alloc_context->occupied_heap_region_count() * HeapRegion::GrainBytes);
+JVM_END
 
 // Array ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -3521,7 +3615,7 @@ JVM_END
 
 // Library support ///////////////////////////////////////////////////////////////////////////
 
-JVM_ENTRY_NO_ENV(void*, JVM_LoadLibrary(const char* name))
+JVM_ENTRY_NO_ENV(void*, JVM_LoadLibrary(const char* name, jboolean throwException))
   //%note jvm_ct
   JVMWrapper("JVM_LoadLibrary");
   char ebuf[1024];
@@ -3531,18 +3625,22 @@ JVM_ENTRY_NO_ENV(void*, JVM_LoadLibrary(const char* name))
     load_result = os::dll_load(name, ebuf, sizeof ebuf);
   }
   if (load_result == NULL) {
-    char msg[1024];
-    jio_snprintf(msg, sizeof msg, "%s: %s", name, ebuf);
-    // Since 'ebuf' may contain a string encoded using
-    // platform encoding scheme, we need to pass
-    // Exceptions::unsafe_to_utf8 to the new_exception method
-    // as the last argument. See bug 6367357.
-    Handle h_exception =
-      Exceptions::new_exception(thread,
-                                vmSymbols::java_lang_UnsatisfiedLinkError(),
-                                msg, Exceptions::unsafe_to_utf8);
+    if (throwException) {
+      char msg[1024];
+      jio_snprintf(msg, sizeof msg, "%s: %s", name, ebuf);
+      // Since 'ebuf' may contain a string encoded using
+      // platform encoding scheme, we need to pass
+      // Exceptions::unsafe_to_utf8 to the new_exception method
+      // as the last argument. See bug 6367357.
+      Handle h_exception =
+        Exceptions::new_exception(thread,
+                                  vmSymbols::java_lang_UnsatisfiedLinkError(),
+                                  msg, Exceptions::unsafe_to_utf8);
 
-    THROW_HANDLE_0(h_exception);
+      THROW_HANDLE_0(h_exception);
+    } else {
+      return load_result;
+    }
   }
   return load_result;
 JVM_END

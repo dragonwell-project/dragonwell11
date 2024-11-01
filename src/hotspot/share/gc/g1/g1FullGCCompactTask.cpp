@@ -25,7 +25,6 @@
 #include "precompiled.hpp"
 #include "gc/g1/g1CollectedHeap.hpp"
 #include "gc/g1/g1ConcurrentMarkBitMap.inline.hpp"
-#include "gc/g1/g1FullCollector.hpp"
 #include "gc/g1/g1FullGCCompactionPoint.hpp"
 #include "gc/g1/g1FullGCCompactTask.hpp"
 #include "gc/g1/heapRegion.inline.hpp"
@@ -89,6 +88,11 @@ void G1FullGCCompactTask::compact_region(HeapRegion* hr) {
 
 void G1FullGCCompactTask::work(uint worker_id) {
   Ticks start = Ticks::now();
+  if (TenantHeapIsolation) {
+    G1TACCompactionClosure cl(collector()->mark_bitmap(), worker_id);
+    G1TenantAllocationContexts::iterate_unlocked(&cl);
+  }
+
   GrowableArray<HeapRegion*>* compaction_queue = collector()->compaction_point(worker_id)->regions();
   for (GrowableArrayIterator<HeapRegion*> it = compaction_queue->begin();
        it != compaction_queue->end();
@@ -103,10 +107,17 @@ void G1FullGCCompactTask::work(uint worker_id) {
 
 void G1FullGCCompactTask::serial_compaction() {
   GCTraceTime(Debug, gc, phases) tm("Phase 4: Serial Compaction", collector()->scope()->timer());
+  if (TenantHeapIsolation) {
+    G1TACSerialCompactionClosure cl(collector()->mark_bitmap());
+    G1TenantAllocationContexts::iterate_unlocked(&cl);
+  }
+
+  if (collector()->serial_compaction_point()->has_regions()) {
   GrowableArray<HeapRegion*>* compaction_queue = collector()->serial_compaction_point()->regions();
-  for (GrowableArrayIterator<HeapRegion*> it = compaction_queue->begin();
-       it != compaction_queue->end();
-       ++it) {
-    compact_region(*it);
+    for (GrowableArrayIterator<HeapRegion*> it = compaction_queue->begin();
+        it != compaction_queue->end();
+        ++it) {
+      compact_region(*it);
+    }
   }
 }

@@ -52,6 +52,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.alibaba.wisp.engine.WispEngine;
+import jdk.internal.misc.SharedSecrets;
+import jdk.internal.misc.WispEngineAccess;
 import sun.net.NetHooks;
 import sun.net.ext.ExtendedSocketOptions;
 import sun.net.util.SocketExceptions;
@@ -65,6 +68,8 @@ class SocketChannelImpl
     extends SocketChannel
     implements SelChImpl
 {
+    private static final WispEngineAccess WEA = SharedSecrets.getWispEngineAccess();
+
     // Used to make native read and write calls
     private static NativeDispatcher nd;
 
@@ -120,6 +125,7 @@ class SocketChannelImpl
         super(sp);
         this.fd = Net.socket(true);
         this.fdVal = IOUtil.fdVal(fd);
+        configureAsNonBlockingForWisp(fd);
     }
 
     SocketChannelImpl(SelectorProvider sp, FileDescriptor fd, boolean bound)
@@ -133,6 +139,7 @@ class SocketChannelImpl
                 this.localAddress = Net.localAddress(fd);
             }
         }
+        configureAsNonBlockingForWisp(fd);
     }
 
     // Constructor for sockets obtained from server sockets
@@ -148,6 +155,7 @@ class SocketChannelImpl
             this.remoteAddress = isa;
             this.state = ST_CONNECTED;
         }
+        configureAsNonBlockingForWisp(fd);
     }
 
     /**
@@ -351,7 +359,15 @@ class SocketChannelImpl
                 if (blocking) {
                     do {
                         n = IOUtil.read(fd, buf, -1, nd);
-                    } while (n == IOStatus.INTERRUPTED && isOpen());
+                        if (n == IOStatus.INTERRUPTED && isOpen()) {
+                            continue;
+                        }
+                        if (WispEngine.transparentWispSwitch() && isBlocking() && IOStatus.okayToRetry(n)) {
+                            WEA.poll(this, Net.POLLIN, -1);
+                            continue;
+                        }
+                        break;
+                    } while (true);
                 } else {
                     n = IOUtil.read(fd, buf, -1, nd);
                 }
@@ -387,7 +403,15 @@ class SocketChannelImpl
                 if (blocking) {
                     do {
                         n = IOUtil.read(fd, dsts, offset, length, nd);
-                    } while (n == IOStatus.INTERRUPTED && isOpen());
+                        if (n == IOStatus.INTERRUPTED && isOpen()) {
+                            continue;
+                        }
+                        if (WispEngine.transparentWispSwitch() && isBlocking() && IOStatus.okayToRetry(n)) {
+                            WEA.poll(this, Net.POLLIN, -1);
+                            continue;
+                        }
+                        break;
+                    } while (true);
                 } else {
                     n = IOUtil.read(fd, dsts, offset, length, nd);
                 }
@@ -457,7 +481,15 @@ class SocketChannelImpl
                 if (blocking) {
                     do {
                         n = IOUtil.write(fd, buf, -1, nd);
-                    } while (n == IOStatus.INTERRUPTED && isOpen());
+                        if (n == IOStatus.INTERRUPTED && isOpen()) {
+                            continue;
+                        }
+                        if (WispEngine.transparentWispSwitch() && isBlocking() && IOStatus.okayToRetry(n)) {
+                            WEA.poll(this, Net.POLLOUT, -1);
+                            continue;
+                        }
+                        break;
+                    } while (true);
                 } else {
                     n = IOUtil.write(fd, buf, -1, nd);
                 }
@@ -488,7 +520,15 @@ class SocketChannelImpl
                 if (blocking) {
                     do {
                         n = IOUtil.write(fd, srcs, offset, length, nd);
-                    } while (n == IOStatus.INTERRUPTED && isOpen());
+                        if (n == IOStatus.INTERRUPTED && isOpen()) {
+                            continue;
+                        }
+                        if (WispEngine.transparentWispSwitch() && isBlocking() && IOStatus.okayToRetry(n)) {
+                            WEA.poll(this, Net.POLLOUT, -1);
+                            continue;
+                        }
+                        break;
+                    } while (true);
                 } else {
                     n = IOUtil.write(fd, srcs, offset, length, nd);
                 }
@@ -517,7 +557,15 @@ class SocketChannelImpl
                 if (blocking) {
                     do {
                         n = sendOutOfBandData(fd, b);
-                    } while (n == IOStatus.INTERRUPTED && isOpen());
+                        if (n == IOStatus.INTERRUPTED && isOpen()) {
+                            continue;
+                        }
+                        if (WispEngine.transparentWispSwitch() && isBlocking()  && IOStatus.okayToRetry(n)) {
+                            WEA.poll(this, Net.POLLOUT, -1);
+                            continue;
+                        }
+                        break;
+                    } while (true);
                 } else {
                     n = sendOutOfBandData(fd, b);
                 }
@@ -690,7 +738,15 @@ class SocketChannelImpl
                         beginConnect(blocking, isa);
                         do {
                             n = Net.connect(fd, ia, isa.getPort());
-                        } while (n == IOStatus.INTERRUPTED && isOpen());
+                            if (n == IOStatus.INTERRUPTED && isOpen()) {
+                                continue;
+                            }
+                            if (WispEngine.transparentWispSwitch() && isBlocking() && IOStatus.okayToRetry(n)) {
+                                WEA.poll(this, Net.POLLCONN, -1);
+                                continue;
+                            }
+                            break;
+                        } while (true);
                     } finally {
                         endConnect(blocking, (n > 0));
                     }
@@ -962,7 +1018,12 @@ class SocketChannelImpl
             boolean polled = false;
             try {
                 beginRead(blocking);
-                int events = Net.poll(fd, Net.POLLIN, timeout);
+                int events;
+                if (WispEngine.transparentWispSwitch()) {
+                    events = WEA.poll(this, Net.POLLIN, timeout);
+                } else {
+                    events = Net.poll(fd, Net.POLLIN, timeout);
+                }
                 polled = (events != 0);
             } finally {
                 endRead(blocking, polled);
@@ -988,7 +1049,12 @@ class SocketChannelImpl
                 boolean polled = false;
                 try {
                     beginFinishConnect(blocking);
-                    int events = Net.poll(fd, Net.POLLCONN, timeout);
+                    int events;
+                    if (WispEngine.transparentWispSwitch()) {
+                        events = WEA.poll(this, Net.POLLCONN, timeout);
+                    } else {
+                        events = Net.poll(fd, Net.POLLCONN, timeout);
+                    }
                     polled = (events != 0);
                 } finally {
                     // invoke endFinishConnect with completed = false so that

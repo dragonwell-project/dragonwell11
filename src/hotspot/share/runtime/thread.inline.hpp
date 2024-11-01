@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -68,6 +69,17 @@ inline void Thread::clear_trace_flag() {
 inline jlong Thread::cooked_allocated_bytes() {
   jlong allocated_bytes = OrderAccess::load_acquire(&_allocated_bytes);
   if (UseTLAB) {
+    if (MultiTenant && UsePerTenantTLAB) {
+      // accumulate used_bytes from all TLABs
+      size_t used_bytes = 0;
+      for (ThreadLocalAllocBuffer* tlab = &_tlab;
+           tlab != NULL;
+           tlab = tlab->next()) {
+        used_bytes += tlab->used_bytes();
+      }
+      return allocated_bytes + used_bytes;
+    }
+
     size_t used_bytes = tlab().used_bytes();
     if (used_bytes <= ThreadLocalAllocBuffer::max_size_in_bytes()) {
       // Comparing used_bytes with the maximum allowed size will ensure
@@ -92,6 +104,27 @@ inline ThreadsList* Thread::get_threads_hazard_ptr() {
 inline void Thread::set_threads_hazard_ptr(ThreadsList* new_list) {
   OrderAccess::release_store_fence(&_threads_hazard_ptr, new_list);
 }
+
+#if defined(__APPLE__) && defined(AARCH64)
+inline void Thread::init_wx() {
+  assert(this == Thread::current(), "should only be called for current thread");
+  assert(!_wx_init, "second init");
+  _wx_state = WXWrite;
+  os::current_thread_enable_wx(_wx_state);
+  DEBUG_ONLY(_wx_init = true);
+}
+
+inline WXMode Thread::enable_wx(WXMode new_state) {
+  assert(this == Thread::current(), "should only be called for current thread");
+  assert(_wx_init, "should be inited");
+  WXMode old = _wx_state;
+  if (_wx_state != new_state) {
+    _wx_state = new_state;
+    os::current_thread_enable_wx(new_state);
+  }
+  return old;
+}
+#endif // __APPLE__ && AARCH64
 
 inline void JavaThread::set_ext_suspended() {
   set_suspend_flag (_ext_suspended);
@@ -120,7 +153,7 @@ inline void JavaThread::set_pending_async_exception(oop e) {
   set_has_async_exception();
 }
 
-#if defined(PPC64) || defined (AARCH64)
+#if defined(PPC64) || defined(AARCH64) || defined(RISCV64)
 inline JavaThreadState JavaThread::thread_state() const    {
   return (JavaThreadState) OrderAccess::load_acquire((volatile jint*)&_thread_state);
 }

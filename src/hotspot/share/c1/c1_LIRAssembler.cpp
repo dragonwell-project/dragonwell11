@@ -41,6 +41,7 @@ void LIR_Assembler::patching_epilog(PatchingStub* patch, LIR_PatchCode patch_cod
   while ((intx) _masm->pc() - (intx) patch->pc_start() < NativeGeneralJump::instruction_size) {
     _masm->nop();
   }
+  info->set_force_reexecute();
   patch->install(_masm, patch_code, obj, info);
   append_code_stub(patch);
 
@@ -708,10 +709,6 @@ void LIR_Assembler::emit_op2(LIR_Op2* op) {
       comp_fl2i(op->code(), op->in_opr1(), op->in_opr2(), op->result_opr(), op);
       break;
 
-    case lir_cmove:
-      cmove(op->condition(), op->in_opr1(), op->in_opr2(), op->result_opr(), op->type());
-      break;
-
     case lir_shl:
     case lir_shr:
     case lir_ushr:
@@ -775,6 +772,17 @@ void LIR_Assembler::emit_op2(LIR_Op2* op) {
   }
 }
 
+void LIR_Assembler::emit_op4(LIR_Op4* op) {
+  switch(op->code()) {
+    case lir_cmove:
+      cmove(op->condition(), op->in_opr1(), op->in_opr2(), op->result_opr(), op->type(), op->in_opr3(), op->in_opr4());
+      break;
+
+    default:
+      Unimplemented();
+      break;
+  }
+}
 
 void LIR_Assembler::build_frame() {
   _masm->build_frame(initial_frame_size_in_bytes(), bang_size_in_bytes());

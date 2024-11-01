@@ -60,6 +60,7 @@ G1Policy::G1Policy(STWGCTimer* gc_timer) :
   _reserve_factor((double) G1ReservePercent / 100.0),
   _reserve_regions(0),
   _rs_lengths_prediction(0),
+  _copied_bytes(0),
   _initial_mark_to_mixed(),
   _collection_set(NULL),
   _g1h(NULL),
@@ -553,11 +554,9 @@ bool G1Policy::need_to_start_conc_mark(const char* source, size_t alloc_word_siz
 // Anything below that is considered to be zero
 #define MIN_TIMER_GRANULARITY 0.0000001
 
-void G1Policy::record_collection_pause_end(double pause_time_ms, size_t cards_scanned, size_t heap_used_bytes_before_gc) {
+void G1Policy::record_collection_pause_end(double pause_time_ms, size_t cards_scanned) {
   double end_time_sec = os::elapsedTime();
 
-  size_t cur_used_bytes = _g1h->used();
-  assert(cur_used_bytes == _g1h->recalculate_used(), "It should!");
   bool this_pause_included_initial_mark = false;
   bool this_pause_was_young_only = collector_state()->in_young_only_phase();
 
@@ -665,12 +664,9 @@ void G1Policy::record_collection_pause_end(double pause_time_ms, size_t cards_sc
     }
     _analytics->report_rs_length_diff((double) rs_length_diff);
 
-    size_t freed_bytes = heap_used_bytes_before_gc - cur_used_bytes;
-
-    if (_collection_set->bytes_used_before() > freed_bytes) {
-      size_t copied_bytes = _collection_set->bytes_used_before() - freed_bytes;
+    if (_copied_bytes > 0) {
       double average_copy_time = average_time_ms(G1GCPhaseTimes::ObjCopy);
-      double cost_per_byte_ms = average_copy_time / (double) copied_bytes;
+      double cost_per_byte_ms = average_copy_time / (double) _copied_bytes;
       _analytics->report_cost_per_byte_ms(cost_per_byte_ms, collector_state()->mark_or_rebuild_in_progress());
     }
 

@@ -2,6 +2,7 @@
  * @test
  * @summary test shutdown a thread pool which contains non-fully-started thread
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -Dcom.alibaba.wisp.transparentWispSwitch=true  TestThreadPoolFastShutdownBug
 
  */

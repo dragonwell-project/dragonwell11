@@ -209,15 +209,9 @@ else ifeq ($(OPENJDK_TARGET_CPU), sparcv9)
 endif
 
 ifeq ($(OPENJDK_TARGET_OS), windows)
-  ifeq ($(wildcard $(TEST_IMAGE_DIR)/bin/fixpath.exe), )
-    $(info Error: fixpath is missing from test image '$(TEST_IMAGE_DIR)')
-    $(error Cannot continue.)
-  endif
-  FIXPATH := $(TEST_IMAGE_DIR)/bin/fixpath.exe -c
-  PATH_SEP:=;
+  FIXPATH := $(BASH) $(TOPDIR)/make/scripts/fixpath.sh exec
 else
   FIXPATH :=
-  PATH_SEP:=:
 endif
 
 # Check number of cores and memory in MB
@@ -230,7 +224,7 @@ else ifeq ($(OPENJDK_TARGET_OS), macosx)
   NUM_CORES := $(shell /usr/sbin/sysctl -n hw.ncpu)
   MEMORY_SIZE := $(shell $(EXPR) `/usr/sbin/sysctl -n hw.memsize` / 1024 / 1024)
 else ifeq ($(OPENJDK_TARGET_OS), solaris)
-  NUM_CORES := $(shell LC_MESSAGES=C /usr/sbin/psrinfo -v | $(GREP) -c on-line)
+  NUM_CORES := $(shell /usr/sbin/psrinfo -v | $(GREP) -c on-line)
   MEMORY_SIZE := $(shell \
       /usr/sbin/prtconf 2> /dev/null | $(GREP) "^Memory [Ss]ize" | $(AWK) '{print $$3}' \
   )
@@ -301,7 +295,6 @@ $(call CreateNewSpec, $(NEW_SPEC), \
     BASH := $(BASH), \
     JIB_JAR := $(JIB_JAR), \
     FIXPATH := $(FIXPATH), \
-    PATH_SEP := $(PATH_SEP), \
     OPENJDK_TARGET_OS := $(OPENJDK_TARGET_OS), \
     OPENJDK_TARGET_OS_TYPE := $(OPENJDK_TARGET_OS_TYPE), \
     OPENJDK_TARGET_OS_ENV := $(OPENJDK_TARGET_OS_ENV), \

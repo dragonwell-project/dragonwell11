@@ -412,6 +412,7 @@ bool JfrOptionSet::configure(TRAPS) {
   configure._object_allocations_sampling_interval.set_is_set(_dcmd_objectallocationssamplinginterval.is_set());
   configure._object_allocations_sampling_interval.set_value(_dcmd_objectallocationssamplinginterval.value());
 
+  configure.set_verbose(false);
   configure.execute(DCmd_Source_Internal, THREAD);
 
   if (HAS_PENDING_EXCEPTION) {

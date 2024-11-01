@@ -3,6 +3,7 @@
 ## @test
 ##
 ## @requires os.family == "linux"
+## @requires os.arch != "riscv64"
 ## @summary test jni MonitorExit
 ## @run shell testJniMonitorExit.sh
 ##

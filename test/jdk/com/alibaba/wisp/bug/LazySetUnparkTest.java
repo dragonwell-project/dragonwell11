@@ -26,6 +26,7 @@
  * @library /lib/testlibrary
  * @summary Test for LazySetUnparkTest
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @modules java.base/jdk.internal.misc
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 LazySetUnparkTest
  */

@@ -3,7 +3,7 @@
  * @summary Test default ResourceContainer is root() instead of null
  * @library /lib/testlibrary
  * @modules java.base/jdk.internal.misc
- * @modules java.base/com.alibaba.rcm.internal:+open
+ * @modules java.base/com.alibaba.rcm.:+open
  * @run main TestRootNotNull
  */
 

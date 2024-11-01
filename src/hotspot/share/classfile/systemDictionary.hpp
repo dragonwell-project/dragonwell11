@@ -139,6 +139,14 @@ class OopStorage;
   do_klass(PhantomReference_klass,                      java_lang_ref_PhantomReference,            Pre                 ) \
   do_klass(Finalizer_klass,                             java_lang_ref_Finalizer,                   Pre                 ) \
                                                                                                                          \
+  /* support for multi-tenant feature */                                                                               \
+  do_klass(com_alibaba_tenant_TenantGlobals_klass,      com_alibaba_tenant_TenantGlobals,          Pre_Tenant          ) \
+  do_klass(com_alibaba_tenant_TenantConfiguration_klass,com_alibaba_tenant_TenantConfiguration,    Pre_Tenant          ) \
+  do_klass(com_alibaba_tenant_TenantState_klass,        com_alibaba_tenant_TenantState,            Pre_Tenant          ) \
+  do_klass(com_alibaba_tenant_TenantException_klass,    com_alibaba_tenant_TenantException,        Pre_Tenant          ) \
+  do_klass(com_alibaba_tenant_TenantContainer_klass,    com_alibaba_tenant_TenantContainer,        Pre_Tenant          ) \
+  /* Note: TenantGlobals must be first, and TenantContainer last in group */                                             \
+                                                                                                                         \
   do_klass(Thread_klass,                                java_lang_Thread,                          Pre                 ) \
   do_klass(ThreadGroup_klass,                           java_lang_ThreadGroup,                     Pre                 ) \
   do_klass(Properties_klass,                            java_util_Properties,                      Pre                 ) \
@@ -228,8 +236,8 @@ class OopStorage;
                                                         com_alibaba_wisp_engine_WispControlGroup_signature, Opt        ) \
   do_klass(com_alibaba_wisp_engine_WispControlGroup_CpuLimit_klass,                                                      \
                                                         com_alibaba_wisp_engine_WispControlGroup_CpuLimit_signature, Opt ) \
-  do_klass(com_alibaba_rcm_internal_AbstractResourceContainer_klass,                                                      \
-                                                        com_alibaba_rcm_internal_AbstractResourceContainer_signature, Opt ) \
+  do_klass(com_alibaba_rcm_AbstractResourceContainer_klass,                                                      \
+                                                        com_alibaba_rcm_AbstractResourceContainer_signature, Opt ) \
   do_klass(com_alibaba_wisp_engine_WispEngine_klass,    com_alibaba_wisp_engine_WispEngine,        Opt                 ) \
   do_klass(com_alibaba_wisp_engine_WispCarrier_klass,   com_alibaba_wisp_engine_WispCarrier,        Opt                 ) \
   do_klass(com_alibaba_wisp_engine_WispEventPump_klass, com_alibaba_wisp_engine_WispEventPump,     Opt                 ) \
@@ -263,6 +271,7 @@ class SystemDictionary : AllStatic {
 
   enum InitOption {
     Pre,                        // preloaded; error if not present
+    Pre_Tenant,                 // preloaded if MultiTenant
 
     // Order is significant.  Options before this point require resolve_or_fail.
     // Options after this point will use resolve_or_null instead.
@@ -427,6 +436,7 @@ public:
   }
 
   static InstanceKlass* check_klass_Pre(InstanceKlass* k) { return check_klass(k); }
+  static InstanceKlass* check_klass_Pre_Tenant(InstanceKlass* k) { return MultiTenant ? check_klass(k) : k; }
   static InstanceKlass* check_klass_Opt(InstanceKlass* k) { return k; }
 
   JVMCI_ONLY(static InstanceKlass* check_klass_Jvmci(InstanceKlass* k) { return k; })
@@ -670,6 +680,7 @@ protected:
   static InstanceKlass* load_shared_class(InstanceKlass* ik,
                                           Handle class_loader,
                                           Handle protection_domain,
+                                          const ClassFileStream *cfs,
                                           TRAPS);
   static InstanceKlass* load_instance_class(Symbol* class_name, Handle class_loader, TRAPS);
   static Handle compute_loader_lock_object(Handle class_loader, TRAPS);

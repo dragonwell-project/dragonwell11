@@ -69,6 +69,7 @@ class G1RootProcessor : public StackObj {
     G1RP_PS_filter_satb_buffers,
     G1RP_PS_refProcessor_oops_do,
     G1RP_PS_weakProcessor_oops_do,
+    G1RP_PS_TenantAllocationContext_oops_do,
     // Leave this one last.
     G1RP_PS_NumElements
   };

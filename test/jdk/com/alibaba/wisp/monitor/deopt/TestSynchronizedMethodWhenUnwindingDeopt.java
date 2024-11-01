@@ -5,6 +5,7 @@
  *          java.base/jdk.internal.vm.annotation
  * @library /test/lib
  * @requires os.family == "linux"
+ * @requires os.arch != "riscv64"
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox sun.hotspot.WhiteBox$WhiteBoxPermission
  * @run main/othervm -XX:TieredStopAtLevel=1 -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::bar -XX:CompileCommand=compileonly,TestSynchronizedMethodWhenUnwindingDeopt::foo -XX:+PrintDeoptimizationDetails -XX:+IgnoreUnrecognizedVMOptions -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI -XX:+UnlockExperimentalVMOptions -XX:+UseWisp2 TestSynchronizedMethodWhenUnwindingDeopt

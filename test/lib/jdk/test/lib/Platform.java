@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,32 +23,34 @@
 
 package jdk.test.lib;
 
-import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class Platform {
-    public  static final String vmName      = System.getProperty("java.vm.name");
-    public  static final String vmInfo      = System.getProperty("java.vm.info");
-    private static final String osVersion   = System.getProperty("os.version");
-    private static       String[] osVersionTokens;
+    public  static final String vmName      = privilegedGetProperty("java.vm.name");
+    public  static final String vmInfo      = privilegedGetProperty("java.vm.info");
+    private static final String osVersion   = privilegedGetProperty("os.version");
     private static       int osVersionMajor = -1;
     private static       int osVersionMinor = -1;
-    private static final String osName      = System.getProperty("os.name");
-    private static final String dataModel   = System.getProperty("sun.arch.data.model");
-    private static final String vmVersion   = System.getProperty("java.vm.version");
-    private static final String jdkDebug    = System.getProperty("jdk.debug");
-    private static final String osArch      = System.getProperty("os.arch");
-    private static final String userName    = System.getProperty("user.name");
-    private static final String compiler    = System.getProperty("sun.management.compiler");
+    private static final String osName      = privilegedGetProperty("os.name");
+    private static final String dataModel   = privilegedGetProperty("sun.arch.data.model");
+    private static final String vmVersion   = privilegedGetProperty("java.vm.version");
+    private static final String jdkDebug    = privilegedGetProperty("jdk.debug");
+    private static final String osArch      = privilegedGetProperty("os.arch");
+    private static final String userName    = privilegedGetProperty("user.name");
+    private static final String compiler    = privilegedGetProperty("sun.management.compiler");
+
+    private static String privilegedGetProperty(String key) {
+        return AccessController.doPrivileged((
+                PrivilegedAction<String>) () -> System.getProperty(key));
+    }
 
     public static boolean isClient() {
         return vmName.endsWith(" Client VM");
@@ -144,7 +146,7 @@ public class Platform {
 
     // Os version support.
     private static void init_version() {
-        osVersionTokens = osVersion.split("\\.");
+        String[] osVersionTokens = osVersion.split("\\.");
         try {
             if (osVersionTokens.length > 0) {
                 osVersionMajor = Integer.parseInt(osVersionTokens[0]);
@@ -175,45 +177,6 @@ public class Platform {
         return osVersionMinor;
     }
 
-    /**
-     * Compares the platform version with the supplied version. The
-     * version must be of the form a[.b[.c[.d...]]] where a, b, c, d, ...
-     * are decimal integers.
-     *
-     * @throws NullPointerException if the parameter is null
-     * @throws NumberFormatException if there is an error parsing either
-     *         version as split into component strings
-     * @return -1, 0, or 1 according to whether the platform version is
-     *         less than, equal to, or greater than the supplied version
-     */
-    public static int compareOsVersion(String version) {
-        if (osVersionTokens == null) init_version();
-
-        Objects.requireNonNull(version);
-
-        List<Integer> s1 = Arrays
-            .stream(osVersionTokens)
-            .map(Integer::valueOf)
-            .collect(Collectors.toList());
-        List<Integer> s2 = Arrays
-            .stream(version.split("\\."))
-            .map(Integer::valueOf)
-            .collect(Collectors.toList());
-
-        int count = Math.max(s1.size(), s2.size());
-        for (int i = 0; i < count; i++) {
-            int i1 = i < s1.size() ? s1.get(i) : 0;
-            int i2 = i < s2.size() ? s2.get(i) : 0;
-            if (i1 > i2) {
-                return 1;
-            } else if (i2 > i1) {
-                return -1;
-            }
-        }
-
-        return 0;
-    }
-
     public static boolean isDebugBuild() {
         return (jdkDebug.toLowerCase().contains("debug"));
     }
@@ -236,6 +199,10 @@ public class Platform {
 
     public static boolean isARM() {
         return isArch("arm.*");
+    }
+
+    public static boolean isRiscv64() {
+        return isArch("riscv64");
     }
 
     public static boolean isPPC() {
@@ -266,6 +233,10 @@ public class Platform {
         return osArch;
     }
 
+    public static boolean isRoot() {
+        return userName.equals("root");
+    }
+
     /**
      * Return a boolean for whether SA and jhsdb are ported/available
      * on this platform.
@@ -286,66 +257,56 @@ public class Platform {
     }
 
     /**
-     * Return a boolean for whether we expect to be able to attach
-     * the SA to our own processes on this system.  This requires
-     * that SA is ported/available on this platform.
+     * Return true if the test JDK is signed, otherwise false. Only valid on OSX.
      */
-    public static boolean shouldSAAttach() throws IOException {
-        if (!hasSA()) return false;
-        if (isLinux()) {
-            return canPtraceAttachLinux();
-        } else if (isOSX()) {
-            return canAttachOSX();
+    public static boolean isSignedOSX() throws IOException {
+        // We only care about signed binaries for 10.14 and later (actually 10.14.5, but
+        // for simplicity we'll also include earlier 10.14 versions).
+        if (getOsVersionMajor() == 10 && getOsVersionMinor() < 14) {
+            return false; // assume not signed
+        }
+
+        // Find the path to the java binary.
+        String jdkPath = System.getProperty("java.home");
+        Path javaPath = Paths.get(jdkPath + "/bin/java");
+        String javaFileName = javaPath.toAbsolutePath().toString();
+        if (!javaPath.toFile().exists()) {
+            throw new FileNotFoundException("Could not find file " + javaFileName);
+        }
+
+        // Run codesign on the java binary.
+        ProcessBuilder pb = new ProcessBuilder("codesign", "-d", "-v", javaFileName);
+        pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+        pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+        Process codesignProcess = pb.start();
+        try {
+            if (codesignProcess.waitFor(10, TimeUnit.SECONDS) == false) {
+                System.err.println("Timed out waiting for the codesign process to complete. Assuming not signed.");
+                codesignProcess.destroyForcibly();
+                return false; // assume not signed
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        // Check codesign result to see if java binary is signed. Here are the
+        // exit code meanings:
+        //    0: signed
+        //    1: not signed
+        //    2: invalid arguments
+        //    3: only has meaning with the -R argument.
+        // So we should always get 0 or 1 as an exit value.
+        if (codesignProcess.exitValue() == 0) {
+            System.out.println("Target JDK is signed. Some tests may be skipped.");
+            return true; // signed
+        } else if (codesignProcess.exitValue() == 1) {
+            System.out.println("Target JDK is not signed.");
+            return false; // not signed
         } else {
-            // Other platforms expected to work:
-            return true;
+            System.err.println("Executing codesign failed. Assuming unsigned: " +
+                               codesignProcess.exitValue());
+            return false; // not signed
         }
-    }
-
-    /**
-     * On Linux, first check the SELinux boolean "deny_ptrace" and return false
-     * as we expect to be denied if that is "1".  Then expect permission to attach
-     * if we are root, so return true.  Then return false for an expected denial
-     * if "ptrace_scope" is 1, and true otherwise.
-     */
-    private static boolean canPtraceAttachLinux() throws IOException {
-        // SELinux deny_ptrace:
-        File deny_ptrace = new File("/sys/fs/selinux/booleans/deny_ptrace");
-        if (deny_ptrace.exists()) {
-            try (RandomAccessFile file = new RandomAccessFile(deny_ptrace, "r")) {
-                if (file.readByte() != '0') {
-                    return false;
-                }
-            }
-        }
-
-        // YAMA enhanced security ptrace_scope:
-        // 0 - a process can PTRACE_ATTACH to any other process running under the same uid
-        // 1 - restricted ptrace: a process must be a children of the inferior or user is root
-        // 2 - only processes with CAP_SYS_PTRACE may use ptrace or user is root
-        // 3 - no attach: no processes may use ptrace with PTRACE_ATTACH
-        File ptrace_scope = new File("/proc/sys/kernel/yama/ptrace_scope");
-        if (ptrace_scope.exists()) {
-            try (RandomAccessFile file = new RandomAccessFile(ptrace_scope, "r")) {
-                byte yama_scope = file.readByte();
-                if (yama_scope == '3') {
-                    return false;
-                }
-
-                if (!userName.equals("root") && yama_scope != '0') {
-                    return false;
-                }
-            }
-        }
-        // Otherwise expect to be permitted:
-        return true;
-    }
-
-    /**
-     * On OSX, expect permission to attach only if we are root.
-     */
-    private static boolean canAttachOSX() {
-        return userName.equals("root");
     }
 
     private static boolean isArch(String archnameRE) {
