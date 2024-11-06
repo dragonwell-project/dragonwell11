@@ -34,6 +34,8 @@ import java.nio.file.Path;
 
 /**
  * @test JarFileFactoryCacheTest
+ * @requires os.family == "linux"
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @library /test/lib
  * @build JarFileFactoryCacheTest
  * @run driver jdk.test.lib.crac.CracTest

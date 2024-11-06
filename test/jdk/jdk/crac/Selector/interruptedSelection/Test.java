@@ -27,6 +27,8 @@ import java.io.IOException;
 
 /*
  * @test Selector/interruptedSelection
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary check that the thread blocked by Selector.select() could be properly woken up by an interruption
  * @library /test/lib
  * @build Test

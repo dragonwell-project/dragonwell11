@@ -29,6 +29,8 @@ import java.io.IOException;
 
 /*
  * @test RestoreEnvironmentTest
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary the test checks that actual environment variables are propagated into a restored process.
  * @library /test/lib
  * @build RestoreEnvironmentTest

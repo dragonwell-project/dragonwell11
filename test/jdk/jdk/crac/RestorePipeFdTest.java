@@ -28,6 +28,8 @@ import jdk.test.lib.process.OutputAnalyzer;
 
 /**
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary test if pipe can restore
  * @library /test/lib
  * @build RestorePipeFdTest

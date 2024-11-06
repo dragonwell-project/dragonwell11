@@ -29,6 +29,7 @@ import java.util.concurrent.CountDownLatch;
 /*
  * @test JoinSleepWaitOnCRPauseTest.java
  * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @library /test/lib
  * @summary check if Thread.join(timeout), Thread.sleep(timeout)
  *          and Object.wait(timeout)
