@@ -25,6 +25,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /*
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary check that the recursive checkpoint is not allowed
  * @library /test/lib
  * @build Test

@@ -28,7 +28,7 @@
 #           Test docker run with the combination of (privileged/unprivileged) and (interactive/detach) modes.
 # @requires docker.support
 # @requires os.family == "linux"
-# @requires os.arch=="amd64" | os.arch=="aarch64"
+# @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
 # @build TestStdoutInDocker
 # @run shell TestStdoutInDocker.sh
 

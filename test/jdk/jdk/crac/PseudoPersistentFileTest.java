@@ -32,6 +32,8 @@ import java.io.FileWriter;
 
 /**
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @library /test/lib
  * @build PseudoPersistentFileTest
  * @run driver/timeout=60 jdk.test.lib.crac.CracTest

@@ -27,6 +27,8 @@ import java.nio.channels.Selector;
 
 /*
  * @test Selector/selectAfterWakeup
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary check that the Selector's wakeup() makes the subsequent select() call to return immediately
  *          (see also jdk/test/java/nio/channels/Selector/WakeupSpeed.java);
  *          covers ZE-983

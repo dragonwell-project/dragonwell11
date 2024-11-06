@@ -27,6 +27,8 @@ import java.io.IOException;
 
 /*
  * @test Selector/wakeupByClose
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary check that the Selector's close() wakes it up after restore
  * @library /test/lib
  * @build Test

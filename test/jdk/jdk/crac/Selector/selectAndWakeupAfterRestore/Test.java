@@ -26,6 +26,8 @@ import java.nio.channels.Selector;
 
 /*
  * @test Selector/selectAndWakeupAfterRestore
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary a trivial check that Selector.wakeup() after restore behaves as expected
  * @library /test/lib
  * @build Test

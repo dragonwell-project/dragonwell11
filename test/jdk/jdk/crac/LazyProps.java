@@ -28,6 +28,8 @@ import jdk.test.lib.crac.CracTest;
 
 /**
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @library /test/lib
  * @build LazyProps
  * @run driver jdk.test.lib.crac.CracTest

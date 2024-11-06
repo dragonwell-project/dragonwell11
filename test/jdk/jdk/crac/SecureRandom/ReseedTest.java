@@ -31,6 +31,8 @@ import static jdk.test.lib.Asserts.assertNotEquals;
 
 /*
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary Verify that SHA1PRNG secure random is reseeded after restore if initialized with default seed.
  * @library /test/lib
  * @build ReseedTest
