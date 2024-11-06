@@ -27,6 +27,8 @@ import java.io.IOException;
 
 /*
  * @test Selector/wakeupAfterRestore
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary check that the thread blocked by Selector.select() on checkpoint could be properly woken up after restore
  * @library /test/lib
  * @build Test

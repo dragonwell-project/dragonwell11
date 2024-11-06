@@ -31,6 +31,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /*
  * @test Selector/multipleSelectSingleClose
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary check a coexistence of multiple select() + C/R in case when the selector is finally closed
  * @library /test/lib
  * @build Test

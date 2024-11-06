@@ -27,6 +27,8 @@ import jdk.test.lib.crac.CracTestArg;
 
 /*
  * @test Selector/Test970
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary a regression test for ZE-970 ("a channel deregistration
  *          is locked depending on mutual order of selector and channel creation")
  * @library /test/lib

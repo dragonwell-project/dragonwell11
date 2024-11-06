@@ -38,6 +38,8 @@ import static jdk.test.lib.Asserts.fail;
 
 /*
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary Test if InetAddress cache is flushed after checkpoint/restore
  * @requires docker.support
  * @library /test/lib

@@ -33,6 +33,8 @@ import jdk.crac.*;
 
 /**
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary Append to app classloader when restore.
  * @library /test/lib
  * @compile ./Foo.java

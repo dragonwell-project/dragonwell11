@@ -26,6 +26,8 @@ import java.io.IOException;
 
 /*
  * @test Selector/wakeupByTimeoutAfterRestore
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary check that the Selector selected before the checkpoint,
  *          will wake up by timeout after the restore
  * @library /test/lib

@@ -43,6 +43,8 @@ import java.util.stream.Collectors;
 
 /**
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @library /test/lib
  * @build AppendOnlyFileTest
  * @summary Test C&R when open file with write&append mode that no need closed.

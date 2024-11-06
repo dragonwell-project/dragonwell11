@@ -30,6 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /*
  * @test Selector/multipleSelect
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary check work of multiple select() + wakeup() + C/R
  * @library /test/lib
  * @build Test

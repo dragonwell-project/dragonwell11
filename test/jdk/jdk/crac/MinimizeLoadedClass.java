@@ -28,6 +28,8 @@ import java.io.IOException;
 
 /*
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary Test only load 3 classes when crac not enabled.
  * @library /test/lib
  * @build TestHello

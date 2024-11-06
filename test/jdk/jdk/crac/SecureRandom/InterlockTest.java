@@ -28,6 +28,8 @@ import java.security.SecureRandom;
 
 /*
  * @test
+ * @requires (os.family == "linux")
+ * @requires os.arch=="amd64" | os.arch=="x86_64" | os.arch=="aarch64"
  * @summary Verify that secure random is not interlocked during checkpoint/restore.
  * @library /test/lib
  * @build InterlockTest
