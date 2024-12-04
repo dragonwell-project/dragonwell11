@@ -4119,6 +4119,16 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
     PropertyList_add(&_system_properties, new SystemProperty("java.math.BigDecimal.optimization", "true", true));
   }
 
+  if (PolymorphicInlining) {
+    FLAG_SET_ERGO_IF_DEFAULT(intx, TypeProfileWidth, 6);
+    FLAG_SET_ERGO_IF_DEFAULT(uintx, MorphismLimit, 6);
+  }
+
+  if (MorphismLimit > 8) {
+    MorphismLimit = 8;
+    warning("support MorphismLimit up to 8.");
+  }
+
   // Set object alignment values.
   set_object_alignment();
 

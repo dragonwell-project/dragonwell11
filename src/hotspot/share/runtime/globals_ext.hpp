@@ -96,6 +96,12 @@
     product(bool, UseBigDecimalOpt, true,                                   \
           "use binary search in zero stripping of BigDecimal")              \
                                                                             \
+  product(bool, PolymorphicInlining, false,                                 \
+          "Inline caching multiple type of receivers")                      \
+                                                                            \
+  product(uintx, MorphismLimit, 2,                                          \
+          "Max call site's morphism we care about")                         \
+                                                                            \
   //add new AJDK specific flags here
 
 

@@ -33,6 +33,7 @@
 #include "opto/callGenerator.hpp"
 #include "opto/castnode.hpp"
 #include "opto/cfgnode.hpp"
+#include "opto/library_call.hpp"
 #include "opto/mulnode.hpp"
 #include "opto/parse.hpp"
 #include "opto/rootnode.hpp"
@@ -233,7 +234,8 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
       }
       if (receiver_method == NULL &&
           (have_major_receiver || morphism == 1 ||
-           (morphism == 2 && UseBimorphicInlining))) {
+           (morphism == 2 && UseBimorphicInlining) ||
+           (morphism >= 2 && PolymorphicInlining))) {
         // receiver_method = profile.method();
         // Profiles do not suggest methods now.  Look it up in the major receiver.
         receiver_method = callee->resolve_invoke(jvms->method()->holder(),
@@ -247,7 +249,7 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
           // Look up second receiver.
           CallGenerator* next_hit_cg = NULL;
           ciMethod* next_receiver_method = NULL;
-          if (morphism == 2 && UseBimorphicInlining) {
+          if ((morphism == 2 && UseBimorphicInlining) || (morphism >= 2 && PolymorphicInlining)) {
             next_receiver_method = callee->resolve_invoke(jvms->method()->holder(),
                                                                profile.receiver(1));
             if (next_receiver_method != NULL) {
@@ -261,11 +263,27 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
               }
             }
           }
+          int polymorphic_devirtualize = morphism >= 2 && PolymorphicInlining ? morphism : 0;
+          bool polymorphic_recompile = PolymorphicInlining && next_hit_cg != NULL;
+          CallGenerator* hit_cg_devirtual[MAX_MORPHISM_LIMIT + 1] = {0};
+          for (int i = 2; i < polymorphic_devirtualize; i++) {
+            ciMethod*receiver_method_devirtual = callee->resolve_invoke(jvms->method()->holder(),
+                                                                profile.receiver(i));
+            if (receiver_method_devirtual != NULL && !(receiver_method_devirtual->is_native() && cg_intrinsic)) {
+              hit_cg_devirtual[i] = this->call_generator(
+                  receiver_method_devirtual,
+                                             vtable_index, !call_does_dispatch, jvms,
+                                             false, prof_factor);
+              if (hit_cg_devirtual[i] == NULL) {
+                polymorphic_recompile = false;
+              }
+            }
+          }
           CallGenerator* miss_cg;
           Deoptimization::DeoptReason reason = (morphism == 2
                                                ? Deoptimization::Reason_bimorphic
                                                : Deoptimization::reason_class_check(speculative_receiver_type != NULL));
-          if ((morphism == 1 || (morphism == 2 && next_hit_cg != NULL)) &&
+          if ((morphism == 1 || (morphism == 2 && next_hit_cg != NULL) || polymorphic_recompile) &&
               !too_many_traps_or_recompiles(caller, bci, reason)
              ) {
             // Generate uncommon trap for class check failure path
@@ -275,9 +293,22 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
           } else {
             // Generate virtual call for class check failure path
             // in case of polymorphic virtual call site.
-            miss_cg = CallGenerator::for_virtual_call(callee, vtable_index);
+            if (PolymorphicInlining && cg_intrinsic != NULL) {
+              miss_cg = cg_intrinsic;
+            } else {
+              miss_cg = CallGenerator::for_virtual_call(callee, vtable_index);
+            }
           }
           if (miss_cg != NULL) {
+            for (int i = polymorphic_devirtualize - 1; i >= 2; i--) {
+              if (hit_cg_devirtual[i] != NULL) {
+                assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
+                trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(i), site_count, profile.receiver_count(i));
+                // We don't need to record dependency on a receiver here and below.
+                // Whenever we inline, the dependency is added by Parse::Parse().
+                miss_cg = CallGenerator::for_predicted_call(profile.receiver(i), miss_cg, hit_cg_devirtual[i], PROB_MAX);
+              }
+            }
             if (next_hit_cg != NULL) {
               assert(speculative_receiver_type == NULL, "shouldn't end up here if we used speculation");
               trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), next_receiver_method, profile.receiver(1), site_count, profile.receiver_count(1));
