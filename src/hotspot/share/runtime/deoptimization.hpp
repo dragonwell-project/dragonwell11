@@ -63,6 +63,7 @@ class Deoptimization : AllStatic {
     Reason_optimized_type_check   = Reason_bimorphic,
 #endif
 
+    Reason_polymorphic,           // saw unexpected object class in polymorphic inlining (@bci)
     Reason_profile_predicate,     // compiler generated predicate moved from frequent branch in a loop failed
 
     // recorded per method

@@ -515,8 +515,8 @@ ciCallProfile ciMethod::call_profile_at_bci(int bci) {
         // The call site count is > 0 in the case of a polymorphic virtual call.
         if (morphism > 0 && morphism == result._limit) {
            // The morphism <= MorphismLimit.
-           if ((morphism <  ciCallProfile::MorphismLimit) ||
-               (morphism == ciCallProfile::MorphismLimit && count == 0)) {
+           if ((morphism ==  1) ||
+               (morphism <= MorphismLimit && count == 0)) {
 #ifdef ASSERT
              if (count > 0) {
                this->print_short_name(tty);

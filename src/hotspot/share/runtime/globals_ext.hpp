@@ -111,6 +111,13 @@
         "*: all matched files."                                             \
         "*.log,*.txt: match given extension files."                         \
         "/x/a.log,/y/b.log: match by full file path")                       \
+                                                                            \
+  product(bool, PolymorphicInlining, false,                                 \
+          "Inline caching multiple type of receivers")                      \
+                                                                            \
+  product(uintx, MorphismLimit, 2,                                          \
+          "Max call site's morphism we care about")                         \
+                                                                            \
   //add new AJDK specific flags here
 
 
