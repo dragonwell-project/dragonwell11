@@ -33,18 +33,19 @@
 // This class is used to determine the frequently called method
 // at some call site
 class ciCallProfile : StackObj {
+public:
+  enum { MAX_MORPHISM_LIMIT = 8 }; // Max call site's morphism we care about
 private:
   // Fields are initialized directly by ciMethod::call_profile_at_bci.
   friend class ciMethod;
   friend class ciMethodHandle;
 
-  enum { MorphismLimit = 2 }; // Max call site's morphism we care about
   int  _limit;                // number of receivers have been determined
   int  _morphism;             // determined call site's morphism
   int  _count;                // # times has this call been executed
-  int  _receiver_count[MorphismLimit + 1]; // # times receivers have been seen
-  ciMethod* _method[MorphismLimit + 1];    // receivers methods
-  ciKlass*  _receiver[MorphismLimit + 1];  // receivers (exact)
+  int  _receiver_count[MAX_MORPHISM_LIMIT + 1]; // # times receivers have been seen
+  ciMethod* _method[MAX_MORPHISM_LIMIT + 1];    // receivers methods
+  ciKlass*  _receiver[MAX_MORPHISM_LIMIT + 1];  // receivers (exact)
 
   ciCallProfile() {
     _limit = 0;
