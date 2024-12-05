@@ -73,6 +73,6 @@ JVMFlag::Error MaxMetaspaceSizeConstraintFunc(size_t value, bool verbose);
 JVMFlag::Error SurvivorAlignmentInBytesConstraintFunc(intx value, bool verbose);
 
 // Internal
-JVMFlag::Error MaxPLABSizeBounds(const char* name, size_t value, bool verbose);
+JVMFlag::Error MaxPLABSizeBounds(const char* name, size_t* value_addr, size_t value, bool verbose);
 
 #endif // SHARE_GC_SHARED_COMMANDLINEFLAGCONSTRAINTSGC_HPP

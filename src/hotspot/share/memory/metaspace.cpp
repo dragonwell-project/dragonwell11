@@ -1276,7 +1276,17 @@ void Metaspace::ergo_initialize() {
   if (UseCompressedClassPointers) {
     if ((min_metaspace_sz + CompressedClassSpaceSize) >  MaxMetaspaceSize) {
       if (min_metaspace_sz >= MaxMetaspaceSize) {
-        vm_exit_during_initialization("MaxMetaspaceSize is too small.");
+          if (VerifyFlagConstraints) {
+              MaxMetaspaceSize = min_metaspace_sz * 2;
+              MetaspaceSize = MaxMetaspaceSize;
+              tty->print_cr("MaxMetaspaceSize:" SIZE_FORMAT,
+                      MaxMetaspaceSize);
+              tty->print_cr("MetaspaceSize:" SIZE_FORMAT,
+                      MetaspaceSize);
+          } else {
+              vm_exit_during_initialization("MaxMetaspaceSize is too small.");
+          }
+
       } else {
         FLAG_SET_ERGO(size_t, CompressedClassSpaceSize,
                       MaxMetaspaceSize - min_metaspace_sz);

@@ -111,7 +111,11 @@
         "*: all matched files."                                             \
         "*.log,*.txt: match given extension files."                         \
         "/x/a.log,/y/b.log: match by full file path")                       \
-  //add new AJDK specific flags here
+                                                                            \
+  diagnostic(bool, VerifyFlagConstraints, false,                            \
+          "Print out legal option values for those violate the constraints" \
+          ", and then exit VM.")                                            \
+//add new AJDK specific flags here
 
 
 DRAGONWELL_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, \
