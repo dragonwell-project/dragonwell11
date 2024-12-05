@@ -4237,6 +4237,17 @@ jint Arguments::apply_ergo() {
     return code;
   }
 
+  if (FLAG_IS_DEFAULT(UseSecondarySupersTable)) {
+    FLAG_SET_DEFAULT(UseSecondarySupersTable, VM_Version::supports_secondary_supers_table());
+  } else if (UseSecondarySupersTable && !VM_Version::supports_secondary_supers_table()) {
+    warning("UseSecondarySupersTable is not supported");
+    FLAG_SET_DEFAULT(UseSecondarySupersTable, false);
+  }
+  if (!UseSecondarySupersTable) {
+    FLAG_SET_DEFAULT(StressSecondarySupers, false);
+    FLAG_SET_DEFAULT(VerifySecondarySupers, false);
+  }
+
   // Turn off biased locking for locking debug mode flags,
   // which are subtly different from each other but neither works with
   // biased locking
