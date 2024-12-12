@@ -115,6 +115,7 @@ public:
 
   static int icache_line_size() { return _icache_line_size; }
   static int dcache_line_size() { return _dcache_line_size; }
+  const static bool supports_secondary_supers_table() { return true; }
 
 #ifdef __APPLE__
   // Is the CPU running emulated (for example macOS Rosetta running x86_64 code on M1 ARM (aarch64)

@@ -196,6 +196,9 @@ class Abstract_VM_Version: AllStatic {
   static bool supports_fast_class_init_checks() { return false; }
 
   static bool print_matching_lines_from_file(const char* filename, outputStream* st, const char* keywords_to_match[]);
+
+  // Does platform support secondary supers table lookup?
+  static bool supports_secondary_supers_table() { return false; }
 };
 
 #endif // SHARE_RUNTIME_ABSTRACT_VM_VERSION_HPP

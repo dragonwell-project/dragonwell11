@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2019, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2024, 2024, Alibaba Group Holding Limited. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -2289,7 +2290,7 @@ public:
   INSN(cmhi,   1, 0b001101, true);  // accepted arrangements: T8B, T16B, T4H, T8H, T2S, T4S, T2D
 
 #undef INSN
-
+  // Advanced SIMD across lanes
 #define INSN(NAME, opc, opc2, accepted) \
   void NAME(FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn) {                   \
     guarantee(T != T1Q && T != T1D, "incorrect arrangement");                           \
