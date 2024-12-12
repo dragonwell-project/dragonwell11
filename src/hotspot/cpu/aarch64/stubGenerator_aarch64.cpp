@@ -6503,6 +6503,7 @@ class StubGenerator: public StubCodeGenerator {
     generate_atomic_entry_points();
 
 #endif // LINUX
+#ifdef COMPILER2
     if (UseSecondarySupersTable) {
       StubRoutines::_lookup_secondary_supers_table_slow_path_stub = generate_lookup_secondary_supers_table_slow_path_stub();
       if (! InlineSecondarySupersTest) {
@@ -6512,6 +6513,7 @@ class StubGenerator: public StubCodeGenerator {
         }
       }
     }
+#endif
   StubRoutines::aarch64::set_completed();
   }
 
