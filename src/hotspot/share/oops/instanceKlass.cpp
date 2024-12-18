@@ -1166,26 +1166,36 @@ bool InstanceKlass::can_be_primary_super_slow() const {
 GrowableArray<Klass*>* InstanceKlass::compute_secondary_supers(int num_extra_slots,
                                                                Array<Klass*>* transitive_interfaces) {
   // The secondaries are the implemented interfaces.
-  Array<Klass*>* interfaces = transitive_interfaces;
+  // We need the cast because Array<Klass*> is NOT a supertype of Array<InstanceKlass*>,
+  // (but it's safe to do here because we won't write into _secondary_supers from this point on).
+  Array<Klass*>* interfaces = (Array<Klass*>*)(address)transitive_interfaces;
   int num_secondaries = num_extra_slots + interfaces->length();
   if (num_secondaries == 0) {
     // Must share this for correct bootstrapping!
-    set_secondary_supers(Universe::the_empty_klass_array());
+    set_secondary_supers(Universe::the_empty_klass_array(), Universe::the_empty_klass_bitmap());
     return NULL;
   } else if (num_extra_slots == 0) {
     // The secondary super list is exactly the same as the transitive interfaces.
     // Redefine classes has to be careful not to delete this!
-    set_secondary_supers(interfaces);
-    return NULL;
-  } else {
-    // Copy transitive interfaces to a temporary growable array to be constructed
-    // into the secondary super list with extra slots.
-    GrowableArray<Klass*>* secondaries = new GrowableArray<Klass*>(interfaces->length());
-    for (int i = 0; i < interfaces->length(); i++) {
-      secondaries->push(interfaces->at(i));
-    }
-    return secondaries;
+    if (!UseSecondarySupersTable) {
+      set_secondary_supers(interfaces);
+      return NULL;
+    } else if (num_extra_slots == 0 && interfaces->length() <= 1) {
+      // We will reuse the transitive interfaces list if we're certain
+      // it's in hash order.
+      uintx bitmap = compute_secondary_supers_bitmap(interfaces);
+      set_secondary_supers(interfaces, bitmap);
+      return NULL;
+     // ... fall through if that didn't work.
+     }
   }
+  // Copy transitive interfaces to a temporary growable array to be constructed
+  // into the secondary super list with extra slots.
+  GrowableArray<Klass*>* secondaries = new GrowableArray<Klass*>(interfaces->length());
+  for (int i = 0; i < interfaces->length(); i++) {
+    secondaries->push(interfaces->at(i));
+  }
+  return secondaries;
 }
 
 bool InstanceKlass::compute_is_subtype_of(Klass* k) {
@@ -3252,6 +3262,29 @@ void InstanceKlass::print_on(outputStream* st) const {
   }
   st->print(BULLET"local interfaces:  "); local_interfaces()->print_value_on(st);      st->cr();
   st->print(BULLET"trans. interfaces: "); transitive_interfaces()->print_value_on(st); st->cr();
+  
+  st->print(BULLET"secondary supers: "); secondary_supers()->print_value_on(st); st->cr();
+  if (UseSecondarySupersTable) {
+    st->print(BULLET"hash_slot:         %d", hash_slot()); st->cr();
+    st->print(BULLET"bitmap:            " UINTX_FORMAT_X_0, _bitmap); st->cr();
+  }
+  if (secondary_supers() != NULL) {
+    if (Verbose) {
+      bool is_hashed = UseSecondarySupersTable && (_bitmap != SECONDARY_SUPERS_BITMAP_FULL);
+      st->print_cr(BULLET"---- secondary supers (%d words):", _secondary_supers->length());
+      for (int i = 0; i < _secondary_supers->length(); i++) {
+        ResourceMark rm; // for external_name()
+        Klass* secondary_super = _secondary_supers->at(i);
+        st->print(BULLET"%2d:", i);
+        if (is_hashed) {
+          int home_slot = compute_home_slot(secondary_super, _bitmap);
+          int distance = (i - home_slot) & SECONDARY_SUPERS_TABLE_MASK;
+          st->print(" dist:%02d:", distance);
+        }
+        st->print_cr(" %p %s", secondary_super, secondary_super->external_name());
+      }
+    }
+  }
   st->print(BULLET"constants:         "); constants()->print_value_on(st);         st->cr();
   if (class_loader_data() != NULL) {
     st->print(BULLET"class loader data:  ");

@@ -949,6 +949,11 @@ public:
   // the intrinsic for java.lang.Thread.onSpinWait()
   static bool supports_on_spin_wait() { return supports_sse2(); }
 
+  // x86_64 supports secondary supers table
+  const static bool supports_secondary_supers_table() {
+    return LP64_ONLY(true) NOT_LP64(false); // not implemented on x86_32
+  }
+
 #ifdef __APPLE__
   // Is the CPU running emulated (for example macOS Rosetta running x86_64 code on M1 ARM (aarch64)
   static bool is_cpu_emulated();

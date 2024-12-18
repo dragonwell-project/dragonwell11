@@ -707,6 +707,12 @@ private:
   int prefix_and_encode(int dst_enc, bool dst_is_byte, int src_enc, bool src_is_byte);
   int prefixq_and_encode(int dst_enc, int src_enc);
 
+// Some prefixq variants always emit exactly one prefix byte, so besides a
+  // prefix-emitting method we provide a method to get the prefix byte to emit,
+  // which can then be folded into a byte stream.
+  int8_t get_prefixq(Address adr);
+  int8_t get_prefixq(Address adr, Register reg);
+
   void prefix(Register reg);
   void prefix(Register dst, Register src, Prefix p);
   void prefix(Register dst, Address adr, Prefix p);
@@ -1674,6 +1680,7 @@ private:
 
 #ifdef _LP64
   void notq(Register dst);
+  void btq(Register src, int imm8);
 #endif
 
   void orw(Register dst, Register src);
@@ -1937,6 +1944,13 @@ private:
 
   void sarl(Register dst, int imm8);
   void sarl(Register dst);
+
+#ifdef _LP64
+  void salq(Register dst, int imm8);
+  void salq(Register dst);
+  void salq(Address dst, int imm8);
+  void salq(Address dst);
+#endif
 
   void sarq(Register dst, int imm8);
   void sarq(Register dst);
