@@ -44,7 +44,7 @@ import sun.security.util.Cache;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Fork(jvmArgsAppend = {"--add-exports", "java.base/sun.security.util=ALL-UNNAMED", "-Xmx1g"})
 public class CacheBench {
-
+/*
     @State(Scope.Benchmark)
     public static class SharedState {
         Cache<Integer, Integer> cache;
@@ -124,5 +124,5 @@ public class CacheBench {
     public void remove(SharedState benchState, RemoveState state) {
         Integer i = state.intArray[state.index];
         benchState.cache.remove(i);
-    }
+    }*/
 }
