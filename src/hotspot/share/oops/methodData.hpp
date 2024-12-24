@@ -1994,7 +1994,6 @@ public:
     friend class VMStructs;
     friend class JVMCIVMStructs;
 
-    int  _creation_mileage;           // method mileage at MDO creation
     uint _nof_decompiles;             // count of all nmethod removals
     uint _nof_overflow_recompiles;    // recompile count, excluding recomp. bits
     uint _nof_overflow_traps;         // trap count, excluding _trap_hist
@@ -2010,16 +2009,9 @@ public:
       Copy::zero_to_words((HeapWord*) &_trap_hist, size_in_words);
     }
   public:
-    CompilerCounters(Method* m) : _creation_mileage(MethodData::mileage_of(m)),
-      _nof_decompiles(0), _nof_overflow_recompiles(0), _nof_overflow_traps(0) {
+    CompilerCounters() : _nof_decompiles(0), _nof_overflow_recompiles(0), _nof_overflow_traps(0) {
       init_trap_hist();
     }
-    CompilerCounters() : _creation_mileage(0), // for ciMethodData
-      _nof_decompiles(0), _nof_overflow_recompiles(0), _nof_overflow_traps(0) {
-      init_trap_hist();
-    }
-
-    int      creation_mileage() const { return _creation_mileage; }
 
     // Return (uint)-1 for overflow.
     uint trap_count(int reason) const {
@@ -2070,6 +2062,7 @@ private:
   intx              _arg_local;       // bit set of non-escaping arguments
   intx              _arg_stack;       // bit set of stack-allocatable arguments
   intx              _arg_returned;    // bit set of returned arguments
+  int               _creation_mileage; // method mileage at MDO creation
 
   // How many invocations has this MDO seen?
   // These counters are used to determine the exact age of MDO.
@@ -2216,7 +2209,8 @@ public:
   void collect_statistics(KlassSizeStats *sz) const;
 #endif
 
-  int      creation_mileage() const { return _compiler_counters.creation_mileage(); }
+  int      creation_mileage() const { return _creation_mileage; }
+  void set_creation_mileage(int x)  { _creation_mileage = x; }
 
   int invocation_count() {
     if (invocation_counter()->carry()) {
