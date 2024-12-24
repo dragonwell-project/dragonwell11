@@ -34,6 +34,7 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -438,7 +439,9 @@ public class LingeredApp {
         LingeredApp a = new LingeredApp();
         a.createLock();
         try {
-            a.runApp(cmd);
+            List<String> opts = new ArrayList<>();
+            Collections.addAll(opts, Utils.prependTestJavaOpts(cmd.toArray(new String[0])));
+            a.runApp(opts);
             a.waitAppReady(appWaitTime);
         } catch (Exception ex) {
             a.deleteLock();
