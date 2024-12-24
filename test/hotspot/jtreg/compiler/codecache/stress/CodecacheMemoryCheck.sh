@@ -92,7 +92,8 @@ useJcmdPrintMemoryUsage()
     while ! grep -q "For random generator using seed" ${javaLog}
     do
         sleep 0.1  #wait util java main function start finish
-        if [[ $i -ge 100 ]] ; then
+        if [[ $i -ge 200 ]] ; then
+            cat ${javaLog}
             echo "The tested java seems work abnormally!"
             exit 1
         fi
@@ -134,7 +135,8 @@ getMemoryUsageFromProc()
     while ! grep -q "For random generator using seed" ${javaLog}
     do
         sleep 0.1  #wait util java main function start finish
-        if [[ $i -ge 100 ]] ; then
+        if [[ $i -ge 200 ]] ; then
+            cat ${javaLog}
             echo "The tested java seems work abnormally!"
             exit 1
         fi
