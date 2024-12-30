@@ -40,6 +40,7 @@
 #include "opto/machnode.hpp"
 #include "opto/matcher.hpp"
 #include "opto/memnode.hpp"
+#include "opto/mempointer.hpp"
 #include "opto/mulnode.hpp"
 #include "opto/narrowptrnode.hpp"
 #include "opto/phaseX.hpp"
@@ -2561,6 +2562,558 @@ uint StoreNode::hash() const {
   return NO_HASH;
 }
 
+// Link together multiple stores (B/S/C/I) into a longer one.
+//
+// Example: _store = StoreB[i+3]
+//
+//   RangeCheck[i+0]           RangeCheck[i+0]
+//   StoreB[i+0]
+//   RangeCheck[i+3]           RangeCheck[i+3]
+//   StoreB[i+1]         -->   pass:             fail:
+//   StoreB[i+2]               StoreI[i+0]       StoreB[i+0]
+//   StoreB[i+3]
+//
+// The 4 StoreB are merged into a single StoreI node. We have to be careful with RangeCheck[i+1]: before
+// the optimization, if this RangeCheck[i+1] fails, then we execute only StoreB[i+0], and then trap. After
+// the optimization, the new StoreI[i+0] is on the passing path of RangeCheck[i+3], and StoreB[i+0] on the
+// failing path.
+//
+// Note: For normal array stores, every store at first has a RangeCheck. But they can be removed with:
+//       - RCE (RangeCheck Elimination): the RangeChecks in the loop are hoisted out and before the loop,
+//                                       and possibly no RangeChecks remain between the stores.
+//       - RangeCheck smearing: the earlier RangeChecks are adjusted such that they cover later RangeChecks,
+//                              and those later RangeChecks can be removed. Example:
+//
+//                              RangeCheck[i+0]                         RangeCheck[i+0] <- before first store
+//                              StoreB[i+0]                             StoreB[i+0]     <- first store
+//                              RangeCheck[i+1]     --> smeared -->     RangeCheck[i+3] <- only RC between first and last store
+//                              StoreB[i+1]                             StoreB[i+1]     <- second store
+//                              RangeCheck[i+2]     --> removed
+//                              StoreB[i+2]                             StoreB[i+2]
+//                              RangeCheck[i+3]     --> removed
+//                              StoreB[i+3]                             StoreB[i+3]     <- last store
+//
+//                              Thus, it is a common pattern that between the first and last store in a chain
+//                              of adjacent stores there remains exactly one RangeCheck, located between the
+//                              first and the second store (e.g. RangeCheck[i+3]).
+//
+class MergePrimitiveStores : public StackObj {
+private:
+  PhaseGVN* const _phase;
+  StoreNode* const _store;
+
+  NOT_PRODUCT( const bool _trace;)
+
+public:
+  MergePrimitiveStores(PhaseGVN* phase, StoreNode* store) :
+    _phase(phase), _store(store)
+    NOT_PRODUCT( COMMA _trace(Compile::current()->directive()->TraceMergeStoresOption) )
+    {}
+
+  StoreNode* run();
+
+private:
+  bool is_compatible_store(const StoreNode* other_store) const;
+  bool is_adjacent_pair(const StoreNode* use_store, const StoreNode* def_store) const;
+  bool is_adjacent_input_pair(const Node* n1, const Node* n2, const int memory_size) const;
+  static bool is_con_RShift(const Node* n, Node const*& base_out, jint& shift_out);
+  enum CFGStatus { CFG_SuccessNoRangeCheck, CFG_SuccessWithRangeCheck, CFG_Failure };
+  static CFGStatus cfg_status_for_pair(const StoreNode* use_store, const StoreNode* def_store);
+
+  class Status {
+  private:
+    StoreNode* _found_store;
+    bool       _found_range_check;
+
+    Status(StoreNode* found_store, bool found_range_check)
+      : _found_store(found_store), _found_range_check(found_range_check) {}
+
+  public:
+    StoreNode* found_store() const { return _found_store; }
+    bool found_range_check() const { return _found_range_check; }
+    static Status make_failure() { return Status(NULL, false); }
+
+    static Status make(StoreNode* found_store, const CFGStatus cfg_status) {
+      if (cfg_status == CFG_Failure) {
+        return Status::make_failure();
+      }
+      return Status(found_store, cfg_status == CFG_SuccessWithRangeCheck);
+    }
+
+#ifndef PRODUCT
+    void print_on(outputStream* st) const {
+      if (_found_store == NULL) {
+        st->print_cr("None");
+      } else {
+        st->print_cr("Found[%d %s, %s]", _found_store->_idx, _found_store->Name(),
+                                         _found_range_check ? "RC" : "no-RC");
+      }
+    }
+#endif
+  };
+
+  Status find_adjacent_use_store(const StoreNode* def_store) const;
+  Status find_adjacent_def_store(const StoreNode* use_store) const;
+  Status find_use_store(const StoreNode* def_store) const;
+  Status find_def_store(const StoreNode* use_store) const;
+  Status find_use_store_unidirectional(const StoreNode* def_store) const;
+  Status find_def_store_unidirectional(const StoreNode* use_store) const;
+
+  void collect_merge_list(Node_List& merge_list) const;
+  Node* make_merged_input_value(const Node_List& merge_list);
+  StoreNode* make_merged_store(const Node_List& merge_list, Node* merged_input_value);
+
+#ifndef PRODUCT
+  bool is_trace_basic() const {
+    return _trace;
+  }
+
+  bool is_trace_pointer() const {
+    return _trace;
+  }
+
+  bool is_trace_aliasing() const {
+    return _trace;
+  }
+
+  bool is_trace_adjacency() const {
+    return _trace;
+  }
+
+  bool is_trace_success() const {
+    return _trace;
+  }
+
+#endif
+
+  NOT_PRODUCT( void trace(const Node_List& merge_list, const Node* merged_input_value, const StoreNode* merged_store) const; )
+};
+
+StoreNode* MergePrimitiveStores::run() {
+  // Check for B/S/C/I
+  int opc = _store->Opcode();
+  if (opc != Op_StoreB && opc != Op_StoreC && opc != Op_StoreI) {
+    return NULL;
+  }
+
+  NOT_PRODUCT( if (is_trace_basic()) { tty->print("[TraceMergeStores] MergePrimitiveStores::run: "); _store->dump(); })
+
+  // The _store must be the "last" store in a chain. If we find a use we could merge with
+  // then that use or a store further down is the "last" store.
+  Status status_use = find_adjacent_use_store(_store);
+  NOT_PRODUCT( if (is_trace_basic()) { tty->print("[TraceMergeStores] expect no use: "); status_use.print_on(tty); })
+  if (status_use.found_store() != NULL) {
+    return NULL;
+  }
+
+  // Check if we can merge with at least one def, so that we have at least 2 stores to merge.
+  Status status_def = find_adjacent_def_store(_store);
+  NOT_PRODUCT( if (is_trace_basic()) { tty->print("[TraceMergeStores] expect def: "); status_def.print_on(tty); })
+  if (status_def.found_store() == NULL) {
+    return NULL;
+  }
+
+  ResourceMark rm;
+  Node_List merge_list;
+  collect_merge_list(merge_list);
+
+  Node* merged_input_value = make_merged_input_value(merge_list);
+  if (merged_input_value == NULL) { return NULL; }
+
+  StoreNode* merged_store = make_merged_store(merge_list, merged_input_value);
+
+  NOT_PRODUCT( if (is_trace_success()) { trace(merge_list, merged_input_value, merged_store); } )
+
+  return merged_store;
+}
+
+// Check compatibility between _store and other_store.
+bool MergePrimitiveStores::is_compatible_store(const StoreNode* other_store) const {
+  int opc = _store->Opcode();
+  assert(opc == Op_StoreB || opc == Op_StoreC || opc == Op_StoreI, "precondition");
+
+  if (other_store == NULL ||
+      _store->Opcode() != other_store->Opcode()) {
+    return false;
+  }
+
+  return true;
+}
+
+bool MergePrimitiveStores::is_adjacent_pair(const StoreNode* use_store, const StoreNode* def_store) const {
+  if (!is_adjacent_input_pair(def_store->in(MemNode::ValueIn),
+                              use_store->in(MemNode::ValueIn),
+                              def_store->memory_size())) {
+    return false;
+  }
+
+  ResourceMark rm;
+#ifndef PRODUCT
+  const TraceMemPointer trace(is_trace_pointer(),
+                              is_trace_aliasing(),
+                              is_trace_adjacency());
+#endif
+  const MemPointer pointer_use(use_store NOT_PRODUCT( COMMA trace ));
+  const MemPointer pointer_def(def_store NOT_PRODUCT( COMMA trace ));
+  return pointer_def.is_adjacent_to_and_before(pointer_use);
+}
+
+bool MergePrimitiveStores::is_adjacent_input_pair(const Node* n1, const Node* n2, const int memory_size) const {
+  // Pattern: [n1 = ConI, n2 = ConI]
+  if (n1->Opcode() == Op_ConI) {
+    return n2->Opcode() == Op_ConI;
+  }
+
+  // Pattern: [n1 = base >> shift, n2 = base >> (shift + memory_size)]
+#ifndef VM_LITTLE_ENDIAN
+  // Pattern: [n1 = base >> (shift + memory_size), n2 = base >> shift]
+  // Swapping n1 with n2 gives same pattern as on little endian platforms.
+  swap(n1, n2);
+#endif // !VM_LITTLE_ENDIAN
+  Node const* base_n2;
+  jint shift_n2;
+  if (!is_con_RShift(n2, base_n2, shift_n2)) {
+    return false;
+  }
+  if (n1->Opcode() == Op_ConvL2I) {
+    // look through
+    n1 = n1->in(1);
+  }
+  Node const* base_n1;
+  jint shift_n1;
+  if (n1 == base_n2) {
+    // n1 = base = base >> 0
+    base_n1 = n1;
+    shift_n1 = 0;
+  } else if (!is_con_RShift(n1, base_n1, shift_n1)) {
+    return false;
+  }
+  int bits_per_store = memory_size * 8;
+  if (base_n1 != base_n2 ||
+      shift_n1 + bits_per_store != shift_n2 ||
+      shift_n1 % bits_per_store != 0) {
+    return false;
+  }
+
+  // both load from same value with correct shift
+  return true;
+}
+
+// Detect pattern: n = base_out >> shift_out
+bool MergePrimitiveStores::is_con_RShift(const Node* n, Node const*& base_out, jint& shift_out) {
+  assert(n != NULL, "precondition");
+
+  int opc = n->Opcode();
+  if (opc == Op_ConvL2I) {
+    n = n->in(1);
+    opc = n->Opcode();
+  }
+
+  if ((opc == Op_RShiftI ||
+       opc == Op_RShiftL ||
+       opc == Op_URShiftI ||
+       opc == Op_URShiftL) &&
+      n->in(2)->is_ConI()) {
+    base_out = n->in(1);
+    shift_out = n->in(2)->get_int();
+    // The shift must be positive:
+    return shift_out >= 0;
+  }
+  return false;
+}
+
+// Check if there is nothing between the two stores, except optionally a RangeCheck leading to an uncommon trap.
+MergePrimitiveStores::CFGStatus MergePrimitiveStores::cfg_status_for_pair(const StoreNode* use_store, const StoreNode* def_store) {
+  assert(use_store->in(MemNode::Memory) == def_store, "use-def relationship");
+
+  Node* ctrl_use = use_store->in(MemNode::Control);
+  Node* ctrl_def = def_store->in(MemNode::Control);
+  if (ctrl_use == NULL || ctrl_def == NULL) {
+    return CFG_Failure;
+  }
+
+  if (ctrl_use == ctrl_def) {
+    // Same ctrl -> no RangeCheck in between.
+    // Check: use_store must be the only use of def_store.
+    if (def_store->outcnt() > 1) {
+      return CFG_Failure;
+    }
+    return CFG_SuccessNoRangeCheck;
+  }
+
+  // Different ctrl -> could have RangeCheck in between.
+  // Check: 1. def_store only has these uses: use_store and MergeMem for uncommon trap, and
+  //        2. ctrl separated by RangeCheck.
+  if (def_store->outcnt() != 2) {
+    return CFG_Failure; // Cannot have exactly these uses: use_store and MergeMem for uncommon trap.
+  }
+  int use_store_out_idx = def_store->raw_out(0) == use_store ? 0 : 1;
+  Node* merge_mem = def_store->raw_out(1 - use_store_out_idx)->isa_MergeMem();
+  if (merge_mem == NULL ||
+      merge_mem->outcnt() != 1) {
+    return CFG_Failure; // Does not have MergeMem for uncommon trap.
+  }
+  if (!ctrl_use->is_IfProj() ||
+      !ctrl_use->in(0)->is_RangeCheck() ||
+      ctrl_use->in(0)->outcnt() != 2) {
+    return CFG_Failure; // Not RangeCheck.
+  }
+  ProjNode* other_proj = ctrl_use->as_IfProj()->other_if_proj();
+  Node* trap = other_proj->is_uncommon_trap_proj(Deoptimization::Reason_range_check);
+  if (trap != merge_mem->unique_out() ||
+      ctrl_use->in(0)->in(0) != ctrl_def) {
+    return CFG_Failure; // Not RangeCheck with merge_mem leading to uncommon trap.
+  }
+
+  return CFG_SuccessWithRangeCheck;
+}
+
+MergePrimitiveStores::Status MergePrimitiveStores::find_adjacent_use_store(const StoreNode* def_store) const {
+  Status status_use = find_use_store(def_store);
+  StoreNode* use_store = status_use.found_store();
+  if (use_store != NULL && !is_adjacent_pair(use_store, def_store)) {
+    return Status::make_failure();
+  }
+  return status_use;
+}
+
+MergePrimitiveStores::Status MergePrimitiveStores::find_adjacent_def_store(const StoreNode* use_store) const {
+  Status status_def = find_def_store(use_store);
+  StoreNode* def_store = status_def.found_store();
+  if (def_store != NULL && !is_adjacent_pair(use_store, def_store)) {
+    return Status::make_failure();
+  }
+  return status_def;
+}
+
+MergePrimitiveStores::Status MergePrimitiveStores::find_use_store(const StoreNode* def_store) const {
+  Status status_use = find_use_store_unidirectional(def_store);
+
+#ifdef ASSERT
+  StoreNode* use_store = status_use.found_store();
+  if (use_store != NULL) {
+    Status status_def = find_def_store_unidirectional(use_store);
+    assert(status_def.found_store() == def_store &&
+           status_def.found_range_check() == status_use.found_range_check(),
+           "find_use_store and find_def_store must be symmetric");
+  }
+#endif
+
+  return status_use;
+}
+
+MergePrimitiveStores::Status MergePrimitiveStores::find_def_store(const StoreNode* use_store) const {
+  Status status_def = find_def_store_unidirectional(use_store);
+
+#ifdef ASSERT
+  StoreNode* def_store = status_def.found_store();
+  if (def_store != NULL) {
+    Status status_use = find_use_store_unidirectional(def_store);
+    assert(status_use.found_store() == use_store &&
+           status_use.found_range_check() == status_def.found_range_check(),
+           "find_use_store and find_def_store must be symmetric");
+  }
+#endif
+
+  return status_def;
+}
+
+MergePrimitiveStores::Status MergePrimitiveStores::find_use_store_unidirectional(const StoreNode* def_store) const {
+  assert(is_compatible_store(def_store), "precondition: must be compatible with _store");
+
+  for (DUIterator_Fast imax, i = def_store->fast_outs(imax); i < imax; i++) {
+    StoreNode* use_store = def_store->fast_out(i)->isa_Store();
+    if (is_compatible_store(use_store)) {
+      return Status::make(use_store, cfg_status_for_pair(use_store, def_store));
+    }
+  }
+
+  return Status::make_failure();
+}
+
+MergePrimitiveStores::Status MergePrimitiveStores::find_def_store_unidirectional(const StoreNode* use_store) const {
+  assert(is_compatible_store(use_store), "precondition: must be compatible with _store");
+
+  StoreNode* def_store = use_store->in(MemNode::Memory)->isa_Store();
+  if (!is_compatible_store(def_store)) {
+    return Status::make_failure();
+  }
+
+  return Status::make(def_store, cfg_status_for_pair(use_store, def_store));
+}
+
+static int round_down_power_of_2(uint value) {
+  assert(value > 0, "Invalid value");
+  return 1 << log2_uint(value);
+}
+
+void MergePrimitiveStores::collect_merge_list(Node_List& merge_list) const {
+  // The merged store can be at most 8 bytes.
+  const uint merge_list_max_size = 8 / _store->memory_size();
+  assert(merge_list_max_size >= 2 &&
+         merge_list_max_size <= 8 &&
+         is_power_of_2(merge_list_max_size),
+         "must be 2, 4 or 8");
+
+  // Traverse up the chain of adjacent def stores.
+  StoreNode* current = _store;
+  merge_list.push(current);
+  while (current != NULL && merge_list.size() < merge_list_max_size) {
+    Status status = find_adjacent_def_store(current);
+    NOT_PRODUCT( if (is_trace_basic()) { tty->print("[TraceMergeStores] find def: "); status.print_on(tty); })
+
+    current = status.found_store();
+    if (current != NULL) {
+      merge_list.push(current);
+
+      // We can have at most one RangeCheck.
+      if (status.found_range_check()) {
+        NOT_PRODUCT( if (is_trace_basic()) { tty->print_cr("[TraceMergeStores] found RangeCheck, stop traversal."); })
+        break;
+      }
+    }
+  }
+
+  NOT_PRODUCT( if (is_trace_basic()) { tty->print_cr("[TraceMergeStores] found:"); merge_list.dump(); })
+
+  // Truncate the merge_list to a power of 2.
+  const uint pow2size = round_down_power_of_2(merge_list.size());
+  assert(pow2size >= 2, "must be merging at least 2 stores");
+  while (merge_list.size() > pow2size) { merge_list.pop(); }
+
+  NOT_PRODUCT( if (is_trace_basic()) { tty->print_cr("[TraceMergeStores] truncated:"); merge_list.dump(); })
+}
+
+// Merge the input values of the smaller stores to a single larger input value.
+Node* MergePrimitiveStores::make_merged_input_value(const Node_List& merge_list) {
+  int new_memory_size = _store->memory_size() * merge_list.size();
+  Node* first = merge_list.at(merge_list.size()-1);
+  Node* merged_input_value = NULL;
+  if (_store->in(MemNode::ValueIn)->Opcode() == Op_ConI) {
+    // Pattern: [ConI, ConI, ...] -> new constant
+    jlong con = 0;
+    jlong bits_per_store = _store->memory_size() * 8;
+    jlong mask = (((jlong)1) << bits_per_store) - 1;
+    for (uint i = 0; i < merge_list.size(); i++) {
+      jlong con_i = merge_list.at(i)->in(MemNode::ValueIn)->get_int();
+#ifdef VM_LITTLE_ENDIAN
+      con = con << bits_per_store;
+      con = con | (mask & con_i);
+#else // VM_LITTLE_ENDIAN
+      con_i = (mask & con_i) << (i * bits_per_store);
+      con = con | con_i;
+#endif // VM_LITTLE_ENDIAN
+    }
+    merged_input_value = _phase->longcon(con);
+  } else {
+    // Pattern: [base >> 24, base >> 16, base >> 8, base] -> base
+    //             |                                  |
+    //           _store                             first
+    //
+    Node* hi = _store->in(MemNode::ValueIn);
+    Node* lo = first->in(MemNode::ValueIn);
+#ifndef VM_LITTLE_ENDIAN
+    // `_store` and `first` are swapped in the diagram above
+    swap(hi, lo);
+#endif // !VM_LITTLE_ENDIAN
+    Node const* hi_base;
+    jint hi_shift;
+    merged_input_value = lo;
+    bool is_true = is_con_RShift(hi, hi_base, hi_shift);
+    assert(is_true, "must detect con RShift");
+    if (merged_input_value != hi_base && merged_input_value->Opcode() == Op_ConvL2I) {
+      // look through
+      merged_input_value = merged_input_value->in(1);
+    }
+    if (merged_input_value != hi_base) {
+      // merged_input_value is not the base
+      return NULL;
+    }
+  }
+
+  if (_phase->type(merged_input_value)->isa_long() != NULL && new_memory_size <= 4) {
+    // Example:
+    //
+    //   long base = ...;
+    //   a[0] = (byte)(base >> 0);
+    //   a[1] = (byte)(base >> 8);
+    //
+    merged_input_value = _phase->transform(new ConvL2INode(merged_input_value));
+  }
+
+  assert((_phase->type(merged_input_value)->isa_int() != NULL && new_memory_size <= 4) ||
+         (_phase->type(merged_input_value)->isa_long() != NULL && new_memory_size == 8),
+         "merged_input_value is either int or long, and new_memory_size is small enough");
+
+  return merged_input_value;
+}
+
+//                                                                                                          //
+// first_ctrl    first_mem   first_adr                first_ctrl    first_mem         first_adr             //
+//  |                |           |                     |                |                 |                 //
+//  |                |           |                     |                +---------------+ |                 //
+//  |                |           |                     |                |               | |                 //
+//  |                | +---------+                     |                | +---------------+                 //
+//  |                | |                               |                | |             | |                 //
+//  +--------------+ | |  v1                           +------------------------------+ | |  v1             //
+//  |              | | |  |                            |                | |           | | |  |              //
+// RangeCheck     first_store                         RangeCheck        | |          first_store            //
+//  |                |  |                              |                | |                |                //
+// last_ctrl         |  +----> unc_trap               last_ctrl         | |                +----> unc_trap  //
+//  |                |                       ===>      |                | |                                 //
+//  +--------------+ | a2 v2                           |                | |                                 //
+//  |              | | |  |                            |                | |                                 //
+//  |             second_store                         |                | |                                 //
+//  |                |                                 |                | | [v1 v2   ...   vn]              //
+// ...              ...                                |                | |         |                       //
+//  |                |                                 |                | |         v                       //
+//  +--------------+ | an vn                           +--------------+ | | merged_input_value              //
+//                 | | |  |                                           | | |  |                              //
+//                last_store (= _store)                              merged_store                           //
+//                                                                                                          //
+StoreNode* MergePrimitiveStores::make_merged_store(const Node_List& merge_list, Node* merged_input_value) {
+  Node* first_store = merge_list.at(merge_list.size()-1);
+  Node* last_ctrl   = _store->in(MemNode::Control); // after (optional) RangeCheck
+  Node* first_mem   = first_store->in(MemNode::Memory);
+  Node* first_adr   = first_store->in(MemNode::Address);
+
+  const TypePtr* new_adr_type = _store->adr_type();
+
+  int new_memory_size = _store->memory_size() * merge_list.size();
+  BasicType bt = T_ILLEGAL;
+  switch (new_memory_size) {
+    case 2: bt = T_SHORT; break;
+    case 4: bt = T_INT;   break;
+    case 8: bt = T_LONG;  break;
+  }
+
+  StoreNode* merged_store = StoreNode::make(*_phase, last_ctrl, first_mem, first_adr,
+                                            new_adr_type, merged_input_value, bt, MemNode::unordered);
+
+  // Marking the store mismatched is sufficient to prevent reordering, since array stores
+  // are all on the same slice. Hence, we need no barriers.
+  merged_store->set_mismatched_access();
+
+  // Constants above may now also be be packed -> put candidate on worklist
+  _phase->is_IterGVN()->_worklist.push(first_mem);
+
+  return merged_store;
+}
+
+#ifndef PRODUCT
+void MergePrimitiveStores::trace(const Node_List& merge_list, const Node* merged_input_value, const StoreNode* merged_store) const {
+  stringStream ss;
+  ss.print_cr("[TraceMergeStores]: Replace");
+  for (int i = (int)merge_list.size() - 1; i >= 0; i--) {
+    merge_list.at(i)->dump("\n", false, &ss);
+  }
+  ss.print_cr("[TraceMergeStores]: with");
+  merged_input_value->dump("\n", false, &ss);
+  merged_store->dump("\n", false, &ss);
+  tty->print("%s", ss.as_string());
+}
+#endif
+
 //------------------------------Ideal------------------------------------------
 // Change back-to-back Store(, p, x) -> Store(m, p, y) to Store(m, p, x).
 // When a store immediately follows a relevant allocation/initialization,
@@ -2631,6 +3184,16 @@ Node *StoreNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         mem = MergeMemNode::make(mem);
         return mem;             // fold me away
       }
+    }
+  }
+
+  if (MergeStores && UseUnalignedAccesses) {
+    if (phase->C->post_loop_opts_phase()) {
+      MergePrimitiveStores merge(phase, this);
+      Node* progress = merge.run();
+      if (progress != NULL) { return progress; }
+    } else {
+      phase->C->record_for_post_loop_opts_igvn(this);
     }
   }
 
