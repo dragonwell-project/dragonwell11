@@ -61,6 +61,7 @@ class CmpNode;
 class CodeBuffer;
 class ConstraintCastNode;
 class ConNode;
+class ConINode;
 class CompareAndSwapNode;
 class CompareAndExchangeNode;
 class CountedLoopNode;
@@ -689,6 +690,8 @@ public:
 #if INCLUDE_SHENANDOAHGC
       DEFINE_CLASS_ID(ShenandoahBarrier, Type, 7)
 #endif
+      DEFINE_CLASS_ID(Con, Type, 8)
+        DEFINE_CLASS_ID(ConI, Con, 0)
 
     DEFINE_CLASS_ID(Proj,  Node, 3)
       DEFINE_CLASS_ID(CatchProj, Proj, 0)
@@ -825,6 +828,7 @@ public:
   DEFINE_CLASS_QUERY(CatchProj)
   DEFINE_CLASS_QUERY(CheckCastPP)
   DEFINE_CLASS_QUERY(CastII)
+  DEFINE_CLASS_QUERY(ConI)
   DEFINE_CLASS_QUERY(ConstraintCast)
   DEFINE_CLASS_QUERY(ClearArray)
   DEFINE_CLASS_QUERY(CMove)
