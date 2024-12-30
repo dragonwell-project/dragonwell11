@@ -383,6 +383,9 @@ class Compile : public Phase {
   int                   _fixed_slots;           // count of frame slots not allocated by the register
                                                 // allocator i.e. locks, original deopt pc, etc.
   uintx                 _max_node_limit;        // Max unique node count during a single compilation.
+
+  bool                  _post_loop_opts_phase;  // Loop opts are finished.
+
   // For deopt
   int                   _orig_pc_slot;
   int                   _orig_pc_slot_offset_in_bytes;
@@ -433,8 +436,7 @@ class Compile : public Phase {
   GrowableArray<Node*>* _macro_nodes;           // List of nodes which need to be expanded before matching.
   GrowableArray<Node*>* _predicate_opaqs;       // List of Opaque1 nodes for the loop predicates.
   GrowableArray<Node*>* _expensive_nodes;       // List of nodes that are expensive to compute and that we'd better not let the GVN freely common
-  GrowableArray<Node*>* _range_check_casts;     // List of CastII nodes with a range check dependency
-  GrowableArray<Node*>* _opaque4_nodes;         // List of Opaque4 nodes that have a default value
+  GrowableArray<Node*>  _for_post_loop_igvn;    // List of nodes for IGVN after loop opts are over
   GrowableArray<Node_List*> _coarsened_locks;   // List of coarsened Lock and Unlock nodes
   ConnectionGraph*      _congraph;
 #ifndef PRODUCT
@@ -855,30 +857,16 @@ class Compile : public Phase {
     _predicate_opaqs->append(n);
   }
 
-  // Range check dependent CastII nodes that can be removed after loop optimizations
-  void add_range_check_cast(Node* n);
-  void remove_range_check_cast(Node* n) {
-    if (_range_check_casts->contains(n)) {
-      _range_check_casts->remove(n);
-    }
-  }
-  Node* range_check_cast_node(int idx) const { return _range_check_casts->at(idx);  }
-  int   range_check_cast_count()       const { return _range_check_casts->length(); }
-  // Remove all range check dependent CastIINodes.
-  void  remove_range_check_casts(PhaseIterGVN &igvn);
   void add_coarsened_locks(GrowableArray<AbstractLockNode*>& locks);
   void remove_coarsened_lock(Node* n);
   bool coarsened_locks_consistent();
 
-  void add_opaque4_node(Node* n);
-  void remove_opaque4_node(Node* n) {
-    if (_opaque4_nodes->contains(n)) {
-      _opaque4_nodes->remove(n);
-    }
-  }
-  Node* opaque4_node(int idx) const { return _opaque4_nodes->at(idx);  }
-  int   opaque4_count()       const { return _opaque4_nodes->length(); }
-  void  remove_opaque4_nodes(PhaseIterGVN &igvn);
+  bool     post_loop_opts_phase() { return _post_loop_opts_phase; }
+  void set_post_loop_opts_phase() { _post_loop_opts_phase = true; }
+
+  void record_for_post_loop_opts_igvn(Node* n);
+  void remove_from_post_loop_opts_igvn(Node* n);
+  void process_for_post_loop_opts_igvn(PhaseIterGVN& igvn);
 
   // remove the opaque nodes that protect the predicates so that the unused checks and
   // uncommon traps will be eliminated from the graph.
@@ -1127,6 +1115,8 @@ class Compile : public Phase {
   void              add_vector_reboxing_late_inline(CallGenerator* cg) {
     _vector_reboxing_late_inlines.push(cg);
   }
+
+  void remove_useless_nodes (GrowableArray<Node*>& node_list, Unique_Node_List &useful);
 
   void remove_useless_late_inlines(GrowableArray<CallGenerator*>* inlines, Unique_Node_List &useful);
 
