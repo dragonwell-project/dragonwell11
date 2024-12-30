@@ -367,6 +367,15 @@ void Compile::remove_useless_late_inlines(GrowableArray<CallGenerator*>* inlines
   inlines->trunc_to(inlines->length()-shift);
 }
 
+void Compile::remove_useless_nodes(GrowableArray<Node*>& node_list, Unique_Node_List& useful) {
+  for (int i = node_list.length() - 1; i >= 0; i--) {
+    Node* node = node_list.at(i);
+    if (!useful.member(node)) {
+      node_list.delete_at(i); // replaces i-th with last element which is known to be useful (already processed)
+    }
+  }
+}
+
 // Disconnect all useless nodes by disconnecting those at the boundary.
 void Compile::remove_useless_nodes(Unique_Node_List &useful) {
   uint next = 0;
@@ -401,13 +410,6 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
       remove_macro_node(n);
     }
   }
-  // Remove useless CastII nodes with range check dependency
-  for (int i = range_check_cast_count() - 1; i >= 0; i--) {
-    Node* cast = range_check_cast_node(i);
-    if (!useful.member(cast)) {
-      remove_range_check_cast(cast);
-    }
-  }
   // Remove useless expensive nodes
   for (int i = C->expensive_count()-1; i >= 0; i--) {
     Node* n = C->expensive_node(i);
@@ -415,13 +417,7 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
       remove_expensive_node(n);
     }
   }
-  // Remove useless Opaque4 nodes
-  for (int i = opaque4_count() - 1; i >= 0; i--) {
-    Node* opaq = opaque4_node(i);
-    if (!useful.member(opaq)) {
-      remove_opaque4_node(opaq);
-    }
-  }
+  remove_useless_nodes(_for_post_loop_igvn, useful); // remove useless node recorded for post loop opts IGVN pass
   remove_useless_coarsened_locks(useful);            // remove useless coarsened locks nodes
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
   bs->eliminate_useless_gc_barriers(useful);
@@ -677,6 +673,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _inner_loops(0),
                   _scratch_const_size(-1),
                   _in_scratch_emit_size(false),
+                  _for_post_loop_igvn(comp_arena(), 8, 0, NULL),
                   _coarsened_locks   (comp_arena(), 8, 0, NULL),
                   _dead_node_list(comp_arena()),
                   _dead_node_count(0),
@@ -705,6 +702,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _print_inlining_output(NULL),
                   _interpreter_frame_size(0),
                   _max_node_limit(MaxNodeLimit),
+                  _post_loop_opts_phase(false),
                   _has_reserved_stack_access(target->has_reserved_stack_access()) {
   C = this;
   CompileWrapper cw(this);
@@ -1007,6 +1005,7 @@ Compile::Compile( ciEnv* ci_env,
     _Compile_types(mtCompiler),
     _dead_node_list(comp_arena()),
     _dead_node_count(0),
+    _for_post_loop_igvn(comp_arena(), 8, 0, NULL),
     _congraph(NULL),
     _replay_inline_data(NULL),
     _number_of_mh_late_inlines(0),
@@ -1019,6 +1018,7 @@ Compile::Compile( ciEnv* ci_env,
     _allowed_reasons(0),
     _interpreter_frame_size(0),
     _max_node_limit(MaxNodeLimit),
+    _post_loop_opts_phase(false),
     _has_reserved_stack_access(false) {
   C = this;
 
@@ -1203,8 +1203,6 @@ void Compile::Init(int aliaslevel) {
   _macro_nodes = new(comp_arena()) GrowableArray<Node*>(comp_arena(), 8,  0, NULL);
   _predicate_opaqs = new(comp_arena()) GrowableArray<Node*>(comp_arena(), 8,  0, NULL);
   _expensive_nodes = new(comp_arena()) GrowableArray<Node*>(comp_arena(), 8,  0, NULL);
-  _range_check_casts = new(comp_arena()) GrowableArray<Node*>(comp_arena(), 8,  0, NULL);
-  _opaque4_nodes = new(comp_arena()) GrowableArray<Node*>(comp_arena(), 8,  0, NULL);
   register_library_intrinsics();
 #ifdef ASSERT
   _type_verify_symmetry = true;
@@ -1977,46 +1975,30 @@ void Compile::cleanup_loop_predicates(PhaseIterGVN &igvn) {
   assert(predicate_count()==0, "should be clean!");
 }
 
-void Compile::add_range_check_cast(Node* n) {
-  assert(n->isa_CastII()->has_range_check(), "CastII should have range check dependency");
-  assert(!_range_check_casts->contains(n), "duplicate entry in range check casts");
-  _range_check_casts->append(n);
-}
-
-// Remove all range check dependent CastIINodes.
-void Compile::remove_range_check_casts(PhaseIterGVN &igvn) {
-  for (int i = range_check_cast_count(); i > 0; i--) {
-    Node* cast = range_check_cast_node(i-1);
-    assert(cast->isa_CastII()->has_range_check(), "CastII should have range check dependency");
-    igvn.replace_node(cast, cast->in(1));
+void Compile::record_for_post_loop_opts_igvn(Node* n) {
+  if (!n->for_post_loop_opts_igvn()) {
+    assert(!_for_post_loop_igvn.contains(n), "duplicate");
+    n->add_flag(Node::Flag_for_post_loop_opts_igvn);
+    _for_post_loop_igvn.append(n);
   }
-  assert(range_check_cast_count() == 0, "should be empty");
 }
 
-void Compile::add_opaque4_node(Node* n) {
-  assert(n->Opcode() == Op_Opaque4, "Opaque4 only");
-  assert(!_opaque4_nodes->contains(n), "duplicate entry in Opaque4 list");
-  _opaque4_nodes->append(n);
+void Compile::remove_from_post_loop_opts_igvn(Node* n) {
+  n->remove_flag(Node::Flag_for_post_loop_opts_igvn);
+  _for_post_loop_igvn.remove(n);
 }
 
-// Remove all Opaque4 nodes.
-void Compile::remove_opaque4_nodes(PhaseIterGVN &igvn) {
-  for (int i = opaque4_count(); i > 0; i--) {
-    Node* opaq = opaque4_node(i-1);
-    assert(opaq->Opcode() == Op_Opaque4, "Opaque4 only");
-    // With Opaque4 nodes, the expectation is that the test of input 1
-    // is always equal to the constant value of input 2. So we can
-    // remove the Opaque4 and replace it by input 2. In debug builds,
-    // leave the non constant test in instead to sanity check that it
-    // never fails (if it does, that subgraph was constructed so, at
-    // runtime, a Halt node is executed).
-#ifdef ASSERT
-    igvn.replace_node(opaq, opaq->in(1));
-#else
-    igvn.replace_node(opaq, opaq->in(2));
-#endif
+void Compile::process_for_post_loop_opts_igvn(PhaseIterGVN& igvn) {
+  if (_for_post_loop_igvn.length() == 0) {
+    return; // no work to do
   }
-  assert(opaque4_count() == 0, "should be empty");
+  while (_for_post_loop_igvn.length() > 0) {
+    Node* n = _for_post_loop_igvn.pop();
+    n->remove_flag(Node::Flag_for_post_loop_opts_igvn);
+    igvn._worklist.push(n);
+  }
+  igvn.optimize();
+  assert(_for_post_loop_igvn.length() == 0, "no more delayed nodes allowed");
 }
 
 // StringOpts and late inlining of string methods
@@ -2433,12 +2415,6 @@ void Compile::Optimize() {
     PhaseIdealLoop::verify(igvn);
   }
 
-  if (range_check_cast_count() > 0) {
-    // No more loop optimizations. Remove all range check dependent CastIINodes.
-    C->remove_range_check_casts(igvn);
-    igvn.optimize();
-  }
-
 #ifdef ASSERT
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
   bs->verify_gc_barriers(false);
@@ -2464,10 +2440,9 @@ void Compile::Optimize() {
   }
 #endif
 
-  if (opaque4_count() > 0) {
-    C->remove_opaque4_nodes(igvn);
-    igvn.optimize();
-  }
+  C->set_post_loop_opts_phase(); // no more loop opts allowed
+
+  process_for_post_loop_opts_igvn(igvn);
 
   if (C->max_vector_size() > 0) {
     C->optimize_logic_cones(igvn);
@@ -4768,8 +4743,6 @@ Node* Compile::constrained_convI2L(PhaseGVN* phase, Node* value, const TypeInt* 
     // ConvI2L node may be eliminated independently of the range check, causing the data path
     // to become TOP while the control path is still there (although it's unreachable).
     value->set_req(0, ctrl);
-    // Save CastII node to remove it after loop optimizations.
-    phase->C->add_range_check_cast(value);
     value = phase->transform(value);
   }
   const TypeLong* ltype = TypeLong::make(itype->_lo, itype->_hi, itype->_widen);
