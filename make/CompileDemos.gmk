@@ -219,6 +219,10 @@ $(eval $(call SetupBuildDemo, TransparentRuler, \
     MAIN_CLASS := transparentruler.Ruler, \
 ))
 
+$(eval $(call SetupBuildDemo, JavaCompilerCRaC, \
+    DEMO_SUBDIR := crac, \
+))
+
 ################################################################################
 # Copy html and README files.
 

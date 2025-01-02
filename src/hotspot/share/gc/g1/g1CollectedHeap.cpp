@@ -1208,6 +1208,12 @@ void G1CollectedHeap::resize_heap_if_necessary() {
   // we'll try to make the capacity smaller than it, not greater).
   maximum_desired_capacity =  MAX2(maximum_desired_capacity, min_heap_size);
 
+  if (Universe::heap()->do_cleanup_unused()) {
+    // HeapRegionManager::shrink_by do not allow remove all regions.
+    // Make sure at least one is there.
+    maximum_desired_capacity = HeapRegion::GrainBytes;
+  }
+
   if (capacity_after_gc < minimum_desired_capacity) {
     // Don't expand unless it's significant
     size_t expand_bytes = minimum_desired_capacity - capacity_after_gc;

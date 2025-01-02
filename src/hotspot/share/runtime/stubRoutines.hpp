@@ -228,7 +228,8 @@ class StubRoutines: AllStatic {
   static address _safefetchN_entry;
   static address _safefetchN_fault_pc;
   static address _safefetchN_continuation_pc;
-
+  static address _lookup_secondary_supers_table_stubs[];
+  static address _lookup_secondary_supers_table_slow_path_stub;
  public:
   // Initialization/Testing
   static void    initialize1();                            // must happen before universe::genesis
@@ -385,6 +386,17 @@ class StubRoutines: AllStatic {
   static address dlibm_sin_cos_huge()  { return _dlibm_sin_cos_huge; }
   static address dlibm_tan_cot_huge()  { return _dlibm_tan_cot_huge; }
   static address dtan()                { return _dtan; }
+ 
+  static address lookup_secondary_supers_table_stub(u1 slot) {
+    assert(slot < Klass::SECONDARY_SUPERS_TABLE_SIZE, "out of bounds");
+    assert(_lookup_secondary_supers_table_stubs[slot] != NULL, "not implemented");
+    return _lookup_secondary_supers_table_stubs[slot];
+  }
+
+  static address lookup_secondary_supers_table_slow_path_stub() {
+    assert(_lookup_secondary_supers_table_slow_path_stub != NULL, "not implemented");
+    return _lookup_secondary_supers_table_slow_path_stub;
+  }
 
   static address select_fill_function(BasicType t, bool aligned, const char* &name);
 

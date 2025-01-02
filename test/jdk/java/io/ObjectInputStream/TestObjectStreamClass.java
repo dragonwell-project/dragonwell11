@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2021 Alibaba Group Holding Limited. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -61,6 +61,8 @@ public class TestObjectStreamClass {
     }
 
     static class TestClass implements Serializable {
+        private static final long serialVersionUID = 1L;
+
         String str = "hello world";
     }
 

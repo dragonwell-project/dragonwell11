@@ -131,7 +131,9 @@ module java.base {
     exports com.alibaba.rcm;
     exports com.alibaba.wisp.engine;
     exports com.alibaba.util;
+    exports javax.crac;
 
+    exports jdk.crac;
 
     // additional qualified exports may be inserted at build time
     // see make/gensrc/GenModuleInfo.gmk
@@ -348,6 +350,8 @@ module java.base {
         jdk.localedata;
     exports com.alibaba.rcm.internal to
             jdk.management;
+    exports jdk.internal.crac to
+            java.rmi;
 
     // the service types defined by the APIs in this module
 

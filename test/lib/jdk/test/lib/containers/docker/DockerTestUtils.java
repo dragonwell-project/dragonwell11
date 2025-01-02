@@ -122,7 +122,7 @@ public class DockerTestUtils {
         return true;
     }
 
-     /**
+    /**
      * Build a container image that contains JDK under test.
      * The jdk will be placed under the "/jdk/" folder inside the image/container file system.
      *
@@ -130,7 +130,20 @@ public class DockerTestUtils {
      * @throws Exception
      */
     public static void buildJdkContainerImage(String imageName) throws Exception {
-        buildJdkContainerImage(imageName, null);
+        buildJdkContainerImage(imageName, "jdk-docker");
+    }
+
+     /**
+     * Build a container image that contains JDK under test.
+     * The jdk will be placed under the "/jdk/" folder inside the image/container file system.
+     *
+     * @param imageName name of the image to be created, including version tag
+      *@param buildDirName  name of the docker build/staging directory, which will
+      *                      be created in the jtreg's scratch folder
+     * @throws Exception
+     */
+    public static void buildJdkContainerImage(String imageName, String buildDirName) throws Exception {
+        buildJdkContainerImage(imageName, null, buildDirName);
     }
 
      /**
@@ -139,14 +152,13 @@ public class DockerTestUtils {
      *
      * @param imageName         name of the image to be created, including version tag
      * @param dockerfileContent content of the Dockerfile; use null to generate default content
+      * @param buildDirName  name of the docker build/staging directory, which will
+      *                      be created in the jtreg's scratch folder
      * @throws Exception
      */
-    public static void buildJdkContainerImage(String imageName, String dockerfileContent) throws Exception {
-        // image name may contain tag, hence replace ':'
-        String imageDirName = imageName.replace(":", "-");
+    public static void buildJdkContainerImage(String imageName, String dockerfileContent, String buildDirName) throws Exception {
 
-        // Create an image build/staging directory
-        Path buildDir = Paths.get(imageDirName);
+        Path buildDir = Paths.get(".", buildDirName);
         if (Files.exists(buildDir)) {
             throw new RuntimeException("The docker build directory already exists: " + buildDir);
         }
@@ -196,7 +208,7 @@ public class DockerTestUtils {
     /**
      * Build the docker command to run java inside a container
      *
-     * @param DockerRunOptions optins for running docker
+     * @param DockerRunOptions options for running docker
      *
      * @return command
      * @throws Exception
@@ -230,7 +242,7 @@ public class DockerTestUtils {
     /**
      * Run Java inside the docker image with specified parameters and options.
      *
-     * @param DockerRunOptions optins for running docker
+     * @param DockerRunOptions options for running docker
      *
      * @return output of the run command
      * @throws Exception
@@ -243,7 +255,7 @@ public class DockerTestUtils {
      /**
      * Remove docker image
      *
-     * @param DockerRunOptions optins for running docker
+     * @param DockerRunOptions options for running docker
      * @throws Exception
      */
     public static void removeDockerImage(String imageNameAndTag) throws Exception {

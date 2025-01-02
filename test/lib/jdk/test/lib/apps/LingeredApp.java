@@ -34,6 +34,7 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -334,6 +335,8 @@ public class LingeredApp {
             // Lets user manage LingeredApp options
             cmd.addAll(vmArguments);
         }
+        Collections.addAll(cmd, Utils.getTestJavaOpts());
+
         if (forceCrash) {
             cmd.add("-XX:+CreateCoredumpOnCrash");
             // We need to find libLingeredApp.so for the crash() native method
@@ -377,7 +380,6 @@ public class LingeredApp {
         if (forceCrash) {
             cmd.add("forceCrash"); // Let the subprocess know to force a crash
         }
-
         printCommandLine(cmd);
 
         ProcessBuilder pb = new ProcessBuilder(cmd);

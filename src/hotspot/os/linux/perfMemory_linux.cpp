@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2001, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,6 +30,7 @@
 #include "memory/resourceArea.hpp"
 #include "oops/oop.inline.hpp"
 #include "os_linux.inline.hpp"
+#include "perfMemory_linux.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/os.hpp"
 #include "runtime/perfMemory.hpp"
@@ -48,6 +50,7 @@
 
 static char* backing_store_file_name = NULL;  // name of the backing store
                                               // file, if successfully created.
+static int checkpoint_fd = -1;
 
 // Standard Memory Implementation Details
 
@@ -1404,4 +1407,102 @@ void PerfMemory::detach(char* addr, size_t bytes, TRAPS) {
   }
 
   unmap_shared(addr, bytes);
+}
+
+bool PerfMemoryLinux::checkpoint(const char* checkpoint_path) {
+  assert(checkpoint_path, "should be set");
+
+  if (!backing_store_file_name) {
+    return true;
+  }
+
+  char path[JVM_MAXPATHLEN];
+  int pathlen = snprintf(path, sizeof(path),"%s/%s", checkpoint_path, perfdata_name());
+
+  RESTARTABLE(::open(path, O_RDWR|O_CREAT|O_NOFOLLOW, S_IRUSR|S_IWUSR), checkpoint_fd);
+  if (checkpoint_fd < 0) {
+    tty->print_cr("cannot open checkpoint perfdata: %s", os::strerror(errno));
+    return false;
+  }
+
+  char* p = PerfMemory::start();
+  size_t len = PerfMemory::capacity();
+  do {
+    int result;
+    RESTARTABLE(::write(checkpoint_fd, p, len), result);
+    if (result == OS_ERR) {
+      tty->print_cr("cannot write data to checkpoint perfdata file: %s", os::strerror(errno));
+      ::close(checkpoint_fd);
+      checkpoint_fd = -1;
+      return false;
+    }
+    p += result;
+    len -= (size_t)result;
+  } while (0 < len);
+
+  void* mmapret = ::mmap(PerfMemory::start(), PerfMemory::capacity(),
+      PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, checkpoint_fd, 0);
+  if (MAP_FAILED == mmapret) {
+    tty->print_cr("cannot mmap checkpoint perfdata file: %s", os::strerror(errno));
+    ::close(checkpoint_fd);
+    checkpoint_fd = -1;
+    return false;
+  }
+
+  remove_file(backing_store_file_name);
+
+  return true;
+}
+
+bool PerfMemoryLinux::restore() {
+  if (checkpoint_fd < 0) {
+    return true;
+  }
+
+  int vmid = os::current_process_id();
+  char* user_name = get_user_name(geteuid());
+  char* dirname = get_user_tmp_dir(user_name, vmid, -1);
+  if (!make_user_tmp_dir(dirname)) {
+    return false;
+  }
+
+  int fd;
+  RESTARTABLE(::open(backing_store_file_name, O_RDWR|O_CREAT|O_NOFOLLOW, S_IRUSR|S_IWUSR), fd);
+  if (fd == OS_ERR) {
+    tty->print_cr("cannot open restore perfdata file: %s", os::strerror(errno));
+
+    void* mmapret = ::mmap(PerfMemory::start(), PerfMemory::capacity(),
+        PROT_READ|PROT_WRITE, MAP_FIXED|MAP_PRIVATE, checkpoint_fd, 0);
+    if (MAP_FAILED == mmapret) {
+      tty->print_cr("cannot remap checkpoint perfdata file: %s", os::strerror(errno));
+    }
+    return false;
+  }
+
+  char* p = PerfMemory::start();
+  size_t len = PerfMemory::capacity();
+  do {
+    int result;
+    RESTARTABLE(::write(fd, p, len), result);
+    if (result == OS_ERR) {
+      tty->print_cr("cannot write data to restore perfdata file: %s", os::strerror(errno));
+      ::close(fd);
+      return false;
+    }
+    p += result;
+    len -= (size_t)result;
+  } while (0 < len);
+
+  void* mmapret = ::mmap(PerfMemory::start(), PerfMemory::capacity(),
+      PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, fd, 0);
+  if (MAP_FAILED == mmapret) {
+    tty->print_cr("cannot mmap restore perfdata file: %s", os::strerror(errno));
+    ::close(fd);
+    return false;
+  }
+
+  ::close(fd);
+  ::close(checkpoint_fd);
+  checkpoint_fd = -1;
+  return true;
 }

@@ -371,6 +371,8 @@ class os: AllStatic {
   NOT_MACOS(static bool   uncommit_memory(char* addr, size_t bytes);)
   static bool   release_memory(char* addr, size_t bytes);
 
+  static void   cleanup_memory(char* addr, size_t bytes);
+
   // Touch memory pages that cover the memory range from start to end (exclusive)
   // to make the OS back the memory range with actual memory.
   // Current implementation may not touch the last page if unaligned addresses
@@ -832,7 +834,6 @@ class os: AllStatic {
   static int send(int fd, char* buf, size_t nBytes, uint flags);
   static int raw_send(int fd, char* buf, size_t nBytes, uint flags);
   static int connect(int fd, struct sockaddr* him, socklen_t len);
-  static struct hostent* get_host_by_name(char* name);
 
   // Support for signals (see JVM_RaiseSignal, JVM_RegisterSignal)
   static void  initialize_jdk_signal_support(TRAPS);
@@ -1073,7 +1074,6 @@ class os: AllStatic {
                                 char fileSep,
                                 char pathSep);
   static bool set_boot_path(char fileSep, char pathSep);
-
 };
 
 #ifndef _WINDOWS

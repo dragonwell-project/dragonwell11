@@ -9921,6 +9921,23 @@ instruct cmovI_cmpL(iRegINoSp dst, iRegI src, iRegL op1, iRegL op2, cmpOp cop) %
   ins_pipe(pipe_slow);
 %}
 
+instruct cmovI_cmpUL(iRegINoSp dst, iRegI src, iRegL op1, iRegL op2, cmpOpU cop) %{
+  match(Set dst (CMoveI (Binary cop (CmpUL op1 op2)) (Binary dst src)));
+  ins_cost(ALU_COST + BRANCH_COST);
+
+  format %{
+    "CMove $dst, ($op1 $cop $op2), $dst, $src\t#@cmovI_cmpUL\n\t"
+  %}
+
+  ins_encode %{
+    __ enc_cmove($cop$$cmpcode | MacroAssembler::unsigned_branch_mask,
+                 as_Register($op1$$reg), as_Register($op2$$reg),
+                 as_Register($dst$$reg), as_Register($src$$reg));
+  %}
+
+  ins_pipe(pipe_class_compare);
+%}
+
 instruct cmovL_cmpL(iRegLNoSp dst, iRegL src, iRegL op1, iRegL op2, cmpOp cop) %{
   match(Set dst (CMoveL (Binary cop (CmpL op1 op2)) (Binary dst src)));
   ins_cost(ALU_COST + BRANCH_COST);
@@ -9959,14 +9976,30 @@ instruct cmovL_cmpUL(iRegLNoSp dst, iRegL src, iRegL op1, iRegL op2, cmpOpU cop)
   ins_pipe(pipe_slow);
 %}
 
-instruct cmovI_cmpUL(iRegINoSp dst, iRegI src, iRegL op1, iRegL op2, cmpOpU cop) %{
-  match(Set dst (CMoveI (Binary cop (CmpUL op1 op2)) (Binary dst src)));
+instruct cmovL_cmpI(iRegLNoSp dst, iRegL src, iRegI op1, iRegI op2, cmpOp cop) %{
+  match(Set dst (CMoveL (Binary cop (CmpI op1 op2)) (Binary dst src)));
   ins_cost(ALU_COST + BRANCH_COST);
+
   format %{
-             "bneg$cop $op1, $op2\t#@cmovI_cmpUL\n\t"
-             "mv $dst, $src\n\t"
-             "skip:"
-         %}
+    "CMove $dst, ($op1 $cop $op2), $dst, $src\t#@cmovL_cmpI\n\t"
+  %}
+
+  ins_encode %{
+    __ enc_cmove($cop$$cmpcode,
+                 as_Register($op1$$reg), as_Register($op2$$reg),
+                 as_Register($dst$$reg), as_Register($src$$reg));
+  %}
+
+  ins_pipe(pipe_class_compare);
+%}
+
+instruct cmovL_cmpU(iRegLNoSp dst, iRegL src, iRegI op1, iRegI op2, cmpOpU cop) %{
+  match(Set dst (CMoveL (Binary cop (CmpU op1 op2)) (Binary dst src)));
+  ins_cost(ALU_COST + BRANCH_COST);
+
+  format %{
+    "CMove $dst, ($op1 $cop $op2), $dst, $src\t#@cmovL_cmpU\n\t"
+  %}
 
   ins_encode %{
     __ enc_cmove($cop$$cmpcode | MacroAssembler::unsigned_branch_mask,
@@ -9976,7 +10009,6 @@ instruct cmovI_cmpUL(iRegINoSp dst, iRegI src, iRegL op1, iRegL op2, cmpOpU cop)
 
   ins_pipe(pipe_slow);
 %}
-
 
 // ============================================================================
 // Procedure Call/Return Instructions

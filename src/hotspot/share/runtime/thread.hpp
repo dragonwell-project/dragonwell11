@@ -791,15 +791,17 @@ protected:
 class ThreadInAsgct {
  private:
   Thread* _thread;
+  bool _saved_in_asgct;
  public:
   ThreadInAsgct(Thread* thread) : _thread(thread) {
     assert(thread != NULL, "invariant");
-    assert(!thread->in_asgct(), "invariant");
+    // Allow AsyncGetCallTrace to be reentrant - save the previous state.
+    _saved_in_asgct = thread->in_asgct();
     thread->set_in_asgct(true);
   }
   ~ThreadInAsgct() {
     assert(_thread->in_asgct(), "invariant");
-    _thread->set_in_asgct(false);
+    _thread->set_in_asgct(_saved_in_asgct);
   }
 };
 
@@ -2281,6 +2283,8 @@ class Threads: AllStatic {
   static void java_threads_and_vm_thread_do(ThreadClosure* tc);
   static void threads_do(ThreadClosure* tc);
   static void possibly_parallel_threads_do(bool is_par, ThreadClosure* tc);
+
+  static jint check_for_restore(JavaVMInitArgs* args);
 
   // Initializes the vm and creates the vm thread
   static jint create_vm(JavaVMInitArgs* args, bool* canTryAgain);

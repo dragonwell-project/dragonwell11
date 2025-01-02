@@ -930,4 +930,20 @@ public:
 };
 
 
-#endif // SHARE_VM_SERVICES_DIAGNOSTICCOMMAND_HPP
+#ifdef LINUX
+class CheckpointDCmd : public DCmd {
+public:
+  CheckpointDCmd(outputStream* output, bool heap) : DCmd(output, heap) { }
+    static const char* name() { return "JDK.checkpoint"; }
+    static const char* description() {
+      return "Checkpoint via jdk.crac.checkpointRestore().";
+    }
+    static const char* impact() {
+      return "High: JVM terminates";
+    }
+    static int num_arguments() { return 0; }
+    virtual void execute(DCmdSource source, TRAPS);
+};
+#endif
+
+#endif // SHARE_SERVICES_DIAGNOSTICCOMMAND_HPP

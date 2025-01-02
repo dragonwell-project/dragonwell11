@@ -3854,8 +3854,25 @@ void Threads::initialize_jsr292_core_classes(TRAPS) {
   initialize_class(vmSymbols::java_lang_invoke_MethodHandleNatives(), CHECK);
 }
 
+jint Threads::check_for_restore(JavaVMInitArgs* args) {
+#ifdef LINUX
+  if (Arguments::is_restore_option_set(args)) {
+    Arguments::parse_options_for_restore(args);
+    os::Linux::restore();
+    if (!CRaCIgnoreRestoreIfUnavailable) {
+      // FIXME switch to unified hotspot logging
+      warning("cannot restore");
+      return JNI_ERR;
+    }
+  }
+#endif
+  return JNI_OK;
+}
+
 jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   extern void JDK_Version_init();
+
+  if (check_for_restore(args) != JNI_OK) return JNI_ERR;
 
   // Preinitialize version info.
   VM_Version::early_initialize();
@@ -3919,6 +3936,10 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   if (PauseAtStartup) {
     os::pause();
   }
+
+#ifdef LINUX
+  os::Linux::vm_create_start();
+#endif
 
   HOTSPOT_VM_INIT_BEGIN();
 

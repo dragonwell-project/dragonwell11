@@ -34,8 +34,8 @@ module jdk.management {
 
     exports com.sun.management;
     exports com.alibaba.management;
+    exports jdk.crac.management;
 
     provides sun.management.spi.PlatformMBeanProvider with
         com.sun.management.internal.PlatformMBeanProviderImpl;
 }
-
