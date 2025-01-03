@@ -80,25 +80,54 @@ void CollectorPolicy::initialize_flags() {
   assert(_heap_alignment % _space_alignment == 0,
          "heap_alignment: " SIZE_FORMAT " not aligned by space_alignment: " SIZE_FORMAT,
          _heap_alignment, _space_alignment);
-
+  bool reset_init = false;
+  bool reset_max  = false;
   if (FLAG_IS_CMDLINE(MaxHeapSize)) {
     if (FLAG_IS_CMDLINE(InitialHeapSize) && InitialHeapSize > MaxHeapSize) {
-      vm_exit_during_initialization("Initial heap size set to a larger value than the maximum heap size");
+      if (VerifyFlagConstraints) {
+        InitialHeapSize = MaxHeapSize;
+        reset_init = true;
+      } else {
+          vm_exit_during_initialization("Initial heap size set to a larger value than the maximum heap size");
+      }
     }
     if (_min_heap_byte_size != 0 && MaxHeapSize < _min_heap_byte_size) {
-      vm_exit_during_initialization("Incompatible minimum and maximum heap sizes specified");
+      if (VerifyFlagConstraints) {
+        MaxHeapSize = _min_heap_byte_size;
+        reset_max = true;
+        if (InitialHeapSize > MaxHeapSize) {
+          InitialHeapSize = MaxHeapSize;
+          reset_init = true;
+        }
+      } else {
+        vm_exit_during_initialization("Incompatible minimum and maximum heap sizes specified");
+      }
     }
   }
 
   // Check heap parameter properties
   if (MaxHeapSize < 2 * M) {
-    vm_exit_during_initialization("Too small maximum heap");
+    if (VerifyFlagConstraints) {
+      MaxHeapSize = 2 * M;
+      reset_max = true;
+    } else {
+      vm_exit_during_initialization("Too small maximum heap");
+    }
   }
   if (InitialHeapSize < M) {
-    vm_exit_during_initialization("Too small initial heap");
+    if (VerifyFlagConstraints) {
+      InitialHeapSize = M;
+      reset_init = true;
+    } else {
+      vm_exit_during_initialization("Too small initial heap");
+    }
   }
   if (_min_heap_byte_size < M) {
-    vm_exit_during_initialization("Too small minimum heap");
+    if (VerifyFlagConstraints) {
+      _min_heap_byte_size = M;
+    } else {
+      vm_exit_during_initialization("Too small minimum heap");
+    }
   }
 
   // User inputs from -Xmx and -Xms must be aligned
@@ -116,7 +145,21 @@ void CollectorPolicy::initialize_flags() {
 
   if (FLAG_IS_CMDLINE(InitialHeapSize) && _min_heap_byte_size != 0 &&
       InitialHeapSize < _min_heap_byte_size) {
-    vm_exit_during_initialization("Incompatible minimum and initial heap sizes specified");
+    if (VerifyFlagConstraints) {
+      InitialHeapSize = _min_heap_byte_size;
+      reset_init = true;
+    } else {
+      vm_exit_during_initialization("Incompatible minimum and initial heap sizes specified");
+    }
+  }
+
+  if (VerifyFlagConstraints) {
+    if (reset_init) {
+      tty->print("InitialHeapSize:"SIZE_FORMAT"\n", InitialHeapSize);
+    }
+    if (reset_max) {
+      tty->print("MaxHeapSize:"SIZE_FORMAT"\n", MaxHeapSize);
+    }
   }
   if (!FLAG_IS_DEFAULT(InitialHeapSize) && InitialHeapSize > MaxHeapSize) {
     FLAG_SET_ERGO(size_t, MaxHeapSize, InitialHeapSize);
