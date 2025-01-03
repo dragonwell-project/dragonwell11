@@ -5,7 +5,7 @@
  * @modules java.base/jdk.internal.misc
  * @requires os.family == "linux"
  * @requires os.arch != "riscv64"
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true TestDatagramSocket
+ * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+EnableCoroutine -XX:+UseWispMonitor -Dcom.alibaba.wisp.transparentWispSwitch=true -Dcom.alibaba.wisp.carrierEngines=8 TestDatagramSocket
 */
 
 
@@ -87,6 +87,11 @@ public class TestDatagramSocket {
             byte[] buf = new byte[1024 * 32];
             DatagramPacket dp = new DatagramPacket(buf, buf.length, host, port);
             so.send(dp);
+            try {
+                Thread.sleep(10); // wait for `receive()` done
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
         receiver.join();
     }
