@@ -87,6 +87,11 @@ public class TestDatagramSocket {
             byte[] buf = new byte[1024 * 32];
             DatagramPacket dp = new DatagramPacket(buf, buf.length, host, port);
             so.send(dp);
+            try {
+                Thread.sleep(10); // wait for `receive()` done
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
         receiver.join();
     }
