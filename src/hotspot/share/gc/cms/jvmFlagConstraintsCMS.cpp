@@ -109,7 +109,7 @@ JVMFlag::Error CMSOldPLABMinConstraintFunc(size_t value, bool verbose) {
                           value, CMSOldPLABMax);
       return JVMFlag::VIOLATES_CONSTRAINT;
     }
-    status = MaxPLABSizeBounds("CMSOldPLABMin", value, verbose);
+    status = MaxPLABSizeBounds("CMSOldPLABMin", &CMSOldPLABMin, value, verbose);
   }
   return status;
 }
@@ -118,7 +118,7 @@ JVMFlag::Error CMSOldPLABMaxConstraintFunc(size_t value, bool verbose) {
   JVMFlag::Error status = JVMFlag::SUCCESS;
 
   if (UseConcMarkSweepGC) {
-    status = MaxPLABSizeBounds("CMSOldPLABMax", value, verbose);
+    status = MaxPLABSizeBounds("CMSOldPLABMax", &CMSOldPLABMax, value, verbose);
   }
   return status;
 }
@@ -236,5 +236,5 @@ JVMFlag::Error OldPLABSizeConstraintFuncCMS(size_t value, bool verbose) {
   // For CMS, OldPLABSize is the number of free blocks of a given size that are used when
   // replenishing the local per-worker free list caches.
   // For more details, please refer to Arguments::set_cms_and_parnew_gc_flags().
-  return MaxPLABSizeBounds("OldPLABSize", value, verbose);
+  return MaxPLABSizeBounds("OldPLABSize", &OldPLABSize, value, verbose);
 }

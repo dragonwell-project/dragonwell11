@@ -433,9 +433,14 @@ G1ConcurrentMark::G1ConcurrentMark(G1CollectedHeap* g1h,
 
   assert(ConcGCThreads > 0, "ConcGCThreads have been set.");
   if (ConcGCThreads > ParallelGCThreads) {
-    log_warning(gc)("More ConcGCThreads (%u) than ParallelGCThreads (%u).",
+    if (VerifyFlagConstraints) {
+      ConcGCThreads = ParallelGCThreads;
+      tty->print_cr("ConcGCThreads:%u\n", ConcGCThreads);
+    } else {
+      log_warning(gc)("More ConcGCThreads (%u) than ParallelGCThreads (%u).",
                     ConcGCThreads, ParallelGCThreads);
-    return;
+      return;
+    }
   }
 
   log_debug(gc)("ConcGCThreads: %u offset %u", ConcGCThreads, _worker_id_offset);
@@ -454,10 +459,15 @@ G1ConcurrentMark::G1ConcurrentMark(G1CollectedHeap* g1h,
     // Verify that the calculated value for MarkStackSize is in range.
     // It would be nice to use the private utility routine from Arguments.
     if (!(mark_stack_size >= 1 && mark_stack_size <= MarkStackSizeMax)) {
-      log_warning(gc)("Invalid value calculated for MarkStackSize (" SIZE_FORMAT "): "
+      if (VerifyFlagConstraints) {
+        MarkStackSize = mark_stack_size < 1 ? 1 : MarkStackSizeMax;
+        tty->print_cr("MarkStackSize:"SIZE_FORMAT"\n", MarkStackSize);
+      } else {
+        log_warning(gc)("Invalid value calculated for MarkStackSize (" SIZE_FORMAT "): "
                       "must be between 1 and " SIZE_FORMAT,
                       mark_stack_size, MarkStackSizeMax);
-      return;
+        return;
+      }
     }
     FLAG_SET_ERGO(size_t, MarkStackSize, mark_stack_size);
   } else {
@@ -465,17 +475,27 @@ G1ConcurrentMark::G1ConcurrentMark(G1CollectedHeap* g1h,
     if (FLAG_IS_CMDLINE(MarkStackSize)) {
       if (FLAG_IS_DEFAULT(MarkStackSizeMax)) {
         if (!(MarkStackSize >= 1 && MarkStackSize <= MarkStackSizeMax)) {
-          log_warning(gc)("Invalid value specified for MarkStackSize (" SIZE_FORMAT "): "
-                          "must be between 1 and " SIZE_FORMAT,
-                          MarkStackSize, MarkStackSizeMax);
-          return;
+          if (VerifyFlagConstraints) {
+            MarkStackSize = MarkStackSize < 1 ? 1 : MarkStackSizeMax;
+            tty->print_cr("MarkStackSize:"SIZE_FORMAT"\n", MarkStackSize);
+          } else {
+            log_warning(gc)("Invalid value specified for MarkStackSize (" SIZE_FORMAT "): "
+                              "must be between 1 and " SIZE_FORMAT,
+                              MarkStackSize, MarkStackSizeMax);
+            return;
+          }
         }
       } else if (FLAG_IS_CMDLINE(MarkStackSizeMax)) {
         if (!(MarkStackSize >= 1 && MarkStackSize <= MarkStackSizeMax)) {
-          log_warning(gc)("Invalid value specified for MarkStackSize (" SIZE_FORMAT ")"
-                          " or for MarkStackSizeMax (" SIZE_FORMAT ")",
-                          MarkStackSize, MarkStackSizeMax);
-          return;
+          if (VerifyFlagConstraints) {
+            MarkStackSize = MarkStackSize < 1 ? 1 : MarkStackSizeMax;
+            tty->print_cr("MarkStackSize:"SIZE_FORMAT"\n", MarkStackSize);
+          } else {
+            log_warning(gc)("Invalid value specified for MarkStackSize (" SIZE_FORMAT ")"
+                            " or for MarkStackSizeMax (" SIZE_FORMAT ")",
+                            MarkStackSize, MarkStackSizeMax);
+            return;
+          }
         }
       }
     }

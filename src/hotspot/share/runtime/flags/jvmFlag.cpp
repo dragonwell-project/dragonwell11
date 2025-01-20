@@ -1086,11 +1086,16 @@ JVMFlag::Error JVMFlag::intAtPut(JVMFlag* flag, int* value, JVMFlag::Flags origi
   if (flag == NULL) return JVMFlag::INVALID_FLAG;
   if (!flag->is_int()) return JVMFlag::WRONG_FORMAT;
   name = flag->_name;
+  int old_value = flag->get_int();
   JVMFlag::Error check = apply_constraint_and_check_range_int(name, *value, !JVMFlagConstraintList::validated_after_ergo());
   if (check != JVMFlag::SUCCESS) return check;
-  int old_value = flag->get_int();
+
   trace_flag_changed<EventIntFlagChanged, s4>(name, old_value, *value, origin);
-  check = flag->set_int(*value);
+  if (VerifyFlagConstraints && old_value != flag->get_int()) {
+    check = JVMFlag::SUCCESS;
+  } else {
+    check = flag->set_int(*value);
+  }
   *value = old_value;
   flag->set_origin(origin);
   return check;
@@ -1135,11 +1140,16 @@ JVMFlag::Error JVMFlag::uintAtPut(JVMFlag* flag, uint* value, JVMFlag::Flags ori
   if (flag == NULL) return JVMFlag::INVALID_FLAG;
   if (!flag->is_uint()) return JVMFlag::WRONG_FORMAT;
   name = flag->_name;
+  uint old_value = flag->get_uint();
   JVMFlag::Error check = apply_constraint_and_check_range_uint(name, *value, !JVMFlagConstraintList::validated_after_ergo());
   if (check != JVMFlag::SUCCESS) return check;
-  uint old_value = flag->get_uint();
+
   trace_flag_changed<EventUnsignedIntFlagChanged, u4>(name, old_value, *value, origin);
-  check = flag->set_uint(*value);
+  if (VerifyFlagConstraints && old_value != flag->get_uint()) {
+    check = JVMFlag::SUCCESS;
+  } else {
+    check = flag->set_uint(*value);
+  }
   *value = old_value;
   flag->set_origin(origin);
   return check;
@@ -1184,11 +1194,16 @@ JVMFlag::Error JVMFlag::intxAtPut(JVMFlag* flag, intx* value, JVMFlag::Flags ori
   if (flag == NULL) return JVMFlag::INVALID_FLAG;
   if (!flag->is_intx()) return JVMFlag::WRONG_FORMAT;
   name = flag->_name;
+  intx old_value = flag->get_intx();
   JVMFlag::Error check = apply_constraint_and_check_range_intx(name, *value, !JVMFlagConstraintList::validated_after_ergo());
   if (check != JVMFlag::SUCCESS) return check;
-  intx old_value = flag->get_intx();
+
   trace_flag_changed<EventLongFlagChanged, intx>(name, old_value, *value, origin);
-  check = flag->set_intx(*value);
+  if (VerifyFlagConstraints && old_value != flag->get_intx()) {
+    check = JVMFlag::SUCCESS;
+  } else {
+    check = flag->set_intx(*value);
+  }
   *value = old_value;
   flag->set_origin(origin);
   return check;
@@ -1233,11 +1248,15 @@ JVMFlag::Error JVMFlag::uintxAtPut(JVMFlag* flag, uintx* value, JVMFlag::Flags o
   if (flag == NULL) return JVMFlag::INVALID_FLAG;
   if (!flag->is_uintx()) return JVMFlag::WRONG_FORMAT;
   name = flag->_name;
+  uintx old_value = flag->get_uintx();
   JVMFlag::Error check = apply_constraint_and_check_range_uintx(name, *value, !JVMFlagConstraintList::validated_after_ergo());
   if (check != JVMFlag::SUCCESS) return check;
-  uintx old_value = flag->get_uintx();
   trace_flag_changed<EventUnsignedLongFlagChanged, u8>(name, old_value, *value, origin);
-  check = flag->set_uintx(*value);
+  if (VerifyFlagConstraints && old_value != flag->get_uintx()) {
+    check = JVMFlag::SUCCESS;
+  } else {
+    check = flag->set_uintx(*value);
+  }
   *value = old_value;
   flag->set_origin(origin);
   return check;
@@ -1282,11 +1301,15 @@ JVMFlag::Error JVMFlag::uint64_tAtPut(JVMFlag* flag, uint64_t* value, JVMFlag::F
   if (flag == NULL) return JVMFlag::INVALID_FLAG;
   if (!flag->is_uint64_t()) return JVMFlag::WRONG_FORMAT;
   name = flag->_name;
+  uint64_t old_value = flag->get_uint64_t();
   JVMFlag::Error check = apply_constraint_and_check_range_uint64_t(name, *value, !JVMFlagConstraintList::validated_after_ergo());
   if (check != JVMFlag::SUCCESS) return check;
-  uint64_t old_value = flag->get_uint64_t();
   trace_flag_changed<EventUnsignedLongFlagChanged, u8>(name, old_value, *value, origin);
-  check = flag->set_uint64_t(*value);
+  if (VerifyFlagConstraints && old_value != flag->get_uint64_t()) {
+    check = JVMFlag::SUCCESS;
+  } else {
+    check = flag->set_uint64_t(*value);
+  }
   *value = old_value;
   flag->set_origin(origin);
   return check;
@@ -1332,11 +1355,15 @@ JVMFlag::Error JVMFlag::size_tAtPut(JVMFlag* flag, size_t* value, JVMFlag::Flags
   if (flag == NULL) return JVMFlag::INVALID_FLAG;
   if (!flag->is_size_t()) return JVMFlag::WRONG_FORMAT;
   name = flag->_name;
+  size_t old_value = flag->get_size_t();
   JVMFlag::Error check = apply_constraint_and_check_range_size_t(name, *value, !JVMFlagConstraintList::validated_after_ergo());
   if (check != JVMFlag::SUCCESS) return check;
-  size_t old_value = flag->get_size_t();
   trace_flag_changed<EventUnsignedLongFlagChanged, u8>(name, old_value, *value, origin);
-  check = flag->set_size_t(*value);
+  if (VerifyFlagConstraints && old_value != flag->get_size_t()) {
+    check = JVMFlag::SUCCESS;
+  } else {
+    check = flag->set_size_t(*value);
+  }
   *value = old_value;
   flag->set_origin(origin);
   return check;
@@ -1381,11 +1408,16 @@ JVMFlag::Error JVMFlag::doubleAtPut(JVMFlag* flag, double* value, JVMFlag::Flags
   if (flag == NULL) return JVMFlag::INVALID_FLAG;
   if (!flag->is_double()) return JVMFlag::WRONG_FORMAT;
   name = flag->_name;
+  double old_value = flag->get_double();
   JVMFlag::Error check = apply_constraint_and_check_range_double(name, *value, !JVMFlagConstraintList::validated_after_ergo());
   if (check != JVMFlag::SUCCESS) return check;
-  double old_value = flag->get_double();
+
   trace_flag_changed<EventDoubleFlagChanged, double>(name, old_value, *value, origin);
-  check = flag->set_double(*value);
+  if (VerifyFlagConstraints && old_value != flag->get_double()) {
+    check = JVMFlag::SUCCESS;
+  } else {
+    check = flag->set_double(*value);
+  }
   *value = old_value;
   flag->set_origin(origin);
   return check;
