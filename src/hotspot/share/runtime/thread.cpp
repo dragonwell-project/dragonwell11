@@ -3347,7 +3347,12 @@ void JavaThread::prepare(jobject jni_thread, ThreadPriority prio) {
 }
 
 ThreadStatistics* JavaThread::get_thread_stat() const {
-  return UseWispMonitor ? WispThread::current(const_cast<JavaThread*>(this))->_thread_stat : _thread_stat;
+  // `current_coroutine` may be null
+  if (UseWispMonitor && !this->is_Wisp_thread() && (const_cast<JavaThread*>(this))->current_coroutine()) {
+    return WispThread::current(const_cast<JavaThread*>(this))->_thread_stat;
+  } else {
+    return _thread_stat;
+  }
 }
 
 oop JavaThread::current_park_blocker() {
