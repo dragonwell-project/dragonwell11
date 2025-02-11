@@ -278,6 +278,7 @@ class CodeStrings {
 private:
 #ifndef PRODUCT
   CodeString* _strings;
+  CodeString* _strings_last;
 #ifdef ASSERT
   // Becomes true after copy-out, forbids further use.
   bool _defunct; // Zero bit pattern is "valid", see memset call in decode_env::decode_env
@@ -291,6 +292,7 @@ private:
   void set_null_and_invalidate() {
 #ifndef PRODUCT
     _strings = NULL;
+    _strings_last = NULL;
 #ifdef ASSERT
     _defunct = true;
 #endif
@@ -301,6 +303,7 @@ public:
   CodeStrings() {
 #ifndef PRODUCT
     _strings = NULL;
+    _strings_last = NULL;
 #ifdef ASSERT
     _defunct = false;
 #endif
