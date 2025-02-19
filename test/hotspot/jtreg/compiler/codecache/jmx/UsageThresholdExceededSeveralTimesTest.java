@@ -40,6 +40,12 @@
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
  *      -XX:+WhiteBoxAPI -XX:-UseCodeCacheFlushing -XX:-MethodFlushing
  *      -XX:CompileCommand=compileonly,null::* -Djdk.test.lib.iterations=10
+ *      -XX:+SegmentedCodeCache
+ *      -XX:NonProfiledHotCodeHeapSize=50m
+ *      compiler.codecache.jmx.UsageThresholdExceededTest
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
+ *      -XX:+WhiteBoxAPI -XX:-UseCodeCacheFlushing -XX:-MethodFlushing
+ *      -XX:CompileCommand=compileonly,null::* -Djdk.test.lib.iterations=10
  *      -XX:-SegmentedCodeCache
  *      compiler.codecache.jmx.UsageThresholdExceededTest
  */

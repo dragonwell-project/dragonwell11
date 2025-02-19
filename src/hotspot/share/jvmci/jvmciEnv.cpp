@@ -509,6 +509,7 @@ JVMCIEnv::CodeInstallResult JVMCIEnv::register_method(
                                  frame_words, oop_map_set,
                                  handler_table, &implicit_tbl,
                                  compiler, comp_level,
+                                 false, // No jvmci support for allocation inside NonProfiledHotCodeHeap
                                  JNIHandles::make_weak_global(installed_code),
                                  JNIHandles::make_weak_global(speculation_log));
 
@@ -519,7 +520,7 @@ JVMCIEnv::CodeInstallResult JVMCIEnv::register_method(
         {
           MutexUnlocker ml(Compile_lock);
           MutexUnlocker locker(MethodCompileQueue_lock);
-          CompileBroker::handle_full_code_cache(CodeCache::get_code_blob_type(comp_level));
+          CompileBroker::handle_full_code_cache(CodeCache::get_code_blob_type(method, comp_level, false));
         }
       } else {
         nm->set_has_unsafe_access(has_unsafe_access);

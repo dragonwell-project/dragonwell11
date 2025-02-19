@@ -32,6 +32,7 @@
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
  *                                sun.hotspot.WhiteBox$WhiteBoxPermission
  * @run main/othervm -Xbootclasspath/a:. -Xmixed -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:NonProfiledHotCodeHeapSize=0
  *                   -XX:+WhiteBoxAPI -XX:-UseCounterDecay
  *                   -XX:CompileCommand=compileonly,compiler.whitebox.SimpleTestCaseHelper::*
  *                   compiler.whitebox.GetNMethodTest

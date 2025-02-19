@@ -378,6 +378,7 @@ public:
                        AbstractCompiler*         compiler,
                        bool                      has_unsafe_access,
                        bool                      has_wide_vectors,
+                       bool                      alloc_in_non_profiled_hot_code_heap,
                        RTMState                  rtm_state = NoRTM);
 
 

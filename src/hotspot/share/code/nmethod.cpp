@@ -461,7 +461,8 @@ nmethod* nmethod::new_native_nmethod(const methodHandle& method,
     CodeOffsets offsets;
     offsets.set_value(CodeOffsets::Verified_Entry, vep_offset);
     offsets.set_value(CodeOffsets::Frame_Complete, frame_complete);
-    nm = new (native_nmethod_size, CompLevel_none) nmethod(method(), compiler_none, native_nmethod_size,
+    int code_blob_type = CodeCache::get_code_blob_type(method, CompLevel_none, false);
+    nm = new (native_nmethod_size, code_blob_type) nmethod(method(), compiler_none, native_nmethod_size,
                                             compile_id, &offsets,
                                             code_buffer, frame_size,
                                             basic_lock_owner_sp_offset,
@@ -491,7 +492,8 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
   ExceptionHandlerTable* handler_table,
   ImplicitExceptionTable* nul_chk_table,
   AbstractCompiler* compiler,
-  int comp_level
+  int comp_level,
+  bool alloc_in_non_profiled_hot_code_heap
 #if INCLUDE_JVMCI
   , jweak installed_code,
   jweak speculationLog
@@ -500,6 +502,7 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
 {
   assert(debug_info->oop_recorder() == code_buffer->oop_recorder(), "shared OR");
   code_buffer->finalize_oop_references(method);
+
   // create nmethod
   nmethod* nm = NULL;
   int nmethod_size = 0;
@@ -529,7 +532,9 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
     }
   }
   { MutexLockerEx mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
-    nm = new (nmethod_size, comp_level)
+
+    int code_blob_type = CodeCache::get_code_blob_type(method, comp_level, alloc_in_non_profiled_hot_code_heap);
+    nm = new (nmethod_size, code_blob_type)
     nmethod(method(), compiler->type(), nmethod_size, immutable_data_size,
             compile_id, entry_bci, immutable_data, offsets,
             orig_pc_offset, debug_info, dependencies, code_buffer, frame_size,
@@ -568,6 +573,9 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
         }
       }
       NOT_PRODUCT(if (nm != NULL)  note_java_nmethod(nm));
+
+      // Logging NonProfiledHotCodeHeap activities
+      CodeCache::trace_non_profiled_hot_code_heap_activities(tty, "Allocate", nm, nmethod_size);
     }
   }
   // Do verification and logging outside CodeCache_lock.
@@ -676,8 +684,8 @@ nmethod::nmethod(
   }
 }
 
-void* nmethod::operator new(size_t size, int nmethod_size, int comp_level) throw () {
-  return CodeCache::allocate(nmethod_size, CodeCache::get_code_blob_type(comp_level));
+void* nmethod::operator new(size_t size, int nmethod_size, int code_blob_type) throw () {
+  return CodeCache::allocate(nmethod_size, code_blob_type);
 }
 
 nmethod::nmethod(
@@ -1403,6 +1411,9 @@ void nmethod::flush() {
   }
   CodeBlob::flush();
   CodeCache::free(this);
+
+  // Logging NonProfiledHotCodeHeap activities
+  CodeCache::trace_non_profiled_hot_code_heap_activities(tty, "Free", this);
 }
 
 oop nmethod::oop_at(int index) const {

@@ -261,7 +261,13 @@ BufferBlob* BufferBlob::create(const char* name, CodeBuffer* cb) {
   return blob;
 }
 
-void* BufferBlob::operator new(size_t s, unsigned size) throw() {
+void* BufferBlob::operator new(size_t s, unsigned size, bool prefer_hot_codeheap) throw() {
+  if (prefer_hot_codeheap) {
+    if (AllocIVtableStubInNonProfiledHotCodeHeap && NonProfiledHotCodeHeapSize) {
+      return CodeCache::allocate(size, CodeBlobType::MethodHotNonProfiled);
+    }
+  }
+
   return CodeCache::allocate(size, CodeBlobType::NonNMethod);
 }
 
@@ -315,7 +321,9 @@ VtableBlob* VtableBlob::create(const char* name, int buffer_size) {
   assert(name != NULL, "must provide a name");
   {
     MutexLockerEx mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
-    blob = new (size) VtableBlob(name, size);
+    blob = new (size, true) VtableBlob(name, size);
+    // Logging NonProfiledHotCodeHeap activities
+    CodeCache::trace_non_profiled_hot_code_heap_activities(tty, "Allocate", blob, size);
   }
   // Track memory usage statistic after releasing CodeCache_lock
   MemoryService::track_code_cache_memory_usage();

@@ -46,6 +46,7 @@
     cflags(DumpReplay,              bool, false, DumpReplay) \
     cflags(DumpInline,              bool, false, DumpInline) \
     cflags(CompilerDirectivesIgnoreCompileCommands, bool, CompilerDirectivesIgnoreCompileCommands, X) \
+    cflags(AllocInNonProfiledHotCodeHeap, bool, false, AllocInNonProfiledHotCodeHeap) \
     cflags(DisableIntrinsic,        ccstrlist, DisableIntrinsic, DisableIntrinsic)
 
 #ifdef COMPILER1

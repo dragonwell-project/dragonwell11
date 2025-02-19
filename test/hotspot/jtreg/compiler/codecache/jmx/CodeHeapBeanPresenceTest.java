@@ -39,6 +39,11 @@
  *     -XX:+WhiteBoxAPI
  *     -XX:+SegmentedCodeCache
  *     compiler.codecache.jmx.CodeHeapBeanPresenceTest
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
+ *     -XX:+WhiteBoxAPI
+ *     -XX:+SegmentedCodeCache
+ *     -XX:NonProfiledHotCodeHeapSize=50m
+ *     compiler.codecache.jmx.CodeHeapBeanPresenceTest
  */
 
 package compiler.codecache.jmx;

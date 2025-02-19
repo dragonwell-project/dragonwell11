@@ -40,7 +40,18 @@ public class CodeCacheCLITestBase {
                     CodeCacheOptions.mB(100)),
             new CodeCacheOptions(CodeCacheOptions.mB(60)),
             new CodeCacheOptions(CodeCacheOptions.mB(200)),
-            new CodeCacheOptions(CodeCacheOptions.mB(300))
+            new CodeCacheOptions(CodeCacheOptions.mB(300)),
+
+            // Support for NonProfiledHotCodeHeap
+            new CodeCacheOptions(CodeCacheOptions.mB(70),
+                    CodeCacheOptions.mB(20), CodeCacheOptions.mB(20),
+                    CodeCacheOptions.mB(20), CodeCacheOptions.mB(10)),
+            new CodeCacheOptions(CodeCacheOptions.mB(210),
+                    CodeCacheOptions.mB(75), CodeCacheOptions.mB(75),
+                    CodeCacheOptions.mB(50), CodeCacheOptions.mB(10)),
+            new CodeCacheOptions(CodeCacheOptions.mB(400),
+                    CodeCacheOptions.mB(100), CodeCacheOptions.mB(100),
+                    CodeCacheOptions.mB(100), CodeCacheOptions.mB(100))
     };
 
     private final CodeCacheCLITestCase[] testCases;

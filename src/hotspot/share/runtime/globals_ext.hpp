@@ -118,6 +118,16 @@
   product(uintx, MorphismLimit, 2,                                          \
           "Max call site's morphism we care about")                         \
                                                                             \
+  product(uintx, NonProfiledHotCodeHeapSize, 0,                             \
+          "Size of hot code heap with non-profiled methods (in bytes)")     \
+          range(0, max_uintx)                                               \
+                                                                            \
+  product(bool, AllocIVtableStubInNonProfiledHotCodeHeap, false,            \
+          "Allocate itable/vtable in NonProfiledHotCodeHeap")               \
+                                                                            \
+  diagnostic(bool, TraceNonProfiledHotCodeHeapActivities, false,            \
+          "Trace activities of NonProfiledHotCodeHeap")                     \
+                                                                            \
   //add new AJDK specific flags here
 
 

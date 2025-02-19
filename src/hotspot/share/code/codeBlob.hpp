@@ -37,12 +37,13 @@
 // Used in the CodeCache to assign CodeBlobs to different CodeHeaps
 struct CodeBlobType {
   enum {
-    MethodNonProfiled   = 0,    // Execution level 1 and 4 (non-profiled) nmethods (including native nmethods)
-    MethodProfiled      = 1,    // Execution level 2 and 3 (profiled) nmethods
-    NonNMethod          = 2,    // Non-nmethods like Buffers, Adapters and Runtime Stubs
-    All                 = 3,    // All types (No code cache segmentation)
-    AOT                 = 4,    // AOT methods
-    NumTypes            = 5     // Number of CodeBlobTypes
+    MethodNonProfiled    = 0,    // Execution level 1 and 4 (non-profiled) nmethods (including native nmethods)
+    MethodHotNonProfiled = 1,    // Hottest nmethods with NonProfiled
+    MethodProfiled       = 2,    // Execution level 2 and 3 (profiled) nmethods
+    NonNMethod           = 3,    // Non-nmethods like Buffers, Adapters and Runtime Stubs
+    All                  = 4,    // All types (No code cache segmentation)
+    AOT                  = 5,    // AOT methods
+    NumTypes             = 6     // Number of CodeBlobTypes
   };
 };
 
@@ -399,7 +400,7 @@ class BufferBlob: public RuntimeBlob {
   // below two-argument operator delete will be treated as a placement
   // delete rather than an ordinary sized delete; see C++14 3.7.4.2/p2.
   void operator delete(void* p);
-  void* operator new(size_t s, unsigned size) throw();
+  void* operator new(size_t s, unsigned size, bool prefer_hot_codeheap = false) throw();
 
  public:
   // Creation

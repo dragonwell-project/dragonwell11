@@ -2042,7 +2042,7 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   product(ccstr, CompileCommandFile, NULL,                                  \
           "Read compiler commands from this file [.hotspot_compiler]")      \
                                                                             \
-  diagnostic(ccstr, CompilerDirectivesFile, NULL,                           \
+  product(ccstr, CompilerDirectivesFile, NULL,                              \
           "Read compiler directives from this file")                        \
                                                                             \
   product(ccstrlist, CompileCommand, "",                                    \

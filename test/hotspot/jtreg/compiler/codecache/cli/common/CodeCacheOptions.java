@@ -37,8 +37,12 @@ public class CodeCacheOptions {
             = EnumSet.of(BlobType.All);
     private static final EnumSet<BlobType> ALL_SEGMENTED_HEAPS
             = EnumSet.complementOf(NON_SEGMENTED_HEAPS);
+    private static final EnumSet<BlobType> ALL_SEGMENTED_HEAPS_WITHOUT_HOT_NON_PROFILED
+            = EnumSet.of(BlobType.NonNMethod, BlobType.MethodProfiled, BlobType.MethodNonProfiled);
     private static final EnumSet<BlobType> SEGMENTED_HEAPS_WO_PROFILED
             = EnumSet.of(BlobType.NonNMethod, BlobType.MethodNonProfiled);
+    private static final EnumSet<BlobType> SEGMENTED_HEAPS_WO_PROFILED_WITH_HOT_NON_PROFILED
+            = EnumSet.of(BlobType.NonNMethod, BlobType.MethodNonProfiled, BlobType.MethodHotNonProfiled);
     private static final EnumSet<BlobType> ONLY_NON_METHODS_HEAP
             = EnumSet.of(BlobType.NonNMethod);
 
@@ -46,6 +50,7 @@ public class CodeCacheOptions {
     public final long nonNmethods;
     public final long nonProfiled;
     public final long profiled;
+    public final long hotNonProfiled;
     public final boolean segmented;
 
     public static long mB(long val) {
@@ -61,6 +66,7 @@ public class CodeCacheOptions {
         this.nonNmethods = 0;
         this.nonProfiled = 0;
         this.profiled = 0;
+        this.hotNonProfiled = 0;
         this.segmented = false;
     }
 
@@ -70,6 +76,17 @@ public class CodeCacheOptions {
         this.nonNmethods = nonNmethods;
         this.nonProfiled = nonProfiled;
         this.profiled = profiled;
+        this.hotNonProfiled = 0;
+        this.segmented = true;
+    }
+
+    public CodeCacheOptions(long reserved, long nonNmethods, long nonProfiled,
+                            long profiled, long hotNonProfiled) {
+        this.reserved = reserved;
+        this.nonNmethods = nonNmethods;
+        this.nonProfiled = nonProfiled;
+        this.profiled = profiled;
+        this.hotNonProfiled = hotNonProfiled;
         this.segmented = true;
     }
 
@@ -83,6 +100,8 @@ public class CodeCacheOptions {
                 return this.nonProfiled;
             case MethodProfiled:
                 return this.profiled;
+            case MethodHotNonProfiled:
+                return this.hotNonProfiled;
             default:
                 throw new Error("Unknown heap: " + heap.name());
         }
@@ -105,7 +124,9 @@ public class CodeCacheOptions {
                             BlobType.MethodNonProfiled.sizeOptionName,
                             nonProfiled),
                     CommandLineOptionTest.prepareNumericFlag(
-                            BlobType.MethodProfiled.sizeOptionName, profiled));
+                            BlobType.MethodProfiled.sizeOptionName, profiled),
+                    CommandLineOptionTest.prepareNumericFlag(
+                            BlobType.MethodHotNonProfiled.sizeOptionName, hotNonProfiled));
         }
         return options.toArray(new String[options.size()]);
     }
@@ -113,14 +134,18 @@ public class CodeCacheOptions {
     public CodeCacheOptions mapOptions(EnumSet<BlobType> involvedCodeHeaps) {
         if (involvedCodeHeaps.isEmpty()
                 || involvedCodeHeaps.equals(NON_SEGMENTED_HEAPS)
-                || involvedCodeHeaps.equals(ALL_SEGMENTED_HEAPS)) {
+                || involvedCodeHeaps.equals(ALL_SEGMENTED_HEAPS)
+                || involvedCodeHeaps.equals(ALL_SEGMENTED_HEAPS_WITHOUT_HOT_NON_PROFILED)) {
             return this;
         } else if (involvedCodeHeaps.equals(SEGMENTED_HEAPS_WO_PROFILED)) {
             return new CodeCacheOptions(reserved, nonNmethods,
                     profiled + nonProfiled, 0L);
+        } else if (involvedCodeHeaps.equals(SEGMENTED_HEAPS_WO_PROFILED_WITH_HOT_NON_PROFILED)) {
+            return new CodeCacheOptions(reserved, nonNmethods,
+                    profiled + nonProfiled, 0L, hotNonProfiled);
         } else if (involvedCodeHeaps.equals(ONLY_NON_METHODS_HEAP)) {
             return new CodeCacheOptions(reserved, nonNmethods + profiled
-                    + nonProfiled, 0L, 0L);
+                    + nonProfiled + hotNonProfiled, 0L, 0L);
         } else {
             throw new Error("Test bug: unexpected set of code heaps involved "
                     + "into test.");

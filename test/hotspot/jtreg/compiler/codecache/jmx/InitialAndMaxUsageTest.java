@@ -39,6 +39,12 @@
  * @run main/othervm -Xbootclasspath/a:. -XX:-UseCodeCacheFlushing
  *     -XX:-MethodFlushing -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
  *     -XX:CompileCommand=compileonly,null::* -XX:-UseLargePages
+ *     -XX:+SegmentedCodeCache
+ *     -XX:NonProfiledHotCodeHeapSize=50m
+ *     compiler.codecache.jmx.InitialAndMaxUsageTest
+ * @run main/othervm -Xbootclasspath/a:. -XX:-UseCodeCacheFlushing
+ *     -XX:-MethodFlushing -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *     -XX:CompileCommand=compileonly,null::* -XX:-UseLargePages
  *     -XX:-SegmentedCodeCache
  *     compiler.codecache.jmx.InitialAndMaxUsageTest
  */

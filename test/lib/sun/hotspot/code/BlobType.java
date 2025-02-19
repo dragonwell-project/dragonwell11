@@ -38,8 +38,17 @@ public enum BlobType {
                     || type == BlobType.MethodProfiled;
         }
     },
+    // Execution level 4 (non-profiled hot) nmethods (without native nmethods)
+    MethodHotNonProfiled(1, "CodeHeap 'non-profiled hot nmethods'", "NonProfiledHotCodeHeapSize") {
+        @Override
+        public boolean allowTypeWhenOverflow(BlobType type) {
+            return super.allowTypeWhenOverflow(type)
+                    || type == BlobType.MethodNonProfiled
+                    || type == BlobType.MethodProfiled;
+        }
+    },
     // Execution level 2 and 3 (profiled) nmethods
-    MethodProfiled(1, "CodeHeap 'profiled nmethods'", "ProfiledCodeHeapSize") {
+    MethodProfiled(2, "CodeHeap 'profiled nmethods'", "ProfiledCodeHeapSize") {
         @Override
         public boolean allowTypeWhenOverflow(BlobType type) {
             return super.allowTypeWhenOverflow(type)
@@ -47,7 +56,7 @@ public enum BlobType {
         }
     },
     // Non-nmethods like Buffers, Adapters and Runtime Stubs
-    NonNMethod(2, "CodeHeap 'non-nmethods'", "NonNMethodCodeHeapSize") {
+    NonNMethod(3, "CodeHeap 'non-nmethods'", "NonNMethodCodeHeapSize") {
         @Override
         public boolean allowTypeWhenOverflow(BlobType type) {
             return super.allowTypeWhenOverflow(type)
@@ -56,7 +65,7 @@ public enum BlobType {
         }
     },
     // All types (No code cache segmentation)
-    All(3, "CodeCache", "ReservedCodeCacheSize");
+    All(4, "CodeCache", "ReservedCodeCacheSize");
 
     public final int id;
     public final String sizeOptionName;
@@ -98,6 +107,9 @@ public enum BlobType {
                 || whiteBox.getIntxVMFlag("TieredStopAtLevel") <= 1) {
             // there is no MethodProfiled in non tiered world or pure C1
             result.remove(MethodProfiled);
+        }
+        if (whiteBox.getUintxVMFlag("NonProfiledHotCodeHeapSize") == 0) {
+            result.remove(MethodHotNonProfiled);
         }
         return result;
     }

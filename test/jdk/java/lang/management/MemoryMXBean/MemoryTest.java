@@ -30,7 +30,8 @@
  * @author  Mandy Chung
  *
  * @modules jdk.management
- * @run main MemoryTest 2 3
+ * @run main/othervm -XX:NonProfiledHotCodeHeapSize=0 MemoryTest 2 3 5
+ * @run main/othervm -XX:NonProfiledHotCodeHeapSize=10m MemoryTest 2 3 6
  */
 
 /*
@@ -42,7 +43,8 @@
  * @author  Mandy Chung
  *
  * @modules jdk.management
- * @run main MemoryTest 2 1
+ * @run main/othervm -XX:NonProfiledHotCodeHeapSize=0 MemoryTest 2 1 5
+ * @run main/othervm -XX:NonProfiledHotCodeHeapSize=10m MemoryTest 2 1 6
  */
 
 /*
@@ -54,7 +56,8 @@
  * @author  Mandy Chung
  *
  * @modules jdk.management
- * @run main MemoryTest 3 3
+ * @run main/othervm -XX:NonProfiledHotCodeHeapSize=0 MemoryTest 3 3 5
+ * @run main/othervm -XX:NonProfiledHotCodeHeapSize=10m MemoryTest 3 3 6
  */
 
 /*
@@ -102,11 +105,13 @@ public class MemoryTest {
         expectedNumMgrs = expectedNumGCMgrs + 2;
 
         int expectedNumPools = Integer.valueOf(args[1]);
+        int expectedMaxNumPoolsOfNonHeap = Integer.valueOf(args[2]);
+
         expectedMinNumPools[HEAP] = expectedNumPools;
         expectedMaxNumPools[HEAP] = expectedNumPools;
 
         expectedMinNumPools[NONHEAP] = 2;
-        expectedMaxNumPools[NONHEAP] = 5;
+        expectedMaxNumPools[NONHEAP] = expectedMaxNumPoolsOfNonHeap;
 
         checkMemoryPools();
         checkMemoryManagers();

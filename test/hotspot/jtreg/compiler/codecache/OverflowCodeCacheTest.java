@@ -43,6 +43,20 @@
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
  *                   -XX:+WhiteBoxAPI -XX:-SegmentedCodeCache -Xmixed
  *                   compiler.codecache.OverflowCodeCacheTest
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:+WhiteBoxAPI -XX:+TieredCompilation
+ *                   -XX:+SegmentedCodeCache -Xmixed
+ *                   compiler.codecache.OverflowCodeCacheTest
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:+WhiteBoxAPI -XX:+TieredCompilation
+ *                   -XX:+SegmentedCodeCache -Xmixed
+ *                   -XX:NonProfiledHotCodeHeapSize=1m
+ *                   compiler.codecache.OverflowCodeCacheTest
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:+WhiteBoxAPI -XX:-TieredCompilation
+ *                   -XX:+SegmentedCodeCache -Xmixed
+ *                   -XX:NonProfiledHotCodeHeapSize=1m
+ *                   compiler.codecache.OverflowCodeCacheTest
  */
 
 package compiler.codecache;

@@ -63,11 +63,11 @@ public class JVMStartupRunner implements CodeCacheCLITestCase.Runner {
             throws Throwable {
         verifyHeapSizesSum(options.reserved,
                 scaleCodeHeapSize(options.profiled), options.nonProfiled,
-                options.nonNmethods);
+                options.nonNmethods, options.hotNonProfiled);
         verifyHeapSizesSum(options.reserved, options.profiled,
-                scaleCodeHeapSize(options.nonProfiled), options.nonNmethods);
+                scaleCodeHeapSize(options.nonProfiled), options.nonNmethods, options.hotNonProfiled);
         verifyHeapSizesSum(options.reserved, options.profiled,
-                options.nonProfiled, scaleCodeHeapSize(options.nonNmethods));
+                options.nonProfiled, scaleCodeHeapSize(options.nonNmethods), options.hotNonProfiled);
     }
 
     /**
@@ -80,19 +80,21 @@ public class JVMStartupRunner implements CodeCacheCLITestCase.Runner {
         long profiled = options.profiled;
         long nonProfiled = options.nonProfiled;
         long nonNMethods = options.nonNmethods;
+        long hotNonProfiled = options.hotNonProfiled;
 
-        while (options.reserved == profiled + nonProfiled + nonNMethods) {
+        while (options.reserved == profiled + nonProfiled + nonNMethods + hotNonProfiled) {
             profiled = scaleCodeHeapSize(profiled);
             nonProfiled = scaleCodeHeapSize(nonProfiled);
             nonNMethods = scaleCodeHeapSize(nonNMethods);
+            hotNonProfiled = scaleCodeHeapSize(hotNonProfiled);
         }
 
         verifyHeapSizesSum(options.reserved, profiled, nonProfiled,
-                nonNMethods);
+                nonNMethods, hotNonProfiled);
     }
 
     private static void verifyHeapSizesSum(long reserved, long profiled,
-            long nonProfiled, long nonNmethods) throws Throwable {
+            long nonProfiled, long nonNmethods, long hotNonProfiled) throws Throwable {
         // JVM startup expected to fail when
         // sum(all code heap sizes) != reserved CC size
         CommandLineOptionTest.verifySameJVMStartup(
@@ -111,7 +113,9 @@ public class JVMStartupRunner implements CodeCacheCLITestCase.Runner {
                 CommandLineOptionTest.prepareNumericFlag(
                         BlobType.MethodNonProfiled.sizeOptionName, nonProfiled),
                 CommandLineOptionTest.prepareNumericFlag(
-                        BlobType.NonNMethod.sizeOptionName, nonNmethods));
+                        BlobType.NonNMethod.sizeOptionName, nonNmethods),
+                CommandLineOptionTest.prepareNumericFlag(
+                        BlobType.MethodHotNonProfiled.sizeOptionName, hotNonProfiled));
     }
 
     /**

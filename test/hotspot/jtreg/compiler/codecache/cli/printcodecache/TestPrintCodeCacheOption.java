@@ -63,13 +63,25 @@ public class TestPrintCodeCacheOption extends CodeCacheCLITestBase {
                         .CommonDescriptions.NON_TIERED.description,
                         DEFAULT_RUNNER),
                 new CodeCacheCLITestCase(CodeCacheCLITestCase
+                        .CommonDescriptions.NON_TIERED_FOR_HOT_NON_PROFILED.description,
+                        DEFAULT_RUNNER),
+                new CodeCacheCLITestCase(CodeCacheCLITestCase
                         .CommonDescriptions.TIERED_LEVEL_0.description,
+                        DEFAULT_RUNNER),
+                new CodeCacheCLITestCase(CodeCacheCLITestCase
+                        .CommonDescriptions.TIERED_LEVEL_0_FOR_HOT_NON_PROFILED.description,
                         DEFAULT_RUNNER),
                 new CodeCacheCLITestCase(CodeCacheCLITestCase
                         .CommonDescriptions.TIERED_LEVEL_1.description,
                         DEFAULT_RUNNER),
                 new CodeCacheCLITestCase(CodeCacheCLITestCase
+                        .CommonDescriptions.TIERED_LEVEL_1_FOR_HOT_NON_PROFILED.description,
+                        DEFAULT_RUNNER),
+                new CodeCacheCLITestCase(CodeCacheCLITestCase
                         .CommonDescriptions.TIERED_LEVEL_4.description,
+                        DEFAULT_RUNNER),
+                new CodeCacheCLITestCase(CodeCacheCLITestCase
+                        .CommonDescriptions.TIERED_LEVEL_4_FOR_HOT_NON_PROFILED.description,
                         DEFAULT_RUNNER),
                 DISABLED_PRINT_CODE_CACHE);
     }

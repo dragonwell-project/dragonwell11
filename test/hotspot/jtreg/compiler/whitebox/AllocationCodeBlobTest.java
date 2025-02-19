@@ -39,6 +39,11 @@
  *                   -XX:+WhiteBoxAPI -XX:CompileCommand=compileonly,null::*
  *                   -XX:+SegmentedCodeCache
  *                   compiler.whitebox.AllocationCodeBlobTest
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:+WhiteBoxAPI -XX:CompileCommand=compileonly,null::*
+ *                   -XX:+SegmentedCodeCache
+ *                   -XX:NonProfiledHotCodeHeapSize=50m
+ *                   compiler.whitebox.AllocationCodeBlobTest
  */
 
 package compiler.whitebox;

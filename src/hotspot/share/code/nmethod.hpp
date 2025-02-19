@@ -224,7 +224,7 @@ class nmethod : public CompiledMethod {
           );
 
   // helper methods
-  void* operator new(size_t size, int nmethod_size, int comp_level) throw();
+  void* operator new(size_t size, int nmethod_size, int code_blob_type) throw();
 
   const char* reloc_string_for(u_char* begin, u_char* end);
 
@@ -261,7 +261,8 @@ class nmethod : public CompiledMethod {
                               ExceptionHandlerTable* handler_table,
                               ImplicitExceptionTable* nul_chk_table,
                               AbstractCompiler* compiler,
-                              int comp_level
+                              int comp_level,
+                              bool alloc_in_non_profiled_hot_code_heap
 #if INCLUDE_JVMCI
                               , jweak installed_code = NULL,
                               jweak speculation_log = NULL

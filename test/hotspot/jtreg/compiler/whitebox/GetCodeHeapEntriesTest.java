@@ -37,6 +37,10 @@
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
  *                   -XX:+WhiteBoxAPI -XX:+SegmentedCodeCache
  *                   compiler.whitebox.GetCodeHeapEntriesTest
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:+WhiteBoxAPI -XX:+SegmentedCodeCache
+ *                   -XX:NonProfiledHotCodeHeapSize=50m
+ *                   compiler.whitebox.GetCodeHeapEntriesTest
  */
 
 package compiler.whitebox;

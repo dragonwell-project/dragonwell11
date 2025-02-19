@@ -49,10 +49,12 @@ runOne()
 }
 
 # Test MemoryTest with default collector
-runOne MemoryTest 3 3
+runOne -XX:NonProfiledHotCodeHeapSize=0 MemoryTest 3 3 5
+runOne -XX:NonProfiledHotCodeHeapSize=10m MemoryTest 3 3 6
 
 # Test MemoryTest with parallel scavenger collector
-runOne -XX:+UseParallelGC MemoryTest 2 3
+runOne -XX:+UseParallelGC -XX:NonProfiledHotCodeHeapSize=0 MemoryTest 2 3 5
+runOne -XX:+UseParallelGC -XX:NonProfiledHotCodeHeapSize=10m MemoryTest 2 3 6
 
 
 exit 0

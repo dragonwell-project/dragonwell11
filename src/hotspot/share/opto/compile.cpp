@@ -733,6 +733,10 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
     _replay_inline_data = ciReplay::load_inline_data(method(), entry_bci(), ci_env->comp_level());
   }
 #endif
+  bool alloc_in_non_profiled_hot_code_heap = false;
+  if (NonProfiledHotCodeHeapSize) {
+    alloc_in_non_profiled_hot_code_heap = directive->AllocInNonProfiledHotCodeHeapOption;
+  }
   set_print_inlining(directive->PrintInliningOption || PrintOptoInlining);
   set_print_intrinsics(directive->PrintIntrinsicsOption);
   set_has_irreducible_loop(true); // conservative until build_loop_tree() reset it
@@ -946,6 +950,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                            compiler,
                            has_unsafe_access(),
                            SharedRuntime::is_wide_vector(max_vector_size()),
+                           alloc_in_non_profiled_hot_code_heap,
                            rtm_state()
                            );
 

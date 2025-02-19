@@ -95,7 +95,7 @@ public final class CodeCacheUtils {
      * @return boolean value, true if respective code heap is predictable
      */
     public static boolean isCodeHeapPredictable(BlobType btype) {
-        return btype == BlobType.MethodProfiled;
+        return btype == BlobType.MethodProfiled || btype == BlobType.MethodHotNonProfiled;
     }
 
     /**

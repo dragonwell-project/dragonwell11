@@ -421,7 +421,8 @@ void Compilation::install_code(int frame_size) {
     implicit_exception_table(),
     compiler(),
     has_unsafe_access(),
-    SharedRuntime::is_wide_vector(max_vector_size())
+    SharedRuntime::is_wide_vector(max_vector_size()),
+    false
   );
 }
 
