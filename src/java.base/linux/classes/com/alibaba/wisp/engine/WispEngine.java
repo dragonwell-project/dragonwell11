@@ -98,8 +98,11 @@ public class WispEngine extends AbstractExecutorService {
      * all the daemon threads in wisp should be created with the Thread Group.
      * In Thread.start(), if the thread should not convert to WispTask,
      * check whether the thread's carrier is daemonThreadGroup
+     *
+     * This field is inited in the method `initializeWispClass`
+     * @see com.alibaba.wisp.engine#initializeWispClass
      */
-    static ThreadGroup daemonThreadGroup = new ThreadGroup(JLA.currentThread0().getThreadGroup(), "Daemon Thread Group");
+    static ThreadGroup daemonThreadGroup;
     static ScheduledExecutorService timer;
     static Set<Thread> carrierThreads;
     static Thread pollerThread;
@@ -120,6 +123,11 @@ public class WispEngine extends AbstractExecutorService {
                 });
     }
 
+    /**
+     * Called by VM to init this class. Don't init these objects directly in ths static fields.
+     * Otherwise, these fields will be inited when using static methods like `transparentWispSwitch`
+     * even when the wisp is off.
+     */
     private static void initializeWispClass() {
         assert JLA != null : "WispCarrier should be initialized after System";
         assert JLA.currentThread0().getName().equals("main") : "Wisp need to be loaded by main thread";
