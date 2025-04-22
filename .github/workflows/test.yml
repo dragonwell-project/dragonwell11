@@ -158,11 +158,18 @@ jobs:
         continue-on-error: true
         if: steps.check_if_run.outputs.should_run != 'false'
 
+      - name: 'Install dependencies in x64 env'
+        run: |
+          # reduce c compiler version to avoid some self-dev cases cannot be compiled
+          sudo apt install -y gcc-10 g++-10
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 --slave /usr/bin/g++ g++ /usr/bin/g++-10
+        if:  inputs.platform == 'linux-x64' && steps.check_if_run.outputs.should_run != 'false'
+
       - name: 'Install dependencies'
         run: |
           # On macOS we need to install some dependencies for testing
           brew install make
-          sudo xcode-select --switch /Applications/Xcode_13.4.1.app/Contents/Developer
+          sudo xcode-select --switch /Applications/Xcode_14.3.1.app/Contents/Developer
           # This will make GNU make available as 'make' and not only as 'gmake'
           echo '/usr/local/opt/make/libexec/gnubin' >> $GITHUB_PATH
         if: runner.os == 'macOS' && steps.check_if_run.outputs.should_run != 'false'
