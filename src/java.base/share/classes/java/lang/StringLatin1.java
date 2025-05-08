@@ -381,10 +381,9 @@ final class StringLatin1 {
         }
         int first;
         final int len = value.length;
-        // Now check if there are any characters that need to be changed, or are surrogate
+        // Now check if there are any characters that need to be changed
         for (first = 0 ; first < len; first++) {
-            int cp = value[first] & 0xff;
-            if (cp != Character.toLowerCase(cp)) {  // no need to check Character.ERROR
+            if (CharacterDataLatin1.instance.isUpperCase(value[first] & 0xff)) {
                 break;
             }
         }
@@ -398,12 +397,7 @@ final class StringLatin1 {
         System.arraycopy(value, 0, result, 0, first);  // Just copy the first few
                                                        // lowerCase characters.
         for (int i = first; i < len; i++) {
-            int cp = value[i] & 0xff;
-            cp = Character.toLowerCase(cp);
-            if (!canEncode(cp)) {                      // not a latin1 character
-                return toLowerCaseEx(str, value, first, locale, false);
-            }
-            result[i] = (byte)cp;
+            result[i] = (byte)CharacterDataLatin1.instance.toLowerCase(value[i] & 0xff);
         }
         return new String(result, LATIN1);
     }
@@ -455,10 +449,11 @@ final class StringLatin1 {
         int first;
         final int len = value.length;
 
-        // Now check if there are any characters that need to be changed, or are surrogate
+        // Now check if there are any characters that need to be changed
         for (first = 0 ; first < len; first++ ) {
             int cp = value[first] & 0xff;
-            if (cp != Character.toUpperCaseEx(cp)) {   // no need to check Character.ERROR
+            boolean notUpperCaseEx = cp >= 'a' && (cp <= 'z' || cp == 0xb5 || (cp >= 0xdf && cp != 0xf7));
+            if (notUpperCaseEx) {
                 break;
             }
         }
@@ -473,8 +468,7 @@ final class StringLatin1 {
         System.arraycopy(value, 0, result, 0, first);  // Just copy the first few
                                                        // upperCase characters.
         for (int i = first; i < len; i++) {
-            int cp = value[i] & 0xff;
-            cp = Character.toUpperCaseEx(cp);
+            int cp = CharacterDataLatin1.instance.toUpperCaseEx(value[i] & 0xff);
             if (!canEncode(cp)) {                      // not a latin1 character
                 return toUpperCaseEx(str, value, first, locale, false);
             }
