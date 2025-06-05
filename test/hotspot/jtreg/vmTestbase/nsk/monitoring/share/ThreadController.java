@@ -653,7 +653,9 @@ class SleepingThread extends BaseThread {
         this.threadsGroupLocks = threadsGroupLocks;
 
         expectedLength += 3;
+        expectedLength += 1; // 1 for wisp
 
+        expectedMethods.add(Thread.class.getName() + ".sleep0");
         expectedMethods.add(Thread.class.getName() + ".sleep");
         expectedMethods.add(SleepingThread.class.getName() + ".run");
 
@@ -720,7 +722,9 @@ class RunningThread extends BaseThread {
         this.threadsGroupLocks = threadsGroupLocks;
 
         expectedLength += 2;
+        expectedLength += 1; // 1 for wisp
 
+        expectedMethods.add(Thread.class.getName() + ".yield0");
         expectedMethods.add(Thread.class.getName() + ".yield");
 
         switch (controller.invocationType) {
