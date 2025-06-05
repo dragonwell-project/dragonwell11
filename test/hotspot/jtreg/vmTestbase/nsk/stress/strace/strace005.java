@@ -136,6 +136,7 @@ public class strace005 {
             "java.lang.System.arraycopy",
             "java.lang.Object.wait",
             "java.lang.Thread.exit",
+            "java.lang.Thread.yield0",
             "java.lang.Thread.yield",
             "java.lang.ThreadGroup.remove",
             "java.lang.ThreadGroup.threadTerminated",
