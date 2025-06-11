@@ -228,7 +228,8 @@ public class LockingThread extends Thread {
     //              synchronizedObjectBlock()   // monitor for instance of Object is acquired here
     //                  createStackFrame()
     //                      doWait()
-    //                          relinquishedMonitor.wait()
+    //                          callWait
+    //                              relinquishedMonitor.wait()
 
     // LockingThread still holds all other locks because of it didn't exit from corresponding synchronized methods and blocks.
     // To let LockingThread acquire relinquished monitor 'relinquishedMonitor.notifyAll()' should be called, after this
@@ -440,7 +441,7 @@ public class LockingThread extends Thread {
                     // and this method waits when LockingThred change state to 'Thread.State.WAITING'
 
                     while (relinquishMonitor)
-                        relinquishedMonitor.wait(0);
+                        callWait(relinquishedMonitor);
 
                     log("Acquire relinquished monitor: " + relinquishedMonitor);
                 } catch (Exception e) {
@@ -458,6 +459,10 @@ public class LockingThread extends Thread {
                 // exit from frame
                 break;
         }
+    }
+
+    private void callWait(Object monitor) throws InterruptedException {
+        monitor.wait(0);
     }
 
     public void run() {
