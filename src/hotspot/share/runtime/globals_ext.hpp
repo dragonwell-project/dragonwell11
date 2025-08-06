@@ -118,6 +118,11 @@
   product(uintx, MorphismLimit, 2,                                          \
           "Max call site's morphism we care about")                         \
                                                                             \
+  AIEXT_ONLY(experimental(bool, UseAIExtension, false,                      \
+                     "Enable Alibaba Dragonwell AI Extension"))             \
+                                                                            \
+  AIEXT_ONLY(experimental(ccstrlist, AIExtensionUnit, "",                   \
+                     "Load external AI-Extension units"))                   \
   //add new AJDK specific flags here
 
 

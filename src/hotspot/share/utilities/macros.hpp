@@ -287,6 +287,17 @@
 #define NOT_JFR_RETURN_(code) { return code; }
 #endif
 
+// Alibaba AI-Extension
+#ifndef INCLUDE_AIEXT
+#define INCLUDE_AIEXT 0
+#endif
+
+#if INCLUDE_AIEXT
+#define AIEXT_ONLY(code) code
+#else
+#define AIEXT_ONLY(code)
+#endif
+
 #ifndef INCLUDE_JVMCI
 #define INCLUDE_JVMCI 1
 #endif

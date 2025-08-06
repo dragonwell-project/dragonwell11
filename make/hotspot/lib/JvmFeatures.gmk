@@ -176,6 +176,13 @@ ifneq ($(call check-jvm-feature, jfr), true)
   JVM_EXCLUDE_PATTERNS += jfr
 endif
 
+ifeq ($(call check-jvm-feature, aiext), true)
+  JVM_CFLAGS_FEATURES += -DINCLUDE_AIEXT=1
+else
+  JVM_CFLAGS_FEATURES += -DINCLUDE_AIEXT=0
+  JVM_EXCLUDE_FILES += aiext.cpp aiExtension.cpp
+endif
+
 ################################################################################
 
 ifeq ($(call check-jvm-feature, link-time-opt), true)

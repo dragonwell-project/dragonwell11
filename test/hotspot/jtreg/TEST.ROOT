@@ -73,6 +73,7 @@ requires.properties= \
     vm.compiler2.enabled \
     vm.musl \
     vm.flagless \
+    vm.aiext \
     docker.support
 
 # Minimum jtreg version

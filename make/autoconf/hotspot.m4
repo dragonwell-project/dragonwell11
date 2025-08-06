@@ -26,7 +26,7 @@
 # All valid JVM features, regardless of platform
 VALID_JVM_FEATURES="compiler1 compiler2 zero minimal dtrace jvmti jvmci \
     graal vm-structs jni-check services management cmsgc epsilongc g1gc parallelgc serialgc shenandoahgc zgc nmt cds \
-    static-build link-time-opt aot jfr"
+    static-build link-time-opt aot jfr aiext"
 
 # Deprecated JVM features (these are ignored, but with a warning)
 DEPRECATED_JVM_FEATURES="trace"
@@ -357,6 +357,10 @@ AC_DEFUN_ONCE([HOTSPOT_SETUP_JVM_FEATURES],
     AC_MSG_ERROR([Specified JVM feature 'cmsgc' requires feature 'serialgc'])
   fi
 
+  if HOTSPOT_CHECK_JVM_FEATURE(aiext) && ! HOTSPOT_CHECK_JVM_FEATURE(compiler2); then
+    AC_MSG_ERROR([Specified JVM feature 'aiext' requires feature 'compiler2'])
+  fi
+
   # Enable JFR by default, except for Zero, linux-sparcv9 and on minimal.
   if ! HOTSPOT_CHECK_JVM_VARIANT(zero); then
     if test "x$OPENJDK_TARGET_OS" != xaix; then
@@ -518,6 +522,26 @@ AC_DEFUN_ONCE([HOTSPOT_SETUP_JVM_FEATURES],
 
   AC_SUBST(ENABLE_AOT)
 
+  AC_MSG_CHECKING([if aiext should be built])
+  if HOTSPOT_IS_JVM_FEATURE_DISABLED(aiext); then
+    AC_MSG_RESULT([no, forced])
+    JVM_FEATURES_aiext=""
+  else
+    # Only enable aiext on x86_64/aarch64 linux
+    if test "x$OPENJDK_TARGET_OS" = xlinux && \
+       (test "x$OPENJDK_TARGET_CPU" = "xx86_64" || \
+        test "x$OPENJDK_TARGET_CPU" = "xaarch64"); then
+        AC_MSG_RESULT([yes])
+        JVM_FEATURES_aiext="aiext"
+    else
+      AC_MSG_RESULT([no])
+      JVM_FEATURES_aiext=""
+      if HOTSPOT_CHECK_JVM_FEATURE(aiext); then
+        AC_MSG_ERROR([aiext is currently not supported on this platform])
+      fi
+    fi
+  fi
+
   if test "x$OPENJDK_TARGET_CPU" = xarm ; then
     # Default to use link time optimizations on minimal on arm
     JVM_FEATURES_link_time_opt="link-time-opt"
@@ -545,7 +569,7 @@ AC_DEFUN_ONCE([HOTSPOT_SETUP_JVM_FEATURES],
   fi
 
   # Enable features depending on variant.
-  JVM_FEATURES_server="compiler1 compiler2 $NON_MINIMAL_FEATURES $JVM_FEATURES $JVM_FEATURES_jvmci $JVM_FEATURES_aot $JVM_FEATURES_graal"
+  JVM_FEATURES_server="compiler1 compiler2 $NON_MINIMAL_FEATURES $JVM_FEATURES $JVM_FEATURES_jvmci $JVM_FEATURES_aot $JVM_FEATURES_graal $JVM_FEATURES_aiext"
   JVM_FEATURES_client="compiler1 $NON_MINIMAL_FEATURES $JVM_FEATURES"
   JVM_FEATURES_core="$NON_MINIMAL_FEATURES $JVM_FEATURES"
   JVM_FEATURES_minimal="compiler1 minimal serialgc $JVM_FEATURES $JVM_FEATURES_link_time_opt"

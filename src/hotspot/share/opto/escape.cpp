@@ -46,6 +46,10 @@
 #include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
 #endif
 
+#if INCLUDE_AIEXT && defined(ASSERT)
+#include "opto/aiExtension.hpp"
+#endif  // INCLUDE_AIEXT && defined(ASSERT)
+
 ConnectionGraph::ConnectionGraph(Compile * C, PhaseIterGVN *igvn) :
   _nodes(C->comp_arena(), C->unique(), C->unique(), NULL),
   _in_worklist(C->comp_arena()),
@@ -1048,6 +1052,9 @@ void ConnectionGraph::process_call_arguments(CallNode *call) {
 #ifdef ASSERT
           if (!(is_arraycopy ||
                 BarrierSet::barrier_set()->barrier_set_c2()->is_gc_barrier_node(call) ||
+#if INCLUDE_AIEXT
+                AIExt::is_accel_native_call(call) ||
+#endif // INCLUDE_AIEXT
                 (call->as_CallLeaf()->_name != NULL &&
                  (strcmp(call->as_CallLeaf()->_name, "updateBytesCRC32") == 0 ||
                   strcmp(call->as_CallLeaf()->_name, "updateBytesCRC32C") == 0 ||
