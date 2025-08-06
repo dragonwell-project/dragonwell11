@@ -129,6 +129,7 @@ public class VMProps implements Callable<Map<String, String>> {
         map.put("vm.musl", this::isMusl);
         map.put("release.implementor", this::implementor);
         map.put("vm.flagless", this::isFlagless);
+        map.put("vm.aiext", this::vmAIExt);
         map.putAll(xOptFlags()); // -Xmx4g -> @requires vm.opt.x.Xmx == "4g" )
         vmGC(map); // vm.gc.X = true/false
         vmOptFinalFlags(map);
@@ -634,6 +635,15 @@ public class VMProps implements Callable<Map<String, String>> {
 
     private Stream<String> allFlags() {
         return Stream.of((System.getProperty("test.vm.opts", "") + " " + System.getProperty("test.java.opts", "")).trim().split("\\s+"));
+    }
+
+    /**
+     * Checks AI-Extension support.
+     *
+     * @return true if AI-Extension is supported.
+     */
+    private String vmAIExt() {
+        return "" + WB.isAIExtSupported();
     }
 
     /**

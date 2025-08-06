@@ -95,6 +95,9 @@
 #include "jvmci/jvmciCompiler.hpp"
 #include "jvmci/jvmciRuntime.hpp"
 #endif
+#if INCLUDE_AIEXT
+#include "opto/aiExtension.hpp"
+#endif
 
 static jint CurrentVersion = JNI_VERSION_10;
 
@@ -4062,6 +4065,13 @@ static jint JNI_CreateJavaVM_inner(JavaVM **vm, void **penv, void *args) {
     // Since this is not a JVM_ENTRY we have to set the thread state manually before leaving.
     ThreadStateTransition::transition_and_fence(thread, _thread_in_vm, _thread_in_native);
     MACOS_AARCH64_ONLY(thread->enable_wx(WXExec));
+#if INCLUDE_AIEXT
+    if (!AIExt::post_init()) {
+      // Failed to perform post initialization for AI-Extension units,
+      // just exit VM.
+      vm_exit(1);
+    }
+#endif // INCLUDE_AIEXT
   } else {
     // If create_vm exits because of a pending exception, exit with that
     // exception.  In the future when we figure out how to reclaim memory,

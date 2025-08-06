@@ -555,4 +555,7 @@ public class WhiteBox {
 
   // libc name
   public native String getLibcName();
+
+  // AI-Extension support
+  public native boolean isAIExtSupported();
 }

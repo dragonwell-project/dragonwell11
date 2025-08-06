@@ -2106,6 +2106,14 @@ WB_ENTRY(void, WB_CleanMetaspaces(JNIEnv* env, jobject target))
   VMThread::execute(&op);
 WB_END
 
+WB_ENTRY(jboolean, WB_IsAIExtSupported(JNIEnv* env))
+#if INCLUDE_AIEXT
+  return true;
+#else
+  return false;
+#endif // INCLUDE_AIEXT
+WB_END
+
 #define CC (char*)
 
 static JNINativeMethod methods[] = {
@@ -2341,6 +2349,7 @@ static JNINativeMethod methods[] = {
   {CC"aotLibrariesCount", CC"()I",                    (void*)&WB_AotLibrariesCount },
   {CC"getLibcName",     CC"()Ljava/lang/String;",     (void*)&WB_GetLibcName},
   {CC"cleanMetaspaces", CC"()V",                      (void*)&WB_CleanMetaspaces},
+  {CC"isAIExtSupported", CC"()Z",                     (void*)&WB_IsAIExtSupported},
 };
 
 
