@@ -186,6 +186,16 @@ jobs:
           fi
         if: steps.check_if_run.outputs.should_run != 'false'
 
+      - name: 'Set JTReg Options'
+        id: jtreg-options
+        run: |
+          if [[ '${{ runner.os }}' == 'Windows' ]]; then
+            # JTReg option for 'ProgramFiles(x86)' environment variable
+            echo 'value=-e:ProgramFiles\(x86\)=C:\\Program\ Files\ \(x86\)' >> $GITHUB_OUTPUT
+          else
+            echo 'value=' >> $GITHUB_OUTPUT
+          fi
+
       - name: 'Run tests'
         id: run-tests
         run: >
@@ -196,7 +206,7 @@ jobs:
           JDK_IMAGE_DIR=${{ steps.bundles.outputs.jdk-path }}
           SYMBOLS_IMAGE_DIR=${{ steps.bundles.outputs.symbols-path }}
           TEST_IMAGE_DIR=${{ steps.bundles.outputs.tests-path }}
-          JTREG='JAVA_OPTIONS=-XX:-CreateCoredumpOnCrash;VERBOSE=fail,error,time;KEYWORDS=!headful'
+          JTREG='OPTIONS=${{ steps.jtreg-options.outputs.value }};JAVA_OPTIONS=-XX:-CreateCoredumpOnCrash;VERBOSE=fail,error,time;KEYWORDS=!headful'
           && bash ./.github/scripts/gen-test-summary.sh "$GITHUB_STEP_SUMMARY" "$GITHUB_OUTPUT"
         env:
           PATH: ${{ steps.path.outputs.value }}
