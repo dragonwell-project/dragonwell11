@@ -130,6 +130,7 @@ jobs:
           --with-jtreg=${{ steps.jtreg.outputs.path }}
           --enable-jtreg-failure-handler
           --with-zlib=system
+          --disable-warnings-as-errors
           ${{ inputs.extra-conf-options }} ${{ inputs.configure-arguments }} || (
           echo "Dumping config.log:" &&
           cat config.log &&
