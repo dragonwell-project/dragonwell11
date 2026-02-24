@@ -3427,7 +3427,7 @@ public:
   static const unsigned long branch_range = 1 * M;
 
   static bool reachable_from_branch_at(address branch, address target) {
-    return uabs(target - branch) < branch_range;
+    return g_uabs(target - branch) < branch_range;
   }
 
   virtual ~Assembler() {}
