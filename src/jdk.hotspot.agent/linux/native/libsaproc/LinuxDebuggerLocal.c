@@ -38,7 +38,11 @@
 #define amd64 1
 #endif
 
-#ifdef i386
+#if defined(i386) && !defined(i586)
+#define i586 1
+#endif
+
+#ifdef i586
 #include "sun_jvm_hotspot_debugger_x86_X86ThreadContext.h"
 #endif
 
@@ -417,7 +421,7 @@ JNIEXPORT jlongArray JNICALL Java_sun_jvm_hotspot_debugger_linux_LinuxDebuggerLo
   }
 
 #undef NPRGREG
-#ifdef i386
+#ifdef i586
 #define NPRGREG sun_jvm_hotspot_debugger_x86_X86ThreadContext_NPRGREG
 #endif
 #ifdef amd64
@@ -443,7 +447,7 @@ JNIEXPORT jlongArray JNICALL Java_sun_jvm_hotspot_debugger_linux_LinuxDebuggerLo
 
 #undef REG_INDEX
 
-#ifdef i386
+#ifdef i586
 #define REG_INDEX(reg) sun_jvm_hotspot_debugger_x86_X86ThreadContext_##reg
 
   regs[REG_INDEX(GS)]  = (uintptr_t) gregs.xgs;
@@ -462,7 +466,7 @@ JNIEXPORT jlongArray JNICALL Java_sun_jvm_hotspot_debugger_linux_LinuxDebuggerLo
   regs[REG_INDEX(CS)]  = (uintptr_t) gregs.xcs;
   regs[REG_INDEX(SS)]  = (uintptr_t) gregs.xss;
 
-#endif /* i386 */
+#endif /* i586 */
 
 #ifdef amd64
 #define REG_INDEX(reg) sun_jvm_hotspot_debugger_amd64_AMD64ThreadContext_##reg
