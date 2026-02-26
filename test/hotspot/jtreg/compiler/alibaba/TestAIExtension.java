@@ -24,7 +24,7 @@
 /**
  * @test TestAIExtension
  * @summary Check that the AI-Extension feature works correctly
- * @requires vm.aiext
+ * @requires vm.aiext & vm.flagless
  * @library /test/lib /
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
