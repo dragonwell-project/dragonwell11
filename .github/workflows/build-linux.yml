@@ -121,6 +121,7 @@ jobs:
 
       - name: 'Configure'
         run: >
+          gcc -v &&
           bash configure
           --with-conf-name=${{ inputs.platform }}
           ${{ matrix.flags }}
