@@ -130,6 +130,12 @@ public class EventNames {
     public static final String G1EvacuationOldStatistics = PREFIX + "G1EvacuationOldStatistics";
     public static final String G1BasicIHOP = PREFIX + "G1BasicIHOP";
     public static final String AllocationRequiringGC = PREFIX + "AllocationRequiringGC";
+    public static final String ZAllocationStall = PREFIX + "ZAllocationStall";
+    public static final String ZPageAllocation = PREFIX + "ZPageAllocation";
+    public static final String ZRelocationSet = PREFIX + "ZRelocationSet";
+    public static final String ZRelocationSetGroup = PREFIX + "ZRelocationSetGroup";
+    public static final String ZUncommit = PREFIX + "ZUncommit";
+    public static final String ZUnmap = PREFIX + "ZUnmap";
 
     // Compiler
     public static final String Compilation = PREFIX + "Compilation";
