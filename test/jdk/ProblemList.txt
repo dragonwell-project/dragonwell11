@@ -887,3 +887,9 @@ java/net/MulticastSocket/UnreferencedMulticastSockets.java https://github.com/dr
 
 java/net/SocketOption/OptionsTest.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
 java/nio/MappedByteBuffer/Truncate.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+
+# ConnectTimeoutWithProxy tests fail intermittently due to network timing issues
+# Also fails on Temurin (upstream issue)
+# https://project.aone.alibaba-inc.com/v2/project/1164623/bug/77018263
+java/net/httpclient/ConnectTimeoutWithProxyAsync.java 77018263 generic-all
+java/net/httpclient/ConnectTimeoutWithProxySync.java  77018263 generic-all
