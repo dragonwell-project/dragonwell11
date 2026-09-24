@@ -370,7 +370,8 @@ tier1 = \
   :tier1_compiler \
   :tier1_gc \
   :tier1_runtime \
-  :tier1_serviceability
+  :tier1_serviceability \
+  :dragonwell_hs
 
 tier2 = \
   :hotspot_tier2_runtime \

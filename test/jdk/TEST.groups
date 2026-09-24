@@ -40,7 +40,8 @@ jdk_all = \
 tier1 = \
     :tier1_part1 \
     :tier1_part2 \
-    :tier1_part3
+    :tier1_part3 \
+    :dragonwell_jdk
 
 tier1_part1 = \
     :jdk_lang
