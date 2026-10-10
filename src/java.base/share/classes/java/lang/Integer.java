@@ -29,6 +29,7 @@ import java.lang.annotation.Native;
 import java.util.Objects;
 import jdk.internal.HotSpotIntrinsicCandidate;
 import jdk.internal.misc.VM;
+import jdk.internal.util.DecimalDigits;
 
 import static java.lang.String.COMPACT_STRINGS;
 import static java.lang.String.LATIN1;
@@ -396,33 +397,6 @@ public final class Integer extends Number implements Comparable<Integer> {
         } while (charPos > offset);
     }
 
-    static final byte[] DigitTens = {
-        '0', '0', '0', '0', '0', '0', '0', '0', '0', '0',
-        '1', '1', '1', '1', '1', '1', '1', '1', '1', '1',
-        '2', '2', '2', '2', '2', '2', '2', '2', '2', '2',
-        '3', '3', '3', '3', '3', '3', '3', '3', '3', '3',
-        '4', '4', '4', '4', '4', '4', '4', '4', '4', '4',
-        '5', '5', '5', '5', '5', '5', '5', '5', '5', '5',
-        '6', '6', '6', '6', '6', '6', '6', '6', '6', '6',
-        '7', '7', '7', '7', '7', '7', '7', '7', '7', '7',
-        '8', '8', '8', '8', '8', '8', '8', '8', '8', '8',
-        '9', '9', '9', '9', '9', '9', '9', '9', '9', '9',
-        } ;
-
-    static final byte[] DigitOnes = {
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        } ;
-
-
     /**
      * Returns a {@code String} object representing the
      * specified integer. The argument is converted to signed decimal
@@ -483,7 +457,8 @@ public final class Integer extends Number implements Comparable<Integer> {
      * @return index of the most significant digit or minus sign, if present
      */
     static int getChars(int i, int index, byte[] buf) {
-        int q, r;
+        // Used by trusted callers.  Assumes all necessary bounds checks have been done by the caller.
+        int q;
         int charPos = index;
 
         boolean negative = i < 0;
@@ -494,20 +469,17 @@ public final class Integer extends Number implements Comparable<Integer> {
         // Generate two digits per iteration
         while (i <= -100) {
             q = i / 100;
-            r = (q * 100) - i;
+            charPos -= 2;
+            DecimalDigits.putPair(buf, charPos, (q * 100) - i);
             i = q;
-            buf[--charPos] = DigitOnes[r];
-            buf[--charPos] = DigitTens[r];
         }
 
         // We know there are at most two digits left at this point.
-        q = i / 10;
-        r = (q * 10) - i;
-        buf[--charPos] = (byte)('0' + r);
-
-        // Whatever left is the remaining digit.
-        if (q < 0) {
-            buf[--charPos] = (byte)('0' - q);
+        if (i < -9) {
+            charPos -= 2;
+            DecimalDigits.putPair(buf, charPos, -i);
+        } else {
+            buf[--charPos] = (byte)('0' - i);
         }
 
         if (negative) {
