@@ -85,8 +85,17 @@
              "Use CPU_ALLOC code path in os::active_processor_count ")  \
                                                                         \
   diagnostic(bool, DumpPerfMapAtExit, false,                            \
-             "Write map file for Linux perf tool at exit")
-
+             "Write map file for Linux perf tool at exit")              \
+                                                                        \
+  diagnostic(bool, THPStackMitigation, true,                            \
+          "If THPs are unconditionally enabled on the system (mode "    \
+          "\"always\"), the JVM will prevent THP from forming in "      \
+          "thread stacks. When disabled, the absence of this mitigation"\
+          "allows THPs to form in thread stacks.")                      \
+                                                                        \
+  develop(bool, DelayThreadStartALot, false,                            \
+          "Artificially delay thread starts randomly for testing.")     \
+                                                                        \
 
 //
 // Defines Linux-specific default values. The flags are available on all
