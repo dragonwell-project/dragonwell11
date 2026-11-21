@@ -887,3 +887,8 @@ java/net/MulticastSocket/UnreferencedMulticastSockets.java https://github.com/dr
 
 java/net/SocketOption/OptionsTest.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
 java/nio/MappedByteBuffer/Truncate.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+
+# GarbageCollectionNotificationContentTest fails due to G1 Old Gen used size not decreasing
+# Known issue: https://github.com/dragonwell-project/dragonwell11/issues/911
+# https://project.aone.alibaba-inc.com/v2/project/1164623/bug/71642429
+com/sun/management/GarbageCollectorMXBean/GarbageCollectionNotificationContentTest.java 71642429 generic-all
