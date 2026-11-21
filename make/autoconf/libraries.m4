@@ -112,7 +112,7 @@ AC_DEFUN_ONCE([LIB_SETUP_LIBRARIES],
 
   BASIC_JDKLIB_LIBS=""
   if test "x$TOOLCHAIN_TYPE" != xmicrosoft; then
-    BASIC_JDKLIB_LIBS="-ljava -ljvm"
+    BASIC_JDKLIB_LIBS="-ljava -ljvm -liconv"
   fi
 
   # Math library
