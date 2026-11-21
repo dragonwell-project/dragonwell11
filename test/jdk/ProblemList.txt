@@ -887,3 +887,8 @@ java/net/MulticastSocket/UnreferencedMulticastSockets.java https://github.com/dr
 
 java/net/SocketOption/OptionsTest.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
 java/nio/MappedByteBuffer/Truncate.java https://github.com/dragonwell-project/dragonwell11/issues/209 linux-riscv64
+
+# HashesOrderTest fails intermittently (2-10% reproduction rate)
+# Also fails on Temurin (upstream issue)
+# https://project.aone.alibaba-inc.com/v2/project/1164623/bug/79732533
+tools/jmod/hashes/HashesOrderTest.java 79732533 generic-all
